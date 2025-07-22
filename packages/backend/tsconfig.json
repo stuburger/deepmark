@@ -4,6 +4,9 @@
   "compilerOptions": {
     "strict": true,
     "isolatedModules": false,
+    "module": "esnext",
+    "target": "es2022",
+    "moduleResolution": "bundler",
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"]

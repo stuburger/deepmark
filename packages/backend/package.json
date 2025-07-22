@@ -1,0 +1,16 @@
+{
+	"name": "@sst-streaming-http-mcp-server/backend",
+	"type": "module",
+	"private": true,
+	"scripts": {
+		"mcp-inspect": "npx @modelcontextprotocol/inspector",
+		"typecheck": "tsc --noEmit"
+	},
+	"dependencies": {
+		"@modelcontextprotocol/sdk": "^1.16.0",
+		"@openauthjs/openauth": "0.4.3",
+		"fetch-to-node": "2.1.0",
+		"hono": "4.7.8",
+		"zod": "^4.0.5"
+	}
+}

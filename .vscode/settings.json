@@ -1,0 +1,11 @@
+{
+  "workbench.colorCustomizations": {
+    "activityBar.background": "#0c0c0c",
+    "titleBar.activeBackground": "#030303",
+    "titleBar.activeForeground": "#e6dede"
+  },
+  "editor.defaultFormatter": "biomejs.biome",
+  "[typescript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  }
+}

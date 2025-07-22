@@ -2,8 +2,13 @@ import { type ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { CreateQuestionSchema } from "./schema";
 import { questions } from "../../db/collections/questions";
 
+// export const title = "Create a new GCSE question";
+
+// export const description = "Create a new GCSE question";
+
 export const handler: ToolCallback<typeof CreateQuestionSchema> = async (
-  args
+  args,
+  extra
 ) => {
   const { topic, question_text, points, difficulty_level, subject } = args;
 

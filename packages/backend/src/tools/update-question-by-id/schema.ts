@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const UpdateQuestionByIdSchema = z.object({
+export const UpdateQuestionByIdSchema = {
   id: z.string().describe("The unique identifier for the question to update"),
   topic: z
     .string()
@@ -22,4 +22,4 @@ export const UpdateQuestionByIdSchema = z.object({
     .enum(["biology", "chemistry", "physics", "english"])
     .optional()
     .describe("Subject area for the question"),
-});
+};

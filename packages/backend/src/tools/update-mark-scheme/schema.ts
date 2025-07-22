@@ -11,7 +11,7 @@ const MarkPointSchema = z.object({
   criteria: z.string().describe("Criteria for awarding the mark point"),
 });
 
-export const UpdateMarkSchemeSchema = z.object({
+export const UpdateMarkSchemeSchema = {
   id: z
     .string()
     .describe("The unique identifier for the mark scheme to update"),
@@ -25,4 +25,4 @@ export const UpdateMarkSchemeSchema = z.object({
     .array(MarkPointSchema)
     .optional()
     .describe("Array of mark points"),
-});
+};

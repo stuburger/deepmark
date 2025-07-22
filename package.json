@@ -1,0 +1,44 @@
+{
+  "name": "mcp-gcse",
+  "type": "module",
+  "bin": {
+    "weather": "./build/index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.13.1",
+    "@openauthjs/openauth": "0.4.3",
+    "mongodb": "^6.17.0",
+    "sst": "3.17.6",
+    "ts-node": "^10.9.2",
+    "valibot": "1.1.0",
+    "zod": "^3.25.67"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "1.9.4",
+    "@types/aws-lambda": "8.10.150",
+    "@types/bun": "1.2.12",
+    "@types/node": "^24.0.3",
+    "@tsconfig/node22": "22.0.1",
+    "typescript": "^5.8.3"
+  },
+  "workspaces": [
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "packageManager": "bun@1.2.12",
+  "trustedDependencies": [
+    "@biomejs/biome",
+    "aws-sdk",
+    "esbuild"
+  ],
+  "scripts": {
+    "typecheck": "bun --elide-lines 0 --filter=* typecheck",
+    "check": "bun biome check",
+    "fix": "bun check --write ./",
+    "dev": "sst dev",
+    "deploy": "bun sst deploy",
+    "mcp-inspect": "NODE_TLS_REJECT_UNAUTHORIZED='0' bun --cwd packages/backend mcp-inspect"
+  }
+}

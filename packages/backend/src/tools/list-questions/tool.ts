@@ -4,5 +4,5 @@ import { ListQuestionsSchema } from "./schema";
 export const handler: ToolCallback<typeof ListQuestionsSchema> = async (
   args
 ) => {
-  // TODO: Implement tool logic
+  return { content: [{ type: "text", text: `` }] };
 };

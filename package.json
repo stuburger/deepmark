@@ -5,6 +5,7 @@
     "weather": "./build/index.js"
   },
   "dependencies": {
+    "@ai-sdk/openai": "^1.3.23",
     "@modelcontextprotocol/sdk": "^1.13.1",
     "@openauthjs/openauth": "0.4.3",
     "mongodb": "^6.17.0",

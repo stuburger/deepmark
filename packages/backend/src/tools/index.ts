@@ -18,3 +18,6 @@ export { UpdateMarkSchemeSchema } from "./update-mark-scheme/schema";
 
 export { handler as answerQuestionHandler } from "./answer-question/tool";
 export { AnswerQuestionSchema } from "./answer-question/schema";
+
+export { handler as markAnswerHandler } from "./mark-answer/tool";
+export { MarkAnswerSchema } from "./mark-answer/schema";

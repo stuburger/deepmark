@@ -14,6 +14,8 @@ import {
   UpdateMarkSchemeSchema,
   answerQuestionHandler,
   AnswerQuestionSchema,
+  markAnswerHandler,
+  MarkAnswerSchema,
 } from "./tools";
 
 export const server = new McpServer({
@@ -93,4 +95,15 @@ server.registerTool(
     inputSchema: AnswerQuestionSchema,
   },
   answerQuestionHandler
+);
+
+server.registerTool(
+  "mark-answer",
+  {
+    title: "Mark Answer",
+    description:
+      "Automatically mark a student answer against the mark scheme using LLM",
+    inputSchema: MarkAnswerSchema,
+  },
+  markAnswerHandler
 );

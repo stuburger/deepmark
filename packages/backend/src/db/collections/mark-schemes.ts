@@ -8,7 +8,7 @@ export interface MarkPoint {
 }
 
 export interface MarkScheme {
-  _id?: string;
+  _id: string;
   question_id: string;
   created_by: string;
   created_at: Date;

@@ -1,7 +1,7 @@
 import { db } from "../client";
 
 export interface Question {
-  _id?: string;
+  _id: string;
   question_text: string;
   topic: string;
   created_by: string;

@@ -15,3 +15,6 @@ export { CreateMarkSchemeSchema } from "./create-mark-scheme/schema";
 
 export { handler as updateMarkSchemeHandler } from "./update-mark-scheme/tool";
 export { UpdateMarkSchemeSchema } from "./update-mark-scheme/schema";
+
+export { handler as answerQuestionHandler } from "./answer-question/tool";
+export { AnswerQuestionSchema } from "./answer-question/schema";

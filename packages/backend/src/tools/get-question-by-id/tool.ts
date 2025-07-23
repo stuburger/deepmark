@@ -1,6 +1,7 @@
 import { type ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { GetQuestionByIdSchema } from "./schema";
 import { questions } from "../../db/collections/questions";
+import { ObjectId } from "mongodb";
 
 export const handler: ToolCallback<typeof GetQuestionByIdSchema> = async (
   args
@@ -9,7 +10,7 @@ export const handler: ToolCallback<typeof GetQuestionByIdSchema> = async (
 
   try {
     // Query the database for the specific question
-    const question = await questions.findOne({ _id: id });
+    const question = await questions.findOne({ _id: new ObjectId(id) });
 
     if (!question) {
       return {

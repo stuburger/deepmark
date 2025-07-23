@@ -12,6 +12,8 @@ import {
   CreateMarkSchemeSchema,
   updateMarkSchemeHandler,
   UpdateMarkSchemeSchema,
+  answerQuestionHandler,
+  AnswerQuestionSchema,
 } from "./tools";
 
 export const server = new McpServer({
@@ -81,4 +83,14 @@ server.registerTool(
     inputSchema: UpdateMarkSchemeSchema,
   },
   updateMarkSchemeHandler
+);
+
+server.registerTool(
+  "answer-question",
+  {
+    title: "Answer Question",
+    description: "Submit a student answer to a GCSE question",
+    inputSchema: AnswerQuestionSchema,
+  },
+  answerQuestionHandler
 );

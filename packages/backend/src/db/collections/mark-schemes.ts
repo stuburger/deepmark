@@ -1,3 +1,4 @@
+import { ObjectId } from "mongodb";
 import { db } from "../client";
 
 export interface MarkPoint {
@@ -8,7 +9,7 @@ export interface MarkPoint {
 }
 
 export interface MarkScheme {
-  _id: string;
+  _id: ObjectId;
   question_id: string;
   created_by: string;
   created_at: Date;

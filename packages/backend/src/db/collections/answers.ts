@@ -1,7 +1,8 @@
+import { ObjectId } from "mongodb";
 import { db } from "../client";
 
 export interface Answer {
-  _id: string;
+  _id: ObjectId;
   question_id: string;
   student_id: string;
   student_answer: string;

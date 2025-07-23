@@ -1,6 +1,7 @@
 import { ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { UpdateMarkSchemeSchema } from "./schema";
 import { mark_schemes, MarkScheme } from "../../db/collections/mark-schemes";
+import { ObjectId } from "mongodb";
 
 export const handler: ToolCallback<typeof UpdateMarkSchemeSchema> = async (
   args
@@ -9,7 +10,10 @@ export const handler: ToolCallback<typeof UpdateMarkSchemeSchema> = async (
 
   try {
     // Check if the mark scheme exists
-    const existingMarkScheme = await mark_schemes.findOne({ _id: id });
+    const existingMarkScheme = await mark_schemes.findOne({
+      _id: new ObjectId(id),
+    });
+
     if (!existingMarkScheme) {
       return {
         content: [
@@ -106,7 +110,7 @@ export const handler: ToolCallback<typeof UpdateMarkSchemeSchema> = async (
 
     // Update the mark scheme in the database
     const result = await mark_schemes.updateOne(
-      { _id: id },
+      { _id: new ObjectId(id) },
       { $set: updateData }
     );
 
@@ -133,7 +137,9 @@ export const handler: ToolCallback<typeof UpdateMarkSchemeSchema> = async (
     }
 
     // Get the updated mark scheme for response
-    const updatedMarkScheme = await mark_schemes.findOne({ _id: id });
+    const updatedMarkScheme = await mark_schemes.findOne({
+      _id: new ObjectId(id),
+    });
 
     return {
       content: [

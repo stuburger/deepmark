@@ -1,6 +1,7 @@
 import { type ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { CreateQuestionSchema } from "./schema";
 import { questions } from "../../db/collections/questions";
+import { ObjectId } from "mongodb";
 
 // export const title = "Create a new GCSE question";
 
@@ -15,6 +16,7 @@ export const handler: ToolCallback<typeof CreateQuestionSchema> = async (
   try {
     // Create the question document
     const questionData = {
+      _id: new ObjectId(),
       question_text,
       topic,
       subject,

@@ -1,3 +1,4 @@
+import { ObjectId } from "mongodb";
 import { db } from "../client";
 
 export interface MarkPointResult {
@@ -9,7 +10,7 @@ export interface MarkPointResult {
 }
 
 export interface MarkingResult {
-  _id: string;
+  _id: ObjectId;
   answer_id: string;
   mark_points_results: MarkPointResult[];
   total_score: number;

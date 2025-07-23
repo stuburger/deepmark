@@ -1,6 +1,7 @@
 import { type ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { UpdateQuestionByIdSchema } from "./schema";
 import { Question, questions } from "../../db/collections/questions";
+import { ObjectId } from "mongodb";
 
 export const handler: ToolCallback<typeof UpdateQuestionByIdSchema> = async (
   args
@@ -9,7 +10,8 @@ export const handler: ToolCallback<typeof UpdateQuestionByIdSchema> = async (
 
   try {
     // Check if the question exists
-    const existingQuestion = await questions.findOne({ _id: id });
+    const existingQuestion = await questions.findOne({ _id: new ObjectId(id) });
+
     if (!existingQuestion) {
       return {
         content: [
@@ -48,7 +50,10 @@ export const handler: ToolCallback<typeof UpdateQuestionByIdSchema> = async (
     }
 
     // Update the question in the database
-    const result = await questions.updateOne({ _id: id }, { $set: updateData });
+    const result = await questions.updateOne(
+      { _id: new ObjectId(id) },
+      { $set: updateData }
+    );
 
     if (result.matchedCount === 0) {
       return {
@@ -73,7 +78,7 @@ export const handler: ToolCallback<typeof UpdateQuestionByIdSchema> = async (
     }
 
     // Get the updated question for response
-    const updatedQuestion = await questions.findOne({ _id: id });
+    const updatedQuestion = await questions.findOne({ _id: new ObjectId(id) });
 
     // Format the response
     const updatedFields = Object.keys(updateData).filter(

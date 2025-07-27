@@ -70,6 +70,7 @@ export const handler = tool(MarkAnswerSchema, async (args, extra) => {
   const markingResultData: MarkingResult = {
     _id: new ObjectId(),
     answer_id,
+
     mark_points_results: markingResult.mark_points_results,
     total_score: markingResult.total_score,
     max_possible_score: answer.max_possible_score,

@@ -36,13 +36,14 @@ export const error = <T extends Record<string, unknown>>(
  * };
  *
  * // You can now use:
- * export const handler = tool("my-tool", async (args, extra) => {
+ * export const handler = tool(MySchema, async (args, extra) => {
  *   // ... tool logic
  *   return text("Success!");
  * });
  * ```
  */
 export const tool = <T extends z.ZodRawShape>(
+  schema: T,
   handler: (
     args: z.infer<z.ZodObject<T>>,
     extra?: any

@@ -191,14 +191,21 @@ async function callLLMForMarking(
   feedback_summary: string;
 }> {
   // Create the prompt for the LLM
-  const prompt = `You are an expert GCSE examiner. Please mark the following student answer against the provided mark scheme.
+  const prompt = `You are an expert GCSE examiner. Mark the following student answer against the provided mark scheme.
+
+<Topic>
+${question.topic}
+</Topic>
 
 <Question>
-Question: ${question.question_text}
-Topic: ${question.topic}
+${question.question_text}
 </Question>
 
 <MarkScheme>
+Description: ${markScheme.description}
+
+Additional marking guidance for this question: 
+${markScheme.guidance ?? "N/A"}
 
 Total Marks: ${markScheme.points_total}
 
@@ -231,7 +238,7 @@ PENALTY SYSTEM:
 - When in doubt, under-mark rather than over-mark
 </MarkingRules>
 
-<Instructions>
+<LLMInstructions>
 Please analyze the student's answer systematically using chain-of-thought reasoning. For each mark point:
 
 1. Think through the criteria step-by-step
@@ -240,14 +247,16 @@ Please analyze the student's answer systematically using chain-of-thought reason
 4. Provide detailed reasoning for your decision
 5. Award 0 or 1 mark based on clear evidence
 
-Your chain-of-thought reasoning should be systematic and thorough, as shown in the example. Think through each mark point carefully before making your decision.
+Your chain-of-thought reasoning should be systematic and thorough, as shown in the example. 
+Think through each mark point carefully before making your decision.
+
+Provide your response in the exact JSON format shown above.
+</LLMInstructions>
 
 <ExampleOutputFormat>
 ${JSON.stringify(exampleMarkingResult, null, 2)}
 </ExampleOutputFormat>
-
-Provide your response in the exact JSON format shown above.
-</Instructions>`;
+`;
 
   const { object } = await generateObject({
     model: openai("gpt-4o"),

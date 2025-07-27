@@ -17,6 +17,8 @@ erDiagram
     MARK_SCHEMES {
         ObjectId _id PK
         string question_id FK
+        string description
+        string instructions
         string created_by
         Date created_at
         Date updated_at
@@ -83,7 +85,7 @@ This diagram represents the GCSE AI Examiner database schema with the following 
 
 ### Core Entities
 - **QUESTIONS**: Stores exam questions with metadata like subject, topic, difficulty, and points
-- **MARK_SCHEMES**: Contains marking criteria for each question, linked to questions via question_id
+- **MARK_SCHEMES**: Contains marking criteria for each question with description and LLM instructions, linked to questions via question_id
 - **ANSWERS**: Student submissions linked to questions via question_id
 - **MARKING_RESULTS**: AI-generated marking results linked to answers via answer_id
 

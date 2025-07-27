@@ -1,12 +1,13 @@
 import { type ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { CreateMarkSchemeSchema } from "./schema";
-import { mark_schemes } from "../../db/collections/mark-schemes";
+import { mark_schemes, MarkScheme } from "../../db/collections/mark-schemes";
 import { questions } from "../../db/collections/questions";
 import { ObjectId } from "mongodb";
 import { text, tool } from "../tool-utils";
 
 export const handler = tool(CreateMarkSchemeSchema, async (args) => {
-  const { question_id, points_total, mark_points } = args;
+  const { question_id, description, instructions, points_total, mark_points } =
+    args;
 
   console.log("[create-mark-scheme] Handler invoked", {
     question_id,
@@ -52,9 +53,11 @@ export const handler = tool(CreateMarkSchemeSchema, async (args) => {
   }
 
   // Create the mark scheme document
-  const markSchemeData = {
+  const markSchemeData: MarkScheme = {
     _id: new ObjectId(),
     question_id,
+    description,
+    guidance: instructions,
     points_total,
     mark_points,
     created_by: "system", // TODO: Get from auth context when available
@@ -83,11 +86,14 @@ export const handler = tool(CreateMarkSchemeSchema, async (args) => {
     `Mark scheme created successfully! Mark Scheme ID: ${result.insertedId}
 
 Question: ${questionPreview}
+Description: ${description}
 Total Points: ${points_total}
 Number of Mark Points: ${mark_points.length}`,
     {
       mark_scheme_id: result.insertedId.toString(),
       question_id,
+      description,
+      instructions,
       points_total,
       mark_points_count: mark_points.length,
       created_at: markSchemeData.created_at.toISOString(),

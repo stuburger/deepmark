@@ -15,6 +15,15 @@ export const CreateMarkSchemeSchema = {
   question_id: z
     .string()
     .describe("The ID of the question this mark scheme is for"),
+  description: z
+    .string()
+    .describe("Description of what this mark scheme is for"),
+  guidance: z
+    .string()
+    .optional()
+    .describe(
+      "Marking guidance for the LLM on how to apply this mark scheme to the question"
+    ),
   points_total: z
     .number()
     .int()

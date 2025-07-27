@@ -12,13 +12,15 @@ erDiagram
         enum subject "biology|chemistry|physics|english"
         number points
         enum difficulty_level "easy|medium|hard|expert"
+        array ancestors "parent question IDs"
+        string part_label "e.g., a, b, c"
     }
 
     MARK_SCHEMES {
         ObjectId _id PK
         string question_id FK
         string description
-        string instructions
+        string guidance
         string created_by
         Date created_at
         Date updated_at
@@ -65,6 +67,7 @@ erDiagram
     }
 
     %% Relationships
+    QUESTIONS ||--o{ QUESTIONS : "has_parts"
     QUESTIONS ||--o{ MARK_SCHEMES : "has"
     MARK_SCHEMES ||--o{ MARK_POINTS : "contains"
     QUESTIONS ||--o{ ANSWERS : "receives"
@@ -94,6 +97,7 @@ This diagram represents the GCSE AI Examiner database schema with the following 
 - **MARK_POINT_RESULTS**: Embedded in MARKING_RESULTS, contains AI evaluation of each mark point
 
 ### Key Relationships
+- Questions can have multiple sub-questions/parts (self-referencing one-to-many)
 - Questions can have multiple mark schemes (one-to-many)
 - Questions can receive multiple answers (one-to-many)
 - Answers can have one marking result (one-to-one)
@@ -101,8 +105,14 @@ This diagram represents the GCSE AI Examiner database schema with the following 
 - Marking results contain multiple mark point results (one-to-many)
 
 ### Data Flow
-1. Questions are created with subject, topic, and difficulty
-2. Mark schemes are created for questions with detailed marking criteria
-3. Students submit answers to questions
-4. AI system evaluates answers against mark schemes
-5. Marking results are generated with detailed feedback 
+1. Questions are created with subject, topic, and difficulty (ancestors: [] for main questions)
+2. Sub-questions/parts are created with ancestors array pointing to parent questions
+3. Mark schemes are created for questions with detailed marking criteria
+4. Students submit answers to questions (can be for main questions or sub-questions)
+5. AI system evaluates answers against mark schemes
+6. Marking results are generated with detailed feedback
+
+### Hierarchical Structure Examples
+- **Main Question**: ancestors: [], part_label: undefined
+- **Question 1, Part A**: ancestors: ["question_id_1"], part_label: "a"
+- **Question 1, Part A.1**: ancestors: ["question_id_1", "question_id_1a"], part_label: "1" 

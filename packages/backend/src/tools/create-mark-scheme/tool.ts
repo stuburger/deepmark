@@ -6,7 +6,7 @@ import { ObjectId } from "mongodb";
 import { text, tool } from "../tool-utils";
 
 export const handler = tool(CreateMarkSchemeSchema, async (args) => {
-  const { question_id, description, instructions, points_total, mark_points } =
+  const { question_id, description, guidance, points_total, mark_points } =
     args;
 
   console.log("[create-mark-scheme] Handler invoked", {
@@ -57,7 +57,7 @@ export const handler = tool(CreateMarkSchemeSchema, async (args) => {
     _id: new ObjectId(),
     question_id,
     description,
-    guidance: instructions,
+    guidance,
     points_total,
     mark_points,
     created_by: "system", // TODO: Get from auth context when available
@@ -93,7 +93,7 @@ Number of Mark Points: ${mark_points.length}`,
       mark_scheme_id: result.insertedId.toString(),
       question_id,
       description,
-      instructions,
+      guidance,
       points_total,
       mark_points_count: mark_points.length,
       created_at: markSchemeData.created_at.toISOString(),

@@ -17,4 +17,16 @@ export const CreateQuestionSchema = {
   subject: z
     .enum(["biology", "chemistry", "physics", "english"])
     .describe("Subject area for the question"),
+  parent_question_id: z
+    .string()
+    .optional()
+    .describe(
+      "Array of parent question IDs for hierarchical structure. Empty array for main questions."
+    ),
+  part_label: z
+    .string()
+    .optional()
+    .describe(
+      "Part label for sub-questions (e.g., 'a', 'b', 'c', '1', '2', '3')"
+    ),
 };

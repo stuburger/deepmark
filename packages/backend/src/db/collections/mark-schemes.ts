@@ -12,7 +12,7 @@ export interface MarkScheme {
   _id: ObjectId;
   question_id: string;
   description: string;
-  guidance: string;
+  guidance?: string;
   created_by: string;
   created_at: Date;
   updated_at: Date;

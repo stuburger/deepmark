@@ -1,3 +1,4 @@
+import { ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 
@@ -44,10 +45,7 @@ export const error = <T extends Record<string, unknown>>(
  */
 export const tool = <T extends z.ZodRawShape>(
   schema: T,
-  handler: (
-    args: z.infer<z.ZodObject<T>>,
-    extra?: any
-  ) => Promise<CallToolResult> | CallToolResult
+  handler: ToolCallback<T>
 ) => {
   return async (args: z.infer<z.ZodObject<T>>, extra?: any) => {
     try {

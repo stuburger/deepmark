@@ -18,67 +18,55 @@ const openai = createOpenAI({
   apiKey: Resource.OpenAiApiKey.value,
 });
 
-export const handler = tool(MarkAnswerSchema, async (args) => {
+export const handler = tool(MarkAnswerSchema, async (args, extra) => {
   const { answer_id, include_mark_result } = args;
 
-  console.log("[mark-answer] Handler invoked", { answer_id });
-
-  // Get the answer
   const answer = await answers.findOne({ _id: new ObjectId(answer_id) });
-  console.log("[mark-answer] Fetched answer", { answer });
 
   if (!answer) {
-    console.log(`[mark-answer] Answer not found: ${answer_id}`);
-    return text(`Answer with ID ${answer_id} not found.`);
+    throw new Error(`Answer with ID ${answer_id} not found.`);
   }
 
-  // Check if already marked
   if (answer.marking_status === "completed") {
-    console.log(`[mark-answer] Answer already marked: ${answer_id}`);
     return text(`Answer ${answer_id} has already been marked.`);
   }
 
-  // Get the question
   const question = await questions.findOne({
     _id: new ObjectId(answer.question_id),
   });
-  console.log("[mark-answer] Fetched question", {
-    question_id: answer.question_id,
-    question,
-  });
 
   if (!question) {
-    console.log(`[mark-answer] Question not found for answer: ${answer_id}`);
-    return text(`Question for answer ${answer_id} not found.`);
+    throw new Error(`Question for answer ${answer_id} not found.`);
   }
 
-  // Get the latest mark scheme created
   const markScheme = await mark_schemes.findOne(
     { question_id: answer.question_id },
     { sort: { created_at: -1 } }
   );
 
-  console.log("[mark-answer] Fetched mark scheme", {
-    question_id: answer.question_id,
-    markScheme,
-  });
-
   if (!markScheme) {
-    console.log(
-      `[mark-answer] Mark scheme not found for question: ${answer.question_id}`
+    throw new Error(
+      `Mark scheme for question ${answer.question_id} not found.
+      Create a mark scheme first.
+      `
     );
-    return text(`Mark scheme for question ${answer.question_id} not found.`);
   }
 
-  // Call external LLM for marking
-  console.log("[mark-answer] Calling LLM for marking", {
-    question_id: question._id,
-    answer_id,
-  });
-  const markingResult = await callLLMForMarking(question, markScheme, answer);
-  console.log("[mark-answer] LLM marking result", { markingResult });
+  // extra.sendNotification({
+  //   method: "notifications/message",
+  //   params: {
+  //     level: "info",
+  //     logger: "marking",
+  //     data: {
+  //       message: "Starting marking process...",
+  //       answer_id,
+  //       question_id: question._id.toString(),
+  //     },
+  //   },
+  // });
 
-  // Create marking result document
+  const markingResult = await callLLMForMarking(question, markScheme, answer);
+
   const markingResultData: MarkingResult = {
     _id: new ObjectId(),
     answer_id,
@@ -89,14 +77,9 @@ export const handler = tool(MarkAnswerSchema, async (args) => {
     llm_reasoning: markingResult.llm_reasoning,
     feedback_summary: markingResult.feedback_summary,
   };
-  console.log("[mark-answer] Inserting marking result", {
-    markingResultData,
-  });
 
-  // Insert marking result
   await marking_results.insertOne(markingResultData);
 
-  // Update answer with marking status and score
   await answers.updateOne(
     { _id: new ObjectId(answer_id) },
     {
@@ -107,15 +90,9 @@ export const handler = tool(MarkAnswerSchema, async (args) => {
       },
     }
   );
-  console.log("[mark-answer] Updated answer marking status to completed", {
-    answer_id,
-    total_score: markingResult.total_score,
-  });
 
-  // Prepare response content
   let responseText = `Answer marked successfully! Score: ${markingResult.total_score}/${answer.max_possible_score}`;
 
-  // Include marking result if requested
   if (include_mark_result) {
     responseText += `\n\nMarking Result:\n${JSON.stringify(
       markingResultData,

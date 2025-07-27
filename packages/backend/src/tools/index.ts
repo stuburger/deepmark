@@ -21,3 +21,6 @@ export { AnswerQuestionSchema } from "./answer-question/schema";
 
 export { handler as markAnswerHandler } from "./mark-answer/tool";
 export { MarkAnswerSchema } from "./mark-answer/schema";
+
+export { handler as getMarkResultByIdHandler } from "./get-mark-result-by-id/tool";
+export { GetMarkResultByIdSchema } from "./get-mark-result-by-id/schema";

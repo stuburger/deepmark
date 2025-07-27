@@ -15,7 +15,7 @@ export const handler: ToolCallback<typeof ListQuestionsSchema> = async (
     }
 
     // Query the database
-    const questionList = await questions.find(filter).toArray();
+    const questionList = await questions.find().toArray();
 
     if (questionList.length === 0) {
       const message = subject

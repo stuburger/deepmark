@@ -2,6 +2,7 @@ import { type ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { CreateMarkSchemeSchema } from "./schema";
 import { mark_schemes } from "../../db/collections/mark-schemes";
 import { questions } from "../../db/collections/questions";
+import { ObjectId } from "mongodb";
 
 export const handler: ToolCallback<typeof CreateMarkSchemeSchema> = async (
   args
@@ -29,7 +30,9 @@ export const handler: ToolCallback<typeof CreateMarkSchemeSchema> = async (
 
   try {
     // Validate that the question exists
-    const question = await questions.findOne({ _id: question_id });
+    const question = await questions.findOne({
+      _id: new ObjectId(question_id),
+    });
 
     if (!question) {
       return {
@@ -69,6 +72,7 @@ export const handler: ToolCallback<typeof CreateMarkSchemeSchema> = async (
 
     // Create the mark scheme document
     const markSchemeData = {
+      _id: new ObjectId(),
       question_id,
       points_total,
       mark_points,

@@ -12,21 +12,27 @@ import { ObjectId } from "mongodb";
 import { generateObject } from "ai";
 import { createOpenAI } from "@ai-sdk/openai";
 import z from "zod";
+import { Resource } from "sst";
+
 const openai = createOpenAI({
-  apiKey: process.env.OPENAI_API_KEY || "",
+  apiKey: Resource.OpenAiApiKey.value,
 });
 
 export const handler: ToolCallback<typeof MarkAnswerSchema> = async (
   args,
   extra
 ) => {
-  const { answer_id } = args;
+  const { answer_id, include_mark_result } = args;
+
+  console.log("[mark-answer] Handler invoked", { answer_id });
 
   try {
     // Get the answer
     const answer = await answers.findOne({ _id: new ObjectId(answer_id) });
+    console.log("[mark-answer] Fetched answer", { answer });
 
     if (!answer) {
+      console.log(`[mark-answer] Answer not found: ${answer_id}`);
       return {
         content: [
           {
@@ -39,6 +45,7 @@ export const handler: ToolCallback<typeof MarkAnswerSchema> = async (
 
     // Check if already marked
     if (answer.marking_status === "completed") {
+      console.log(`[mark-answer] Answer already marked: ${answer_id}`);
       return {
         content: [
           {
@@ -53,8 +60,13 @@ export const handler: ToolCallback<typeof MarkAnswerSchema> = async (
     const question = await questions.findOne({
       _id: new ObjectId(answer.question_id),
     });
+    console.log("[mark-answer] Fetched question", {
+      question_id: answer.question_id,
+      question,
+    });
 
     if (!question) {
+      console.log(`[mark-answer] Question not found for answer: ${answer_id}`);
       return {
         content: [
           {
@@ -65,12 +77,21 @@ export const handler: ToolCallback<typeof MarkAnswerSchema> = async (
       };
     }
 
-    // Get the mark scheme
-    const markScheme = await mark_schemes.findOne({
+    // Get the latest mark scheme created
+    const markScheme = await mark_schemes.findOne(
+      { question_id: answer.question_id },
+      { sort: { created_at: -1 } }
+    );
+
+    console.log("[mark-answer] Fetched mark scheme", {
       question_id: answer.question_id,
+      markScheme,
     });
 
     if (!markScheme) {
+      console.log(
+        `[mark-answer] Mark scheme not found for question: ${answer.question_id}`
+      );
       return {
         content: [
           {
@@ -82,7 +103,12 @@ export const handler: ToolCallback<typeof MarkAnswerSchema> = async (
     }
 
     // Call external LLM for marking
+    console.log("[mark-answer] Calling LLM for marking", {
+      question_id: question._id,
+      answer_id,
+    });
     const markingResult = await callLLMForMarking(question, markScheme, answer);
+    console.log("[mark-answer] LLM marking result", { markingResult });
 
     // Create marking result document
     const markingResultData: MarkingResult = {
@@ -95,6 +121,9 @@ export const handler: ToolCallback<typeof MarkAnswerSchema> = async (
       llm_reasoning: markingResult.llm_reasoning,
       feedback_summary: markingResult.feedback_summary,
     };
+    console.log("[mark-answer] Inserting marking result", {
+      markingResultData,
+    });
 
     // Insert marking result
     await marking_results.insertOne(markingResultData);
@@ -110,27 +139,56 @@ export const handler: ToolCallback<typeof MarkAnswerSchema> = async (
         },
       }
     );
+    console.log("[mark-answer] Updated answer marking status to completed", {
+      answer_id,
+      total_score: markingResult.total_score,
+    });
+
+    // Prepare response content
+    const responseContent: Array<{ type: "text"; text: string }> = [
+      {
+        type: "text",
+        text: `Answer marked successfully! Score: ${markingResult.total_score}/${answer.max_possible_score}`,
+      },
+    ];
+
+    // Include marking result if requested
+    if (include_mark_result) {
+      responseContent.push({
+        type: "text",
+        text: `\n\nMarking Result:\n${JSON.stringify(
+          markingResultData,
+          null,
+          2
+        )}`,
+      });
+    }
 
     return {
-      content: [
-        {
-          type: "text",
-          text: `Answer marked successfully! Score: ${markingResult.total_score}/${answer.max_possible_score}`,
-        },
-      ],
+      content: responseContent,
     };
   } catch (error) {
-    console.error("Error marking answer:", error);
+    console.error("[mark-answer] Error marking answer:", error);
 
     // Update answer status to failed
-    await answers.updateOne(
-      { _id: new ObjectId(answer_id) },
-      {
-        $set: {
-          marking_status: "failed",
-        },
-      }
-    );
+    try {
+      await answers.updateOne(
+        { _id: new ObjectId(answer_id) },
+        {
+          $set: {
+            marking_status: "failed",
+          },
+        }
+      );
+      console.log("[mark-answer] Updated answer marking status to failed", {
+        answer_id,
+      });
+    } catch (updateError) {
+      console.error(
+        "[mark-answer] Failed to update answer status to failed:",
+        updateError
+      );
+    }
 
     return {
       content: [

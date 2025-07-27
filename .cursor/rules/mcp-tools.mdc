@@ -1,0 +1,68 @@
+# MCP Tool Development Guidelines
+
+## Tool Registration
+All tools must be registered in [packages/backend/src/mcp-server.ts](mdc:packages/backend/src/mcp-server.ts):
+
+```typescript
+server.registerTool(
+  "tool-name",
+  {
+    title: "Human Readable Title",
+    description: "Detailed description with examples",
+    inputSchema: ToolSchema,
+  },
+  toolHandler
+);
+```
+
+## Tool Structure Requirements
+1. **Schema File** (`schema.ts`):
+   - Use Zod for validation
+   - Include descriptive text for each parameter
+   - Use appropriate Zod types (string, number, boolean, etc.)
+
+2. **Tool File** (`tool.ts`):
+   - Export handler function with proper typing
+   - Include comprehensive logging
+   - Handle errors gracefully
+   - Return structured responses
+
+3. **Index Export** ([packages/backend/src/tools/index.ts](mdc:packages/backend/src/tools/index.ts)):
+   - Export both schema and handler
+   - Use consistent naming pattern
+
+## Response Format
+All tools must return responses in this format:
+```typescript
+{
+  content: [
+    {
+      type: "text",
+      text: "Response content",
+    },
+  ],
+}
+```
+
+## Logging Standards
+- Use consistent prefixes: `[tool-name] Message`
+- Log input parameters (sanitized)
+- Log database operations
+- Log errors with full context
+- Log successful operations with key metrics
+
+## Database Integration
+- Use typed collections from [packages/backend/src/db/collections/](mdc:packages/backend/src/db/collections/)
+- Always validate ObjectIds before database queries
+- Handle missing documents gracefully
+- Update related documents when needed
+
+## Error Handling
+- Return user-friendly error messages
+- Log technical details for debugging
+- Update document status on failures
+- Provide actionable feedback when possible
+description:
+globs:
+alwaysApply: false
+---

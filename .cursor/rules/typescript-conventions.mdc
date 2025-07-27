@@ -1,0 +1,58 @@
+# TypeScript Conventions
+
+## Code Style
+- Use semicolons at the end of statements
+- Use double quotes for strings
+- Use trailing commas in objects and arrays
+- Use explicit return types for functions
+- Use `const` for immutable variables, `let` for mutable ones
+
+## MCP Tool Patterns
+Each MCP tool should follow this structure:
+
+```typescript
+// schema.ts
+import { z } from "zod";
+
+export const ToolNameSchema = {
+  param1: z.string().describe("Description of parameter"),
+  param2: z.number().optional(),
+};
+
+// tool.ts
+import { type ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { ToolNameSchema } from "./schema";
+
+export const handler: ToolCallback<typeof ToolNameSchema> = async (args) => {
+  // Implementation
+  return {
+    content: [
+      {
+        type: "text",
+        text: "Response text",
+      },
+    ],
+  };
+};
+```
+
+## Database Operations
+- Always use `ObjectId` for MongoDB IDs: `new ObjectId(id)`
+- Use typed collections from [packages/backend/src/db/collections/](mdc:packages/backend/src/db/collections/)
+- Include proper error handling and logging
+- Use console.log with context prefixes: `[tool-name] Message`
+
+## Error Handling
+- Wrap database operations in try-catch blocks
+- Return structured error responses
+- Log errors with context information
+- Update document status on failure (e.g., marking_status: "failed")
+
+## Environment Variables
+- Use SST Resource pattern: `Resource.OpenAiApiKey.value`
+- Define types in [sst-env.d.ts](mdc:sst-env.d.ts)
+- Never hardcode sensitive values
+description:
+globs:
+alwaysApply: false
+---

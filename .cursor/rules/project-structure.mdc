@@ -1,0 +1,47 @@
+# MCP GCSE Tooling Project Structure
+
+This is an MCP (Model Context Protocol) GCSE exam tooling project built with SST (Serverless Stack) and TypeScript. The project provides tools for managing exam questions, mark schemes, and automated marking.
+
+## Project Architecture
+
+### Root Structure
+- [package.json](mdc:package.json) - Main project configuration using Bun as package manager
+- [sst.config.ts](mdc:sst.config.ts) - SST infrastructure configuration
+- [biome.json](mdc:biome.json) - Code formatting and linting configuration
+- [README.md](mdc:README.md) - Project documentation
+
+### Backend Package
+The main backend logic is in `packages/backend/`:
+- [packages/backend/src/main.ts](mdc:packages/backend/src/main.ts) - Entry point
+- [packages/backend/src/mcp-server.ts](mdc:packages/backend/src/mcp-server.ts) - MCP server configuration
+- [packages/backend/src/routes.ts](mdc:packages/backend/src/routes.ts) - HTTP route handlers
+- [packages/backend/src/db/](mdc:packages/backend/src/db/) - Database collections and client
+
+### Tool Structure
+Each MCP tool follows a consistent pattern in `packages/backend/src/tools/`:
+- `tool-name/schema.ts` - Zod schema for input validation
+- `tool-name/tool.ts` - Tool implementation with handler function
+- [packages/backend/src/tools/index.ts](mdc:packages/backend/src/tools/index.ts) - Exports all tools
+
+### Infrastructure
+- [infra/api.ts](mdc:infra/api.ts) - SST API configuration
+- [sst-env.d.ts](mdc:sst-env.d.ts) - SST environment type definitions
+
+## Key Conventions
+
+1. **Package Manager**: Use Bun (check [bun.lockb](mdc:bun.lockb) exists)
+2. **Code Style**: Biome for formatting and linting
+3. **Type Safety**: Strict TypeScript with Zod schemas
+4. **Database**: MongoDB with typed collections
+5. **API**: SST serverless functions with Hono routing
+6. **MCP Tools**: Each tool has schema + implementation pattern
+
+## Database Collections
+- `questions` - GCSE exam questions
+- `mark_schemes` - Marking criteria for questions  
+- `answers` - Student answers to questions
+- `marking_results` - Automated marking results
+description:
+globs:
+alwaysApply: false
+---

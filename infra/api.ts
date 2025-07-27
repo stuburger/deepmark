@@ -9,6 +9,7 @@ export const auth = new sst.aws.Auth("Auth", {
 const api = new sst.aws.Function("Api", {
   url: true,
   streaming: !$dev,
+  timeout: "30 seconds",
   handler: "packages/backend/src/main.handler",
   link: [mongoUri, auth, openAiApiKey],
 });

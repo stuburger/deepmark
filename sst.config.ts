@@ -9,8 +9,8 @@ export default $config({
     };
   },
   async run() {
-    const { apiRouter } = await import("./infra/api");
+    const { apiRouter, interactions } = await import("./infra/api");
 
-    return { url: apiRouter.url };
+    return { url: apiRouter.url, interactions: interactions.url };
   },
 });

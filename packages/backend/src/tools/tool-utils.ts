@@ -10,6 +10,10 @@ export const text = <T extends Record<string, unknown>>(
   structuredContent: structuredData,
 });
 
+export const json = (json: any): CallToolResult => {
+  return text(JSON.stringify(text), json);
+};
+
 export const error = <T extends Record<string, unknown>>(
   message: string,
   errorData?: T

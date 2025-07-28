@@ -14,6 +14,14 @@ const api = new sst.aws.Function("Api", {
   link: [mongoUri, auth, openAiApiKey],
 });
 
+export const interactions = new sst.aws.Function("Interactions", {
+  url: true,
+  streaming: !$dev,
+  timeout: "30 seconds",
+  handler: "packages/backend/src/interactions/main.handler",
+  link: [mongoUri, auth, openAiApiKey],
+});
+
 export const apiRouter = new sst.aws.Router("ApiRouter", {
   // domain: `mcp.${$app.stage}.supalink.co`,
   routes: { "/*": api.url },

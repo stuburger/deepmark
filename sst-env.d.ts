@@ -18,6 +18,11 @@ declare module "sst" {
       "type": "sst.aws.Auth"
       "url": string
     }
+    "Interactions": {
+      "name": string
+      "type": "sst.aws.Function"
+      "url": string
+    }
     "MongoDbUri": {
       "type": "sst.sst.Secret"
       "value": string

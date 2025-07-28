@@ -20,19 +20,14 @@ export const ToolNameSchema = {
 };
 
 // tool.ts
-import { type ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { ToolNameSchema } from "./schema";
+import { tool, text } from "../tool-utils";
 
-export const handler: ToolCallback<typeof ToolNameSchema> = async (args) => {
+export const handler = tool(ToolNameSchema, async (args) => {  if(/* there is an error*/) {
+    throw new Error("Sample Error")
+  }
   // Implementation
-  return {
-    content: [
-      {
-        type: "text",
-        text: "Response text",
-      },
-    ],
-  };
+  return text("Sample response")
 };
 ```
 

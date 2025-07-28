@@ -20,6 +20,39 @@ import {
   GetMarkResultByIdSchema,
   createExamPaperHandler,
   CreateExamPaperSchema,
+  listExamPapersHandler,
+  ListExamPapersSchema,
+  // Phase 1: Core Exam Paper Management
+  getExamPaperByIdHandler,
+  GetExamPaperByIdSchema,
+  updateExamPaperHandler,
+  UpdateExamPaperSchema,
+  // Phase 2: Question Management
+  listQuestionsByExamPaperHandler,
+  ListQuestionsByExamPaperSchema,
+  reorderQuestionsInExamPaperHandler,
+  ReorderQuestionsInExamPaperSchema,
+  // Phase 3: Session Management
+  startExamSessionHandler,
+  StartExamSessionSchema,
+  completeExamSessionHandler,
+  CompleteExamSessionSchema,
+  getExamSessionByIdHandler,
+  GetExamSessionByIdSchema,
+  listExamSessionsHandler,
+  ListExamSessionsSchema,
+  // Phase 4: Answer Management
+  listAnswersByExamSessionHandler,
+  ListAnswersByExamSessionSchema,
+  getExamPaperProgressHandler,
+  GetExamPaperProgressSchema,
+  // Phase 5: Analytics
+  getExamPaperStatisticsHandler,
+  GetExamPaperStatisticsSchema,
+  getStudentPerformanceByExamPaperHandler,
+  GetStudentPerformanceByExamPaperSchema,
+  compareExamPapersHandler,
+  CompareExamPapersSchema,
 } from "./tools";
 
 export const server = new McpServer({
@@ -217,4 +250,157 @@ server.registerTool(
     inputSchema: CreateExamPaperSchema,
   },
   createExamPaperHandler
+);
+
+server.registerTool(
+  "list-exam-papers",
+  {
+    title: "List Exam Papers",
+    description: "List all exam papers with optional filtering",
+    inputSchema: ListExamPapersSchema,
+  },
+  listExamPapersHandler
+);
+
+// Phase 1: Core Exam Paper Management
+server.registerTool(
+  "get-exam-paper-by-id",
+  {
+    title: "Get Exam Paper by ID",
+    description:
+      "Retrieve a specific exam paper by its ID with question details",
+    inputSchema: GetExamPaperByIdSchema,
+  },
+  getExamPaperByIdHandler
+);
+
+server.registerTool(
+  "update-exam-paper",
+  {
+    title: "Update Exam Paper",
+    description: "Update an existing exam paper by its ID",
+    inputSchema: UpdateExamPaperSchema,
+  },
+  updateExamPaperHandler
+);
+
+// Phase 2: Question Management
+server.registerTool(
+  "list-questions-by-exam-paper",
+  {
+    title: "List Questions by Exam Paper",
+    description:
+      "List all questions in a specific exam paper, organized by sections",
+    inputSchema: ListQuestionsByExamPaperSchema,
+  },
+  listQuestionsByExamPaperHandler
+);
+
+server.registerTool(
+  "reorder-questions-in-exam-paper",
+  {
+    title: "Reorder Questions in Exam Paper",
+    description: "Reorder questions within a specific section of an exam paper",
+    inputSchema: ReorderQuestionsInExamPaperSchema,
+  },
+  reorderQuestionsInExamPaperHandler
+);
+
+// Phase 3: Session Management
+server.registerTool(
+  "start-exam-session",
+  {
+    title: "Start Exam Session",
+    description:
+      "Start a new exam session for a student taking a specific exam paper",
+    inputSchema: StartExamSessionSchema,
+  },
+  startExamSessionHandler
+);
+
+server.registerTool(
+  "complete-exam-session",
+  {
+    title: "Complete Exam Session",
+    description: "Complete an exam session with final score and status",
+    inputSchema: CompleteExamSessionSchema,
+  },
+  completeExamSessionHandler
+);
+
+server.registerTool(
+  "get-exam-session-by-id",
+  {
+    title: "Get Exam Session by ID",
+    description:
+      "Retrieve a specific exam session by its ID with calculated metrics",
+    inputSchema: GetExamSessionByIdSchema,
+  },
+  getExamSessionByIdHandler
+);
+
+server.registerTool(
+  "list-exam-sessions",
+  {
+    title: "List Exam Sessions",
+    description: "List exam sessions with optional filtering and pagination",
+    inputSchema: ListExamSessionsSchema,
+  },
+  listExamSessionsHandler
+);
+
+// Phase 4: Answer Management
+server.registerTool(
+  "list-answers-by-exam-session",
+  {
+    title: "List Answers by Exam Session",
+    description: "List all answers submitted in a specific exam session",
+    inputSchema: ListAnswersByExamSessionSchema,
+  },
+  listAnswersByExamSessionHandler
+);
+
+server.registerTool(
+  "get-exam-paper-progress",
+  {
+    title: "Get Exam Paper Progress",
+    description:
+      "Get detailed progress information for a student on a specific exam paper",
+    inputSchema: GetExamPaperProgressSchema,
+  },
+  getExamPaperProgressHandler
+);
+
+// Phase 5: Analytics
+server.registerTool(
+  "get-exam-paper-statistics",
+  {
+    title: "Get Exam Paper Statistics",
+    description:
+      "Get comprehensive statistics and analytics for a specific exam paper",
+    inputSchema: GetExamPaperStatisticsSchema,
+  },
+  getExamPaperStatisticsHandler
+);
+
+server.registerTool(
+  "get-student-performance-by-exam-paper",
+  {
+    title: "Get Student Performance by Exam Paper",
+    description:
+      "Analyze a student's performance on a specific exam paper with detailed metrics",
+    inputSchema: GetStudentPerformanceByExamPaperSchema,
+  },
+  getStudentPerformanceByExamPaperHandler
+);
+
+server.registerTool(
+  "compare-exam-papers",
+  {
+    title: "Compare Exam Papers",
+    description:
+      "Compare multiple exam papers across various metrics and performance indicators",
+    inputSchema: CompareExamPapersSchema,
+  },
+  compareExamPapersHandler
 );

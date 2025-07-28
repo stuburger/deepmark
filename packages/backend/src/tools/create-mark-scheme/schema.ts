@@ -30,4 +30,8 @@ export const CreateMarkSchemeSchema = {
     .positive()
     .describe("Total number of points for the mark scheme"),
   mark_points: z.array(MarkPointSchema).describe("Array of mark points"),
+  tags: z
+    .array(z.string())
+    .optional()
+    .describe("Array of tags to categorize and organize the mark scheme"),
 };

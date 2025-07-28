@@ -6,12 +6,19 @@ import { ObjectId } from "mongodb";
 import { text, tool } from "../tool-utils";
 
 export const handler = tool(CreateMarkSchemeSchema, async (args) => {
-  const { question_id, description, guidance, points_total, mark_points } =
-    args;
+  const {
+    question_id,
+    description,
+    guidance,
+    points_total,
+    mark_points,
+    tags = [],
+  } = args;
 
   console.log("[create-mark-scheme] Handler invoked", {
     question_id,
     points_total,
+    tags,
   });
 
   // Validate total points matches sum of mark points
@@ -59,6 +66,7 @@ export const handler = tool(CreateMarkSchemeSchema, async (args) => {
     description,
     guidance,
     points_total,
+    tags: tags || [],
     mark_points,
     created_by: "system", // TODO: Get from auth context when available
     created_at: new Date(),
@@ -82,11 +90,13 @@ export const handler = tool(CreateMarkSchemeSchema, async (args) => {
     question.question_text.substring(0, 100) +
     (question.question_text.length > 100 ? "..." : "");
 
+  const tagsInfo = tags && tags.length > 0 ? `\nTags: ${tags.join(", ")}` : "";
+
   return text(
     `Mark scheme created successfully! Mark Scheme ID: ${result.insertedId}
 
 Question: ${questionPreview}
-Description: ${description}
+Description: ${description}${tagsInfo}
 Total Points: ${points_total}
 Number of Mark Points: ${mark_points.length}`,
     {
@@ -94,6 +104,7 @@ Number of Mark Points: ${mark_points.length}`,
       question_id,
       description,
       guidance,
+      tags,
       points_total,
       mark_points_count: mark_points.length,
       created_at: markSchemeData.created_at.toISOString(),

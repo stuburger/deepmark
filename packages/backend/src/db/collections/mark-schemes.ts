@@ -15,6 +15,7 @@ export interface MarkScheme {
   guidance?: string;
   created_by: string;
   created_at: Date;
+  tags: string[];
   updated_at: Date;
   points_total: number;
   mark_points: MarkPoint[];

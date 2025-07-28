@@ -21,12 +21,11 @@ export const CreateQuestionSchema = {
     .string()
     .optional()
     .describe(
-      "Array of parent question IDs for hierarchical structure. Empty array for main questions."
+      "The parent question ID for hierarchical structure. Omit for new question."
     ),
-  part_label: z
-    .string()
-    .optional()
-    .describe(
-      "Part label for sub-questions (e.g., 'a', 'b', 'c', '1', '2', '3')"
-    ),
+  part_label: z.string().describe(
+    `Part label for sub-questions. 
+     - Top level questions are always numbers (e.g. '1', '2', '3'). 
+     - Sub-questions are always letters (e.g. 'a', 'b', 'c')`
+  ),
 };

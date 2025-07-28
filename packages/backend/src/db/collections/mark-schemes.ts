@@ -19,6 +19,10 @@ export interface MarkScheme {
   updated_at: Date;
   points_total: number;
   mark_points: MarkPoint[];
+
+  // NEW: Exam paper association
+  exam_paper_id: ObjectId; // Reference to exam_paper
+  question_number: number; // Position within exam paper
 }
 
 export const mark_schemes = db.collection<MarkScheme>("mark_schemes");

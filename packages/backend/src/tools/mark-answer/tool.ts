@@ -134,7 +134,7 @@ const markingResultSchema = z.object({
 });
 
 // Create example object that conforms to the schema
-const exampleMarkingResult = {
+const exampleMarkingResult: z.infer<typeof markingResultSchema> = {
   mark_points_results: [
     {
       point_number: 1,

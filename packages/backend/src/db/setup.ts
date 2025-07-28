@@ -1,4 +1,5 @@
-import { initializeIndexes, runMigration } from "./index";
+import { initializeIndexes } from "./init-indexes";
+import { runMigrationToRemoveExamPaperAssociations } from "./migration-utils";
 
 /**
  * Complete database setup including migration and index creation
@@ -7,8 +8,8 @@ export async function setupDatabase() {
   console.log("🔧 Setting up database...");
 
   try {
-    // Run migration first to ensure all data has exam paper associations
-    await runMigration();
+    // Run migration first to remove exam paper associations
+    await runMigrationToRemoveExamPaperAssociations();
 
     // Then create indexes for optimal performance
     await initializeIndexes();
@@ -42,7 +43,7 @@ export async function runMigrationOnly() {
   console.log("🔧 Running database migration...");
 
   try {
-    await runMigration();
+    await runMigrationToRemoveExamPaperAssociations();
     console.log("✅ Database migration completed successfully!");
   } catch (error) {
     console.error("❌ Database migration failed:", error);

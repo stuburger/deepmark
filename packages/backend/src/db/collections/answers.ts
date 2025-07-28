@@ -11,9 +11,6 @@ export interface Answer {
   total_score?: number;
   max_possible_score: number;
   marking_status: "pending" | "completed" | "failed";
-
-  // NEW: Exam paper context
-  exam_paper_id: ObjectId; // Reference to exam_paper
   exam_session_id?: string; // For grouping answers from same exam session
 }
 

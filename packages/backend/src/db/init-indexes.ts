@@ -17,25 +17,22 @@ export async function initializeIndexes() {
     await exam_papers.createIndex({ is_active: 1 });
 
     // Questions indexes
-    await questions.createIndex({ exam_paper_id: 1, question_number: 1 });
     await questions.createIndex({ subject: 1, topic: 1 });
-    await questions.createIndex({ exam_paper_id: 1, section: 1 });
+    await questions.createIndex({ created_by: 1 });
+    await questions.createIndex({ difficulty_level: 1 });
 
     // Answers indexes
-    await answers.createIndex({ exam_paper_id: 1, student_id: 1 });
     await answers.createIndex({ question_id: 1 });
+    await answers.createIndex({ student_id: 1 });
     await answers.createIndex({ exam_session_id: 1 });
     await answers.createIndex({ marking_status: 1 });
 
     // Marking results indexes
-    await marking_results.createIndex({ exam_paper_id: 1, answer_id: 1 });
     await marking_results.createIndex({ answer_id: 1 });
-    await marking_results.createIndex({ exam_paper_id: 1, question_number: 1 });
 
     // Mark schemes indexes
-    await mark_schemes.createIndex({ exam_paper_id: 1, question_id: 1 });
     await mark_schemes.createIndex({ question_id: 1 });
-    await mark_schemes.createIndex({ exam_paper_id: 1, question_number: 1 });
+    await mark_schemes.createIndex({ created_by: 1 });
 
     // Exam sessions indexes
     await exam_sessions.createIndex({ exam_paper_id: 1, student_id: 1 });

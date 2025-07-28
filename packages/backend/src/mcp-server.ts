@@ -18,6 +18,8 @@ import {
   MarkAnswerSchema,
   getMarkResultByIdHandler,
   GetMarkResultByIdSchema,
+  createExamPaperHandler,
+  CreateExamPaperSchema,
 } from "./tools";
 
 export const server = new McpServer({
@@ -204,4 +206,15 @@ server.registerTool(
     inputSchema: GetMarkResultByIdSchema,
   },
   getMarkResultByIdHandler
+);
+
+server.registerTool(
+  "create-exam-paper",
+  {
+    title: "Create Exam Paper",
+    description:
+      "Create a new exam paper with sections containing ordered questions",
+    inputSchema: CreateExamPaperSchema,
+  },
+  createExamPaperHandler
 );

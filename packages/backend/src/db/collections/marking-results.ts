@@ -18,10 +18,6 @@ export interface MarkingResult {
   marked_at: Date;
   llm_reasoning: string; // Chain-of-thought reasoning
   feedback_summary: string;
-
-  // NEW: Exam paper context
-  exam_paper_id: ObjectId; // Reference to exam_paper
-  question_number: number; // For easy lookup within exam context
 }
 
 export const marking_results = db.collection<MarkingResult>("marking_results");

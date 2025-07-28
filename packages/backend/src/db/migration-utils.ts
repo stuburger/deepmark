@@ -5,13 +5,15 @@ import {
   marking_results,
   mark_schemes,
   exam_papers,
+  ExamPaper,
+  ExamSection,
 } from "./collections";
 
 /**
- * Creates a default exam paper for existing data migration
+ * Creates a default exam paper with sections for existing data migration
  */
 export async function createDefaultExamPaper(subject: string) {
-  const defaultPaper = {
+  const defaultPaper: ExamPaper = {
     _id: new ObjectId(),
     title: `Default ${
       subject.charAt(0).toUpperCase() + subject.slice(1)
@@ -26,6 +28,7 @@ export async function createDefaultExamPaper(subject: string) {
     created_at: new Date(),
     updated_at: new Date(),
     is_active: true,
+    sections: [], // Will be populated with sections
     metadata: {
       difficulty_level: "higher",
       tier: "higher",
@@ -38,149 +41,105 @@ export async function createDefaultExamPaper(subject: string) {
 }
 
 /**
- * Migrates existing questions to include exam paper association
+ * Migrates existing questions to remove exam paper associations
  */
-export async function migrateQuestionsToExamPapers() {
-  console.log("Starting questions migration...");
+export async function migrateQuestionsToRemoveExamPaperAssociations() {
+  console.log(
+    "Starting questions migration to remove exam paper associations..."
+  );
 
-  // Get all subjects from existing questions
-  const subjects = await questions.distinct("subject");
-
-  for (const subject of subjects) {
-    console.log(`Migrating ${subject} questions...`);
-
-    // Create default exam paper for this subject
-    const examPaperId = await createDefaultExamPaper(subject);
-
-    // Update all questions for this subject
-    const result = await questions.updateMany(
-      { subject, exam_paper_id: { $exists: false } },
-      {
-        $set: {
-          exam_paper_id: examPaperId,
-          question_number: 1, // Default to 1, can be updated later
-        },
-      }
-    );
-
-    console.log(`Updated ${result.modifiedCount} ${subject} questions`);
-  }
-}
-
-/**
- * Migrates existing answers to include exam paper context
- */
-export async function migrateAnswersToExamPapers() {
-  console.log("Starting answers migration...");
-
-  // Get all answers that don't have exam_paper_id
-  const answersToMigrate = await answers
-    .find({
-      exam_paper_id: { $exists: false },
-    })
-    .toArray();
-
-  for (const answer of answersToMigrate) {
-    // Find the question to get its exam paper
-    const question = await questions.findOne({
-      _id: new ObjectId(answer.question_id),
-    });
-
-    if (question && question.exam_paper_id) {
-      await answers.updateOne(
-        { _id: answer._id },
-        { $set: { exam_paper_id: question.exam_paper_id } }
-      );
+  // Remove exam_paper_id, question_number, and section fields from questions
+  const result = await questions.updateMany(
+    {},
+    {
+      $unset: {
+        exam_paper_id: "",
+        question_number: "",
+        section: "",
+      },
     }
-  }
+  );
 
-  console.log(`Migrated ${answersToMigrate.length} answers`);
+  console.log(`Updated ${result.modifiedCount} questions`);
 }
 
 /**
- * Migrates existing marking results to include exam paper context
+ * Migrates existing answers to remove exam paper associations
  */
-export async function migrateMarkingResultsToExamPapers() {
-  console.log("Starting marking results migration...");
+export async function migrateAnswersToRemoveExamPaperAssociations() {
+  console.log(
+    "Starting answers migration to remove exam paper associations..."
+  );
 
-  const resultsToMigrate = await marking_results
-    .find({
-      exam_paper_id: { $exists: false },
-    })
-    .toArray();
-
-  for (const result of resultsToMigrate) {
-    // Find the answer to get its exam paper
-    const answer = await answers.findOne({
-      _id: new ObjectId(result.answer_id),
-    });
-
-    if (answer && answer.exam_paper_id) {
-      // Find the question to get the question number
-      const question = await questions.findOne({
-        _id: new ObjectId(answer.question_id),
-      });
-
-      await marking_results.updateOne(
-        { _id: result._id },
-        {
-          $set: {
-            exam_paper_id: answer.exam_paper_id,
-            question_number: question?.question_number || 1,
-          },
-        }
-      );
+  // Remove exam_paper_id field from answers
+  const result = await answers.updateMany(
+    {},
+    {
+      $unset: {
+        exam_paper_id: "",
+      },
     }
-  }
+  );
 
-  console.log(`Migrated ${resultsToMigrate.length} marking results`);
+  console.log(`Updated ${result.modifiedCount} answers`);
 }
 
 /**
- * Migrates existing mark schemes to include exam paper association
+ * Migrates existing marking results to remove exam paper associations
  */
-export async function migrateMarkSchemesToExamPapers() {
-  console.log("Starting mark schemes migration...");
+export async function migrateMarkingResultsToRemoveExamPaperAssociations() {
+  console.log(
+    "Starting marking results migration to remove exam paper associations..."
+  );
 
-  const schemesToMigrate = await mark_schemes
-    .find({
-      exam_paper_id: { $exists: false },
-    })
-    .toArray();
-
-  for (const scheme of schemesToMigrate) {
-    // Find the question to get its exam paper
-    const question = await questions.findOne({
-      _id: new ObjectId(scheme.question_id),
-    });
-
-    if (question && question.exam_paper_id) {
-      await mark_schemes.updateOne(
-        { _id: scheme._id },
-        {
-          $set: {
-            exam_paper_id: question.exam_paper_id,
-            question_number: question.question_number || 1,
-          },
-        }
-      );
+  // Remove exam_paper_id and question_number fields from marking results
+  const result = await marking_results.updateMany(
+    {},
+    {
+      $unset: {
+        exam_paper_id: "",
+        question_number: "",
+      },
     }
-  }
+  );
 
-  console.log(`Migrated ${schemesToMigrate.length} mark schemes`);
+  console.log(`Updated ${result.modifiedCount} marking results`);
 }
 
 /**
- * Runs the complete migration process
+ * Migrates existing mark schemes to remove exam paper associations
  */
-export async function runMigration() {
-  console.log("🚀 Starting database migration to exam paper schema...");
+export async function migrateMarkSchemesToRemoveExamPaperAssociations() {
+  console.log(
+    "Starting mark schemes migration to remove exam paper associations..."
+  );
+
+  // Remove exam_paper_id field from mark schemes
+  const result = await mark_schemes.updateMany(
+    {},
+    {
+      $unset: {
+        exam_paper_id: "",
+      },
+    }
+  );
+
+  console.log(`Updated ${result.modifiedCount} mark schemes`);
+}
+
+/**
+ * Runs the complete migration process to remove exam paper associations
+ */
+export async function runMigrationToRemoveExamPaperAssociations() {
+  console.log(
+    "🚀 Starting database migration to remove exam paper associations..."
+  );
 
   try {
-    await migrateQuestionsToExamPapers();
-    await migrateAnswersToExamPapers();
-    await migrateMarkingResultsToExamPapers();
-    await migrateMarkSchemesToExamPapers();
+    await migrateQuestionsToRemoveExamPaperAssociations();
+    await migrateAnswersToRemoveExamPaperAssociations();
+    await migrateMarkingResultsToRemoveExamPaperAssociations();
+    await migrateMarkSchemesToRemoveExamPaperAssociations();
 
     console.log("✅ Migration completed successfully!");
   } catch (error) {

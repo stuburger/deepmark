@@ -24,3 +24,6 @@ export { MarkAnswerSchema } from "./mark-answer/schema";
 
 export { handler as getMarkResultByIdHandler } from "./get-mark-result-by-id/tool";
 export { GetMarkResultByIdSchema } from "./get-mark-result-by-id/schema";
+
+export { handler as createExamPaperHandler } from "./create-exam-paper/tool";
+export { CreateExamPaperSchema } from "./create-exam-paper/schema";

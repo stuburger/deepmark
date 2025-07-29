@@ -25,7 +25,7 @@ Created At: ${question.created_at.toLocaleDateString()} ${question.created_at.to
 Updated At: ${question.updated_at.toLocaleDateString()} ${question.updated_at.toLocaleTimeString()}
 
 Question Text:
-${question.question_text}`;
+${question.text}`;
 
   return text(questionDetails);
 });

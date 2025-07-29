@@ -1,16 +1,19 @@
 import { ListAnswersByExamSessionSchema } from "./schema";
 import { answers } from "../../db/collections/answers";
 import { questions } from "../../db/collections/questions";
+import {
+  question_parts,
+  QuestionPart,
+} from "../../db/collections/question-parts";
 import { exam_sessions } from "../../db/collections/exam-sessions";
 import { ObjectId } from "mongodb";
 import { tool, text } from "../tool-utils";
 
 export const handler = tool(ListAnswersByExamSessionSchema, async (args) => {
-  const { session_id, include_question_details } = args;
+  const { session_id } = args;
 
   console.log("[list-answers-by-exam-session] Handler invoked", {
     session_id,
-    include_question_details,
   });
 
   // Validate ObjectId format
@@ -33,53 +36,28 @@ export const handler = tool(ListAnswersByExamSessionSchema, async (args) => {
     .sort({ submitted_at: 1 })
     .toArray();
 
-  if (include_question_details) {
-    // Get question details for all answers
-    const questionIds = [...new Set(sessionAnswers.map((a) => a.question_id))];
-    const questionDetails = await questions
-      .find({ _id: { $in: questionIds.map((id) => new ObjectId(id)) } })
-      .toArray();
+  console.log("[list-answers-by-exam-session] Answers retrieved", {
+    sessionId: session_id,
+    answerCount: sessionAnswers.length,
+  });
 
-    const questionMap = new Map(
-      questionDetails.map((q) => [q._id.toString(), q])
-    );
+  return text(
+    `Found ${sessionAnswers.length} answers for exam session ${session_id}
+Session Status: ${examSession.status}
 
-    // Enhance answers with question details
-    const enhancedAnswers = sessionAnswers.map((answer) => ({
-      ...answer,
-      question_details: questionMap.get(answer.question_id) || null,
-    }));
-
-    const result = {
-      session_id,
-      session_status: examSession.status,
-      total_answers: sessionAnswers.length,
-      answers: enhancedAnswers,
-    };
-
-    console.log(
-      "[list-answers-by-exam-session] Answers retrieved with question details",
-      {
-        sessionId: session_id,
-        answerCount: sessionAnswers.length,
-      }
-    );
-
-    return text(JSON.stringify(result, null, 2), result);
-  } else {
-    // Return just the answers without question details
-    const result = {
-      session_id,
-      session_status: examSession.status,
-      total_answers: sessionAnswers.length,
-      answers: sessionAnswers,
-    };
-
-    console.log("[list-answers-by-exam-session] Answers retrieved", {
-      sessionId: session_id,
-      answerCount: sessionAnswers.length,
-    });
-
-    return text(JSON.stringify(result, null, 2), result);
-  }
+Answers:
+${sessionAnswers
+  .map(
+    (answer, i) =>
+      `${i + 1}. Question ID: ${answer.question_id}
+     Question Part ID: ${answer.question_part_id || "N/A"}
+     Student ID: ${answer.student_id}
+     Answer ID: ${answer._id}
+     Submitted: ${answer.submitted_at.toISOString()}
+     Status: ${answer.marking_status}
+     Answer: ${answer.student_answer}
+  `
+  )
+  .join("\n")}`
+  );
 });

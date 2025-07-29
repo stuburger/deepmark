@@ -2,12 +2,17 @@ import { type ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { CreateMarkSchemeSchema } from "./schema";
 import { mark_schemes, MarkScheme } from "../../db/collections/mark-schemes";
 import { questions } from "../../db/collections/questions";
+import {
+  question_parts,
+  QuestionPart,
+} from "../../db/collections/question-parts";
 import { ObjectId } from "mongodb";
 import { text, tool } from "../tool-utils";
 
 export const handler = tool(CreateMarkSchemeSchema, async (args) => {
   const {
     question_id,
+    question_part_id,
     description,
     guidance,
     points_total,
@@ -17,6 +22,7 @@ export const handler = tool(CreateMarkSchemeSchema, async (args) => {
 
   console.log("[create-mark-scheme] Handler invoked", {
     question_id,
+    question_part_id,
     points_total,
     tags,
   });
@@ -51,6 +57,21 @@ export const handler = tool(CreateMarkSchemeSchema, async (args) => {
     );
   }
 
+  // If question_part_id is provided, validate that the question part exists
+  let questionPart: QuestionPart | null = null;
+  if (question_part_id) {
+    questionPart = await question_parts.findOne({
+      _id: new ObjectId(question_part_id),
+      question_id: question_id, // Ensure the part belongs to the question
+    });
+
+    if (!questionPart) {
+      throw new Error(
+        `Question part with ID ${question_part_id} not found for question ${question_id}. Please create the question part first.`
+      );
+    }
+  }
+
   // Validate that all mark points have points value of 1
   const invalidPoints = mark_points.filter((point) => point.points !== 1);
   if (invalidPoints.length > 0) {
@@ -63,6 +84,7 @@ export const handler = tool(CreateMarkSchemeSchema, async (args) => {
   const markSchemeData: MarkScheme = {
     _id: new ObjectId(),
     question_id,
+    question_part_id: question_part_id || undefined,
     description,
     guidance,
     points_total,
@@ -83,25 +105,30 @@ export const handler = tool(CreateMarkSchemeSchema, async (args) => {
   console.log("[create-mark-scheme] Successfully created mark scheme", {
     mark_scheme_id: result.insertedId,
     question_id,
+    question_part_id,
     points_total,
   });
 
+  // Get the text to display (question or question part)
+  const questionText = questionPart ? questionPart.text : question.text;
+  const partInfo = questionPart ? ` (Part ${questionPart.part_label})` : "";
+
   const questionPreview =
-    question.question_text.substring(0, 100) +
-    (question.question_text.length > 100 ? "..." : "");
+    questionText.substring(0, 100) + (questionText.length > 100 ? "..." : "");
 
   const tagsInfo = tags && tags.length > 0 ? `\nTags: ${tags.join(", ")}` : "";
 
   return text(
     `Mark scheme created successfully! Mark Scheme ID: ${result.insertedId}
 
-Question: ${questionPreview}
+Question${partInfo}: ${questionPreview}
 Description: ${description}${tagsInfo}
 Total Points: ${points_total}
 Number of Mark Points: ${mark_points.length}`,
     {
       mark_scheme_id: result.insertedId.toString(),
       question_id,
+      question_part_id: question_part_id || null,
       description,
       guidance,
       tags,

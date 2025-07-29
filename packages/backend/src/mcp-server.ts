@@ -2,6 +2,8 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   createQuestionHandler,
   CreateQuestionSchema,
+  createQuestionPartHandler,
+  CreateQuestionPartSchema,
   listQuestionsHandler,
   ListQuestionsSchema,
   getQuestionByIdHandler,
@@ -72,6 +74,16 @@ server.registerTool(
     inputSchema: CreateQuestionSchema,
   },
   createQuestionHandler
+);
+
+server.registerTool(
+  "create-question-part",
+  {
+    title: "Create GCSE Question Part",
+    description: "Create a new part for an existing GCSE question",
+    inputSchema: CreateQuestionPartSchema,
+  },
+  createQuestionPartHandler
 );
 
 server.registerTool(

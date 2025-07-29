@@ -10,7 +10,8 @@ export interface MarkPoint {
 
 export interface MarkScheme {
   _id: ObjectId;
-  question_id: string;
+  question_id: string; // Reference to the parent question
+  question_part_id?: string; // Reference to the specific question part (optional - can be null for whole question mark schemes)
   description: string;
   guidance?: string;
   created_by: string;

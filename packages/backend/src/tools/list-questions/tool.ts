@@ -39,8 +39,8 @@ export const handler = tool(ListQuestionsSchema, async (args) => {
    Points: ${question.points || "Not specified"}
    Difficulty: ${question.difficulty_level || "Not specified"}
    Created: ${question.created_at.toLocaleDateString()}
-   Question: ${question.question_text.substring(0, 100)}${
-        question.question_text.length > 100 ? "..." : ""
+   Question: ${question.text.substring(0, 100)}${
+        question.text.length > 100 ? "..." : ""
       }`;
     })
     .join("\n\n");

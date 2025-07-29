@@ -1,6 +1,10 @@
 import { MarkAnswerSchema } from "./schema";
 import { answers, Answer } from "../../db/collections/answers";
 import { questions, Question } from "../../db/collections/questions";
+import {
+  question_parts,
+  QuestionPart,
+} from "../../db/collections/question-parts";
 import { mark_schemes, MarkScheme } from "../../db/collections/mark-schemes";
 import {
   marking_results,
@@ -39,14 +43,46 @@ export const handler = tool(MarkAnswerSchema, async (args, extra) => {
     throw new Error(`Question for answer ${answer_id} not found.`);
   }
 
-  const markScheme = await mark_schemes.findOne(
-    { question_id: answer.question_id },
-    { sort: { created_at: -1 } }
-  );
+  // Get question part details if this answer is for a specific part
+  let questionPart: QuestionPart | null = null;
+  let questionText = question.text;
+  let questionTopic = question.topic;
+
+  if (answer.question_part_id) {
+    questionPart = await question_parts.findOne({
+      _id: new ObjectId(answer.question_part_id),
+    });
+
+    if (!questionPart) {
+      throw new Error(`Question part for answer ${answer_id} not found.`);
+    }
+
+    // Use the part text and topic for marking
+    questionText = questionPart.text;
+    questionTopic = question.topic; // Keep parent question topic
+  }
+
+  // Find mark scheme - prioritize part-specific mark schemes
+  const markSchemeQuery = answer.question_part_id
+    ? {
+        question_id: answer.question_id,
+        question_part_id: answer.question_part_id,
+      }
+    : {
+        question_id: answer.question_id,
+        question_part_id: { $exists: false },
+      };
+
+  const markScheme = await mark_schemes.findOne(markSchemeQuery, {
+    sort: { created_at: -1 },
+  });
 
   if (!markScheme) {
+    const partInfo = answer.question_part_id
+      ? ` (part ${answer.question_part_id})`
+      : "";
     throw new Error(
-      `Mark scheme for question ${answer.question_id} not found.
+      `Mark scheme for question ${answer.question_id}${partInfo} not found.
       Create a mark scheme first.
       `
     );
@@ -65,12 +101,16 @@ export const handler = tool(MarkAnswerSchema, async (args, extra) => {
   //   },
   // });
 
-  const markingResult = await callLLMForMarking(question, markScheme, answer);
+  const markingResult = await callLLMForMarking(
+    question,
+    questionPart,
+    markScheme,
+    answer
+  );
 
   const markingResultData: MarkingResult = {
     _id: new ObjectId(),
     answer_id,
-
     mark_points_results: markingResult.mark_points_results,
     total_score: markingResult.total_score,
     max_possible_score: answer.max_possible_score,
@@ -182,6 +222,7 @@ const exampleMarkingResult: z.infer<typeof markingResultSchema> = {
 
 async function callLLMForMarking(
   question: Question,
+  questionPart: QuestionPart | null,
   markScheme: MarkScheme,
   answer: Answer
 ): Promise<{
@@ -190,6 +231,10 @@ async function callLLMForMarking(
   llm_reasoning: string;
   feedback_summary: string;
 }> {
+  // Determine the text to use for marking
+  const questionText = questionPart ? questionPart.text : question.text;
+  const partLabel = questionPart ? questionPart.part_label : null;
+
   // Create the prompt for the LLM
   const prompt = `You are an expert GCSE examiner. Mark the following student answer against the provided mark scheme.
 
@@ -197,9 +242,21 @@ async function callLLMForMarking(
 ${question.topic}
 </Topic>
 
-<Question>
-${question.question_text}
-</Question>
+<FullQuestion>
+${question.text}
+</FullQuestion>
+
+${
+  questionPart
+    ? `<QuestionPart>
+Part ${questionPart.part_label}: ${questionPart.text}
+</QuestionPart>`
+    : ""
+}
+
+<QuestionToMark>
+${questionText}${partLabel ? ` (Part ${partLabel})` : ""}
+</QuestionToMark>
 
 <MarkScheme>
 Description: ${markScheme.description}

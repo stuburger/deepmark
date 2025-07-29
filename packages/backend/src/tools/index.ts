@@ -1,6 +1,9 @@
 export { handler as createQuestionHandler } from "./create-question/tool";
 export { CreateQuestionSchema } from "./create-question/schema";
 
+export { handler as createQuestionPartHandler } from "./create-question-part/tool";
+export { CreateQuestionPartSchema } from "./create-question-part/schema";
+
 export { handler as listQuestionsHandler } from "./list-questions/tool";
 export { ListQuestionsSchema } from "./list-questions/schema";
 

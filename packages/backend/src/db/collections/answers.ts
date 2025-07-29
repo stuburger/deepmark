@@ -3,7 +3,8 @@ import { db } from "../client";
 
 export interface Answer {
   _id: ObjectId;
-  question_id: string;
+  question_id: string; // Reference to the parent question
+  question_part_id?: string; // Reference to the specific question part (optional - can be null for whole question answers)
   student_id: string;
   student_answer: string;
   submitted_at: Date;

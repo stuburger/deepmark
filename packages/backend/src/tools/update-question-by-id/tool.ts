@@ -24,7 +24,7 @@ export const handler = tool(UpdateQuestionByIdSchema, async (args) => {
   }
 
   if (question_text !== undefined) {
-    updateData.question_text = question_text;
+    updateData.text = question_text;
   }
 
   if (points !== undefined) {
@@ -60,9 +60,9 @@ export const handler = tool(UpdateQuestionByIdSchema, async (args) => {
   const updatedFields = Object.keys(updateData).filter(
     (key) => key !== "updated_at"
   );
-  const questionPreview = updatedQuestion?.question_text
-    ? updatedQuestion.question_text.substring(0, 100) +
-      (updatedQuestion.question_text.length > 100 ? "..." : "")
+  const questionPreview = updatedQuestion?.text
+    ? updatedQuestion.text.substring(0, 100) +
+      (updatedQuestion.text.length > 100 ? "..." : "")
     : "No question text";
 
   return text(

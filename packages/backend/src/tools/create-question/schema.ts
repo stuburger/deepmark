@@ -17,15 +17,4 @@ export const CreateQuestionSchema = {
   subject: z
     .enum(["biology", "chemistry", "physics", "english"])
     .describe("Subject area for the question"),
-  parent_question_id: z
-    .string()
-    .optional()
-    .describe(
-      "The parent question ID for hierarchical structure. Omit for new question."
-    ),
-  part_label: z.string().describe(
-    `Part label for sub-questions. 
-     - Top level questions are always numbers (e.g. '1', '2', '3'). 
-     - Sub-questions are always letters (e.g. 'a', 'b', 'c')`
-  ),
 };

@@ -3,6 +3,7 @@ import { exam_papers } from "../../db/collections/exam-papers";
 import { exam_sessions } from "../../db/collections/exam-sessions";
 import { answers } from "../../db/collections/answers";
 import { questions } from "../../db/collections/questions";
+import { question_parts } from "../../db/collections/question-parts";
 import { ObjectId } from "mongodb";
 import { tool, json } from "../tool-utils";
 
@@ -71,16 +72,43 @@ export const handler = tool(
       .find({ _id: { $in: allQuestionIds.map((id) => new ObjectId(id)) } })
       .project({
         _id: 1,
-        question_text: 1,
-        question_type: 1,
-        marks: 1,
-        difficulty: 1,
+        text: 1,
+        topic: 1,
+        subject: 1,
+        points: 1,
+        difficulty_level: 1,
       })
       .toArray();
 
     const questionMap = new Map(
       questionDetails.map((q) => [q._id.toString(), q])
     );
+
+    // Get question part details for answers that have question_part_id
+    const questionPartIds = allAnswers
+      .filter((a) => a.question_part_id)
+      .map((a) => a.question_part_id!)
+      .filter((id) => id);
+
+    let questionPartMap = new Map();
+    if (questionPartIds.length > 0) {
+      const questionPartDetails = await question_parts
+        .find({ _id: { $in: questionPartIds.map((id) => new ObjectId(id)) } })
+        .project({
+          _id: 1,
+          question_id: 1,
+          part_label: 1,
+          text: 1,
+          points: 1,
+          difficulty_level: 1,
+          order: 1,
+        })
+        .toArray();
+
+      questionPartMap = new Map(
+        questionPartDetails.map((qp) => [qp._id.toString(), qp])
+      );
+    }
 
     // Calculate performance metrics
     const completedSessions = sessions.filter((s) => s.status === "completed");
@@ -151,12 +179,34 @@ export const handler = tool(
           (a) => a.marking_status === "completed"
         );
 
+        // Group answers by question parts
+        const answersByPart = new Map();
+        const wholeQuestionAnswers = [];
+
+        questionAnswers.forEach((answer) => {
+          if (answer.question_part_id) {
+            const part = questionPartMap.get(answer.question_part_id);
+            if (part) {
+              if (!answersByPart.has(part.part_label)) {
+                answersByPart.set(part.part_label, []);
+              }
+              answersByPart.get(part.part_label).push({
+                ...answer,
+                part_details: part,
+              });
+            }
+          } else {
+            wholeQuestionAnswers.push(answer);
+          }
+        });
+
         return {
           question_id: questionId,
-          question_text: question?.question_text || "Unknown",
-          question_type: question?.question_type || "Unknown",
-          marks: question?.marks || 0,
-          difficulty: question?.difficulty || "Unknown",
+          question_text: question?.text || "Unknown",
+          topic: question?.topic || "Unknown",
+          subject: question?.subject || "Unknown",
+          points: question?.points || 0,
+          difficulty_level: question?.difficulty_level || "Unknown",
           total_attempts: questionAnswers.length,
           marked_attempts: markedAnswers.length,
           average_score:
@@ -170,16 +220,58 @@ export const handler = tool(
             markedAnswers.length > 0
               ? Math.max(...markedAnswers.map((a) => a.total_score || 0))
               : 0,
+          has_parts: answersByPart.size > 0,
+          parts_analysis: Array.from(answersByPart.entries()).map(
+            ([partLabel, partAnswers]) => {
+              const markedPartAnswers = partAnswers.filter(
+                (a: any) => a.marking_status === "completed"
+              );
+              const part = partAnswers[0]?.part_details;
+
+              return {
+                part_label: partLabel,
+                part_text: part?.text || "Unknown",
+                part_points: part?.points || 0,
+                part_difficulty: part?.difficulty_level || "Unknown",
+                total_attempts: partAnswers.length,
+                marked_attempts: markedPartAnswers.length,
+                average_score:
+                  markedPartAnswers.length > 0
+                    ? markedPartAnswers.reduce(
+                        (sum: number, a: any) => sum + (a.total_score || 0),
+                        0
+                      ) / markedPartAnswers.length
+                    : 0,
+                best_score:
+                  markedPartAnswers.length > 0
+                    ? Math.max(
+                        ...markedPartAnswers.map((a: any) => a.total_score || 0)
+                      )
+                    : 0,
+              };
+            }
+          ),
+          whole_question_answers:
+            wholeQuestionAnswers.length > 0 ? wholeQuestionAnswers.length : 0,
           answers: include_answer_details
-            ? questionAnswers.map((answer) => ({
-                answer_id: answer._id.toString(),
-                session_id: answer.exam_session_id,
-                student_answer: answer.student_answer,
-                score: answer.total_score,
-                max_score: answer.max_possible_score,
-                marking_status: answer.marking_status,
-                submitted_at: answer.submitted_at,
-              }))
+            ? questionAnswers.map((answer) => {
+                const partDetails = answer.question_part_id
+                  ? questionPartMap.get(answer.question_part_id)
+                  : null;
+
+                return {
+                  answer_id: answer._id.toString(),
+                  session_id: answer.exam_session_id,
+                  question_part_id: answer.question_part_id || null,
+                  part_label: partDetails?.part_label || null,
+                  part_text: partDetails?.text || null,
+                  student_answer: answer.student_answer,
+                  score: answer.total_score,
+                  max_score: answer.max_possible_score,
+                  marking_status: answer.marking_status,
+                  submitted_at: answer.submitted_at,
+                };
+              })
             : [],
         };
       });
@@ -239,6 +331,7 @@ export const handler = tool(
         studentId: student_id,
         sessionCount: sessions.length,
         bestScore: bestSession?.total_score,
+        answersWithParts: allAnswers.filter((a) => a.question_part_id).length,
       }
     );
 

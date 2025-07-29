@@ -2,8 +2,9 @@ import { GetExamPaperStatisticsSchema } from "./schema";
 import { exam_papers } from "../../db/collections/exam-papers";
 import { exam_sessions } from "../../db/collections/exam-sessions";
 import { answers } from "../../db/collections/answers";
+import { question_parts } from "../../db/collections/question-parts";
 import { ObjectId } from "mongodb";
-import { tool, json } from "../tool-utils";
+import { tool, text } from "../tool-utils";
 
 export const handler = tool(GetExamPaperStatisticsSchema, async (args) => {
   const { exam_paper_id, include_detailed_breakdown } = args;
@@ -38,6 +39,22 @@ export const handler = tool(GetExamPaperStatisticsSchema, async (args) => {
     .find({ exam_session_id: { $in: sessionIds } })
     .toArray();
 
+  // Gather all question IDs in the paper
+  const allQuestionIds = examPaper.sections.flatMap(
+    (section) => section.questions
+  );
+
+  // Fetch all question parts for these questions
+  const allQuestionParts = await question_parts
+    .find({ question_id: { $in: allQuestionIds } })
+    .toArray();
+  const partsByQuestion = new Map();
+  allQuestionParts.forEach((part) => {
+    if (!partsByQuestion.has(part.question_id))
+      partsByQuestion.set(part.question_id, []);
+    partsByQuestion.get(part.question_id).push(part);
+  });
+
   // Calculate basic statistics
   const totalSessions = sessions.length;
   const completedSessions = sessions.filter(
@@ -62,8 +79,8 @@ export const handler = tool(GetExamPaperStatisticsSchema, async (args) => {
 
   if (completedSessionsWithScores.length > 0) {
     const scores = completedSessionsWithScores.map((s) => s.total_score!);
-    const percentages = scores.map(
-      (score) => (score / s.max_possible_score) * 100
+    const percentages = completedSessionsWithScores.map(
+      (s) => (s.total_score! / s.max_possible_score) * 100
     );
 
     averageScore =
@@ -97,7 +114,6 @@ export const handler = tool(GetExamPaperStatisticsSchema, async (args) => {
       else if (percentage >= 10) distribution["10-19%"]++;
       else distribution["0-9%"]++;
     });
-
     scoreDistribution = distribution;
   }
 
@@ -174,11 +190,26 @@ export const handler = tool(GetExamPaperStatisticsSchema, async (args) => {
   };
 
   if (include_detailed_breakdown) {
-    // Calculate section-wise statistics
+    // Calculate section-wise statistics, including question parts
     const sectionStatistics = examPaper.sections.map((section) => {
       const sectionQuestionIds = new Set(section.questions);
       const sectionAnswers = allAnswers.filter((answer) =>
         sectionQuestionIds.has(answer.question_id)
+      );
+
+      // Gather all parts for questions in this section
+      const sectionParts = allQuestionParts.filter((part) =>
+        sectionQuestionIds.has(part.question_id)
+      );
+      const sectionPartIds = new Set(sectionParts.map((p) => p._id.toString()));
+
+      // Answers for question parts in this section
+      const sectionPartAnswers = sectionAnswers.filter(
+        (a) => a.question_part_id && sectionPartIds.has(a.question_part_id)
+      );
+      // Answers for whole questions in this section
+      const sectionWholeAnswers = sectionAnswers.filter(
+        (a) => !a.question_part_id
       );
 
       const markedSectionAnswers = sectionAnswers.filter(
@@ -193,6 +224,75 @@ export const handler = tool(GetExamPaperStatisticsSchema, async (args) => {
         0
       );
 
+      // Per-question and per-part breakdown
+      const questionsBreakdown = Array.from(sectionQuestionIds).map(
+        (questionId) => {
+          // Whole question answers
+          const qAnswers = sectionWholeAnswers.filter(
+            (a) => a.question_id === questionId
+          );
+          // Parts for this question
+          const qParts = partsByQuestion.get(questionId) || [];
+          // Per-part answers
+          const partsBreakdown = qParts.map((part: any) => {
+            const partAnswers = sectionPartAnswers.filter(
+              (a) => a.question_part_id === part._id.toString()
+            );
+            const markedPartAnswers = partAnswers.filter(
+              (a) => a.marking_status === "completed"
+            );
+            return {
+              part_id: part._id.toString(),
+              part_label: part.part_label,
+              text: part.text,
+              points: part.points,
+              difficulty_level: part.difficulty_level,
+              total_answers: partAnswers.length,
+              marked_answers: markedPartAnswers.length,
+              average_score:
+                markedPartAnswers.length > 0
+                  ? Math.round(
+                      (markedPartAnswers.reduce(
+                        (sum: number, a: any) => sum + (a.total_score || 0),
+                        0
+                      ) /
+                        markedPartAnswers.length /
+                        (part.points || 1)) *
+                        100
+                    ) / 100
+                  : 0,
+            };
+          });
+          // Whole question stats
+          const markedQAnswers = qAnswers.filter(
+            (a) => a.marking_status === "completed"
+          );
+          return {
+            question_id: questionId,
+            total_answers: qAnswers.length,
+            marked_answers: markedQAnswers.length,
+            average_score:
+              markedQAnswers.length > 0
+                ? Math.round(
+                    (markedQAnswers.reduce(
+                      (sum: number, a: any) => sum + (a.total_score || 0),
+                      0
+                    ) /
+                      markedQAnswers.length /
+                      (qParts.length === 0
+                        ? 1
+                        : qParts.reduce(
+                            (sum: number, p: any) => sum + (p.points || 1),
+                            0
+                          ))) *
+                      100
+                  ) / 100
+                : 0,
+            parts: partsBreakdown,
+          };
+        }
+      );
+
       return {
         section_id: section._id.toString(),
         title: section.title,
@@ -205,6 +305,8 @@ export const handler = tool(GetExamPaperStatisticsSchema, async (args) => {
               100
             : 0,
         total_marks: section.total_marks,
+        questions: questionsBreakdown,
+        total_parts: sectionParts.length,
       };
     });
 
@@ -221,5 +323,94 @@ export const handler = tool(GetExamPaperStatisticsSchema, async (args) => {
     }
   );
 
-  return json(result);
+  // Format the result as a readable string
+  let summary = `<ExamPaperStatistics>`;
+  summary += `<ExamPaper>`;
+  summary += `<Title>${result.exam_paper_title}</Title>`;
+  summary += `<Subject>${result.subject}</Subject>`;
+  summary += `<Year>${result.year}</Year>`;
+  summary += `<TotalMarks>${result.total_marks}</TotalMarks>`;
+  summary += `<DurationMinutes>${result.duration_minutes}</DurationMinutes>`;
+  summary += `</ExamPaper>`;
+
+  summary += `<SessionStatistics>`;
+  summary += `<TotalSessions>${result.session_statistics.total_sessions}</TotalSessions>`;
+  summary += `<Completed>${result.session_statistics.completed_sessions}</Completed>`;
+  summary += `<InProgress>${result.session_statistics.in_progress_sessions}</InProgress>`;
+  summary += `<Abandoned>${result.session_statistics.abandoned_sessions}</Abandoned>`;
+  summary += `<CompletionRate>${result.session_statistics.completion_rate.toFixed(
+    2
+  )}</CompletionRate>`;
+  summary += `</SessionStatistics>`;
+
+  summary += `<ScoreStatistics>`;
+  summary += `<AverageScore>${result.score_statistics.average_score}</AverageScore>`;
+  summary += `<HighestScore>${result.score_statistics.highest_score}</HighestScore>`;
+  summary += `<LowestScore>${result.score_statistics.lowest_score}</LowestScore>`;
+  summary += `<AveragePercentage>${result.score_statistics.average_percentage}</AveragePercentage>`;
+  summary += `<ScoreDistribution>${JSON.stringify(
+    result.score_statistics.score_distribution
+  )}</ScoreDistribution>`;
+  summary += `</ScoreStatistics>`;
+
+  summary += `<TimeStatistics>`;
+  summary += `<AverageCompletionTimeMinutes>${result.time_statistics.average_completion_time_minutes}</AverageCompletionTimeMinutes>`;
+  summary += `<FastestCompletionMinutes>${result.time_statistics.fastest_completion_minutes}</FastestCompletionMinutes>`;
+  summary += `<SlowestCompletionMinutes>${result.time_statistics.slowest_completion_minutes}</SlowestCompletionMinutes>`;
+  summary += `</TimeStatistics>`;
+
+  summary += `<AnswerStatistics>`;
+  summary += `<TotalAnswers>${result.answer_statistics.total_answers}</TotalAnswers>`;
+  summary += `<Marked>${result.answer_statistics.marked_answers}</Marked>`;
+  summary += `<Pending>${result.answer_statistics.pending_answers}</Pending>`;
+  summary += `<MarkingCompletionRate>${result.answer_statistics.marking_completion_rate.toFixed(
+    2
+  )}</MarkingCompletionRate>`;
+  summary += `</AnswerStatistics>`;
+
+  if (include_detailed_breakdown && result.section_breakdown) {
+    summary += `<SectionBreakdown>`;
+    for (const section of result.section_breakdown) {
+      summary += `<Section id="${section.section_id}">`;
+      summary += `<Title>${section.title}</Title>`;
+      summary += `<TotalQuestions>${section.total_questions}</TotalQuestions>`;
+      summary += `<TotalParts>${section.total_parts}</TotalParts>`;
+      summary += `<TotalAnswers>${section.total_answers}</TotalAnswers>`;
+      summary += `<MarkedAnswers>${section.marked_answers}</MarkedAnswers>`;
+      summary += `<AverageScore>${section.average_score}</AverageScore>`;
+      summary += `<TotalMarks>${section.total_marks}</TotalMarks>`;
+      if (section.questions) {
+        summary += `<Questions>`;
+        for (const q of section.questions) {
+          summary += `<Question id="${q.question_id}">`;
+          summary += `<TotalAnswers>${q.total_answers}</TotalAnswers>`;
+          summary += `<MarkedAnswers>${q.marked_answers}</MarkedAnswers>`;
+          summary += `<AverageScore>${q.average_score}</AverageScore>`;
+          if (q.parts && q.parts.length > 0) {
+            summary += `<Parts>`;
+            for (const part of q.parts) {
+              summary += `<Part id="${part.part_id}">`;
+              summary += `<Label>${part.part_label}</Label>`;
+              summary += `<Text>${part.text}</Text>`;
+              summary += `<Points>${part.points}</Points>`;
+              summary += `<Difficulty>${part.difficulty_level}</Difficulty>`;
+              summary += `<TotalAnswers>${part.total_answers}</TotalAnswers>`;
+              summary += `<MarkedAnswers>${part.marked_answers}</MarkedAnswers>`;
+              summary += `<AverageScore>${part.average_score}</AverageScore>`;
+              summary += `</Part>`;
+            }
+            summary += `</Parts>`;
+          }
+          summary += `</Question>`;
+        }
+        summary += `</Questions>`;
+      }
+      summary += `</Section>`;
+    }
+    summary += `</SectionBreakdown>`;
+  }
+
+  summary += `</ExamPaperStatistics>`;
+
+  return text(summary);
 });

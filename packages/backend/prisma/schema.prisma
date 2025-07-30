@@ -63,7 +63,7 @@ enum UserRole {
 type MarkPoint {
   point_number Int
   description  String
-  points       Int    // always 1
+  points       Int // always 1
   criteria     String
 }
 
@@ -101,16 +101,17 @@ model User {
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
-  // Relations based on role
-  created_questions      Question[]      @relation("CreatedBy")
-  created_question_parts QuestionPart[]  @relation("CreatedBy")
-  created_exam_papers    ExamPaper[]     @relation("CreatedBy") 
-  created_mark_schemes   MarkScheme[]    @relation("CreatedBy")
-  created_exam_sections  ExamSection[]   @relation("CreatedBy")
-  
-  // Student relations
-  student_answers       Answer[]        @relation("StudentAnswers")
-  exam_sessions        ExamSession[]   @relation("Student")
+  // Relations based on role  
+  created_questions      Question[]
+  created_question_parts QuestionPart[]
+  created_exam_papers    ExamPaper[]
+  created_mark_schemes   MarkScheme[]
+  created_exam_sections  ExamSection[]
+  created_question_banks QuestionBank[]
+
+  // Student relations (these need names because multiple User relations exist)
+  student_answers Answer[]      @relation("StudentAnswers")
+  exam_sessions   ExamSession[] @relation("Student")
 
   @@map("users")
 }
@@ -123,15 +124,16 @@ model Question {
   created_at       DateTime         @default(now())
   updated_at       DateTime         @updatedAt
   subject          Subject
-  points           Int?             // optional
+  points           Int? // optional
   difficulty_level DifficultyLevel? // optional
 
   // Relations
-  created_by             User                   @relation("CreatedBy", fields: [created_by_id], references: [id])
+  created_by             User                  @relation(fields: [created_by_id], references: [id])
   question_parts         QuestionPart[]
-  mark_schemes          MarkScheme[]
-  answers               Answer[]
+  mark_schemes           MarkScheme[]
+  answers                Answer[]
   exam_section_questions ExamSectionQuestion[]
+  question_bank_items    QuestionBankItem[]
 
   @@map("questions")
 }
@@ -139,18 +141,18 @@ model Question {
 model QuestionPart {
   id               String           @id @default(auto()) @map("_id") @db.ObjectId
   question_id      String           @db.ObjectId
-  part_label       String           // e.g., "a", "b", "c" or "1", "2", "3"
-  text             String           // The actual question part text
-  points           Int?             // Points for this specific part
+  part_label       String // e.g., "a", "b", "c" or "1", "2", "3"
+  text             String // The actual question part text
+  points           Int? // Points for this specific part
   difficulty_level DifficultyLevel? // optional
-  order            Int              // Order within the parent question (1, 2, 3, etc.)
+  order            Int // Order within the parent question (1, 2, 3, etc.)
   created_by_id    String           @db.ObjectId
   created_at       DateTime         @default(now())
   updated_at       DateTime         @updatedAt
 
   // Relations
-  created_by   User           @relation("CreatedBy", fields: [created_by_id], references: [id])
-  question     Question       @relation(fields: [question_id], references: [id])
+  created_by   User         @relation(fields: [created_by_id], references: [id])
+  question     Question     @relation(fields: [question_id], references: [id])
   mark_schemes MarkScheme[]
   answers      Answer[]
 
@@ -162,16 +164,16 @@ model MarkScheme {
   question_id      String      @db.ObjectId
   question_part_id String?     @db.ObjectId // optional - can be null for whole question mark schemes
   description      String
-  guidance         String?     // optional
+  guidance         String? // optional
   created_by_id    String      @db.ObjectId
   created_at       DateTime    @default(now())
   updated_at       DateTime    @updatedAt
-  tags             String[]    // array of tags
+  tags             String[] // array of tags
   points_total     Int
   mark_points      MarkPoint[] // embedded array
 
   // Relations
-  created_by    User          @relation("CreatedBy", fields: [created_by_id], references: [id])
+  created_by    User          @relation(fields: [created_by_id], references: [id])
   question      Question      @relation(fields: [question_id], references: [id])
   question_part QuestionPart? @relation(fields: [question_part_id], references: [id])
 
@@ -179,37 +181,37 @@ model MarkScheme {
 }
 
 model Answer {
-  id                  String        @id @default(auto()) @map("_id") @db.ObjectId
-  question_id         String        @db.ObjectId
-  question_part_id    String?       @db.ObjectId // optional - can be null for whole question answers
-  student_id          String        @db.ObjectId
-  student_answer      String
-  submitted_at        DateTime      @default(now())
-  marked_at           DateTime?
-  total_score         Int?
-  max_possible_score  Int           // required
-  marking_status      MarkingStatus @default(pending)
-  exam_session_id     String?       @db.ObjectId // optional - for grouping answers from same exam session
+  id                 String        @id @default(auto()) @map("_id") @db.ObjectId
+  question_id        String        @db.ObjectId
+  question_part_id   String?       @db.ObjectId // optional - can be null for whole question answers
+  student_id         String        @db.ObjectId
+  student_answer     String
+  submitted_at       DateTime      @default(now())
+  marked_at          DateTime?
+  total_score        Int?
+  max_possible_score Int // required
+  marking_status     MarkingStatus @default(pending)
+  exam_session_id    String?       @db.ObjectId // optional - for grouping answers from same exam session
 
   // Relations
-  student         User             @relation("StudentAnswers", fields: [student_id], references: [id])
-  question        Question         @relation(fields: [question_id], references: [id])
-  question_part   QuestionPart?    @relation(fields: [question_part_id], references: [id])
-  exam_session    ExamSession?     @relation(fields: [exam_session_id], references: [id])
+  student         User            @relation("StudentAnswers", fields: [student_id], references: [id])
+  question        Question        @relation(fields: [question_id], references: [id])
+  question_part   QuestionPart?   @relation(fields: [question_part_id], references: [id])
+  exam_session    ExamSession?    @relation(fields: [exam_session_id], references: [id])
   marking_results MarkingResult[]
 
   @@map("answers")
 }
 
 model MarkingResult {
-  id                   String            @id @default(auto()) @map("_id") @db.ObjectId
-  answer_id            String            @db.ObjectId
-  mark_points_results  MarkPointResult[] // embedded array
-  total_score          Int
-  max_possible_score   Int
-  marked_at            DateTime          @default(now())
-  llm_reasoning        String
-  feedback_summary     String
+  id                  String            @id @default(auto()) @map("_id") @db.ObjectId
+  answer_id           String            @db.ObjectId
+  mark_points_results MarkPointResult[] // embedded array
+  total_score         Int
+  max_possible_score  Int
+  marked_at           DateTime          @default(now())
+  llm_reasoning       String
+  feedback_summary    String
 
   // Relations
   answer Answer @relation(fields: [answer_id], references: [id])
@@ -218,22 +220,22 @@ model MarkingResult {
 }
 
 model ExamPaper {
-  id               String               @id @default(auto()) @map("_id") @db.ObjectId
-  title            String               // e.g., "GCSE Biology Paper 1 - 2024"
+  id               String             @id @default(auto()) @map("_id") @db.ObjectId
+  title            String // e.g., "GCSE Biology Paper 1 - 2024"
   subject          Subject
-  exam_board       String?              // e.g., "AQA", "Edexcel", "OCR"
-  year             Int                  // e.g., 2024
-  paper_number     Int?                 // e.g., 1, 2 for multiple papers
+  exam_board       String? // e.g., "AQA", "Edexcel", "OCR"
+  year             Int // e.g., 2024
+  paper_number     Int? // e.g., 1, 2 for multiple papers
   total_marks      Int
   duration_minutes Int
-  created_by_id    String               @db.ObjectId
-  created_at       DateTime             @default(now())
-  updated_at       DateTime             @updatedAt
-  is_active        Boolean              @default(true) // for soft deletion
-  metadata         ExamPaperMetadata?   // optional metadata
+  created_by_id    String             @db.ObjectId
+  created_at       DateTime           @default(now())
+  updated_at       DateTime           @updatedAt
+  is_active        Boolean            @default(true) // for soft deletion
+  metadata         ExamPaperMetadata? // optional metadata
 
   // Relations
-  created_by    User           @relation("CreatedBy", fields: [created_by_id], references: [id])
+  created_by    User          @relation(fields: [created_by_id], references: [id])
   sections      ExamSection[]
   exam_sessions ExamSession[]
 
@@ -241,50 +243,50 @@ model ExamPaper {
 }
 
 model ExamSection {
-  id            String    @id @default(auto()) @map("_id") @db.ObjectId
-  exam_paper_id String    @db.ObjectId
-  title         String    // e.g., "Section A", "Section B"
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  exam_paper_id String   @db.ObjectId
+  title         String // e.g., "Section A", "Section B"
   description   String?
   total_marks   Int
-  instructions  String?   // e.g., "Answer all questions in this section"
-  order         Int       // Order within the exam paper (1, 2, 3, etc.)
-  created_by_id String    @db.ObjectId
-  created_at    DateTime  @default(now())
-  updated_at    DateTime  @updatedAt
+  instructions  String? // e.g., "Answer all questions in this section"
+  order         Int // Order within the exam paper (1, 2, 3, etc.)
+  created_by_id String   @db.ObjectId
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
 
   // Relations
-  created_by             User                   @relation("CreatedBy", fields: [created_by_id], references: [id])
-  exam_paper            ExamPaper             @relation(fields: [exam_paper_id], references: [id])
+  created_by             User                  @relation(fields: [created_by_id], references: [id])
+  exam_paper             ExamPaper             @relation(fields: [exam_paper_id], references: [id])
   exam_section_questions ExamSectionQuestion[]
 
   @@map("exam_sections")
 }
 
 model ExamSectionQuestion {
-  id             String @id @default(auto()) @map("_id") @db.ObjectId
+  id              String @id @default(auto()) @map("_id") @db.ObjectId
   exam_section_id String @db.ObjectId
-  question_id    String @db.ObjectId
-  order          Int    // Order within the section (1, 2, 3, etc.)
+  question_id     String @db.ObjectId
+  order           Int // Order within the section (1, 2, 3, etc.)
 
   // Relations
   exam_section ExamSection @relation(fields: [exam_section_id], references: [id])
   question     Question    @relation(fields: [question_id], references: [id])
 
   @@unique([exam_section_id, question_id]) // Prevent duplicate question in same section
-  @@unique([exam_section_id, order])       // Prevent duplicate order in same section
+  @@unique([exam_section_id, order]) // Prevent duplicate order in same section
   @@map("exam_section_questions")
 }
 
 model ExamSession {
-  id                  String                @id @default(auto()) @map("_id") @db.ObjectId
-  exam_paper_id       String                @db.ObjectId
-  student_id          String                @db.ObjectId
-  started_at          DateTime              @default(now())
-  completed_at        DateTime?
-  status              ExamSessionStatus     @default(in_progress)
-  total_score         Int?
-  max_possible_score  Int
-  metadata            ExamSessionMetadata?  // optional metadata
+  id                 String               @id @default(auto()) @map("_id") @db.ObjectId
+  exam_paper_id      String               @db.ObjectId
+  student_id         String               @db.ObjectId
+  started_at         DateTime             @default(now())
+  completed_at       DateTime?
+  status             ExamSessionStatus    @default(in_progress)
+  total_score        Int?
+  max_possible_score Int
+  metadata           ExamSessionMetadata? // optional metadata
 
   // Relations
   student    User      @relation("Student", fields: [student_id], references: [id])
@@ -292,4 +294,39 @@ model ExamSession {
   answers    Answer[]
 
   @@map("exam_sessions")
+}
+
+model QuestionBank {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  name          String
+  description   String?
+  subject       Subject
+  created_by_id String   @db.ObjectId
+  is_public     Boolean  @default(false) // Private by default, can be shared
+  tags          String[] // For categorization
+  is_active     Boolean  @default(true) // For soft deletion
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  // Relations
+  created_by          User               @relation(fields: [created_by_id], references: [id])
+  question_bank_items QuestionBankItem[]
+
+  @@map("question_banks")
+}
+
+model QuestionBankItem {
+  id               String   @id @default(auto()) @map("_id") @db.ObjectId
+  question_bank_id String   @db.ObjectId
+  question_id      String   @db.ObjectId
+  order            Int // Order within the question bank (1, 2, 3, etc.)
+  added_at         DateTime @default(now())
+
+  // Relations
+  question_bank QuestionBank @relation(fields: [question_bank_id], references: [id])
+  question      Question     @relation(fields: [question_id], references: [id])
+
+  @@unique([question_bank_id, question_id]) // Prevent duplicate question in same bank
+  @@unique([question_bank_id, order]) // Prevent duplicate order in same bank
+  @@map("question_bank_items")
 }

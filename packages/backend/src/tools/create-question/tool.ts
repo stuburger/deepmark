@@ -1,6 +1,5 @@
 import { CreateQuestionSchema } from "./schema";
-import { Question, questions } from "../../db/collections/questions";
-import { ObjectId } from "mongodb";
+import { prisma } from "../../db/client";
 import { tool, text } from "../tool-utils";
 
 export const handler = tool(CreateQuestionSchema, async (args) => {
@@ -13,36 +12,63 @@ export const handler = tool(CreateQuestionSchema, async (args) => {
     difficulty_level,
   });
 
-  // Create the question document
-  const questionData: Question = {
-    _id: new ObjectId(),
-    text: question_text,
-    topic,
-    subject,
-    points,
-    difficulty_level,
-    created_by: "system", // TODO: Get from auth context when available
-    created_at: new Date(),
-    updated_at: new Date(),
-  };
-
-  console.log("[create-question] Creating question", { questionData });
-
-  // Insert the question into the database
-  const result = await questions.insertOne(questionData);
-
-  if (!result.insertedId) {
-    console.log(
-      "[create-question] Failed to insert question - no insertedId returned"
+  // Check if Prisma client is available
+  if (!prisma) {
+    throw new Error(
+      "Prisma client not available. Please run 'npx prisma generate' first."
     );
-    throw new Error("Failed to insert question into database");
   }
 
+  // TODO: Get actual user from auth context when available
+  // For now, find or create a system user
+  let systemUser = await prisma.user.findUnique({
+    where: { email: "system@example.com" },
+  });
+
+  if (!systemUser) {
+    systemUser = await prisma.user.create({
+      data: {
+        email: "system@example.com",
+        name: "System",
+        role: "admin",
+      },
+    });
+    console.log("[create-question] Created system user", {
+      userId: systemUser.id,
+    });
+  }
+
+  console.log("[create-question] Creating question with user", {
+    userId: systemUser.id,
+  });
+
+  // Create the question using Prisma
+  const question = await prisma.question.create({
+    data: {
+      text: question_text,
+      topic,
+      subject,
+      points,
+      difficulty_level,
+      created_by_id: systemUser.id,
+    },
+    include: {
+      created_by: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+        },
+      },
+    },
+  });
+
   console.log("[create-question] Question created successfully", {
-    questionId: result.insertedId,
+    questionId: question.id,
+    createdBy: question.created_by,
   });
 
   return text(
-    `Question created successfully! Question ID: ${result.insertedId}`
+    `Question created successfully! Question ID: ${question.id}\nCreated by: ${question.created_by.name} (${question.created_by.email})`
   );
 });

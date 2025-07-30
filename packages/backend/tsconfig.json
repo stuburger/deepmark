@@ -9,7 +9,8 @@
     "moduleResolution": "bundler",
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@/generated/*": ["./generated/*"]
     }
   },
   "include": ["src/**/*.ts", "lib/**/*.ts", "sst-env.d.ts"],

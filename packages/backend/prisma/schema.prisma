@@ -92,7 +92,7 @@ type ExamSessionMetadata {
 // Main models
 model User {
   id         String   @id @default(auto()) @map("_id") @db.ObjectId
-  email      String   @unique
+  email      String?  @unique
   name       String?
   role       UserRole
   github_id  String?  @unique // For GitHub OAuth

@@ -34,7 +34,7 @@ export const interactions = new sst.aws.Function("Interactions", {
   link: [mongoUri, auth, openAiApiKey],
 });
 
-export const apiRouter = new sst.aws.Router("ApiRouter", {
-  // domain: `mcp.${$app.stage}.supalink.co`,
-  routes: { "/*": api.url },
-});
+// export const apiRouter = new sst.aws.Router("ApiRouter", {
+//   // domain: `mcp.${$app.stage}.supalink.co`,
+//   routes: { "/*": api.url },
+// });

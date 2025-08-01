@@ -9,15 +9,104 @@ import { route } from "./routes";
 import { Resource } from "sst";
 import { z } from "zod";
 import { cors } from "hono/cors";
-import { createClient } from "@openauthjs/openauth/client";
-import { subjects } from "./subjects";
 
-const client = createClient({
-  clientID: `${Resource.App.name}_${Resource.App.stage}`,
-  issuer: Resource.Auth.url,
-});
+// Extend Hono context to include auth info
+type Variables = {
+  auth: AuthInfo;
+};
 
 const clientRegistrations = new Map();
+
+// Types for auth info
+export interface AuthInfo {
+  token: string;
+  clientId: string;
+  scopes: string[];
+  expiresAt: number;
+  userId?: string;
+}
+
+// Token verification errors
+class AuthError extends Error {
+  constructor(
+    message: string,
+    public errorCode: string,
+    public statusCode: number = 401
+  ) {
+    super(message);
+  }
+
+  toResponse() {
+    return {
+      error: this.errorCode,
+      error_description: this.message,
+    };
+  }
+}
+
+// Token verifier that uses the introspection endpoint
+const createTokenVerifier = () => {
+  return {
+    verifyAccessToken: async (token: string): Promise<AuthInfo> => {
+      const introspectEndpoint = `${Resource.Auth.url}/introspect`;
+
+      try {
+        const response = await fetch(introspectEndpoint, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ token }),
+        });
+
+        if (!response.ok) {
+          throw new AuthError(
+            "Token verification failed",
+            "invalid_token",
+            401
+          );
+        }
+
+        const data = await response.json();
+
+        // Check if token is active
+        if (!data.active) {
+          throw new AuthError("Token is not active", "invalid_token", 401);
+        }
+
+        // Check if token is expired
+        if (data.exp && data.exp < Date.now() / 1000) {
+          throw new AuthError("Token has expired", "invalid_token", 401);
+        }
+
+        return {
+          token,
+          clientId: data.client_id,
+          scopes: data.scope ? data.scope.split(" ") : [],
+          expiresAt: data.exp,
+          userId: data.sub,
+        };
+      } catch (error) {
+        if (error instanceof AuthError) {
+          throw error;
+        }
+        console.error("Token verification error:", error);
+        throw new AuthError(
+          "Internal error during token verification",
+          "server_error",
+          500
+        );
+      }
+    },
+  };
+};
+
+const tokenVerifier = createTokenVerifier();
+
+// Utility function to get auth info from Hono context
+export const getAuthInfo = (c: any): AuthInfo | undefined => {
+  return c.get("auth");
+};
 
 const OAuthRegistrationSchema = z.object({
   redirect_uris: z.array(z.string().url()).optional(),
@@ -30,7 +119,7 @@ const OAuthRegistrationSchema = z.object({
   token_endpoint_auth_method: z.string().optional(),
 });
 
-export const routes = new Hono()
+export const routes = new Hono<{ Variables: Variables }>()
   .use("*", async (c, next) => {
     let body: unknown = undefined;
     try {
@@ -60,25 +149,47 @@ export const routes = new Hono()
     }
   })
   .use("/mcp/*", async (c, next) => {
-    const authHeader = c.req.header("authorization");
+    try {
+      const authHeader = c.req.header("authorization");
 
-    console.log("authHeader", authHeader);
-    const token = authHeader?.startsWith("Bearer ")
-      ? authHeader.slice(7)
-      : null;
-    if (!token) {
-      c.header(
-        "WWW-Authenticate",
-        `Bearer realm="MCP Server", resource_metadata_uri="${Resource.Auth.url}/.well-known/oauth-protected-resource"`
-      );
-      return c.text("Unauthorized", 401);
+      if (!authHeader) {
+        throw new AuthError("Missing Authorization header", "invalid_request");
+      }
+
+      const [type, token] = authHeader.split(" ");
+      if (type.toLowerCase() !== "bearer" || !token) {
+        throw new AuthError(
+          "Invalid Authorization header format, expected 'Bearer TOKEN'",
+          "invalid_token"
+        );
+      }
+
+      // Verify the token using the introspection endpoint
+      const authInfo = await tokenVerifier.verifyAccessToken(token);
+
+      // Store auth info in context for later use
+      c.set("auth", authInfo);
+
+      console.log("Token verified successfully for user:", authInfo.userId);
+
+      await next();
+    } catch (error) {
+      if (error instanceof AuthError) {
+        const wwwAuthValue = `Bearer realm="MCP Server", error="${error.errorCode}", error_description="${error.message}", resource_metadata_uri="${Resource.Auth.url}/.well-known/oauth-protected-resource"`;
+
+        c.header("WWW-Authenticate", wwwAuthValue);
+        return c.json(error.toResponse(), error.statusCode as 401 | 403 | 500);
+      } else {
+        console.error("Unexpected auth error:", error);
+        const authError = new AuthError(
+          "Internal server error",
+          "server_error",
+          500
+        );
+        c.header("WWW-Authenticate", `Bearer realm="MCP Server"`);
+        return c.json(authError.toResponse(), 500);
+      }
     }
-
-    const ret = await client.verify(subjects, token);
-
-    console.log("verified", ret);
-
-    await next();
   })
   .route("/mcp", route)
   .onError((error, c) => {
@@ -122,11 +233,13 @@ export const routes = new Hono()
       issuer: Resource.Auth.url,
       authorization_endpoint: `${Resource.Auth.url}/authorize`,
       token_endpoint: `${Resource.Auth.url}/token`,
+      introspection_endpoint: `${Resource.Auth.url}/introspect`,
       response_types_supported: ["code"],
       // response_types_supported: ["code", "token"],
       grant_types_supported: ["authorization_code", "refresh_token"],
       scopes_supported: ["openid", "profile", "email"],
       token_endpoint_auth_methods_supported: ["none"], // or ["client_secret_post"] if you require client secrets
+      introspection_endpoint_auth_methods_supported: ["none"], // Same as token endpoint for consistency
       registration_endpoint: `${Resource.Auth.url}/register`, // Using Auth URL like other endpoints
     });
   })

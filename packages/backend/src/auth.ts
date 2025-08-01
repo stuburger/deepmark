@@ -154,7 +154,7 @@ app.post("/introspect", async (c) => {
 					client_id: client_id,
 					scope: "openid profile email", // Based on your GitHub provider scopes
 					sub: tokenInfo.subject.properties?.userId,
-					exp: Math.floor(Date.now() / 1000) + 3600,
+					exp: tokenInfo.tokens?.expiresIn,
 					iat: Math.floor(Date.now() / 1000),
 					token_type: "access_token",
 				})

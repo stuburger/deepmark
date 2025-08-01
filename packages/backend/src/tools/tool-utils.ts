@@ -1,27 +1,33 @@
-import { ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import { z } from "zod";
+import type { ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js"
+import type { RequestHandlerExtra } from "@modelcontextprotocol/sdk/shared/protocol.js"
+import type {
+	CallToolResult,
+	ServerNotification,
+	ServerRequest,
+} from "@modelcontextprotocol/sdk/types.js"
+import { ToolResult } from "ai"
+import { z } from "zod"
 
 export const text = <T extends Record<string, unknown>>(
-  text: string,
-  structuredData?: T
+	text: string,
+	structuredData?: T,
 ): CallToolResult => ({
-  content: [{ text, type: "text" }],
-  structuredContent: structuredData,
-});
+	content: [{ text, type: "text" }],
+	structuredContent: structuredData,
+})
 
 export const json = (json: any): CallToolResult => {
-  return text(JSON.stringify(text), json);
-};
+	return text(JSON.stringify(text), json)
+}
 
 export const error = <T extends Record<string, unknown>>(
-  message: string,
-  errorData?: T
+	message: string,
+	errorData?: T,
 ): CallToolResult => ({
-  content: [{ text: message, type: "text" }],
-  structuredContent: errorData,
-  isError: true,
-});
+	content: [{ text: message, type: "text" }],
+	structuredContent: errorData,
+	isError: true,
+})
 
 /**
  * Higher-order function that wraps a tool handler with standardized logging and error handling.
@@ -48,24 +54,38 @@ export const error = <T extends Record<string, unknown>>(
  * ```
  */
 export const tool = <T extends z.ZodRawShape>(
-  schema: T,
-  handler: ToolCallback<T>
-) => {
-  return async (args: z.infer<z.ZodObject<T>>, extra?: any) => {
-    try {
-      const result = await handler(args, extra);
+	schema: T,
+	handler: (
+		args: z.infer<z.ZodObject<T>>,
+		extra: { authInfo: { extra: { userId: string } } },
+	) => Promise<string>,
+): ToolCallback<T> => {
+	// @ts-expect-error todo
+	const callback: ToolCallback<T> = async (args, extra) => {
+		try {
+			const userId = extra.authInfo?.extra?.userId as string | undefined
+			if (!userId) {
+				throw new Error("Not authenticated")
+			}
 
-      return result;
-    } catch (err) {
-      return error(
-        `Tool execution failed: ${
-          err instanceof Error ? err.message : "Unknown error"
-        }`,
-        {
-          error_type: err instanceof Error ? err.constructor.name : "Unknown",
-          timestamp: new Date().toISOString(),
-        }
-      );
-    }
-  };
-};
+			// @ts-expect-error todo
+			const content = await handler(args, {
+				authInfo: { extra: { userId } },
+			})
+
+			return text(content)
+		} catch (err) {
+			return error(
+				`Tool execution failed: ${
+					err instanceof Error ? err.message : "Unknown error"
+				}`,
+				{
+					error_type: err instanceof Error ? err.constructor.name : "Unknown",
+					timestamp: new Date().toISOString(),
+				},
+			)
+		}
+	}
+
+	return callback
+}

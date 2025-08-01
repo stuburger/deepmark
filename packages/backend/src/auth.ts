@@ -122,19 +122,13 @@ app.post("/register", async (c) => {
 
 const client = createClient({
 	clientID: client_id,
-	// issuer: Resource.Auth.url,
-	issuer:
-		"https://rfxvbxzeehtypdqwuxqrn2nt7i0dnlkt.lambda-url.us-east-1.on.aws",
+	issuer: `https://auth.${Resource.App.stage}.supalink.co`,
 })
 
 // OAuth 2.0 Token Introspection endpoint (RFC 7662)
 app.post("/introspect", async (c) => {
 	try {
 		// Create OpenAuth client for token verification
-		const url = new URL(c.req.url)
-		const issuer = `${url.protocol}//${url.host}`
-
-		// const client = createClient({ clientID: client_id, issuer })
 
 		const body = await c.req.json()
 		const { token } = body

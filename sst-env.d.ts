@@ -14,6 +14,10 @@ declare module "sst" {
       "type": "sst.aws.Auth"
       "url": string
     }
+    "AuthUrl": {
+      "type": "sst.sst.Linkable"
+      "url": string
+    }
     "Interactions": {
       "name": string
       "type": "sst.aws.Function"

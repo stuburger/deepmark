@@ -35,7 +35,7 @@ class AuthError extends Error {
 const createTokenVerifier = () => {
 	return {
 		verifyAccessToken: async (token: string): Promise<AuthInfo> => {
-			const introspectEndpoint = `${Resource.Auth.url}/introspect`
+			const introspectEndpoint = `${Resource.AuthUrl.url}/introspect`
 
 			try {
 				const response = await fetch(introspectEndpoint, {
@@ -154,7 +154,7 @@ export const routes = new Hono<{ Variables: HonoVariables }>()
 			await next()
 		} catch (error) {
 			if (error instanceof AuthError) {
-				const wwwAuthValue = `Bearer realm="MCP Server", error="${error.errorCode}", error_description="${error.message}", resource_metadata_uri="${Resource.Auth.url}/.well-known/oauth-protected-resource"`
+				const wwwAuthValue = `Bearer realm="MCP Server", error="${error.errorCode}", error_description="${error.message}", resource_metadata_uri="${Resource.AuthUrl.url}/.well-known/oauth-protected-resource"`
 
 				c.header("WWW-Authenticate", wwwAuthValue)
 				return c.json(error.toResponse(), error.statusCode as 401 | 403 | 500)
@@ -202,24 +202,24 @@ export const routes = new Hono<{ Variables: HonoVariables }>()
 	.get("/.well-known/oauth-protected-resource", (c) => {
 		// --- OAUTH DISCOVERY ENDPOINTS ---
 		return c.json({
-			issuer: Resource.Auth.url, // TODO: replace with actual URL or dynamic value
-			authorization_server: Resource.Auth.url,
-			token_endpoint: `${Resource.Auth.url}/auth/token`,
+			issuer: Resource.AuthUrl.url, // TODO: replace with actual URL or dynamic value
+			authorization_server: Resource.AuthUrl.url,
+			token_endpoint: `${Resource.AuthUrl.url}/auth/token`,
 		})
 	})
 	.get("/.well-known/oauth-authorization-server", (c) => {
 		return c.json({
-			issuer: Resource.Auth.url,
-			authorization_endpoint: `${Resource.Auth.url}/authorize`,
-			token_endpoint: `${Resource.Auth.url}/token`,
-			introspection_endpoint: `${Resource.Auth.url}/introspect`,
+			issuer: Resource.AuthUrl.url,
+			authorization_endpoint: `${Resource.AuthUrl.url}/authorize`,
+			token_endpoint: `${Resource.AuthUrl.url}/token`,
+			introspection_endpoint: `${Resource.AuthUrl.url}/introspect`,
 			response_types_supported: ["code"],
 			// response_types_supported: ["code", "token"],
 			grant_types_supported: ["authorization_code", "refresh_token"],
 			scopes_supported: ["openid", "profile", "email"],
 			token_endpoint_auth_methods_supported: ["none"], // or ["client_secret_post"] if you require client secrets
 			introspection_endpoint_auth_methods_supported: ["none"], // Same as token endpoint for consistency
-			registration_endpoint: `${Resource.Auth.url}/register`, // Using Auth URL like other endpoints
+			registration_endpoint: `${Resource.AuthUrl.url}/register`, // Using Auth URL like other endpoints
 		})
 	})
 	.post("/register", async (c) => {

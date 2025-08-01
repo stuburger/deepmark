@@ -120,6 +120,13 @@ app.post("/register", async (c) => {
 	}
 })
 
+const client = createClient({
+	clientID: client_id,
+	// issuer: Resource.Auth.url,
+	issuer:
+		"https://rfxvbxzeehtypdqwuxqrn2nt7i0dnlkt.lambda-url.us-east-1.on.aws",
+})
+
 // OAuth 2.0 Token Introspection endpoint (RFC 7662)
 app.post("/introspect", async (c) => {
 	try {
@@ -127,7 +134,7 @@ app.post("/introspect", async (c) => {
 		const url = new URL(c.req.url)
 		const issuer = `${url.protocol}//${url.host}`
 
-		const client = createClient({ clientID: client_id, issuer })
+		// const client = createClient({ clientID: client_id, issuer })
 
 		const body = await c.req.json()
 		const { token } = body
@@ -153,7 +160,7 @@ app.post("/introspect", async (c) => {
 					client_id: client_id,
 					scope: "openid profile email", // Based on your GitHub provider scopes
 					sub: tokenInfo.subject.properties?.userId,
-					exp: Math.floor(Date.now() / 1000) + 3600, // 1 hour from now (adjust as needed)
+					exp: Math.floor(Date.now() / 1000) + 3600,
 					iat: Math.floor(Date.now() / 1000),
 					token_type: "access_token",
 				})

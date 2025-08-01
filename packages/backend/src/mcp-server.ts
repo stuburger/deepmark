@@ -1,92 +1,92 @@
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import {
-  createQuestionHandler,
-  CreateQuestionSchema,
-  debugToolHandler,
-  DebugToolSchema,
-  // createQuestionPartHandler,
-  // CreateQuestionPartSchema,
-  // listQuestionsHandler,
-  // ListQuestionsSchema,
-  // getQuestionByIdHandler,
-  // GetQuestionByIdSchema,
-  // updateQuestionByIdHandler,
-  // UpdateQuestionByIdSchema,
-  // createMarkSchemeHandler,
-  // CreateMarkSchemeSchema,
-  // updateMarkSchemeHandler,
-  // UpdateMarkSchemeSchema,
-  // answerQuestionHandler,
-  // AnswerQuestionSchema,
-  // markAnswerHandler,
-  // MarkAnswerSchema,
-  // getMarkResultByIdHandler,
-  // GetMarkResultByIdSchema,
-  // createExamPaperHandler,
-  // CreateExamPaperSchema,
-  // listExamPapersHandler,
-  // ListExamPapersSchema,
-  // // Phase 1: Core Exam Paper Management
-  // getExamPaperByIdHandler,
-  // GetExamPaperByIdSchema,
-  // updateExamPaperHandler,
-  // UpdateExamPaperSchema,
-  // // Phase 2: Question Management
-  // listQuestionsByExamPaperHandler,
-  // ListQuestionsByExamPaperSchema,
-  // reorderQuestionsInExamPaperHandler,
-  // ReorderQuestionsInExamPaperSchema,
-  // // Phase 3: Session Management
-  // startExamSessionHandler,
-  // StartExamSessionSchema,
-  // completeExamSessionHandler,
-  // CompleteExamSessionSchema,
-  // getExamSessionByIdHandler,
-  // GetExamSessionByIdSchema,
-  // listExamSessionsHandler,
-  // ListExamSessionsSchema,
-  // // Phase 4: Answer Management
-  // listAnswersByExamSessionHandler,
-  // ListAnswersByExamSessionSchema,
-  // getExamPaperProgressHandler,
-  // GetExamPaperProgressSchema,
-  // // Phase 5: Analytics
-  // getExamPaperStatisticsHandler,
-  // GetExamPaperStatisticsSchema,
-  // getStudentPerformanceByExamPaperHandler,
-  // GetStudentPerformanceByExamPaperSchema,
-  // compareExamPapersHandler,
-  // CompareExamPapersSchema,
-} from "./tools";
+	createQuestionHandler,
+	CreateQuestionSchema,
+	debugToolHandler,
+	DebugToolSchema,
+	// createQuestionPartHandler,
+	// CreateQuestionPartSchema,
+	// listQuestionsHandler,
+	// ListQuestionsSchema,
+	// getQuestionByIdHandler,
+	// GetQuestionByIdSchema,
+	// updateQuestionByIdHandler,
+	// UpdateQuestionByIdSchema,
+	// createMarkSchemeHandler,
+	// CreateMarkSchemeSchema,
+	// updateMarkSchemeHandler,
+	// UpdateMarkSchemeSchema,
+	// answerQuestionHandler,
+	// AnswerQuestionSchema,
+	// markAnswerHandler,
+	// MarkAnswerSchema,
+	// getMarkResultByIdHandler,
+	// GetMarkResultByIdSchema,
+	// createExamPaperHandler,
+	// CreateExamPaperSchema,
+	// listExamPapersHandler,
+	// ListExamPapersSchema,
+	// // Phase 1: Core Exam Paper Management
+	// getExamPaperByIdHandler,
+	// GetExamPaperByIdSchema,
+	// updateExamPaperHandler,
+	// UpdateExamPaperSchema,
+	// // Phase 2: Question Management
+	// listQuestionsByExamPaperHandler,
+	// ListQuestionsByExamPaperSchema,
+	// reorderQuestionsInExamPaperHandler,
+	// ReorderQuestionsInExamPaperSchema,
+	// // Phase 3: Session Management
+	// startExamSessionHandler,
+	// StartExamSessionSchema,
+	// completeExamSessionHandler,
+	// CompleteExamSessionSchema,
+	// getExamSessionByIdHandler,
+	// GetExamSessionByIdSchema,
+	// listExamSessionsHandler,
+	// ListExamSessionsSchema,
+	// // Phase 4: Answer Management
+	// listAnswersByExamSessionHandler,
+	// ListAnswersByExamSessionSchema,
+	// getExamPaperProgressHandler,
+	// GetExamPaperProgressSchema,
+	// // Phase 5: Analytics
+	// getExamPaperStatisticsHandler,
+	// GetExamPaperStatisticsSchema,
+	// getStudentPerformanceByExamPaperHandler,
+	// GetStudentPerformanceByExamPaperSchema,
+	// compareExamPapersHandler,
+	// CompareExamPapersSchema,
+} from "./tools"
 
 export const server = new McpServer({
-  name: "mcp-gcse",
-  version: "1.0.0",
-  capabilities: {
-    resources: {},
-    tools: {},
-  },
-});
+	name: "mcp-gcse",
+	version: "1.0.0",
+	capabilities: {
+		resources: {},
+		tools: {},
+	},
+})
 
 server.registerTool(
-  "create-question",
-  {
-    title: "Create GCSE Question",
-    description: "Create a new GCSE question",
-    inputSchema: CreateQuestionSchema,
-  },
-  createQuestionHandler
-);
+	"create-question",
+	{
+		title: "Create GCSE Question",
+		description: "Create a new GCSE question",
+		inputSchema: CreateQuestionSchema,
+	},
+	createQuestionHandler,
+)
 
 server.registerTool(
-  "debug-tool",
-  {
-    title: "Check the status of this MCP server",
-    description: "Log out information about this server. Used for debugging.",
-    inputSchema: DebugToolSchema,
-  },
-  debugToolHandler
-);
+	"debug-tool",
+	{
+		title: "Check the status of this MCP server",
+		description: "Log out information about this server. Used for debugging.",
+		inputSchema: DebugToolSchema,
+	},
+	debugToolHandler,
+)
 
 // server.registerTool(
 //   "create-question-part",

@@ -4,10 +4,8 @@ import {
 	CreateQuestionSchema,
 	debugToolHandler,
 	DebugToolSchema,
-	// createQuestionPartHandler,
-	// CreateQuestionPartSchema,
-	// listQuestionsHandler,
-	// ListQuestionsSchema,
+	listQuestionsHandler,
+	ListQuestionsSchema,
 	// getQuestionByIdHandler,
 	// GetQuestionByIdSchema,
 	// updateQuestionByIdHandler,
@@ -88,25 +86,15 @@ server.registerTool(
 	debugToolHandler,
 )
 
-// server.registerTool(
-//   "create-question-part",
-//   {
-//     title: "Create GCSE Question Part",
-//     description: "Create a new part for an existing GCSE question",
-//     inputSchema: CreateQuestionPartSchema,
-//   },
-//   createQuestionPartHandler
-// );
-
-// server.registerTool(
-//   "list-questions",
-//   {
-//     title: "List GCSE Questions",
-//     description: "List all GCSE questions with optional subject filtering",
-//     inputSchema: ListQuestionsSchema,
-//   },
-//   listQuestionsHandler
-// );
+server.registerTool(
+	"list-questions",
+	{
+		title: "List GCSE Questions",
+		description: "List all GCSE questions with optional subject filtering",
+		inputSchema: ListQuestionsSchema,
+	},
+	listQuestionsHandler,
+)
 
 // server.registerTool(
 //   "get-question-by-id",

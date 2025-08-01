@@ -6,7 +6,7 @@ import type {
 	ServerRequest,
 } from "@modelcontextprotocol/sdk/types.js"
 import { ToolResult } from "ai"
-import { z } from "zod"
+import type { z } from "zod"
 
 export const text = <T extends Record<string, unknown>>(
 	text: string,
@@ -15,10 +15,6 @@ export const text = <T extends Record<string, unknown>>(
 	content: [{ text, type: "text" }],
 	structuredContent: structuredData,
 })
-
-export const json = (json: any): CallToolResult => {
-	return text(JSON.stringify(text), json)
-}
 
 export const error = <T extends Record<string, unknown>>(
 	message: string,

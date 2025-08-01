@@ -1,14 +1,11 @@
-export { handler as debugToolHandler } from "./debug-tool/tool";
-export { DebugToolSchema } from "./debug-tool/schema";
+export { handler as debugToolHandler } from "./debug-tool/tool"
+export { DebugToolSchema } from "./debug-tool/schema"
 
-export { handler as createQuestionHandler } from "./create-question/tool";
-export { CreateQuestionSchema } from "./create-question/schema";
+export { handler as createQuestionHandler } from "./create-question/tool"
+export { CreateQuestionSchema } from "./create-question/schema"
 
-// export { handler as createQuestionPartHandler } from "./create-question-part/tool";
-// export { CreateQuestionPartSchema } from "./create-question-part/schema";
-
-// export { handler as listQuestionsHandler } from "./list-questions/tool";
-// export { ListQuestionsSchema } from "./list-questions/schema";
+export { handler as listQuestionsHandler } from "./list-questions/tool"
+export { ListQuestionsSchema } from "./list-questions/schema"
 
 // export { handler as getQuestionByIdHandler } from "./get-question-by-id/tool";
 // export { GetQuestionByIdSchema } from "./get-question-by-id/schema";

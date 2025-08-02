@@ -1,242 +1,231 @@
-import { MarkAnswerSchema } from "./schema";
-import { answers, Answer } from "../../db/collections/answers";
-import { questions, Question } from "../../db/collections/questions";
-import {
-  question_parts,
-  QuestionPart,
-} from "../../db/collections/question-parts";
-import { mark_schemes, MarkScheme } from "../../db/collections/mark-schemes";
-import {
-  marking_results,
-  MarkingResult,
-  MarkPointResult,
-} from "../../db/collections/marking-results";
-import { ObjectId } from "mongodb";
-import { generateObject } from "ai";
-import { createOpenAI } from "@ai-sdk/openai";
-import z from "zod";
-import { Resource } from "sst";
-import { tool, text } from "../tool-utils";
+import { MarkAnswerSchema } from "./schema"
+
+import { ObjectId } from "mongodb"
+import { generateObject } from "ai"
+import { createOpenAI } from "@ai-sdk/openai"
+import z from "zod"
+import { Resource } from "sst"
+import { tool, text } from "../tool-utils"
 
 const openai = createOpenAI({
-  apiKey: Resource.OpenAiApiKey.value,
-});
+	apiKey: Resource.OpenAiApiKey.value,
+})
 
 export const handler = tool(MarkAnswerSchema, async (args, extra) => {
-  const { answer_id, include_mark_result } = args;
+	const { answer_id, include_mark_result } = args
 
-  const answer = await answers.findOne({ _id: new ObjectId(answer_id) });
+	const answer = await answers.findOne({ _id: new ObjectId(answer_id) })
 
-  if (!answer) {
-    throw new Error(`Answer with ID ${answer_id} not found.`);
-  }
+	if (!answer) {
+		throw new Error(`Answer with ID ${answer_id} not found.`)
+	}
 
-  if (answer.marking_status === "completed") {
-    return text(`Answer ${answer_id} has already been marked.`);
-  }
+	if (answer.marking_status === "completed") {
+		return text(`Answer ${answer_id} has already been marked.`)
+	}
 
-  const question = await questions.findOne({
-    _id: new ObjectId(answer.question_id),
-  });
+	const question = await questions.findOne({
+		_id: new ObjectId(answer.question_id),
+	})
 
-  if (!question) {
-    throw new Error(`Question for answer ${answer_id} not found.`);
-  }
+	if (!question) {
+		throw new Error(`Question for answer ${answer_id} not found.`)
+	}
 
-  // Get question part details if this answer is for a specific part
-  let questionPart: QuestionPart | null = null;
-  let questionText = question.text;
-  let questionTopic = question.topic;
+	// Get question part details if this answer is for a specific part
+	let questionPart: QuestionPart | null = null
+	let questionText = question.text
+	let questionTopic = question.topic
 
-  if (answer.question_part_id) {
-    questionPart = await question_parts.findOne({
-      _id: new ObjectId(answer.question_part_id),
-    });
+	if (answer.question_part_id) {
+		questionPart = await question_parts.findOne({
+			_id: new ObjectId(answer.question_part_id),
+		})
 
-    if (!questionPart) {
-      throw new Error(`Question part for answer ${answer_id} not found.`);
-    }
+		if (!questionPart) {
+			throw new Error(`Question part for answer ${answer_id} not found.`)
+		}
 
-    // Use the part text and topic for marking
-    questionText = questionPart.text;
-    questionTopic = question.topic; // Keep parent question topic
-  }
+		// Use the part text and topic for marking
+		questionText = questionPart.text
+		questionTopic = question.topic // Keep parent question topic
+	}
 
-  // Find mark scheme - prioritize part-specific mark schemes
-  const markSchemeQuery = answer.question_part_id
-    ? {
-        question_id: answer.question_id,
-        question_part_id: answer.question_part_id,
-      }
-    : {
-        question_id: answer.question_id,
-        question_part_id: { $exists: false },
-      };
+	// Find mark scheme - prioritize part-specific mark schemes
+	const markSchemeQuery = answer.question_part_id
+		? {
+				question_id: answer.question_id,
+				question_part_id: answer.question_part_id,
+			}
+		: {
+				question_id: answer.question_id,
+				question_part_id: { $exists: false },
+			}
 
-  const markScheme = await mark_schemes.findOne(markSchemeQuery, {
-    sort: { created_at: -1 },
-  });
+	const markScheme = await mark_schemes.findOne(markSchemeQuery, {
+		sort: { created_at: -1 },
+	})
 
-  if (!markScheme) {
-    const partInfo = answer.question_part_id
-      ? ` (part ${answer.question_part_id})`
-      : "";
-    throw new Error(
-      `Mark scheme for question ${answer.question_id}${partInfo} not found.
+	if (!markScheme) {
+		const partInfo = answer.question_part_id
+			? ` (part ${answer.question_part_id})`
+			: ""
+		throw new Error(
+			`Mark scheme for question ${answer.question_id}${partInfo} not found.
       Create a mark scheme first.
-      `
-    );
-  }
+      `,
+		)
+	}
 
-  // extra.sendNotification({
-  //   method: "notifications/message",
-  //   params: {
-  //     level: "info",
-  //     logger: "marking",
-  //     data: {
-  //       message: "Starting marking process...",
-  //       answer_id,
-  //       question_id: question._id.toString(),
-  //     },
-  //   },
-  // });
+	// extra.sendNotification({
+	//   method: "notifications/message",
+	//   params: {
+	//     level: "info",
+	//     logger: "marking",
+	//     data: {
+	//       message: "Starting marking process...",
+	//       answer_id,
+	//       question_id: question._id.toString(),
+	//     },
+	//   },
+	// });
 
-  const markingResult = await callLLMForMarking(
-    question,
-    questionPart,
-    markScheme,
-    answer
-  );
+	const markingResult = await callLLMForMarking(
+		question,
+		questionPart,
+		markScheme,
+		answer,
+	)
 
-  const markingResultData: MarkingResult = {
-    _id: new ObjectId(),
-    answer_id,
-    mark_points_results: markingResult.mark_points_results,
-    total_score: markingResult.total_score,
-    max_possible_score: answer.max_possible_score,
-    marked_at: new Date(),
-    llm_reasoning: markingResult.llm_reasoning,
-    feedback_summary: markingResult.feedback_summary,
-  };
+	const markingResultData: MarkingResult = {
+		_id: new ObjectId(),
+		answer_id,
+		mark_points_results: markingResult.mark_points_results,
+		total_score: markingResult.total_score,
+		max_possible_score: answer.max_possible_score,
+		marked_at: new Date(),
+		llm_reasoning: markingResult.llm_reasoning,
+		feedback_summary: markingResult.feedback_summary,
+	}
 
-  await marking_results.insertOne(markingResultData);
+	await marking_results.insertOne(markingResultData)
 
-  await answers.updateOne(
-    { _id: new ObjectId(answer_id) },
-    {
-      $set: {
-        marking_status: "completed",
-        total_score: markingResult.total_score,
-        marked_at: new Date(),
-      },
-    }
-  );
+	await answers.updateOne(
+		{ _id: new ObjectId(answer_id) },
+		{
+			$set: {
+				marking_status: "completed",
+				total_score: markingResult.total_score,
+				marked_at: new Date(),
+			},
+		},
+	)
 
-  let responseText = `Answer marked successfully! Score: ${markingResult.total_score}/${answer.max_possible_score}`;
+	let responseText = `Answer marked successfully! Score: ${markingResult.total_score}/${answer.max_possible_score}`
 
-  if (include_mark_result) {
-    responseText += `\n\nMarking Result:\n${JSON.stringify(
-      markingResultData,
-      null,
-      2
-    )}`;
-  }
+	if (include_mark_result) {
+		responseText += `\n\nMarking Result:\n${JSON.stringify(
+			markingResultData,
+			null,
+			2,
+		)}`
+	}
 
-  return text(responseText);
-});
+	return text(responseText)
+})
 
 // Define the schema for the marking result
 const markingResultSchema = z.object({
-  mark_points_results: z.array(
-    z.object({
-      point_number: z.number(),
-      awarded: z.boolean(),
-      reasoning: z
-        .string()
-        .describe(
-          "Detailed reasoning for why this mark was or was not awarded"
-        ),
-      expected_criteria: z
-        .string()
-        .describe("What the mark scheme expected for this point"),
-      student_covered: z
-        .string()
-        .describe("What the student actually covered in their answer"),
-    })
-  ),
-  total_score: z.number(),
-  llm_reasoning: z
-    .string()
-    .describe("Chain-of-thought reasoning for the overall marking process"),
-  feedback_summary: z
-    .string()
-    .describe("Overall feedback summary for the student"),
-});
+	mark_points_results: z.array(
+		z.object({
+			point_number: z.number(),
+			awarded: z.boolean(),
+			reasoning: z
+				.string()
+				.describe(
+					"Detailed reasoning for why this mark was or was not awarded",
+				),
+			expected_criteria: z
+				.string()
+				.describe("What the mark scheme expected for this point"),
+			student_covered: z
+				.string()
+				.describe("What the student actually covered in their answer"),
+		}),
+	),
+	total_score: z.number(),
+	llm_reasoning: z
+		.string()
+		.describe("Chain-of-thought reasoning for the overall marking process"),
+	feedback_summary: z
+		.string()
+		.describe("Overall feedback summary for the student"),
+})
 
 // Create example object that conforms to the schema
 const exampleMarkingResult: z.infer<typeof markingResultSchema> = {
-  mark_points_results: [
-    {
-      point_number: 1,
-      awarded: true,
-      reasoning:
-        "Student clearly describes the fermentation setup: 'Mix the yeast with sugar water'. This meets the criteria for describing the method/procedure.",
-      expected_criteria:
-        "Mentions adding the sample to glucose/sugar solution OR mentions mixing yeast sample with sugar water OR describes setting up fermentation test",
-      student_covered: "Mix the yeast with sugar water",
-    },
-    {
-      point_number: 2,
-      awarded: true,
-      reasoning:
-        "Student mentions temperature requirement: 'leave in a warm place'. This satisfies the conditions needed for yeast fermentation.",
-      expected_criteria:
-        "States warm temperature needed (e.g., 37°C, warm water bath, room temperature) OR mentions anaerobic conditions (no oxygen/air excluded) OR mentions suitable pH conditions",
-      student_covered: "leave in a warm place",
-    },
-    {
-      point_number: 3,
-      awarded: true,
-      reasoning:
-        "Student identifies gas production as key observation: 'Bubbles will form'. This clearly describes the expected result of fermentation.",
-      expected_criteria:
-        "Bubbles/gas produced OR carbon dioxide given off OR effervescence/fizzing observed OR froth/foam formation",
-      student_covered: "Bubbles will form",
-    },
-    {
-      point_number: 4,
-      awarded: true,
-      reasoning:
-        "Student describes CO₂ test with correct result: 'test them with limewater which goes cloudy'. This is the standard confirmation test for carbon dioxide.",
-      expected_criteria:
-        "Test gas with limewater (turns milky/cloudy) OR use pH indicator (solution becomes more acidic) OR smell of alcohol/ethanol detected OR use gas collection tube to capture CO₂",
-      student_covered: "test them with limewater which goes cloudy",
-    },
-  ],
-  total_score: 4,
-  llm_reasoning:
-    "Systematic analysis: Point 1 - Student clearly describes fermentation setup with 'Mix the yeast with sugar water'. Point 2 - Temperature requirement met with 'leave in a warm place'. Point 3 - Gas production identified with 'Bubbles will form'. Point 4 - CO₂ test correctly described with limewater test. All criteria met for full marks.",
-  feedback_summary:
-    "Excellent answer scoring 4/4 marks. Student demonstrates comprehensive understanding of yeast testing procedure, including method, conditions, observations, and confirmation test.",
-};
+	mark_points_results: [
+		{
+			point_number: 1,
+			awarded: true,
+			reasoning:
+				"Student clearly describes the fermentation setup: 'Mix the yeast with sugar water'. This meets the criteria for describing the method/procedure.",
+			expected_criteria:
+				"Mentions adding the sample to glucose/sugar solution OR mentions mixing yeast sample with sugar water OR describes setting up fermentation test",
+			student_covered: "Mix the yeast with sugar water",
+		},
+		{
+			point_number: 2,
+			awarded: true,
+			reasoning:
+				"Student mentions temperature requirement: 'leave in a warm place'. This satisfies the conditions needed for yeast fermentation.",
+			expected_criteria:
+				"States warm temperature needed (e.g., 37°C, warm water bath, room temperature) OR mentions anaerobic conditions (no oxygen/air excluded) OR mentions suitable pH conditions",
+			student_covered: "leave in a warm place",
+		},
+		{
+			point_number: 3,
+			awarded: true,
+			reasoning:
+				"Student identifies gas production as key observation: 'Bubbles will form'. This clearly describes the expected result of fermentation.",
+			expected_criteria:
+				"Bubbles/gas produced OR carbon dioxide given off OR effervescence/fizzing observed OR froth/foam formation",
+			student_covered: "Bubbles will form",
+		},
+		{
+			point_number: 4,
+			awarded: true,
+			reasoning:
+				"Student describes CO₂ test with correct result: 'test them with limewater which goes cloudy'. This is the standard confirmation test for carbon dioxide.",
+			expected_criteria:
+				"Test gas with limewater (turns milky/cloudy) OR use pH indicator (solution becomes more acidic) OR smell of alcohol/ethanol detected OR use gas collection tube to capture CO₂",
+			student_covered: "test them with limewater which goes cloudy",
+		},
+	],
+	total_score: 4,
+	llm_reasoning:
+		"Systematic analysis: Point 1 - Student clearly describes fermentation setup with 'Mix the yeast with sugar water'. Point 2 - Temperature requirement met with 'leave in a warm place'. Point 3 - Gas production identified with 'Bubbles will form'. Point 4 - CO₂ test correctly described with limewater test. All criteria met for full marks.",
+	feedback_summary:
+		"Excellent answer scoring 4/4 marks. Student demonstrates comprehensive understanding of yeast testing procedure, including method, conditions, observations, and confirmation test.",
+}
 
 async function callLLMForMarking(
-  question: Question,
-  questionPart: QuestionPart | null,
-  markScheme: MarkScheme,
-  answer: Answer
+	question: Question,
+	questionPart: QuestionPart | null,
+	markScheme: MarkScheme,
+	answer: Answer,
 ): Promise<{
-  mark_points_results: MarkPointResult[];
-  total_score: number;
-  llm_reasoning: string;
-  feedback_summary: string;
+	mark_points_results: MarkPointResult[]
+	total_score: number
+	llm_reasoning: string
+	feedback_summary: string
 }> {
-  // Determine the text to use for marking
-  const questionText = questionPart ? questionPart.text : question.text;
-  const partLabel = questionPart ? questionPart.part_label : null;
+	// Determine the text to use for marking
+	const questionText = questionPart ? questionPart.text : question.text
+	const partLabel = questionPart ? questionPart.part_label : null
 
-  // Create the prompt for the LLM
-  const prompt = `You are an expert GCSE examiner. Mark the following student answer against the provided mark scheme.
+	// Create the prompt for the LLM
+	const prompt = `You are an expert GCSE examiner. Mark the following student answer against the provided mark scheme.
 
 <Topic>
 ${question.topic}
@@ -247,11 +236,11 @@ ${question.text}
 </FullQuestion>
 
 ${
-  questionPart
-    ? `<QuestionPart>
+	questionPart
+		? `<QuestionPart>
 Part ${questionPart.part_label}: ${questionPart.text}
 </QuestionPart>`
-    : ""
+		: ""
 }
 
 <QuestionToMark>
@@ -268,15 +257,15 @@ Total Marks: ${markScheme.points_total}
 
 Mark Points:
 ${markScheme.mark_points
-  .map(
-    (point) =>
-      `${point.point_number}. ${point.description} (${point.points} mark${
-        point.points > 1 ? "s" : ""
-      })
+	.map(
+		(point) =>
+			`${point.point_number}. ${point.description} (${point.points} mark${
+				point.points > 1 ? "s" : ""
+			})
 
-   ${point.criteria}`
-  )
-  .join("\n\n")}
+   ${point.criteria}`,
+	)
+	.join("\n\n")}
 </MarkScheme>
 
 <StudentAnswer>
@@ -313,22 +302,22 @@ Provide your response in the exact JSON format shown above.
 <ExampleOutputFormat>
 ${JSON.stringify(exampleMarkingResult, null, 2)}
 </ExampleOutputFormat>
-`;
+`
 
-  const { object } = await generateObject({
-    model: openai("gpt-4o"),
-    schema: markingResultSchema,
-    prompt,
-    temperature: 0.1, // Low temperature for consistent marking
-  });
+	const { object } = await generateObject({
+		model: openai("gpt-4o"),
+		schema: markingResultSchema,
+		prompt,
+		temperature: 0.1, // Low temperature for consistent marking
+	})
 
-  if (
-    object.total_score !==
-    object.mark_points_results.reduce((sum, mp) => sum + +mp.awarded, 0)
-  ) {
-    throw new Error(`Total score does not match sum of awarded marks. 
-      This indicates an inconsistency in the LLM output.`);
-  }
+	if (
+		object.total_score !==
+		object.mark_points_results.reduce((sum, mp) => sum + +mp.awarded, 0)
+	) {
+		throw new Error(`Total score does not match sum of awarded marks. 
+      This indicates an inconsistency in the LLM output.`)
+	}
 
-  return object;
+	return object
 }

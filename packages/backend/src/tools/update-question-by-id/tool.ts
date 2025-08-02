@@ -29,9 +29,7 @@ export const handler = tool(UpdateQuestionByIdSchema, async (args, extra) => {
 	}
 
 	// Prepare update data
-	const updateData: Partial<Question> = {
-		updated_at: new Date(),
-	}
+	const updateData: Partial<Question> = {}
 
 	// Add optional fields if provided
 	if (topic !== undefined) {

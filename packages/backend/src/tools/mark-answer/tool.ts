@@ -54,6 +54,7 @@ export const handler = tool(MarkAnswerSchema, async (args, extra) => {
 	await db.markingResult.create({
 		data: {
 			answer_id,
+			mark_scheme_id: markScheme.id,
 			mark_points_results: markingResult.mark_points_results,
 			total_score: markingResult.total_score,
 			max_possible_score: answer.max_possible_score,

@@ -11,7 +11,11 @@ export const handler = tool(
 
 		const answer = await db.answer.findUniqueOrThrow({
 			where: { id: answer_id },
-			include: { marking_results: true },
+			include: {
+				marking_results: {
+					include: { mark_scheme: true },
+				},
+			},
 		})
 
 		if (!answer.marking_results.length) {
@@ -39,6 +43,12 @@ export const handler = tool(
 Answer ID: ${most_recent_mark.answer_id}
 Total Score: ${most_recent_mark.total_score}/${most_recent_mark.max_possible_score}
 Marked At: ${most_recent_mark.marked_at.toLocaleDateString()} ${most_recent_mark.marked_at.toLocaleTimeString()}
+
+Mark Scheme Used:
+- Description: ${most_recent_mark.mark_scheme.description}
+- Total Points: ${most_recent_mark.mark_scheme.points_total}
+- Tags: ${most_recent_mark.mark_scheme.tags.join(", ") || "None"}
+${most_recent_mark.mark_scheme.guidance ? `- Guidance: ${most_recent_mark.mark_scheme.guidance}` : ""}
 
 Mark Points Results:
 ${markPointsDetails}

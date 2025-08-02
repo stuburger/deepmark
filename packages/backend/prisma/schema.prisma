@@ -173,9 +173,10 @@ model MarkScheme {
   mark_points      MarkPoint[] // embedded array
 
   // Relations
-  created_by    User          @relation(fields: [created_by_id], references: [id])
-  question      Question      @relation(fields: [question_id], references: [id])
-  question_part QuestionPart? @relation(fields: [question_part_id], references: [id])
+  created_by      User            @relation(fields: [created_by_id], references: [id])
+  question        Question        @relation(fields: [question_id], references: [id])
+  question_part   QuestionPart?   @relation(fields: [question_part_id], references: [id])
+  marking_results MarkingResult[]
 
   @@map("mark_schemes")
 }
@@ -206,6 +207,7 @@ model Answer {
 model MarkingResult {
   id                  String            @id @default(auto()) @map("_id") @db.ObjectId
   answer_id           String            @db.ObjectId
+  mark_scheme_id      String            @db.ObjectId
   mark_points_results MarkPointResult[] // embedded array
   total_score         Int
   max_possible_score  Int
@@ -214,7 +216,8 @@ model MarkingResult {
   feedback_summary    String
 
   // Relations
-  answer Answer @relation(fields: [answer_id], references: [id])
+  answer      Answer     @relation(fields: [answer_id], references: [id])
+  mark_scheme MarkScheme @relation(fields: [mark_scheme_id], references: [id])
 
   @@map("marking_results")
 }

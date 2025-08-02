@@ -10,7 +10,6 @@ import type {
 	Answer,
 	MarkPointResult,
 	MarkScheme,
-	Prisma,
 	Question,
 	QuestionPart,
 } from "@/generated/prisma"
@@ -31,9 +30,7 @@ export const handler = tool(MarkAnswerSchema, async (args, extra) => {
 		return `Answer ${answer_id} has already been marked.`
 	}
 
-	let questionPart: QuestionPart | undefined
 	let questionText = answer.question.text
-	// let questionTopic = answer.question.topic
 
 	if (answer.question_part) {
 		// Use the part text and topic for marking
@@ -46,19 +43,6 @@ export const handler = tool(MarkAnswerSchema, async (args, extra) => {
 			question_part_id: answer.question_part_id,
 		},
 	})
-
-	// extra.sendNotification({
-	//   method: "notifications/message",
-	//   params: {
-	//     level: "info",
-	//     logger: "marking",
-	//     data: {
-	//       message: "Starting marking process...",
-	//       answer_id,
-	//       question_id: question._id.toString(),
-	//     },
-	//   },
-	// });
 
 	const markingResult = await callLLMForMarking(
 		answer.question,

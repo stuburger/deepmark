@@ -8,18 +8,18 @@ import {
 	ListQuestionsSchema,
 	getQuestionByIdHandler,
 	GetQuestionByIdSchema,
-	// updateQuestionByIdHandler,
-	// UpdateQuestionByIdSchema,
-	// createMarkSchemeHandler,
+	updateQuestionByIdHandler,
+	UpdateQuestionByIdSchema,
+	createMarkSchemeHandler,
 	CreateMarkSchemeSchema,
 	updateMarkSchemeHandler,
-	// UpdateMarkSchemeSchema,
-	// answerQuestionHandler,
-	// AnswerQuestionSchema,
-	// markAnswerHandler,
-	// MarkAnswerSchema,
-	// getMarkResultByIdHandler,
-	// GetMarkResultByIdSchema,
+	UpdateMarkSchemeSchema,
+	answerQuestionHandler,
+	AnswerQuestionSchema,
+	markAnswerHandler,
+	MarkAnswerSchema,
+	getMarkResultByAnswerIdHandler,
+	GetMarkResultByAnswerIdSchema,
 	// createExamPaperHandler,
 	// CreateExamPaperSchema,
 	// listExamPapersHandler,
@@ -107,15 +107,15 @@ server.registerTool(
 	getQuestionByIdHandler,
 )
 
-// server.registerTool(
-//   "update-question-by-id",
-//   {
-//     title: "Update Question by ID",
-//     description: "Update an existing GCSE question by its ID",
-//     inputSchema: UpdateQuestionByIdSchema,
-//   },
-//   updateQuestionByIdHandler
-// );
+server.registerTool(
+	"update-question-by-id",
+	{
+		title: "Update Question by ID",
+		description: "Update an existing GCSE question by its ID",
+		inputSchema: UpdateQuestionByIdSchema,
+	},
+	updateQuestionByIdHandler,
+)
 
 server.registerTool(
 	"create-mark-scheme",
@@ -212,46 +212,46 @@ PENALTY SYSTEM:
 	createMarkSchemeHandler,
 )
 
-// server.registerTool(
-//   "update-mark-scheme",
-//   {
-//     title: "Update Mark Scheme",
-//     description: "Update an existing mark scheme by its ID",
-//     inputSchema: UpdateMarkSchemeSchema,
-//   },
-//   updateMarkSchemeHandler
-// );
+server.registerTool(
+	"update-mark-scheme",
+	{
+		title: "Update Mark Scheme",
+		description: "Update an existing mark scheme by its ID",
+		inputSchema: UpdateMarkSchemeSchema,
+	},
+	updateMarkSchemeHandler,
+)
 
-// server.registerTool(
-//   "answer-question",
-//   {
-//     title: "Answer Question",
-//     description: "Submit a student answer to a GCSE question",
-//     inputSchema: AnswerQuestionSchema,
-//   },
-//   answerQuestionHandler
-// );
+server.registerTool(
+	"answer-question",
+	{
+		title: "Answer Question",
+		description: "Submit a student answer to a GCSE question",
+		inputSchema: AnswerQuestionSchema,
+	},
+	answerQuestionHandler,
+)
 
-// server.registerTool(
-//   "mark-answer",
-//   {
-//     title: "Mark Answer",
-//     description:
-//       "Automatically mark a student answer against the mark scheme using LLM",
-//     inputSchema: MarkAnswerSchema,
-//   },
-//   markAnswerHandler
-// );
+server.registerTool(
+	"mark-answer",
+	{
+		title: "Mark Answer",
+		description:
+			"Automatically mark a student answer against the mark scheme using LLM",
+		inputSchema: MarkAnswerSchema,
+	},
+	markAnswerHandler,
+)
 
-// server.registerTool(
-//   "get-mark-result-by-id",
-//   {
-//     title: "Get Mark Result by Answer ID",
-//     description: "Retrieve the marking result for a specific answer by its ID",
-//     inputSchema: GetMarkResultByIdSchema,
-//   },
-//   getMarkResultByIdHandler
-// );
+server.registerTool(
+	"get-mark-result-by-answer-id",
+	{
+		title: "Get Mark Result by Answer ID",
+		description: "Retrieve the marking result for a specific answer by its ID",
+		inputSchema: GetMarkResultByAnswerIdSchema,
+	},
+	getMarkResultByAnswerIdHandler,
+)
 
 // server.registerTool(
 //   "create-exam-paper",

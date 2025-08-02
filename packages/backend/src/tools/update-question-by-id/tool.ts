@@ -1,77 +1,124 @@
-import { UpdateQuestionByIdSchema } from "./schema";
-import { Question, questions } from "../../db/collections/questions";
-import { ObjectId } from "mongodb";
-import { tool, text } from "../tool-utils";
+import { UpdateQuestionByIdSchema } from "./schema"
+import { tool } from "../tool-utils"
+import { db } from "@/db"
+import type { Question } from "@/generated/prisma"
 
-export const handler = tool(UpdateQuestionByIdSchema, async (args) => {
-  const { id, topic, question_text, points, difficulty_level, subject } = args;
+export const handler = tool(UpdateQuestionByIdSchema, async (args, extra) => {
+	const userId = extra.authInfo.extra.userId
+	const {
+		id,
+		topic,
+		question_text,
+		points,
+		difficulty_level,
+		subject,
+		question_parts,
+	} = args
 
-  // Check if the question exists
-  const existingQuestion = await questions.findOne({ _id: new ObjectId(id) });
+	// Check if the question exists
+	const question = await db.question.findUniqueOrThrow({
+		where: { id },
+		include: { answers: true, question_parts: { include: { answers: true } } },
+	})
 
-  if (!existingQuestion) {
-    return text(`Question with ID ${id} not found.`);
-  }
+	if (
+		question.answers.length ||
+		question.question_parts.some((x) => x.answers.length > 0)
+	) {
+		throw new Error("Cannot update a question with answers")
+	}
 
-  // Prepare update data
-  const updateData: Partial<Question> = {
-    updated_at: new Date(),
-  };
+	// Prepare update data
+	const updateData: Partial<Question> = {
+		updated_at: new Date(),
+	}
 
-  // Add optional fields if provided
-  if (topic !== undefined) {
-    updateData.topic = topic;
-  }
+	// Add optional fields if provided
+	if (topic !== undefined) {
+		updateData.topic = topic
+	}
 
-  if (question_text !== undefined) {
-    updateData.text = question_text;
-  }
+	if (question_text !== undefined) {
+		updateData.text = question_text
+	}
 
-  if (points !== undefined) {
-    updateData.points = points;
-  }
+	if (points !== undefined) {
+		updateData.points = points
+	}
 
-  if (difficulty_level !== undefined) {
-    updateData.difficulty_level = difficulty_level;
-  }
+	if (difficulty_level !== undefined) {
+		updateData.difficulty_level = difficulty_level
+	}
 
-  if (subject !== undefined) {
-    updateData.subject = subject;
-  }
+	if (subject !== undefined) {
+		updateData.subject = subject
+	}
 
-  // Update the question in the database
-  const result = await questions.updateOne(
-    { _id: new ObjectId(id) },
-    { $set: updateData }
-  );
+	// Update the question in the database using a transaction
+	const updatedQuestion = await db.$transaction(async (tx) => {
+		// If question_parts are provided, replace all existing parts
+		if (question_parts !== undefined) {
+			// Delete existing question parts
+			await tx.questionPart.deleteMany({
+				where: { question_id: id },
+			})
 
-  if (result.matchedCount === 0) {
-    return text(`Question with ID ${id} not found.`);
-  }
+			// Create new question parts if any provided
+			if (question_parts.length > 0) {
+				await tx.questionPart.createMany({
+					data: question_parts.map((p, i) => ({
+						question_id: id,
+						created_by_id: userId,
+						order: i,
+						part_label: p.part_label,
+						text: p.part_text,
+						points: p.part_points,
+						difficulty_level: p.part_difficulty_level,
+					})),
+				})
+			}
+		}
 
-  if (result.modifiedCount === 0) {
-    return text(`Question with ID ${id} was found but no changes were made.`);
-  }
+		// Update the main question
+		return await tx.question.update({
+			where: { id },
+			data: updateData,
+			include: {
+				question_parts: {
+					orderBy: { order: "asc" },
+				},
+			},
+		})
+	})
 
-  // Get the updated question for response
-  const updatedQuestion = await questions.findOne({ _id: new ObjectId(id) });
+	// Format the response
+	const updatedFields = Object.keys(updateData).filter(
+		(key) => key !== "updated_at",
+	)
 
-  // Format the response
-  const updatedFields = Object.keys(updateData).filter(
-    (key) => key !== "updated_at"
-  );
-  const questionPreview = updatedQuestion?.text
-    ? updatedQuestion.text.substring(0, 100) +
-      (updatedQuestion.text.length > 100 ? "..." : "")
-    : "No question text";
+	// Add question_parts to updated fields if it was provided
+	if (question_parts !== undefined) {
+		updatedFields.push("question_parts")
+	}
 
-  return text(
-    `Question updated successfully! Question ID: ${id}\n\nUpdated Fields: ${updatedFields.join(
-      ", "
-    )}\nTopic: ${updatedQuestion?.topic}\nSubject: ${
-      updatedQuestion?.subject
-    }\nPoints: ${updatedQuestion?.points || "Not specified"}\nDifficulty: ${
-      updatedQuestion?.difficulty_level || "Not specified"
-    }\n\nQuestion Preview: ${questionPreview}`
-  );
-});
+	const questionPreview = updatedQuestion?.text
+		? updatedQuestion.text.substring(0, 100) +
+			(updatedQuestion.text.length > 100 ? "..." : "")
+		: "No question text"
+
+	const partsInfo =
+		question_parts !== undefined
+			? `\nQuestion Parts: ${question_parts.length} parts (${question_parts.map((p) => p.part_label).join(", ")})`
+			: updatedQuestion.question_parts.length > 0
+				? `\nQuestion Parts: ${updatedQuestion.question_parts.length} existing parts`
+				: ""
+
+	return `Question updated successfully! 
+Question ID: ${id}
+Updated Fields: ${updatedFields.join(", ")}
+Topic: ${updatedQuestion.topic}
+Subject: ${updatedQuestion.subject}
+Points: ${updatedQuestion.points}
+Difficulty: ${updatedQuestion.difficulty_level}
+Question Preview: ${questionPreview}${partsInfo}`
+})

@@ -28,25 +28,22 @@ export { MarkAnswerSchema } from "./mark-answer/schema"
 export { handler as getMarkResultByAnswerIdHandler } from "./get-mark-result-by-answer-id/tool"
 export { GetMarkResultByAnswerIdSchema } from "./get-mark-result-by-answer-id/schema"
 
-// export { handler as createExamPaperHandler } from "./create-exam-paper/tool";
-// export { CreateExamPaperSchema } from "./create-exam-paper/schema";
+export { handler as createExamPaperHandler } from "./create-exam-paper/tool"
+export { CreateExamPaperSchema } from "./create-exam-paper/schema"
 
-// export { handler as listExamPapersHandler } from "./list-exam-papers/tool";
-// export { ListExamPapersSchema } from "./list-exam-papers/schema";
+export { handler as listExamPapersHandler } from "./list-exam-papers/tool"
+export { ListExamPapersSchema } from "./list-exam-papers/schema"
 
-// // Phase 1: Core Exam Paper Management
-// export { handler as getExamPaperByIdHandler } from "./get-exam-paper-by-id/tool";
-// export { GetExamPaperByIdSchema } from "./get-exam-paper-by-id/schema";
+// Core Exam Paper Management
+export { handler as getExamPaperByIdHandler } from "./get-exam-paper-by-id/tool"
+export { GetExamPaperByIdSchema } from "./get-exam-paper-by-id/schema"
 
-// export { handler as updateExamPaperHandler } from "./update-exam-paper/tool";
-// export { UpdateExamPaperSchema } from "./update-exam-paper/schema";
+export { handler as updateExamPaperHandler } from "./update-exam-paper/tool"
+export { UpdateExamPaperSchema } from "./update-exam-paper/schema"
 
 // // Phase 2: Question Management
 // export { handler as listQuestionsByExamPaperHandler } from "./list-questions-by-exam-paper/tool";
 // export { ListQuestionsByExamPaperSchema } from "./list-questions-by-exam-paper/schema";
-
-// export { handler as reorderQuestionsInExamPaperHandler } from "./reorder-questions-in-exam-paper/tool";
-// export { ReorderQuestionsInExamPaperSchema } from "./reorder-questions-in-exam-paper/schema";
 
 // // Phase 3: Session Management
 // export { handler as startExamSessionHandler } from "./start-exam-session/tool";

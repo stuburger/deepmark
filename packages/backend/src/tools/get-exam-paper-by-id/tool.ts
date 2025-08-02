@@ -1,68 +1,131 @@
-import { GetExamPaperByIdSchema } from "./schema";
-import { exam_papers } from "../../db/collections/exam-papers";
-import { questions } from "../../db/collections/questions";
-import { ObjectId } from "mongodb";
-import { tool, json } from "../tool-utils";
+import { GetExamPaperByIdSchema } from "./schema"
+import { tool } from "../tool-utils"
+import { db } from "@/db"
 
-export const handler = tool(GetExamPaperByIdSchema, async (args) => {
-  const { exam_paper_id } = args;
+export const handler = tool(GetExamPaperByIdSchema, async (args, extra) => {
+	const { userId } = extra.authInfo.extra
+	const { exam_paper_id } = args
 
-  console.log("[get-exam-paper-by-id] Handler invoked", { exam_paper_id });
+	console.log("[get-exam-paper-by-id] Handler invoked", {
+		exam_paper_id,
+		userId,
+	})
 
-  // Validate ObjectId format
-  if (!ObjectId.isValid(exam_paper_id)) {
-    throw new Error("Invalid exam paper ID format");
-  }
+	// Find the exam paper with all its relations
+	const examPaper = await db.examPaper.findUniqueOrThrow({
+		where: { id: exam_paper_id },
+		include: {
+			created_by: {
+				select: {
+					id: true,
+					name: true,
+					email: true,
+				},
+			},
+			sections: {
+				include: {
+					exam_section_questions: {
+						include: {
+							question: {
+								select: {
+									id: true,
+									text: true,
+									subject: true,
+									points: true,
+									difficulty_level: true,
+									topic: true,
+								},
+							},
+						},
+						orderBy: {
+							order: "asc",
+						},
+					},
+				},
+				orderBy: {
+					order: "asc",
+				},
+			},
+		},
+	})
 
-  const objectId = new ObjectId(exam_paper_id);
+	console.log("[get-exam-paper-by-id] Exam paper retrieved successfully", {
+		examPaperId: exam_paper_id,
+		title: examPaper.title,
+		sectionsCount: examPaper.sections.length,
+	})
 
-  // Find the exam paper
-  const examPaper = await exam_papers.findOne({ _id: objectId });
+	// Format the response as markdown
+	let markdown = `# ${examPaper.title}\n\n`
 
-  if (!examPaper) {
-    throw new Error(`Exam paper with ID ${exam_paper_id} not found`);
-  }
+	// Basic information
+	markdown += "## Exam Information\n\n"
+	markdown += `- **Subject**: ${examPaper.subject}\n`
+	markdown += `- **Year**: ${examPaper.year}\n`
+	if (examPaper.paper_number) {
+		markdown += `- **Paper Number**: ${examPaper.paper_number}\n`
+	}
+	if (examPaper.exam_board) {
+		markdown += `- **Exam Board**: ${examPaper.exam_board}\n`
+	}
+	markdown += `- **Duration**: ${examPaper.duration_minutes} minutes\n`
+	markdown += `- **Total Marks**: ${examPaper.total_marks}\n`
+	markdown += `- **Created by**: ${examPaper.created_by.name || examPaper.created_by.email || "Unknown"}\n`
+	markdown += `- **Created**: ${examPaper.created_at.toLocaleDateString()}\n`
 
-  // Get question details for each section
-  const allQuestionIds = examPaper.sections.flatMap(
-    (section) => section.questions
-  );
-  const uniqueQuestionIds = [...new Set(allQuestionIds)];
+	if (examPaper.metadata) {
+		markdown += `- **Difficulty Level**: ${examPaper.metadata.difficulty_level || "Not specified"}\n`
+		markdown += `- **Tier**: ${examPaper.metadata.tier || "Not specified"}\n`
+		markdown += `- **Season**: ${examPaper.metadata.season || "Not specified"}\n`
+	}
 
-  const questionDetails = await questions
-    .find({ _id: { $in: uniqueQuestionIds.map((id) => new ObjectId(id)) } })
-    .project({
-      _id: 1,
-      question_text: 1,
-      question_type: 1,
-      marks: 1,
-      difficulty: 1,
-    })
-    .toArray();
+	markdown += "\n"
 
-  const questionMap = new Map(
-    questionDetails.map((q) => [q._id.toString(), q])
-  );
+	// Sections
+	if (examPaper.sections && examPaper.sections.length > 0) {
+		markdown += "## Sections\n\n"
 
-  // Enhance sections with question details
-  const enhancedSections = examPaper.sections.map((section) => ({
-    ...section,
-    questions: section.questions.map((questionId) => ({
-      question_id: questionId,
-      details: questionMap.get(questionId) || null,
-    })),
-  }));
+		examPaper.sections.forEach((section, sectionIndex) => {
+			markdown += `### ${section.title}\n\n`
 
-  const result = {
-    ...examPaper,
-    sections: enhancedSections,
-  };
+			if (section.description) {
+				markdown += `${section.description}\n\n`
+			}
 
-  console.log("[get-exam-paper-by-id] Exam paper retrieved successfully", {
-    examPaperId: exam_paper_id,
-    title: examPaper.title,
-    sectionsCount: examPaper.sections.length,
-  });
+			if (section.instructions) {
+				markdown += `**Instructions**: ${section.instructions}\n\n`
+			}
 
-  return json(result);
-});
+			markdown += `**Total Marks**: ${section.total_marks}\n\n`
+
+			if (
+				section.exam_section_questions &&
+				section.exam_section_questions.length > 0
+			) {
+				markdown += "#### Questions\n\n"
+
+				section.exam_section_questions.forEach((esq, questionIndex) => {
+					const question = esq.question
+					markdown += `${questionIndex + 1}. **Question ${esq.order}**\n`
+					markdown += `   - **Text**: ${question.text}\n`
+					markdown += `   - **Subject**: ${question.subject}\n`
+					markdown += `   - **Topic**: ${question.topic}\n`
+					if (question.points) {
+						markdown += `   - **Points**: ${question.points}\n`
+					}
+					if (question.difficulty_level) {
+						markdown += `   - **Difficulty**: ${question.difficulty_level}\n`
+					}
+					markdown += "\n"
+				})
+			} else {
+				markdown += "*No questions assigned to this section yet.*\n\n"
+			}
+		})
+	} else {
+		markdown +=
+			"## Sections\n\n*No sections defined for this exam paper yet.*\n\n"
+	}
+
+	return markdown
+})

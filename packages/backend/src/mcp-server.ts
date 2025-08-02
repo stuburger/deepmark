@@ -20,15 +20,15 @@ import {
 	MarkAnswerSchema,
 	getMarkResultByAnswerIdHandler,
 	GetMarkResultByAnswerIdSchema,
-	// createExamPaperHandler,
-	// CreateExamPaperSchema,
-	// listExamPapersHandler,
-	// ListExamPapersSchema,
+	createExamPaperHandler,
+	CreateExamPaperSchema,
+	listExamPapersHandler,
+	ListExamPapersSchema,
 	// // Phase 1: Core Exam Paper Management
-	// getExamPaperByIdHandler,
-	// GetExamPaperByIdSchema,
-	// updateExamPaperHandler,
-	// UpdateExamPaperSchema,
+	getExamPaperByIdHandler,
+	GetExamPaperByIdSchema,
+	updateExamPaperHandler,
+	UpdateExamPaperSchema,
 	// // Phase 2: Question Management
 	// listQuestionsByExamPaperHandler,
 	// ListQuestionsByExamPaperSchema,
@@ -253,70 +253,48 @@ server.registerTool(
 	getMarkResultByAnswerIdHandler,
 )
 
-// server.registerTool(
-//   "create-exam-paper",
-//   {
-//     title: "Create Exam Paper",
-//     description:
-//       "Create a new exam paper with sections containing ordered questions",
-//     inputSchema: CreateExamPaperSchema,
-//   },
-//   createExamPaperHandler
-// );
+server.registerTool(
+	"create-exam-paper",
+	{
+		title: "Create Exam Paper",
+		description:
+			"Create a new exam paper with sections containing ordered questions",
+		inputSchema: CreateExamPaperSchema,
+	},
+	createExamPaperHandler,
+)
 
-// server.registerTool(
-//   "list-exam-papers",
-//   {
-//     title: "List Exam Papers",
-//     description: "List all exam papers with optional filtering",
-//     inputSchema: ListExamPapersSchema,
-//   },
-//   listExamPapersHandler
-// );
+server.registerTool(
+	"list-exam-papers",
+	{
+		title: "List Exam Papers",
+		description: "List all exam papers with optional filtering",
+		inputSchema: ListExamPapersSchema,
+	},
+	listExamPapersHandler,
+)
 
 // // Phase 1: Core Exam Paper Management
-// server.registerTool(
-//   "get-exam-paper-by-id",
-//   {
-//     title: "Get Exam Paper by ID",
-//     description:
-//       "Retrieve a specific exam paper by its ID with question details",
-//     inputSchema: GetExamPaperByIdSchema,
-//   },
-//   getExamPaperByIdHandler
-// );
+server.registerTool(
+	"get-exam-paper-by-id",
+	{
+		title: "Get Exam Paper by ID",
+		description:
+			"Retrieve a specific exam paper by its ID with question details",
+		inputSchema: GetExamPaperByIdSchema,
+	},
+	getExamPaperByIdHandler,
+)
 
-// server.registerTool(
-//   "update-exam-paper",
-//   {
-//     title: "Update Exam Paper",
-//     description: "Update an existing exam paper by its ID",
-//     inputSchema: UpdateExamPaperSchema,
-//   },
-//   updateExamPaperHandler
-// );
-
-// // Phase 2: Question Management
-// server.registerTool(
-//   "list-questions-by-exam-paper",
-//   {
-//     title: "List Questions by Exam Paper",
-//     description:
-//       "List all questions in a specific exam paper, organized by sections",
-//     inputSchema: ListQuestionsByExamPaperSchema,
-//   },
-//   listQuestionsByExamPaperHandler
-// );
-
-// server.registerTool(
-//   "reorder-questions-in-exam-paper",
-//   {
-//     title: "Reorder Questions in Exam Paper",
-//     description: "Reorder questions within a specific section of an exam paper",
-//     inputSchema: ReorderQuestionsInExamPaperSchema,
-//   },
-//   reorderQuestionsInExamPaperHandler
-// );
+server.registerTool(
+	"update-exam-paper",
+	{
+		title: "Update Exam Paper",
+		description: "Update an existing exam paper by its ID",
+		inputSchema: UpdateExamPaperSchema,
+	},
+	updateExamPaperHandler,
+)
 
 // // Phase 3: Session Management
 // server.registerTool(

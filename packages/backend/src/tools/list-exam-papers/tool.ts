@@ -1,42 +1,80 @@
-import { ListExamPapersSchema } from "./schema";
-import { exam_papers } from "../../db/collections/exam-papers";
-import { text, tool } from "../tool-utils";
+import { ListExamPapersSchema } from "./schema"
+import { tool } from "../tool-utils"
+import { db } from "@/db"
 
 export const handler = tool(ListExamPapersSchema, async (args, extra) => {
-  console.log("[list-exam-papers] Handler invoked");
+	const { userId } = extra.authInfo.extra
 
-  try {
-    // Fetch all exam papers from the database
-    const allExamPapers = await exam_papers.find({}).toArray();
+	console.log("[list-exam-papers] Handler invoked", { userId })
 
-    console.log("[list-exam-papers] Successfully retrieved exam papers", {
-      count: allExamPapers.length,
-    });
+	// Fetch all exam papers from the database
+	const allExamPapers = await db.examPaper.findMany({
+		where: { is_active: true },
+		include: {
+			created_by: {
+				select: {
+					id: true,
+					name: true,
+					email: true,
+				},
+			},
+			sections: {
+				select: {
+					id: true,
+					title: true,
+					total_marks: true,
+				},
+			},
+		},
+		orderBy: {
+			created_at: "desc",
+		},
+	})
 
-    // Format the response
-    const formattedPapers = allExamPapers.map((paper) => ({
-      id: paper._id.toString(),
-      title: paper.title,
-      subject: paper.subject,
-      exam_board: paper.exam_board,
-      year: paper.year,
-      paper_number: paper.paper_number,
-      total_marks: paper.total_marks,
-      duration_minutes: paper.duration_minutes,
-      created_by: paper.created_by,
-      created_at: paper.created_at.toISOString(),
-      updated_at: paper.updated_at.toISOString(),
-      is_active: paper.is_active,
-      sections_count: paper.sections.length,
-      metadata: paper.metadata,
-    }));
+	console.log("[list-exam-papers] Successfully retrieved exam papers", {
+		count: allExamPapers.length,
+	})
 
-    return text(`Found ${allExamPapers.length} exam paper(s)`, {
-      exam_papers: formattedPapers,
-      total_count: allExamPapers.length,
-    });
-  } catch (error) {
-    console.error("[list-exam-papers] Error retrieving exam papers:", error);
-    throw new Error("Failed to retrieve exam papers from database");
-  }
-});
+	// Format the response as markdown
+	let markdown = "# Exam Papers\n\n"
+	markdown += `Found **${allExamPapers.length}** exam paper(s)\n\n`
+
+	if (allExamPapers.length === 0) {
+		markdown += "*No exam papers found.*\n"
+		return markdown
+	}
+
+	allExamPapers.forEach((paper, index) => {
+		markdown += `## ${index + 1}. ${paper.title}\n\n`
+		markdown += `- **ID**: ${paper.id}\n`
+		markdown += `- **Subject**: ${paper.subject}\n`
+		markdown += `- **Year**: ${paper.year}\n`
+		if (paper.paper_number) {
+			markdown += `- **Paper Number**: ${paper.paper_number}\n`
+		}
+		if (paper.exam_board) {
+			markdown += `- **Exam Board**: ${paper.exam_board}\n`
+		}
+		markdown += `- **Duration**: ${paper.duration_minutes} minutes\n`
+		markdown += `- **Total Marks**: ${paper.total_marks}\n`
+		markdown += `- **Created by**: ${paper.created_by.name || paper.created_by.email || "Unknown"}\n`
+		markdown += `- **Created**: ${paper.created_at.toLocaleDateString()}\n`
+		markdown += `- **Sections**: ${paper.sections.length}\n`
+
+		if (paper.metadata) {
+			if (paper.metadata.difficulty_level) {
+				markdown += `- **Difficulty**: ${paper.metadata.difficulty_level}\n`
+			}
+			if (paper.metadata.tier) {
+				markdown += `- **Tier**: ${paper.metadata.tier}\n`
+			}
+			if (paper.metadata.season) {
+				markdown += `- **Season**: ${paper.metadata.season}\n`
+			}
+		}
+
+		markdown += "\n"
+	})
+
+	return markdown
+})

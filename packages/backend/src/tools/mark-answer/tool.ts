@@ -1,11 +1,19 @@
 import { MarkAnswerSchema } from "./schema"
 
-import { ObjectId } from "mongodb"
 import { generateObject } from "ai"
 import { createOpenAI } from "@ai-sdk/openai"
 import z from "zod"
 import { Resource } from "sst"
-import { tool, text } from "../tool-utils"
+import { tool } from "../tool-utils"
+import { db } from "@/db"
+import type {
+	Answer,
+	MarkPointResult,
+	MarkScheme,
+	Prisma,
+	Question,
+	QuestionPart,
+} from "@/generated/prisma"
 
 const openai = createOpenAI({
 	apiKey: Resource.OpenAiApiKey.value,
@@ -14,68 +22,30 @@ const openai = createOpenAI({
 export const handler = tool(MarkAnswerSchema, async (args, extra) => {
 	const { answer_id, include_mark_result } = args
 
-	const answer = await answers.findOne({ _id: new ObjectId(answer_id) })
-
-	if (!answer) {
-		throw new Error(`Answer with ID ${answer_id} not found.`)
-	}
+	const answer = await db.answer.findUniqueOrThrow({
+		where: { id: answer_id },
+		include: { question: true, question_part: true },
+	})
 
 	if (answer.marking_status === "completed") {
-		return text(`Answer ${answer_id} has already been marked.`)
+		return `Answer ${answer_id} has already been marked.`
 	}
 
-	const question = await questions.findOne({
-		_id: new ObjectId(answer.question_id),
-	})
+	let questionPart: QuestionPart | undefined
+	let questionText = answer.question.text
+	// let questionTopic = answer.question.topic
 
-	if (!question) {
-		throw new Error(`Question for answer ${answer_id} not found.`)
-	}
-
-	// Get question part details if this answer is for a specific part
-	let questionPart: QuestionPart | null = null
-	let questionText = question.text
-	let questionTopic = question.topic
-
-	if (answer.question_part_id) {
-		questionPart = await question_parts.findOne({
-			_id: new ObjectId(answer.question_part_id),
-		})
-
-		if (!questionPart) {
-			throw new Error(`Question part for answer ${answer_id} not found.`)
-		}
-
+	if (answer.question_part) {
 		// Use the part text and topic for marking
-		questionText = questionPart.text
-		questionTopic = question.topic // Keep parent question topic
+		questionText += answer.question_part.text
 	}
 
-	// Find mark scheme - prioritize part-specific mark schemes
-	const markSchemeQuery = answer.question_part_id
-		? {
-				question_id: answer.question_id,
-				question_part_id: answer.question_part_id,
-			}
-		: {
-				question_id: answer.question_id,
-				question_part_id: { $exists: false },
-			}
-
-	const markScheme = await mark_schemes.findOne(markSchemeQuery, {
-		sort: { created_at: -1 },
+	const markScheme = await db.markScheme.findFirstOrThrow({
+		where: {
+			question_id: answer.question_id,
+			question_part_id: answer.question_part_id,
+		},
 	})
-
-	if (!markScheme) {
-		const partInfo = answer.question_part_id
-			? ` (part ${answer.question_part_id})`
-			: ""
-		throw new Error(
-			`Mark scheme for question ${answer.question_id}${partInfo} not found.
-      Create a mark scheme first.
-      `,
-		)
-	}
 
 	// extra.sendNotification({
 	//   method: "notifications/message",
@@ -91,47 +61,44 @@ export const handler = tool(MarkAnswerSchema, async (args, extra) => {
 	// });
 
 	const markingResult = await callLLMForMarking(
-		question,
-		questionPart,
+		answer.question,
+		answer.question_part,
 		markScheme,
 		answer,
 	)
 
-	const markingResultData: MarkingResult = {
-		_id: new ObjectId(),
-		answer_id,
-		mark_points_results: markingResult.mark_points_results,
-		total_score: markingResult.total_score,
-		max_possible_score: answer.max_possible_score,
-		marked_at: new Date(),
-		llm_reasoning: markingResult.llm_reasoning,
-		feedback_summary: markingResult.feedback_summary,
-	}
-
-	await marking_results.insertOne(markingResultData)
-
-	await answers.updateOne(
-		{ _id: new ObjectId(answer_id) },
-		{
-			$set: {
-				marking_status: "completed",
-				total_score: markingResult.total_score,
-				marked_at: new Date(),
-			},
+	await db.markingResult.create({
+		data: {
+			answer_id,
+			mark_points_results: markingResult.mark_points_results,
+			total_score: markingResult.total_score,
+			max_possible_score: answer.max_possible_score,
+			marked_at: new Date(),
+			llm_reasoning: markingResult.llm_reasoning,
+			feedback_summary: markingResult.feedback_summary,
 		},
-	)
+	})
+
+	await db.answer.update({
+		where: { id: answer_id },
+		data: {
+			marking_status: "completed",
+			total_score: markingResult.total_score,
+			marked_at: new Date(),
+		},
+	})
 
 	let responseText = `Answer marked successfully! Score: ${markingResult.total_score}/${answer.max_possible_score}`
 
 	if (include_mark_result) {
 		responseText += `\n\nMarking Result:\n${JSON.stringify(
-			markingResultData,
+			markingResult,
 			null,
 			2,
 		)}`
 	}
 
-	return text(responseText)
+	return responseText
 })
 
 // Define the schema for the marking result

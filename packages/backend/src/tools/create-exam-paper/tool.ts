@@ -1,10 +1,4 @@
 import { CreateExamPaperSchema } from "./schema"
-import {
-	ExamPaper,
-	exam_papers,
-	ExamSection,
-} from "../../db/collections/exam-papers"
-import { questions } from "../../db/collections/questions"
 import { ObjectId } from "mongodb"
 import { tool, text } from "../tool-utils"
 
@@ -105,8 +99,7 @@ export const handler = tool(CreateExamPaperSchema, async (args) => {
 		)
 		.join("\n  ")
 
-	return text(
-		`Exam paper created successfully! Exam Paper ID: ${result.insertedId}
+	return `Exam paper created successfully! Exam Paper ID: ${result.insertedId}
 
 Title: ${title}
 Subject: ${subject}
@@ -114,6 +107,5 @@ Year: ${year}
 Duration: ${duration_minutes} minutes
 Total Marks: ${totalMarks}
 Sections: ${sections.length}
-  ${sectionsInfo}`,
-	)
+${sectionsInfo}`
 })

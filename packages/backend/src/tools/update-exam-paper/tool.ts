@@ -1,10 +1,5 @@
 import { UpdateExamPaperSchema } from "./schema"
-import {
-	ExamPaper,
-	exam_papers,
-	ExamSection,
-} from "../../db/collections/exam-papers"
-import { questions } from "../../db/collections/questions"
+
 import { ObjectId } from "mongodb"
 import { tool, text } from "../tool-utils"
 

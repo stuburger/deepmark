@@ -41,10 +41,6 @@ export { GetExamPaperByIdSchema } from "./get-exam-paper-by-id/schema"
 export { handler as updateExamPaperHandler } from "./update-exam-paper/tool"
 export { UpdateExamPaperSchema } from "./update-exam-paper/schema"
 
-// // Phase 2: Question Management
-// export { handler as listQuestionsByExamPaperHandler } from "./list-questions-by-exam-paper/tool";
-// export { ListQuestionsByExamPaperSchema } from "./list-questions-by-exam-paper/schema";
-
 // // Phase 3: Session Management
 // export { handler as startExamSessionHandler } from "./start-exam-session/tool";
 // export { StartExamSessionSchema } from "./start-exam-session/schema";

@@ -5,12 +5,12 @@ import { db } from "@/db"
 import type { Answer, QuestionPart } from "@/generated/prisma"
 
 export const handler = tool(AnswerQuestionSchema, async (args, extra) => {
-	const { question_id, question_part_id, student_answer, student_id } = args
+	const { question_id, question_part_id, student_answer } = args
+	const { userId } = extra.authInfo.extra
 
 	console.log("[answer-question] Handler invoked", {
 		question_id,
 		question_part_id,
-		student_id,
 	})
 
 	// Verify the question exists and get its details
@@ -42,7 +42,7 @@ export const handler = tool(AnswerQuestionSchema, async (args, extra) => {
 		data: {
 			question_id,
 			question_part_id: question_part_id || null,
-			student_id,
+			student_id: userId,
 			student_answer,
 			submitted_at: new Date(),
 			max_possible_score: maxPossibleScore,
@@ -56,7 +56,7 @@ export const handler = tool(AnswerQuestionSchema, async (args, extra) => {
 		answer_id: answer.id,
 		question_id,
 		question_part_id,
-		student_id,
+		student_id: userId,
 	})
 
 	return `Answer submitted successfully! Answer ID: ${answer.id} ${partInfo}`

@@ -262,6 +262,7 @@ model ExamSection {
   exam_paper             ExamPaper             @relation(fields: [exam_paper_id], references: [id])
   exam_section_questions ExamSectionQuestion[]
 
+  @@unique([exam_paper_id, title]) // Prevent duplicate section titles within the same exam paper
   @@map("exam_sections")
 }
 

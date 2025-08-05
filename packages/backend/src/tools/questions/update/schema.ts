@@ -1,5 +1,5 @@
 import { z } from "zod"
-import { CreateQuestionPartSchema } from "../create-question/schema"
+import { CreateQuestionPartSchema } from "../create/schema"
 
 export const UpdateQuestionByIdSchema = {
 	id: z.string().describe("The unique identifier for the question to update"),

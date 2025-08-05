@@ -1,5 +1,5 @@
 import { UpdateMarkSchemeSchema } from "./schema"
-import { tool } from "../tool-utils"
+import { tool } from "../shared/tool-utils"
 import { db } from "@/db"
 import type { MarkScheme } from "@/generated/prisma"
 

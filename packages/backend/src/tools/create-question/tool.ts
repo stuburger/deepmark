@@ -1,6 +1,6 @@
 import { CreateQuestionSchema } from "./schema"
 import { db } from "../../db/client"
-import { tool } from "../tool-utils"
+import { tool } from "../shared/tool-utils"
 
 export const handler = tool(CreateQuestionSchema, async (args, extra) => {
 	const userId = extra.authInfo.extra.userId

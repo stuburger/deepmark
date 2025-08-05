@@ -1,5 +1,5 @@
 import { GetMarkResultByAnswerIdSchema } from "./schema"
-import { tool } from "../tool-utils"
+import { tool } from "../shared/tool-utils"
 import { db } from "@/db"
 
 export const handler = tool(

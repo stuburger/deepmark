@@ -1,6 +1,6 @@
 import { ListQuestionsSchema } from "./schema"
 import { questions } from "../../db/collections/questions"
-import { tool, text } from "../tool-utils"
+import { tool, text } from "../shared/tool-utils"
 import type { Prisma } from "@/generated/prisma"
 import { db } from "@/db"
 

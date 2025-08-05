@@ -1,5 +1,5 @@
 import { GetExamPaperByIdSchema } from "./schema"
-import { tool } from "../tool-utils"
+import { tool } from "../shared/tool-utils"
 import { db } from "@/db"
 
 export const handler = tool(GetExamPaperByIdSchema, async (args, extra) => {

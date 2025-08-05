@@ -1,6 +1,6 @@
 import { UpdateExamPaperSchema } from "./schema"
 
-import { tool, text } from "../tool-utils"
+import { tool, text } from "../shared/tool-utils"
 import { db } from "@/db"
 import type { ExamPaper } from "@/generated/prisma"
 

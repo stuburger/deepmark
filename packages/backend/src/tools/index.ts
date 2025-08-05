@@ -1,5 +1,5 @@
-export { handler as debugToolHandler } from "./debug-tool/tool"
-export { DebugToolSchema } from "./debug-tool/schema"
+export { handler as debugToolHandler } from "./core/debug-tool/tool"
+export { DebugToolSchema } from "./core/debug-tool/schema"
 
 export { handler as createQuestionHandler } from "./create-question/tool"
 export { CreateQuestionSchema } from "./create-question/schema"

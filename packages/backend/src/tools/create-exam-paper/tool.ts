@@ -1,6 +1,6 @@
 import { CreateExamPaperSchema } from "./schema"
 import { ObjectId } from "mongodb"
-import { tool, text } from "../tool-utils"
+import { tool, text } from "../shared/tool-utils"
 import { db } from "@/db"
 
 export const handler = tool(CreateExamPaperSchema, async (args, extra) => {

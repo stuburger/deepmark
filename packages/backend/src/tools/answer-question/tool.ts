@@ -1,6 +1,6 @@
 import { AnswerQuestionSchema } from "./schema"
 
-import { tool } from "../tool-utils"
+import { tool } from "../shared/tool-utils"
 import { db } from "@/db"
 import type { Answer, QuestionPart } from "@/generated/prisma"
 

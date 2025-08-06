@@ -22,6 +22,9 @@ export { UpdateMarkSchemeSchema } from "./mark-schemes/update/schema"
 export { handler as answerQuestionHandler } from "./answers/create/tool"
 export { AnswerQuestionSchema } from "./answers/create/schema"
 
+export { handler as evaluateAnswerHandler } from "./answers/evaluate/tool"
+export { EvaluateAnswerSchema } from "./answers/evaluate/schema"
+
 export { handler as markAnswerHandler } from "./mark-results/create/tool"
 export { MarkAnswerSchema } from "./mark-results/create/schema"
 
@@ -40,6 +43,9 @@ export { GetExamPaperByIdSchema } from "./exam-papers/get/schema"
 
 export { handler as updateExamPaperHandler } from "./exam-papers/update/tool"
 export { UpdateExamPaperSchema } from "./exam-papers/update/schema"
+
+export { handler as addQuestionToExamPaperHandler } from "./exam-papers/add-question/tool"
+export { AddQuestionToExamPaperSchema } from "./exam-papers/add-question/schema"
 
 // // Phase 3: Session Management
 // export { handler as startExamSessionHandler } from "./sessions/start-exam-session/tool";

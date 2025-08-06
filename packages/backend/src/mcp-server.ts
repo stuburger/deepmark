@@ -16,6 +16,8 @@ import {
 	UpdateMarkSchemeSchema,
 	answerQuestionHandler,
 	AnswerQuestionSchema,
+	evaluateAnswerHandler,
+	EvaluateAnswerSchema,
 	markAnswerHandler,
 	MarkAnswerSchema,
 	getMarkResultByAnswerIdHandler,
@@ -29,6 +31,8 @@ import {
 	GetExamPaperByIdSchema,
 	updateExamPaperHandler,
 	UpdateExamPaperSchema,
+	addQuestionToExamPaperHandler,
+	AddQuestionToExamPaperSchema,
 	// // Phase 2: Question Management
 	// listQuestionsByExamPaperHandler,
 	// ListQuestionsByExamPaperSchema,
@@ -233,6 +237,17 @@ server.registerTool(
 )
 
 server.registerTool(
+	"evaluate-answer",
+	{
+		title: "Evaluate Answer (Testing)",
+		description:
+			"Evaluate a student answer against a mark scheme without saving to database - useful for mark scheme testing and refinement",
+		inputSchema: EvaluateAnswerSchema,
+	},
+	evaluateAnswerHandler,
+)
+
+server.registerTool(
 	"mark-answer",
 	{
 		title: "Mark Answer",
@@ -294,6 +309,17 @@ server.registerTool(
 		inputSchema: UpdateExamPaperSchema,
 	},
 	updateExamPaperHandler,
+)
+
+server.registerTool(
+	"add-question-to-exam-paper",
+	{
+		title: "Add Question to Exam Paper",
+		description:
+			"Add an existing question to a specific exam paper and section",
+		inputSchema: AddQuestionToExamPaperSchema,
+	},
+	addQuestionToExamPaperHandler,
 )
 
 // // Phase 3: Session Management

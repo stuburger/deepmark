@@ -1,0 +1,298 @@
+import { EvaluateAnswerSchema } from "./schema"
+import { generateObject } from "ai"
+import { createOpenAI } from "@ai-sdk/openai"
+import z from "zod"
+import { Resource } from "sst"
+import { tool } from "@/tools/shared/tool-utils"
+import { db } from "@/db"
+import type {
+	MarkPointResult,
+	MarkScheme,
+	Question,
+	QuestionPart,
+} from "@/generated/prisma"
+
+type QuestionPartForMarking = {
+	id: string
+	part_label: string
+	text: string
+	points: number | null
+}
+
+const openai = createOpenAI({
+	apiKey: Resource.OpenAiApiKey.value,
+})
+
+// Define the schema for the marking result (same as in mark-results/create/tool.ts)
+const markingResultSchema = z.object({
+	mark_points_results: z.array(
+		z.object({
+			point_number: z.number(),
+			awarded: z.boolean(),
+			reasoning: z
+				.string()
+				.describe(
+					"Detailed reasoning for why this mark was or was not awarded",
+				),
+			expected_criteria: z
+				.string()
+				.describe("What the mark scheme expected for this point"),
+			student_covered: z
+				.string()
+				.describe("What the student actually covered in their answer"),
+		}),
+	),
+	total_score: z.number(),
+	llm_reasoning: z
+		.string()
+		.describe("Chain-of-thought reasoning for the overall marking process"),
+	feedback_summary: z
+		.string()
+		.describe("Overall feedback summary for the student"),
+})
+
+export const handler = tool(EvaluateAnswerSchema, async (args, extra) => {
+	const { question_id, question_part_id, student_answer, mark_scheme_id } = args
+
+	console.log("[evaluate-answer] Handler invoked", {
+		question_id,
+		question_part_id,
+		mark_scheme_id,
+		answerLength: student_answer.length,
+	})
+
+	// Fetch the question
+	const question = await db.question.findUniqueOrThrow({
+		where: { id: question_id },
+		select: {
+			id: true,
+			text: true,
+			topic: true,
+			subject: true,
+			points: true,
+		},
+	})
+
+	// Fetch the question part if specified
+	let questionPart: QuestionPartForMarking | null = null
+	if (question_part_id) {
+		questionPart = await db.questionPart.findUniqueOrThrow({
+			where: { id: question_part_id },
+			select: {
+				id: true,
+				part_label: true,
+				text: true,
+				points: true,
+			},
+		})
+	}
+
+	// Find the appropriate mark scheme
+	let markScheme: MarkScheme
+	if (mark_scheme_id) {
+		// Use the specified mark scheme
+		markScheme = await db.markScheme.findUniqueOrThrow({
+			where: { id: mark_scheme_id },
+		})
+
+		// Validate that the mark scheme matches the question/question part
+		if (markScheme.question_id !== question_id) {
+			throw new Error(
+				`Mark scheme ${mark_scheme_id} does not belong to question ${question_id}`,
+			)
+		}
+
+		if (markScheme.question_part_id !== question_part_id) {
+			throw new Error(
+				`Mark scheme ${mark_scheme_id} does not match question part ${question_part_id}`,
+			)
+		}
+	} else {
+		// Find the mark scheme automatically
+		markScheme = await db.markScheme.findFirstOrThrow({
+			where: {
+				question_id: question_id,
+				question_part_id: question_part_id,
+			},
+		})
+	}
+
+	console.log("[evaluate-answer] Found mark scheme", {
+		markSchemeId: markScheme.id,
+		pointsTotal: markScheme.points_total,
+		markPointsCount: markScheme.mark_points.length,
+	})
+
+	// Calculate max possible score
+	const maxPossibleScore =
+		questionPart?.points || question.points || markScheme.points_total
+
+	// Create a temporary answer object for evaluation (not saved to DB)
+	const tempAnswer = {
+		id: "temp-answer",
+		question_id: question_id,
+		question_part_id: question_part_id,
+		student_answer: student_answer,
+		max_possible_score: maxPossibleScore,
+	}
+
+	// Call the LLM for marking
+	const markingResult = await callLLMForMarking(
+		{ text: question.text, topic: question.topic },
+		questionPart,
+		markScheme,
+		tempAnswer,
+	)
+
+	console.log("[evaluate-answer] Marking completed", {
+		totalScore: markingResult.total_score,
+		maxScore: maxPossibleScore,
+		markPointsAwarded: markingResult.mark_points_results.filter(
+			(mp) => mp.awarded,
+		).length,
+	})
+
+	return `
+🎯 **Answer Evaluation Results**
+
+📄 **Question**: ${question.text.slice(0, 100)}${question.text.length > 100 ? "..." : ""}
+${questionPart ? `📋 **Part ${questionPart.part_label}**: ${questionPart.text.slice(0, 100)}${questionPart.text.length > 100 ? "..." : ""}` : ""}
+
+📊 **Score**: ${markingResult.total_score}/${maxPossibleScore} marks
+
+💭 **Overall Reasoning**:
+${markingResult.llm_reasoning}
+
+📝 **Feedback Summary**:
+${markingResult.feedback_summary}
+
+🔍 **Detailed Mark Point Analysis**:
+${markingResult.mark_points_results
+	.map(
+		(mp, index) =>
+			`\n**Point ${mp.point_number}**: ${mp.awarded ? "✅ AWARDED" : "❌ NOT AWARDED"}
+	Expected: ${mp.expected_criteria}
+	Student covered: ${mp.student_covered}
+	Reasoning: ${mp.reasoning}`,
+	)
+	.join("\n")}
+
+📈 **Mark Scheme Performance**:
+- Mark Scheme ID: ${markScheme.id}
+- Points Awarded: ${markingResult.mark_points_results.filter((mp) => mp.awarded).length}/${markScheme.mark_points.length}
+- Score Percentage: ${Math.round((markingResult.total_score / maxPossibleScore) * 100)}%
+
+⚠️ *Note: This evaluation was performed without saving the answer to the database. Use this for mark scheme testing and refinement.*
+`
+})
+
+async function callLLMForMarking(
+	question: Pick<Question, "text" | "topic">,
+	questionPart: QuestionPartForMarking | null,
+	markScheme: MarkScheme,
+	answer: { student_answer: string },
+): Promise<{
+	mark_points_results: MarkPointResult[]
+	total_score: number
+	llm_reasoning: string
+	feedback_summary: string
+}> {
+	// Determine the text to use for marking
+	const questionText = questionPart ? questionPart.text : question.text
+	const partLabel = questionPart ? questionPart.part_label : null
+
+	// Create the prompt for the LLM (same as in mark-results/create/tool.ts)
+	const prompt = `You are an expert GCSE examiner. Mark the following student answer against the provided mark scheme.
+
+<Topic>
+${question.topic}
+</Topic>
+
+<FullQuestion>
+${question.text}
+</FullQuestion>
+
+${
+	questionPart
+		? `<QuestionPart>
+Part ${questionPart.part_label}: ${questionPart.text}
+</QuestionPart>`
+		: ""
+}
+
+<QuestionToMark>
+${questionText}${partLabel ? ` (Part ${partLabel})` : ""}
+</QuestionToMark>
+
+<MarkScheme>
+Description: ${markScheme.description}
+
+Additional marking guidance for this question: 
+${markScheme.guidance ?? "N/A"}
+
+Total Marks: ${markScheme.points_total}
+
+Mark Points:
+${markScheme.mark_points
+	.map(
+		(point) =>
+			`${point.point_number}. ${point.description} (${point.points} mark${
+				point.points > 1 ? "s" : ""
+			})
+
+   ${point.criteria}`,
+	)
+	.join("\n\n")}
+</MarkScheme>
+
+<StudentAnswer>
+${answer.student_answer}
+</StudentAnswer>
+
+<MarkingRules>
+CRITICAL RULES:
+- Total marks awarded MUST NOT exceed ${markScheme.points_total}
+- Each mark point can only award 0 or 1 mark (no partial marks)
+- If unsure between 0 or 1 mark, award 0 (conservative marking)
+- Marks must sum exactly to your awarded total
+
+PENALTY SYSTEM:
+- If you can't find clear evidence in text: award 0 marks
+- When in doubt, under-mark rather than over-mark
+</MarkingRules>
+
+<LLMInstructions>
+Please analyze the student's answer systematically using chain-of-thought reasoning. For each mark point:
+
+1. Think through the criteria step-by-step
+2. Quote the specific part of the student's answer that relates to this mark point
+3. Analyze whether the student's response meets the expected criteria
+4. Provide detailed reasoning for your decision
+5. Award 0 or 1 mark based on clear evidence
+
+Your chain-of-thought reasoning should be systematic and thorough. 
+Think through each mark point carefully before making your decision.
+
+Provide your response in the specified JSON format.
+</LLMInstructions>
+`
+
+	const { object } = await generateObject({
+		model: openai("gpt-4o"),
+		schema: markingResultSchema,
+		prompt,
+		temperature: 0.1, // Low temperature for consistent marking
+	})
+
+	// Validate that total score matches the sum of awarded marks
+	const calculatedTotal = object.mark_points_results.reduce(
+		(sum, mp) => sum + +mp.awarded,
+		0,
+	)
+	if (object.total_score !== calculatedTotal) {
+		throw new Error(`Total score (${object.total_score}) does not match sum of awarded marks (${calculatedTotal}). 
+      This indicates an inconsistency in the LLM output.`)
+	}
+
+	return object
+}

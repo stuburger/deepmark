@@ -23,7 +23,26 @@ export const handler = tool(MarkAnswerSchema, async (args, extra) => {
 
 	const answer = await db.answer.findUniqueOrThrow({
 		where: { id: answer_id },
-		include: { question: true, question_part: true },
+		include: {
+			question: {
+				select: {
+					id: true,
+					text: true,
+					topic: true,
+					question_type: true,
+					multiple_choice_options: true,
+				},
+			},
+			question_part: {
+				select: {
+					id: true,
+					text: true,
+					part_label: true,
+					question_type: true,
+					multiple_choice_options: true,
+				},
+			},
+		},
 	})
 
 	if (answer.marking_status === "completed") {
@@ -44,12 +63,34 @@ export const handler = tool(MarkAnswerSchema, async (args, extra) => {
 		},
 	})
 
-	const markingResult = await callLLMForMarking(
-		answer.question,
-		answer.question_part,
-		markScheme,
-		answer,
-	)
+	// Determine if this is a multiple choice question
+	const isMultipleChoice = answer.question_part
+		? answer.question_part.question_type === "multiple_choice"
+		: answer.question.question_type === "multiple_choice"
+
+	let markingResult: {
+		mark_points_results: MarkPointResult[]
+		total_score: number
+		llm_reasoning: string
+		feedback_summary: string
+	}
+	if (isMultipleChoice) {
+		// Handle multiple choice questions without LLM
+		markingResult = evaluateMultipleChoiceAnswer(
+			answer.question,
+			answer.question_part,
+			markScheme,
+			answer,
+		)
+	} else {
+		// Call the LLM for marking written questions
+		markingResult = await callLLMForMarking(
+			answer.question,
+			answer.question_part,
+			markScheme,
+			answer,
+		)
+	}
 
 	await db.markingResult.create({
 		data: {
@@ -162,8 +203,8 @@ const exampleMarkingResult: z.infer<typeof markingResultSchema> = {
 }
 
 async function callLLMForMarking(
-	question: Question,
-	questionPart: QuestionPart | null,
+	question: { id: string; text: string; topic: string },
+	questionPart: { id: string; text: string; part_label: string } | null,
 	markScheme: MarkScheme,
 	answer: Answer,
 ): Promise<{
@@ -272,4 +313,108 @@ ${JSON.stringify(exampleMarkingResult, null, 2)}
 	}
 
 	return object
+}
+
+function evaluateMultipleChoiceAnswer(
+	question: {
+		question_type: string
+		multiple_choice_options: Array<{
+			option_label: string
+			option_text: string
+		}>
+	},
+	questionPart: {
+		question_type: string
+		multiple_choice_options: Array<{
+			option_label: string
+			option_text: string
+		}>
+	} | null,
+	markScheme: MarkScheme,
+	answer: Answer,
+): {
+	mark_points_results: MarkPointResult[]
+	total_score: number
+	llm_reasoning: string
+	feedback_summary: string
+} {
+	// Parse student answer - expect format like "A,C" or "A, C" or "A C"
+	const studentSelectedOptions = answer.student_answer
+		.toUpperCase()
+		.replace(/[^A-Z]/g, "")
+		.split("")
+		.filter(Boolean)
+		.sort()
+
+	// Get correct options from mark scheme
+	const correctOptions = markScheme.correct_option_labels
+		.map((label: string) => label.toUpperCase())
+		.sort()
+
+	// Get available options from the question/question part
+	const availableOptions = questionPart
+		? questionPart.multiple_choice_options
+		: question.multiple_choice_options
+
+	// Check if student's answer matches correct options exactly
+	const isCorrect =
+		studentSelectedOptions.length === correctOptions.length &&
+		studentSelectedOptions.every((option: string) =>
+			correctOptions.includes(option),
+		)
+
+	// Create mark point results
+	const mark_points_results: MarkPointResult[] = [
+		{
+			point_number: 1,
+			awarded: isCorrect,
+			reasoning: isCorrect
+				? `Student selected options [${studentSelectedOptions.join(", ")}] which exactly matches the correct answer [${correctOptions.join(", ")}].`
+				: `Student selected options [${studentSelectedOptions.join(", ")}] but the correct answer is [${correctOptions.join(", ")}]. ${
+						studentSelectedOptions.length === 0
+							? "No options were selected."
+							: studentSelectedOptions.length !== correctOptions.length
+								? `Wrong number of options selected (${studentSelectedOptions.length} vs ${correctOptions.length} required).`
+								: "Selected options do not match the correct combination."
+					}`,
+			expected_criteria: `Must select exactly: ${correctOptions.join(", ")}`,
+			student_covered:
+				studentSelectedOptions.length > 0
+					? `Selected: ${studentSelectedOptions.join(", ")}`
+					: "No options selected",
+		},
+	]
+
+	const total_score = isCorrect ? markScheme.points_total : 0
+
+	// Create option breakdown for feedback
+	const optionBreakdown = availableOptions
+		.map((option: { option_label: string; option_text: string }) => {
+			const isSelected = studentSelectedOptions.includes(
+				option.option_label.toUpperCase(),
+			)
+			const shouldBeSelected = correctOptions.includes(
+				option.option_label.toUpperCase(),
+			)
+
+			let status = ""
+			if (isSelected && shouldBeSelected) status = "✅ Correctly selected"
+			else if (isSelected && !shouldBeSelected)
+				status = "❌ Incorrectly selected"
+			else if (!isSelected && shouldBeSelected)
+				status = "❌ Should have been selected"
+			else status = "✅ Correctly not selected"
+
+			return `${option.option_label}: ${option.option_text} - ${status}`
+		})
+		.join("\n")
+
+	return {
+		mark_points_results,
+		total_score,
+		llm_reasoning: `Multiple choice question evaluation: Student selected [${studentSelectedOptions.join(", ")}], correct answer is [${correctOptions.join(", ")}]. ${isCorrect ? "Perfect match - full marks awarded." : "No match - zero marks awarded."}`,
+		feedback_summary: isCorrect
+			? `Excellent! You correctly identified all the right options and avoided incorrect ones. Score: ${total_score}/${markScheme.points_total}`
+			: `Incorrect answer. The correct options are: ${correctOptions.join(", ")}. Remember to select ALL correct options for multiple choice questions. Score: ${total_score}/${markScheme.points_total}\n\nOption breakdown:\n${optionBreakdown}`,
+	}
 }

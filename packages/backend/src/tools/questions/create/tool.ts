@@ -10,6 +10,8 @@ export const handler = tool(CreateQuestionSchema, async (args, extra) => {
 		points,
 		difficulty_level,
 		subject,
+		question_type,
+		multiple_choice_options,
 		question_parts,
 		exam_paper_id,
 		section_title,
@@ -21,11 +23,34 @@ export const handler = tool(CreateQuestionSchema, async (args, extra) => {
 		subject,
 		points,
 		difficulty_level,
+		question_type,
+		multipleChoiceOptionsCount: multiple_choice_options?.length || 0,
 		partsCount: question_parts.length,
 		exam_paper_id,
 		section_title,
 		section_order,
 	})
+
+	// Validation for multiple choice questions
+	if (question_type === "multiple_choice") {
+		if (!multiple_choice_options || multiple_choice_options.length === 0) {
+			throw new Error("Multiple choice questions must have at least one option")
+		}
+	}
+
+	// Validation for question parts
+	for (const part of question_parts) {
+		if (part.part_question_type === "multiple_choice") {
+			if (
+				!part.part_multiple_choice_options ||
+				part.part_multiple_choice_options.length === 0
+			) {
+				throw new Error(
+					`Question part ${part.part_label} is multiple choice but has no options`,
+				)
+			}
+		}
+	}
 
 	// Create the question using Prisma
 	const question = await db.question.create({
@@ -35,6 +60,8 @@ export const handler = tool(CreateQuestionSchema, async (args, extra) => {
 			subject,
 			points,
 			difficulty_level,
+			question_type,
+			multiple_choice_options: multiple_choice_options || [],
 			created_by_id: userId,
 			question_parts: {
 				createMany: {
@@ -45,6 +72,8 @@ export const handler = tool(CreateQuestionSchema, async (args, extra) => {
 						text: p.part_text,
 						points: p.part_points,
 						difficulty_level: p.part_difficulty_level,
+						question_type: p.part_question_type || "written",
+						multiple_choice_options: p.part_multiple_choice_options || [],
 					})),
 				},
 			},
@@ -164,9 +193,19 @@ export const handler = tool(CreateQuestionSchema, async (args, extra) => {
 		})
 	}
 
+	// Build question type info for response
+	let questionTypeInfo = `
+📝 Question Type: ${question_type}`
+
+	if (question_type === "multiple_choice" && multiple_choice_options) {
+		questionTypeInfo += `
+🔤 Multiple Choice Options: ${multiple_choice_options.length} (${multiple_choice_options.map((opt) => opt.option_label).join(", ")})
+💡 Note: Correct answers should be defined in the mark scheme`
+	}
+
 	return `
 Question created successfully! 
 Question ID: ${question.id}
-Created by: ${question.created_by.name} (${question.created_by.email})${examSectionInfo}
+Created by: ${question.created_by.name} (${question.created_by.email})${questionTypeInfo}${examSectionInfo}
 `
 })

@@ -17,6 +17,11 @@ type QuestionPartForMarking = {
 	part_label: string
 	text: string
 	points: number | null
+	question_type: string
+	multiple_choice_options: Array<{
+		option_label: string
+		option_text: string
+	}>
 }
 
 const openai = createOpenAI({
@@ -70,6 +75,8 @@ export const handler = tool(EvaluateAnswerSchema, async (args, extra) => {
 			topic: true,
 			subject: true,
 			points: true,
+			question_type: true,
+			multiple_choice_options: true,
 		},
 	})
 
@@ -83,6 +90,8 @@ export const handler = tool(EvaluateAnswerSchema, async (args, extra) => {
 				part_label: true,
 				text: true,
 				points: true,
+				question_type: true,
+				multiple_choice_options: true,
 			},
 		})
 	}
@@ -127,6 +136,11 @@ export const handler = tool(EvaluateAnswerSchema, async (args, extra) => {
 	const maxPossibleScore =
 		questionPart?.points || question.points || markScheme.points_total
 
+	// Determine if this is a multiple choice question
+	const isMultipleChoice = questionPart
+		? questionPart.question_type === "multiple_choice"
+		: question.question_type === "multiple_choice"
+
 	// Create a temporary answer object for evaluation (not saved to DB)
 	const tempAnswer = {
 		id: "temp-answer",
@@ -136,13 +150,29 @@ export const handler = tool(EvaluateAnswerSchema, async (args, extra) => {
 		max_possible_score: maxPossibleScore,
 	}
 
-	// Call the LLM for marking
-	const markingResult = await callLLMForMarking(
-		{ text: question.text, topic: question.topic },
-		questionPart,
-		markScheme,
-		tempAnswer,
-	)
+	let markingResult: {
+		mark_points_results: MarkPointResult[]
+		total_score: number
+		llm_reasoning: string
+		feedback_summary: string
+	}
+	if (isMultipleChoice) {
+		// Handle multiple choice questions without LLM
+		markingResult = evaluateMultipleChoiceAnswer(
+			question,
+			questionPart,
+			markScheme,
+			tempAnswer,
+		)
+	} else {
+		// Call the LLM for marking written questions
+		markingResult = await callLLMForMarking(
+			{ text: question.text, topic: question.topic },
+			questionPart,
+			markScheme,
+			tempAnswer,
+		)
+	}
 
 	console.log("[evaluate-answer] Marking completed", {
 		totalScore: markingResult.total_score,
@@ -185,6 +215,99 @@ ${markingResult.mark_points_results
 ⚠️ *Note: This evaluation was performed without saving the answer to the database. Use this for mark scheme testing and refinement.*
 `
 })
+
+function evaluateMultipleChoiceAnswer(
+	question: Pick<
+		Question,
+		"text" | "topic" | "question_type" | "multiple_choice_options"
+	>,
+	questionPart: QuestionPartForMarking | null,
+	markScheme: MarkScheme,
+	answer: { student_answer: string },
+): {
+	mark_points_results: MarkPointResult[]
+	total_score: number
+	llm_reasoning: string
+	feedback_summary: string
+} {
+	// Parse student answer - expect format like "A,C" or "A, C" or "A C"
+	const studentSelectedOptions = answer.student_answer
+		.toUpperCase()
+		.replace(/[^A-Z]/g, "")
+		.split("")
+		.filter(Boolean)
+		.sort()
+
+	// Get correct options from mark scheme
+	const correctOptions = markScheme.correct_option_labels
+		.map((label) => label.toUpperCase())
+		.sort()
+
+	// Get available options from the question/question part
+	const availableOptions = questionPart
+		? questionPart.multiple_choice_options
+		: question.multiple_choice_options
+
+	// Check if student's answer matches correct options exactly
+	const isCorrect =
+		studentSelectedOptions.length === correctOptions.length &&
+		studentSelectedOptions.every((option) => correctOptions.includes(option))
+
+	// Create mark point results
+	const mark_points_results: MarkPointResult[] = [
+		{
+			point_number: 1,
+			awarded: isCorrect,
+			reasoning: isCorrect
+				? `Student selected options [${studentSelectedOptions.join(", ")}] which exactly matches the correct answer [${correctOptions.join(", ")}].`
+				: `Student selected options [${studentSelectedOptions.join(", ")}] but the correct answer is [${correctOptions.join(", ")}]. ${
+						studentSelectedOptions.length === 0
+							? "No options were selected."
+							: studentSelectedOptions.length !== correctOptions.length
+								? `Wrong number of options selected (${studentSelectedOptions.length} vs ${correctOptions.length} required).`
+								: "Selected options do not match the correct combination."
+					}`,
+			expected_criteria: `Must select exactly: ${correctOptions.join(", ")}`,
+			student_covered:
+				studentSelectedOptions.length > 0
+					? `Selected: ${studentSelectedOptions.join(", ")}`
+					: "No options selected",
+		},
+	]
+
+	const total_score = isCorrect ? markScheme.points_total : 0
+
+	// Create option breakdown for feedback
+	const optionBreakdown = availableOptions
+		.map((option: { option_label: string; option_text: string }) => {
+			const isSelected = studentSelectedOptions.includes(
+				option.option_label.toUpperCase(),
+			)
+			const shouldBeSelected = correctOptions.includes(
+				option.option_label.toUpperCase(),
+			)
+
+			let status = ""
+			if (isSelected && shouldBeSelected) status = "✅ Correctly selected"
+			else if (isSelected && !shouldBeSelected)
+				status = "❌ Incorrectly selected"
+			else if (!isSelected && shouldBeSelected)
+				status = "❌ Should have been selected"
+			else status = "✅ Correctly not selected"
+
+			return `${option.option_label}: ${option.option_text} - ${status}`
+		})
+		.join("\n")
+
+	return {
+		mark_points_results,
+		total_score,
+		llm_reasoning: `Multiple choice question evaluation: Student selected [${studentSelectedOptions.join(", ")}], correct answer is [${correctOptions.join(", ")}]. ${isCorrect ? "Perfect match - full marks awarded." : "No match - zero marks awarded."}`,
+		feedback_summary: isCorrect
+			? `Excellent! You correctly identified all the right options and avoided incorrect ones. Score: ${total_score}/${markScheme.points_total}`
+			: `Incorrect answer. The correct options are: ${correctOptions.join(", ")}. Remember to select ALL correct options for multiple choice questions. Score: ${total_score}/${markScheme.points_total}\n\nOption breakdown:\n${optionBreakdown}`,
+	}
+}
 
 async function callLLMForMarking(
 	question: Pick<Question, "text" | "topic">,

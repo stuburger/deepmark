@@ -59,12 +59,22 @@ enum UserRole {
   examiner
 }
 
+enum QuestionType {
+  written
+  multiple_choice
+}
+
 // Embedded types for sub-documents
 type MarkPoint {
   point_number Int
   description  String
   points       Int // always 1
   criteria     String
+}
+
+type MultipleChoiceOption {
+  option_label String // e.g., "A", "B", "C", "D"
+  option_text  String
 }
 
 type MarkPointResult {
@@ -117,15 +127,17 @@ model User {
 }
 
 model Question {
-  id               String           @id @default(auto()) @map("_id") @db.ObjectId
-  text             String
-  topic            String
-  created_by_id    String           @db.ObjectId
-  created_at       DateTime         @default(now())
-  updated_at       DateTime         @updatedAt
-  subject          Subject
-  points           Int? // optional
-  difficulty_level DifficultyLevel? // optional
+  id                      String                 @id @default(auto()) @map("_id") @db.ObjectId
+  text                    String
+  topic                   String
+  created_by_id           String                 @db.ObjectId
+  created_at              DateTime               @default(now())
+  updated_at              DateTime               @updatedAt
+  subject                 Subject
+  points                  Int? // optional
+  difficulty_level        DifficultyLevel? // optional
+  question_type           QuestionType           @default(written)
+  multiple_choice_options MultipleChoiceOption[] // embedded array for MC questions
 
   // Relations
   created_by             User                  @relation(fields: [created_by_id], references: [id])
@@ -139,16 +151,18 @@ model Question {
 }
 
 model QuestionPart {
-  id               String           @id @default(auto()) @map("_id") @db.ObjectId
-  question_id      String           @db.ObjectId
-  part_label       String // e.g., "a", "b", "c" or "1", "2", "3"
-  text             String // The actual question part text
-  points           Int? // Points for this specific part
-  difficulty_level DifficultyLevel? // optional
-  order            Int // Order within the parent question (1, 2, 3, etc.)
-  created_by_id    String           @db.ObjectId
-  created_at       DateTime         @default(now())
-  updated_at       DateTime         @updatedAt
+  id                      String                 @id @default(auto()) @map("_id") @db.ObjectId
+  question_id             String                 @db.ObjectId
+  part_label              String // e.g., "a", "b", "c" or "1", "2", "3"
+  text                    String // The actual question part text
+  points                  Int? // Points for this specific part
+  difficulty_level        DifficultyLevel? // optional
+  order                   Int // Order within the parent question (1, 2, 3, etc.)
+  created_by_id           String                 @db.ObjectId
+  created_at              DateTime               @default(now())
+  updated_at              DateTime               @updatedAt
+  question_type           QuestionType           @default(written)
+  multiple_choice_options MultipleChoiceOption[] // embedded array for MC question parts
 
   // Relations
   created_by   User         @relation(fields: [created_by_id], references: [id])
@@ -160,17 +174,18 @@ model QuestionPart {
 }
 
 model MarkScheme {
-  id               String      @id @default(auto()) @map("_id") @db.ObjectId
-  question_id      String      @db.ObjectId
-  question_part_id String?     @db.ObjectId // optional - can be null for whole question mark schemes
-  description      String
-  guidance         String? // optional
-  created_by_id    String      @db.ObjectId
-  created_at       DateTime    @default(now())
-  updated_at       DateTime    @updatedAt
-  tags             String[] // array of tags
-  points_total     Int
-  mark_points      MarkPoint[] // embedded array
+  id                    String      @id @default(auto()) @map("_id") @db.ObjectId
+  question_id           String      @db.ObjectId
+  question_part_id      String?     @db.ObjectId // optional - can be null for whole question mark schemes
+  description           String
+  guidance              String? // optional
+  created_by_id         String      @db.ObjectId
+  created_at            DateTime    @default(now())
+  updated_at            DateTime    @updatedAt
+  tags                  String[] // array of tags
+  points_total          Int
+  mark_points           MarkPoint[] // embedded array for written questions
+  correct_option_labels String[] // array of correct option labels for multiple choice questions (e.g., ["A", "C"])
 
   // Relations
   created_by      User            @relation(fields: [created_by_id], references: [id])

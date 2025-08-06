@@ -1,5 +1,12 @@
 import { z } from "zod"
 
+export const MultipleChoiceOptionSchema = z.object({
+	option_label: z
+		.string()
+		.describe("The option label (e.g., 'A', 'B', 'C', 'D')"),
+	option_text: z.string().describe("The text for this option"),
+})
+
 export const CreateQuestionPartSchema = z.object({
 	part_label: z.string().describe("The part label (e.g., 'a', 'b', 'c')"),
 	part_text: z.string().describe("The text for this specific question part"),
@@ -16,6 +23,16 @@ export const CreateQuestionPartSchema = z.object({
 		.optional()
 		.describe(
 			"Difficulty level for this specific part (optional, defaults to parent question difficulty)",
+		),
+	part_question_type: z
+		.enum(["written", "multiple_choice"])
+		.default("written")
+		.describe("Type of question part - written or multiple choice"),
+	part_multiple_choice_options: z
+		.array(MultipleChoiceOptionSchema)
+		.optional()
+		.describe(
+			"Multiple choice options (required for multiple_choice type questions)",
 		),
 })
 
@@ -36,6 +53,16 @@ export const CreateQuestionSchema = {
 	subject: z
 		.enum(["biology", "chemistry", "physics", "english"])
 		.describe("Subject area for the question"),
+	question_type: z
+		.enum(["written", "multiple_choice"])
+		.default("written")
+		.describe("Type of question - written or multiple choice"),
+	multiple_choice_options: z
+		.array(MultipleChoiceOptionSchema)
+		.optional()
+		.describe(
+			"Multiple choice options (required for multiple_choice type questions)",
+		),
 	question_parts: z.array(CreateQuestionPartSchema),
 	// Optional fields for adding question to an exam paper
 	exam_paper_id: z

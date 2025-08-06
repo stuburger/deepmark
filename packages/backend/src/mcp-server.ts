@@ -14,6 +14,10 @@ import {
 	CreateMarkSchemeSchema,
 	updateMarkSchemeHandler,
 	UpdateMarkSchemeSchema,
+	testAndRefineMarkSchemeHandler,
+	TestAndRefineMarkSchemeSchema,
+	createTestDatasetHandler,
+	CreateTestDatasetSchema,
 	answerQuestionHandler,
 	AnswerQuestionSchema,
 	evaluateAnswerHandler,
@@ -224,6 +228,28 @@ server.registerTool(
 		inputSchema: UpdateMarkSchemeSchema,
 	},
 	updateMarkSchemeHandler,
+)
+
+server.registerTool(
+	"test-and-refine-mark-scheme",
+	{
+		title: "Test and Refine Mark Scheme",
+		description:
+			"Automatically test a mark scheme with known answers and refine it using LLM to improve accuracy",
+		inputSchema: TestAndRefineMarkSchemeSchema,
+	},
+	testAndRefineMarkSchemeHandler,
+)
+
+server.registerTool(
+	"create-test-dataset",
+	{
+		title: "Create Test Dataset",
+		description:
+			"Create a test dataset with example answers and expected scores for mark scheme testing and validation",
+		inputSchema: CreateTestDatasetSchema,
+	},
+	createTestDatasetHandler,
 )
 
 server.registerTool(

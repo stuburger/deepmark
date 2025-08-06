@@ -57,7 +57,13 @@ const markingResultSchema = z.object({
 })
 
 export const handler = tool(EvaluateAnswerSchema, async (args, extra) => {
-	const { question_id, question_part_id, student_answer, mark_scheme_id } = args
+	const {
+		question_id,
+		question_part_id,
+		student_answer,
+		mark_scheme_id,
+		expected_score,
+	} = args
 
 	console.log("[evaluate-answer] Handler invoked", {
 		question_id,
@@ -180,7 +186,32 @@ export const handler = tool(EvaluateAnswerSchema, async (args, extra) => {
 		markPointsAwarded: markingResult.mark_points_results.filter(
 			(mp) => mp.awarded,
 		).length,
+		expectedScore: expected_score,
 	})
+
+	// Calculate mark scheme testing metrics if expected_score is provided
+	const testingAnalysis =
+		expected_score !== undefined
+			? {
+					scoreDifference: markingResult.total_score - expected_score,
+					accuracyPercentage:
+						expected_score === 0
+							? markingResult.total_score === 0
+								? 100
+								: 0
+							: Math.max(
+									0,
+									100 -
+										Math.abs(
+											(markingResult.total_score - expected_score) /
+												expected_score,
+										) *
+											100,
+								),
+					isAccurate: markingResult.total_score === expected_score,
+					scoreError: Math.abs(markingResult.total_score - expected_score),
+				}
+			: null
 
 	return `
 🎯 **Answer Evaluation Results**
@@ -189,6 +220,29 @@ export const handler = tool(EvaluateAnswerSchema, async (args, extra) => {
 ${questionPart ? `📋 **Part ${questionPart.part_label}**: ${questionPart.text.slice(0, 100)}${questionPart.text.length > 100 ? "..." : ""}` : ""}
 
 📊 **Score**: ${markingResult.total_score}/${maxPossibleScore} marks
+
+${
+	testingAnalysis
+		? `
+🧪 **Mark Scheme Testing Analysis**:
+- Expected Score: ${expected_score}/${maxPossibleScore} marks
+- Actual Score: ${markingResult.total_score}/${maxPossibleScore} marks
+- Score Difference: ${testingAnalysis.scoreDifference > 0 ? "+" : ""}${testingAnalysis.scoreDifference} marks
+- Accuracy: ${testingAnalysis.accuracyPercentage.toFixed(1)}%
+- Status: ${testingAnalysis.isAccurate ? "✅ ACCURATE" : `❌ INACCURATE (Error: ${testingAnalysis.scoreError} marks)`}
+
+${
+	testingAnalysis.isAccurate
+		? "🎉 **Perfect Match**: The mark scheme performed exactly as expected!"
+		: `
+⚠️ **Mark Scheme Issues Detected**:
+${testingAnalysis.scoreDifference > 0 ? "• Mark scheme may be too lenient (over-marking)" : "• Mark scheme may be too strict (under-marking)"}
+• Consider reviewing mark point criteria and guidance
+• This discrepancy suggests the mark scheme needs refinement`
+}
+`
+		: ""
+}
 
 💭 **Overall Reasoning**:
 ${markingResult.llm_reasoning}
@@ -211,6 +265,21 @@ ${markingResult.mark_points_results
 - Mark Scheme ID: ${markScheme.id}
 - Points Awarded: ${markingResult.mark_points_results.filter((mp) => mp.awarded).length}/${markScheme.mark_points.length}
 - Score Percentage: ${Math.round((markingResult.total_score / maxPossibleScore) * 100)}%
+
+${
+	testingAnalysis
+		? `
+📊 **Testing Recommendations**:
+${
+	testingAnalysis.isAccurate
+		? "• Mark scheme is performing well for this test case"
+		: `• Review and refine mark scheme criteria
+• Test with additional similar answers
+• Consider adjusting mark point descriptions or guidance`
+}
+`
+		: ""
+}
 
 ⚠️ *Note: This evaluation was performed without saving the answer to the database. Use this for mark scheme testing and refinement.*
 `

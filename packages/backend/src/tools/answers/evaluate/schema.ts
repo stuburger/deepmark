@@ -20,4 +20,11 @@ export const EvaluateAnswerSchema = {
 		.describe(
 			"Optional: Specific mark scheme ID (if not provided, will find the appropriate mark scheme)",
 		),
+	expected_score: z
+		.number()
+		.min(0)
+		.optional()
+		.describe(
+			"Optional: Expected score for this answer (used for mark scheme testing and refinement)",
+		),
 }

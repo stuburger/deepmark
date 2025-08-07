@@ -18,6 +18,14 @@ declare module "sst" {
       "type": "sst.sst.Linkable"
       "url": string
     }
+    "GithubClientId": {
+      "type": "sst.sst.Secret"
+      "value": string
+    }
+    "GithubClientSecret": {
+      "type": "sst.sst.Secret"
+      "value": string
+    }
     "Interactions": {
       "name": string
       "type": "sst.aws.Function"

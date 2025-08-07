@@ -6,13 +6,27 @@ const authUrlLink = new sst.Linkable("AuthUrl", {
 	properties: { url: authUrl },
 })
 
+const githubClientId = new sst.Secret("GithubClientId")
+const githubClientSecret = new sst.Secret("GithubClientSecret")
+
 export const auth = new sst.aws.Auth("Auth", {
 	issuer: {
 		handler: "packages/backend/src/auth.handler",
 		environment: {
 			DATABASE_URL: mongoUri.value,
 		},
-		link: [authUrlLink],
+		link: [authUrlLink, githubClientId, githubClientSecret],
+		nodejs: {
+			esbuild: {
+				external: ["@prisma/client"],
+			},
+		},
+		copyFiles: [
+			{
+				from: "packages/backend/generated/prisma",
+				to: "generated/prisma",
+			},
+		],
 	},
 	domain: `auth.${$app.stage}.supalink.co`,
 })
@@ -26,6 +40,17 @@ const api = new sst.aws.Function("Api", {
 	},
 	handler: "packages/backend/src/main.handler",
 	link: [mongoUri, authUrlLink, openAiApiKey],
+	nodejs: {
+		esbuild: {
+			external: ["@prisma/client"],
+		},
+	},
+	copyFiles: [
+		{
+			from: "packages/backend/generated/prisma",
+			to: "generated/prisma",
+		},
+	],
 })
 
 export const interactions = new sst.aws.Function("Interactions", {
@@ -37,6 +62,17 @@ export const interactions = new sst.aws.Function("Interactions", {
 	},
 	handler: "packages/backend/src/interactions/main.handler",
 	link: [mongoUri, auth, openAiApiKey],
+	nodejs: {
+		esbuild: {
+			external: ["@prisma/client"],
+		},
+	},
+	copyFiles: [
+		{
+			from: "packages/backend/generated/prisma",
+			to: "generated/prisma",
+		},
+	],
 })
 
 // export const apiRouter = new sst.aws.Router("ApiRouter", {

@@ -32,8 +32,8 @@ const app = issuer({
 	allow: async () => true,
 	providers: {
 		github: GithubProvider({
-			clientID: "Ov23liAjeJ1QCQoDg1I6",
-			clientSecret: "d3f51ed263b37e6761c320322befc300780de971",
+			clientID: Resource.GithubClientId.value,
+			clientSecret: Resource.GithubClientSecret.value,
 			scopes: ["email", "profile"],
 		}),
 	},

@@ -14,8 +14,8 @@ import {
 	CreateMarkSchemeSchema,
 	updateMarkSchemeHandler,
 	UpdateMarkSchemeSchema,
-	testAndRefineMarkSchemeHandler,
-	TestAndRefineMarkSchemeSchema,
+	// testAndRefineMarkSchemeHandler,
+	// TestAndRefineMarkSchemeSchema,
 	createTestDatasetHandler,
 	CreateTestDatasetSchema,
 	answerQuestionHandler,
@@ -230,16 +230,16 @@ server.registerTool(
 	updateMarkSchemeHandler,
 )
 
-server.registerTool(
-	"test-and-refine-mark-scheme",
-	{
-		title: "Test and Refine Mark Scheme",
-		description:
-			"Automatically test a mark scheme with known answers and refine it using LLM to improve accuracy",
-		inputSchema: TestAndRefineMarkSchemeSchema,
-	},
-	testAndRefineMarkSchemeHandler,
-)
+// server.registerTool(
+// 	"test-and-refine-mark-scheme",
+// 	{
+// 		title: "Test and Refine Mark Scheme",
+// 		description:
+// 			"Automatically test a mark scheme with known answers and refine it using LLM to improve accuracy",
+// 		inputSchema: TestAndRefineMarkSchemeSchema,
+// 	},
+// 	testAndRefineMarkSchemeHandler,
+// )
 
 server.registerTool(
 	"create-test-dataset",

@@ -465,26 +465,81 @@ Please analyze the student's answer systematically using chain-of-thought reason
 Your chain-of-thought reasoning should be systematic and thorough. 
 Think through each mark point carefully before making your decision.
 
-Provide your response in the specified JSON format.
+Provide your response in the exact JSON format shown below.
 </LLMInstructions>
+
+<ExampleOutputFormat>
+{
+  "mark_points_results": [
+    {
+      "point_number": 1,
+      "awarded": true,
+      "reasoning": "Student clearly describes the fermentation setup: 'Mix the yeast with sugar water'. This meets the criteria for describing the method/procedure.",
+      "expected_criteria": "Mentions adding the sample to glucose/sugar solution OR mentions mixing yeast sample with sugar water OR describes setting up fermentation test",
+      "student_covered": "Mix the yeast with sugar water"
+    },
+    {
+      "point_number": 2,
+      "awarded": false,
+      "reasoning": "Student does not mention temperature conditions. No reference to warm conditions or specific temperature requirements.",
+      "expected_criteria": "States warm temperature needed (e.g., 37°C, warm water bath, room temperature)",
+      "student_covered": "No temperature conditions mentioned"
+    }
+  ],
+  "total_score": 1,
+  "llm_reasoning": "Systematic analysis: Point 1 - Student clearly describes fermentation setup with 'Mix the yeast with sugar water'. Point 2 - No temperature requirement mentioned. Total: 1/2 marks.",
+  "feedback_summary": "Good start with the method but missing key conditions for the experiment to work properly."
+}
+</ExampleOutputFormat>
 `
 
-	const { object } = await generateObject({
-		model: openai("gpt-4o"),
-		schema: markingResultSchema,
-		prompt,
-		temperature: 0.1, // Low temperature for consistent marking
-	})
+	try {
+		console.log("[evaluate-answer] Calling generateObject with schema")
 
-	// Validate that total score matches the sum of awarded marks
-	const calculatedTotal = object.mark_points_results.reduce(
-		(sum, mp) => sum + +mp.awarded,
-		0,
-	)
-	if (object.total_score !== calculatedTotal) {
-		throw new Error(`Total score (${object.total_score}) does not match sum of awarded marks (${calculatedTotal}). 
-      This indicates an inconsistency in the LLM output.`)
+		// Ensure we have a valid API key
+		if (!Resource.OpenAiApiKey.value) {
+			throw new Error("OpenAI API key is not configured")
+		}
+
+		const result = await generateObject({
+			model: openai("gpt-4o"),
+			schema: markingResultSchema,
+			prompt,
+			temperature: 0.1, // Low temperature for consistent marking
+		})
+
+		console.log("[evaluate-answer] generateObject succeeded")
+		const { object } = result
+
+		// Validate that we got a valid object
+		if (!object || typeof object !== "object") {
+			throw new Error("generateObject returned invalid or empty result")
+		}
+
+		// Validate that total score matches the sum of awarded marks
+		const calculatedTotal = object.mark_points_results.reduce(
+			(sum, mp) => sum + +mp.awarded,
+			0,
+		)
+		if (object.total_score !== calculatedTotal) {
+			throw new Error(`Total score (${object.total_score}) does not match sum of awarded marks (${calculatedTotal}). 
+		This indicates an inconsistency in the LLM output.`)
+		}
+
+		return object
+	} catch (error) {
+		console.error("[evaluate-answer] generateObject failed:", error)
+		// Provide more detailed error information
+		if (
+			error instanceof Error &&
+			error.message.includes("No object generated")
+		) {
+			throw new Error(
+				`AI model failed to generate valid response. This may be due to: 1) Complex question content, 2) Model availability issues, or 3) Schema validation problems. Original error: ${error.message}`,
+			)
+		}
+		throw new Error(
+			`Failed to generate marking result: ${error instanceof Error ? error.message : "Unknown error"}`,
+		)
 	}
-
-	return object
 }

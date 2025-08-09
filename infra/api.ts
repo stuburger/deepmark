@@ -31,6 +31,16 @@ export const auth = new sst.aws.Auth("Auth", {
 	domain: `auth.${$app.stage}.supalink.co`,
 })
 
+export const queue = new sst.aws.Queue("RefinementQueue", {
+	visibilityTimeout: "6 minutes",
+})
+
+queue.subscribe({
+	handler: "packages/backend/src/job.handler",
+	timeout: "5 minutes",
+	link: [mongoUri, openAiApiKey],
+})
+
 const api = new sst.aws.Function("Api", {
 	url: true,
 	streaming: !$dev,
@@ -39,7 +49,7 @@ const api = new sst.aws.Function("Api", {
 		DATABASE_URL: mongoUri.value,
 	},
 	handler: "packages/backend/src/main.handler",
-	link: [mongoUri, authUrlLink, openAiApiKey],
+	link: [mongoUri, authUrlLink, openAiApiKey, queue],
 	nodejs: {
 		esbuild: {
 			external: ["@prisma/client"],
@@ -61,7 +71,7 @@ export const interactions = new sst.aws.Function("Interactions", {
 		DATABASE_URL: mongoUri.value,
 	},
 	handler: "packages/backend/src/interactions/main.handler",
-	link: [mongoUri, auth, openAiApiKey],
+	link: [mongoUri, auth, openAiApiKey, queue],
 	nodejs: {
 		esbuild: {
 			external: ["@prisma/client"],

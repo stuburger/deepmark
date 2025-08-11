@@ -1,8 +1,7 @@
 import { service } from "./service"
 import { type RouteHandler, createRoute, z } from "@hono/zod-openapi"
-import { CreateQuestionSchema } from "./schema"
-
-const RequestSchema = z.object(CreateQuestionSchema)
+import { CreateQuestionSchema, CreateQuestionResponseSchema } from "./schema"
+import type { HonoEnv } from "@/types"
 
 export const route = createRoute({
 	method: "post",
@@ -11,7 +10,7 @@ export const route = createRoute({
 		body: {
 			content: {
 				"application/json": {
-					schema: RequestSchema,
+					schema: z.object(CreateQuestionSchema),
 				},
 			},
 			required: true,
@@ -23,7 +22,7 @@ export const route = createRoute({
 			content: {
 				"application/json": {
 					schema: z.object({
-						data: z.string(),
+						data: z.object(CreateQuestionResponseSchema),
 					}),
 				},
 			},
@@ -31,10 +30,9 @@ export const route = createRoute({
 	},
 })
 
-export const handler: RouteHandler<typeof route> = async (c) => {
-	// TODO: Replace with real user extraction
-	const userId = "demo-user"
+export const handler: RouteHandler<typeof route, HonoEnv> = async (c) => {
+	const { extra } = c.get("auth")
 	const args = c.req.valid("json")
-	const result = await service(args, userId)
+	const result = await service(args, extra)
 	return c.json({ data: result })
 }

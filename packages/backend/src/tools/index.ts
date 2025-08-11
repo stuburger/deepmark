@@ -19,9 +19,6 @@ export { CreateMarkSchemeSchema } from "./mark-schemes/create/schema"
 export { handler as updateMarkSchemeHandler } from "./mark-schemes/update/tool"
 export { UpdateMarkSchemeSchema } from "./mark-schemes/update/schema"
 
-export { handler as testAndRefineMarkSchemeHandler } from "./mark-schemes/test-and-refine/tool"
-export { TestAndRefineMarkSchemeSchema } from "./mark-schemes/test-and-refine/schema"
-
 export { handler as createTestDatasetHandler } from "./mark-schemes/create-test-dataset/tool"
 export { CreateTestDatasetSchema } from "./mark-schemes/create-test-dataset/schema"
 

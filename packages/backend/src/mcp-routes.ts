@@ -2,9 +2,9 @@ import { toFetchResponse, toReqRes } from "fetch-to-node"
 import { type Context, Hono } from "hono"
 import { server } from "./mcp-server"
 import { getStatelessTransport } from "./transport"
-import type { HonoVariables } from "./types"
+import type { HonoEnv } from "./types"
 
-export const route = new Hono<{ Variables: HonoVariables }>()
+export const mcpRoutes = new Hono<HonoEnv>()
 	.post("/", async (c) => {
 		const { req, res } = toReqRes(c.req.raw)
 

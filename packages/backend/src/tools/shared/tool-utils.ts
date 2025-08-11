@@ -5,7 +5,6 @@ import type {
 	ServerNotification,
 	ServerRequest,
 } from "@modelcontextprotocol/sdk/types.js"
-import { ToolResult } from "ai"
 import type { z } from "zod"
 
 export const text = <T extends Record<string, unknown>>(

@@ -84,3 +84,30 @@ export const CreateQuestionSchema = {
 			"Optional: Order of the question within the section (will be calculated automatically if not provided)",
 		),
 }
+
+export const CreateQuestionResponseSchema = {
+	question: z.object({
+		id: z.string(),
+		created_by: z.object({
+			id: z.string(),
+			name: z.string().nullable(),
+			email: z.string().nullable(),
+		}),
+	}),
+	question_type: z.string(),
+	multiple_choice_options: z
+		.array(
+			z.object({
+				option_label: z.string(),
+				option_text: z.string(),
+			}),
+		)
+		.optional(),
+	exam_section_info: z
+		.object({
+			exam_paper_title: z.string(),
+			section_title: z.string(),
+			question_order: z.number(),
+		})
+		.optional(),
+}

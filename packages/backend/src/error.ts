@@ -121,3 +121,20 @@ export class VisibleError extends Error {
 		return response
 	}
 }
+
+export class AuthError extends Error {
+	constructor(
+		message: string,
+		public errorCode: string,
+		public statusCode = 401,
+	) {
+		super(message)
+	}
+
+	toResponse() {
+		return {
+			error: this.errorCode,
+			error_description: this.message,
+		}
+	}
+}

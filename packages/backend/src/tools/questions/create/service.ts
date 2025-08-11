@@ -1,11 +1,14 @@
 import { db } from "@/db"
-import type { CreateQuestionSchema } from "./schema"
+import type {
+	CreateQuestionSchema,
+	CreateQuestionResponseSchema,
+} from "./schema"
 import type { z } from "zod"
 
 export async function service(
 	args: z.infer<z.ZodObject<typeof CreateQuestionSchema>>,
-	userId: string,
-): Promise<string> {
+	{ userId }: { userId: string },
+): Promise<z.infer<z.ZodObject<typeof CreateQuestionResponseSchema>>> {
 	const {
 		topic,
 		question_text,
@@ -96,7 +99,13 @@ export async function service(
 		createdBy: question.created_by,
 	})
 
-	let examSectionInfo = ""
+	let examSectionInfo:
+		| {
+				exam_paper_title: string
+				section_title: string
+				question_order: number
+		  }
+		| undefined = undefined
 
 	// If exam_paper_id is provided, add the question to the exam paper
 	if (exam_paper_id) {
@@ -182,11 +191,11 @@ export async function service(
 			data: { total_marks: totalMarks },
 		})
 
-		examSectionInfo = `
-
-✅ Question added to exam paper: ${examPaper.title}
-📋 Section: ${finalSectionTitle}
-📍 Question order in section: ${finalQuestionOrder}`
+		examSectionInfo = {
+			exam_paper_title: examPaper.title,
+			section_title: finalSectionTitle,
+			question_order: finalQuestionOrder,
+		}
 
 		console.log("[create-question] Question added to exam section", {
 			sectionId: examSection.id,
@@ -195,19 +204,14 @@ export async function service(
 		})
 	}
 
-	// Build question type info for response
-	let questionTypeInfo = `
-📝 Question Type: ${question_type}`
-
-	if (question_type === "multiple_choice" && multiple_choice_options) {
-		questionTypeInfo += `
-🔤 Multiple Choice Options: ${multiple_choice_options.length} (${multiple_choice_options.map((opt) => opt.option_label).join(", ")})
-💡 Note: Correct answers should be defined in the mark scheme`
+	return {
+		question: {
+			id: question.id,
+			created_by: question.created_by,
+		},
+		question_type,
+		multiple_choice_options:
+			question_type === "multiple_choice" ? multiple_choice_options : undefined,
+		exam_section_info: examSectionInfo,
 	}
-
-	return `
-Question created successfully! 
-Question ID: ${question.id}
-Created by: ${question.created_by.name} (${question.created_by.email})${questionTypeInfo}${examSectionInfo}
-`
 }

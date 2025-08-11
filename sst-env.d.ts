@@ -39,10 +39,6 @@ declare module "sst" {
       "type": "sst.sst.Secret"
       "value": string
     }
-    "RefinementQueue": {
-      "type": "sst.aws.Queue"
-      "url": string
-    }
   }
 }
 /// <reference path="sst-env.d.ts" />

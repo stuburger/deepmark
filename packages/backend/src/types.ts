@@ -1,3 +1,4 @@
+import type { LambdaEvent, LambdaContext } from "hono/aws-lambda"
 import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js"
 
 // export interface AuthInfo {
@@ -9,5 +10,12 @@ import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js"
 // }
 
 export type HonoVariables = {
-	auth: AuthInfo
+	auth: AuthInfo & { extra: { userId: string } }
 }
+
+export type Bindings = {
+	event: LambdaEvent
+	lambdaContext: LambdaContext
+}
+
+export type HonoEnv = { Variables: HonoVariables; Bindings: Bindings }

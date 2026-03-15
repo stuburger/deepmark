@@ -1,27 +1,66 @@
 import { MarkAnswerSchema } from "./schema"
-
-import { generateObject } from "ai"
 import { createOpenAI } from "@ai-sdk/openai"
-import z from "zod"
 import { Resource } from "sst"
 import { tool } from "@/tools/shared/tool-utils"
 import { db } from "@/db"
-import type {
-	Answer,
-	MarkPointResult,
-	MarkScheme,
-	Question,
-	QuestionPart,
-} from "@/generated/prisma"
+import {
+	DeterministicMarker,
+	Grader,
+	LlmMarker,
+	MarkerOrchestrator,
+	parseMarkPointsFromPrisma,
+	type QuestionWithMarkScheme,
+} from "@mcp-gcse/shared"
 
 const openai = createOpenAI({
 	apiKey: Resource.OpenAiApiKey.value,
 })
 
-export const handler = tool(MarkAnswerSchema, async (args, extra) => {
-	const { answer_id, include_mark_result } = args
+const grader = new Grader(openai("gpt-4o"), {
+	systemPrompt:
+		"You are an expert GCSE examiner. Mark the student's answer against the provided mark scheme. Return valid JSON matching the schema. Ignore spelling and grammar; focus on understanding and correct science. Be consistent and conservative: only award marks when there is clear evidence.",
+})
 
-	const answer = await db.answer.findUniqueOrThrow({
+const orchestrator = new MarkerOrchestrator([
+	new DeterministicMarker(),
+	new LlmMarker(grader),
+])
+
+function buildQuestionWithMarkScheme(
+	answer: Awaited<ReturnType<typeof loadAnswer>>,
+	markScheme: Awaited<ReturnType<typeof loadMarkScheme>>,
+	questionText: string,
+): QuestionWithMarkScheme {
+	const q = answer.question
+	const part = answer.question_part
+	const questionType = part ? part.question_type : q.question_type
+	const rawOptions = (part?.multiple_choice_options ?? q.multiple_choice_options) as
+		| Array<{ option_label: string; option_text: string }>
+		| null
+		| undefined
+	const availableOptions = Array.isArray(rawOptions)
+		? rawOptions.map((o) => ({ optionLabel: o.option_label, optionText: o.option_text }))
+		: undefined
+
+	return {
+		id: part?.id ?? q.id,
+		questionType,
+		questionText,
+		topic: q.topic,
+		rubric: markScheme.description,
+		guidance: markScheme.guidance ?? null,
+		totalPoints: markScheme.points_total,
+		markPoints: parseMarkPointsFromPrisma(markScheme.mark_points),
+		correctOptionLabels:
+			markScheme.correct_option_labels?.length > 0
+				? markScheme.correct_option_labels
+				: undefined,
+		availableOptions,
+	}
+}
+
+async function loadAnswer(answer_id: string) {
+	return db.answer.findUniqueOrThrow({
 		where: { id: answer_id },
 		include: {
 			question: {
@@ -44,64 +83,61 @@ export const handler = tool(MarkAnswerSchema, async (args, extra) => {
 			},
 		},
 	})
+}
 
-	if (answer.marking_status === "completed") {
-		return `Answer ${answer_id} has already been marked.`
-	}
-
-	let questionText = answer.question.text
-
-	if (answer.question_part) {
-		// Use the part text and topic for marking
-		questionText += answer.question_part.text
-	}
-
-	const markScheme = await db.markScheme.findFirstOrThrow({
+async function loadMarkScheme(answer: Awaited<ReturnType<typeof loadAnswer>>) {
+	return db.markScheme.findFirstOrThrow({
 		where: {
 			question_id: answer.question_id,
 			question_part_id: answer.question_part_id,
 		},
 	})
+}
 
-	// Determine if this is a multiple choice question
-	const isMultipleChoice = answer.question_part
-		? answer.question_part.question_type === "multiple_choice"
-		: answer.question.question_type === "multiple_choice"
+export const handler = tool(MarkAnswerSchema, async (args) => {
+	const { answer_id, include_mark_result } = args
 
-	let markingResult: {
-		mark_points_results: MarkPointResult[]
-		total_score: number
-		llm_reasoning: string
-		feedback_summary: string
+	const answer = await loadAnswer(answer_id)
+
+	if (answer.marking_status === "completed") {
+		return `Answer ${answer_id} has already been marked.`
 	}
-	if (isMultipleChoice) {
-		// Handle multiple choice questions without LLM
-		markingResult = evaluateMultipleChoiceAnswer(
-			answer.question,
-			answer.question_part,
-			markScheme,
-			answer,
-		)
-	} else {
-		// Call the LLM for marking written questions
-		markingResult = await callLLMForMarking(
-			answer.question,
-			answer.question_part,
-			markScheme,
-			answer,
-		)
-	}
+
+	const questionText = answer.question_part
+		? answer.question.text + answer.question_part.text
+		: answer.question.text
+
+	const markScheme = await loadMarkScheme(answer)
+
+	const questionWithMarkScheme = buildQuestionWithMarkScheme(
+		answer,
+		markScheme,
+		questionText,
+	)
+
+	const grade = await orchestrator.mark(
+		questionWithMarkScheme,
+		answer.student_answer,
+	)
+
+	const mark_points_results = grade.markPointsResults.map((mp) => ({
+		point_number: mp.pointNumber,
+		awarded: mp.awarded,
+		reasoning: mp.reasoning,
+		expected_criteria: mp.expectedCriteria,
+		student_covered: mp.studentCovered,
+	}))
 
 	await db.markingResult.create({
 		data: {
 			answer_id,
 			mark_scheme_id: markScheme.id,
-			mark_points_results: markingResult.mark_points_results,
-			total_score: markingResult.total_score,
+			mark_points_results,
+			total_score: grade.totalScore,
 			max_possible_score: answer.max_possible_score,
 			marked_at: new Date(),
-			llm_reasoning: markingResult.llm_reasoning,
-			feedback_summary: markingResult.feedback_summary,
+			llm_reasoning: grade.llmReasoning,
+			feedback_summary: grade.feedbackSummary,
 		},
 	})
 
@@ -109,16 +145,16 @@ export const handler = tool(MarkAnswerSchema, async (args, extra) => {
 		where: { id: answer_id },
 		data: {
 			marking_status: "completed",
-			total_score: markingResult.total_score,
+			total_score: grade.totalScore,
 			marked_at: new Date(),
 		},
 	})
 
-	let responseText = `Answer marked successfully! Score: ${markingResult.total_score}/${answer.max_possible_score}`
+	let responseText = `Answer marked successfully! Score: ${grade.totalScore}/${answer.max_possible_score}`
 
 	if (include_mark_result) {
 		responseText += `\n\nMarking Result:\n${JSON.stringify(
-			markingResult,
+			{ mark_points_results, total_score: grade.totalScore, llm_reasoning: grade.llmReasoning, feedback_summary: grade.feedbackSummary },
 			null,
 			2,
 		)}`
@@ -126,295 +162,3 @@ export const handler = tool(MarkAnswerSchema, async (args, extra) => {
 
 	return responseText
 })
-
-// Define the schema for the marking result
-const markingResultSchema = z.object({
-	mark_points_results: z.array(
-		z.object({
-			point_number: z.number(),
-			awarded: z.boolean(),
-			reasoning: z
-				.string()
-				.describe(
-					"Detailed reasoning for why this mark was or was not awarded",
-				),
-			expected_criteria: z
-				.string()
-				.describe("What the mark scheme expected for this point"),
-			student_covered: z
-				.string()
-				.describe("What the student actually covered in their answer"),
-		}),
-	),
-	total_score: z.number(),
-	llm_reasoning: z
-		.string()
-		.describe("Chain-of-thought reasoning for the overall marking process"),
-	feedback_summary: z
-		.string()
-		.describe("Overall feedback summary for the student"),
-})
-
-// Create example object that conforms to the schema
-const exampleMarkingResult: z.infer<typeof markingResultSchema> = {
-	mark_points_results: [
-		{
-			point_number: 1,
-			awarded: true,
-			reasoning:
-				"Student clearly describes the fermentation setup: 'Mix the yeast with sugar water'. This meets the criteria for describing the method/procedure.",
-			expected_criteria:
-				"Mentions adding the sample to glucose/sugar solution OR mentions mixing yeast sample with sugar water OR describes setting up fermentation test",
-			student_covered: "Mix the yeast with sugar water",
-		},
-		{
-			point_number: 2,
-			awarded: true,
-			reasoning:
-				"Student mentions temperature requirement: 'leave in a warm place'. This satisfies the conditions needed for yeast fermentation.",
-			expected_criteria:
-				"States warm temperature needed (e.g., 37°C, warm water bath, room temperature) OR mentions anaerobic conditions (no oxygen/air excluded) OR mentions suitable pH conditions",
-			student_covered: "leave in a warm place",
-		},
-		{
-			point_number: 3,
-			awarded: true,
-			reasoning:
-				"Student identifies gas production as key observation: 'Bubbles will form'. This clearly describes the expected result of fermentation.",
-			expected_criteria:
-				"Bubbles/gas produced OR carbon dioxide given off OR effervescence/fizzing observed OR froth/foam formation",
-			student_covered: "Bubbles will form",
-		},
-		{
-			point_number: 4,
-			awarded: true,
-			reasoning:
-				"Student describes CO₂ test with correct result: 'test them with limewater which goes cloudy'. This is the standard confirmation test for carbon dioxide.",
-			expected_criteria:
-				"Test gas with limewater (turns milky/cloudy) OR use pH indicator (solution becomes more acidic) OR smell of alcohol/ethanol detected OR use gas collection tube to capture CO₂",
-			student_covered: "test them with limewater which goes cloudy",
-		},
-	],
-	total_score: 4,
-	llm_reasoning:
-		"Systematic analysis: Point 1 - Student clearly describes fermentation setup with 'Mix the yeast with sugar water'. Point 2 - Temperature requirement met with 'leave in a warm place'. Point 3 - Gas production identified with 'Bubbles will form'. Point 4 - CO₂ test correctly described with limewater test. All criteria met for full marks.",
-	feedback_summary:
-		"Excellent answer scoring 4/4 marks. Student demonstrates comprehensive understanding of yeast testing procedure, including method, conditions, observations, and confirmation test.",
-}
-
-async function callLLMForMarking(
-	question: { id: string; text: string; topic: string },
-	questionPart: { id: string; text: string; part_label: string } | null,
-	markScheme: MarkScheme,
-	answer: Answer,
-): Promise<{
-	mark_points_results: MarkPointResult[]
-	total_score: number
-	llm_reasoning: string
-	feedback_summary: string
-}> {
-	// Determine the text to use for marking
-	const questionText = questionPart ? questionPart.text : question.text
-	const partLabel = questionPart ? questionPart.part_label : null
-
-	// Create the prompt for the LLM
-	const prompt = `You are an expert GCSE examiner. Mark the following student answer against the provided mark scheme.
-
-<Topic>
-${question.topic}
-</Topic>
-
-<FullQuestion>
-${question.text}
-</FullQuestion>
-
-${
-	questionPart
-		? `<QuestionPart>
-Part ${questionPart.part_label}: ${questionPart.text}
-</QuestionPart>`
-		: ""
-}
-
-<QuestionToMark>
-${questionText}${partLabel ? ` (Part ${partLabel})` : ""}
-</QuestionToMark>
-
-<MarkScheme>
-Description: ${markScheme.description}
-
-Additional marking guidance for this question: 
-${markScheme.guidance ?? "N/A"}
-
-Total Marks: ${markScheme.points_total}
-
-Mark Points:
-${markScheme.mark_points
-	.map(
-		(point) =>
-			`${point.point_number}. ${point.description} (${point.points} mark${
-				point.points > 1 ? "s" : ""
-			})
-
-   ${point.criteria}`,
-	)
-	.join("\n\n")}
-</MarkScheme>
-
-<StudentAnswer>
-${answer.student_answer}
-</StudentAnswer>
-
-<MarkingRules>
-CRITICAL RULES:
-- Total marks awarded MUST NOT exceed ${markScheme.points_total}
-- Each mark point can only award 0 or 1 mark (no partial marks)
-- If unsure between 0 or 1 mark, award 0 (conservative marking)
-- Marks must sum exactly to your awarded total
-
-PENALTY SYSTEM:
-- If you can't find clear evidence in text: award 0 marks
-- When in doubt, under-mark rather than over-mark
-</MarkingRules>
-
-<LLMInstructions>
-Please analyze the student's answer systematically using chain-of-thought reasoning. For each mark point:
-
-1. Think through the criteria step-by-step
-2. Quote the specific part of the student's answer that relates to this mark point
-3. Analyze whether the student's response meets the expected criteria
-4. Provide detailed reasoning for your decision
-5. Award 0 or 1 mark based on clear evidence
-
-Your chain-of-thought reasoning should be systematic and thorough, as shown in the example. 
-Think through each mark point carefully before making your decision.
-
-Provide your response in the exact JSON format shown above.
-</LLMInstructions>
-
-<ExampleOutputFormat>
-${JSON.stringify(exampleMarkingResult, null, 2)}
-</ExampleOutputFormat>
-`
-
-	const { object } = await generateObject({
-		model: openai("gpt-4o"),
-		schema: markingResultSchema,
-		prompt,
-		temperature: 0.1, // Low temperature for consistent marking
-	})
-
-	if (
-		object.total_score !==
-		object.mark_points_results.reduce((sum, mp) => sum + +mp.awarded, 0)
-	) {
-		throw new Error(`Total score does not match sum of awarded marks. 
-      This indicates an inconsistency in the LLM output.`)
-	}
-
-	return object
-}
-
-function evaluateMultipleChoiceAnswer(
-	question: {
-		question_type: string
-		multiple_choice_options: Array<{
-			option_label: string
-			option_text: string
-		}>
-	},
-	questionPart: {
-		question_type: string
-		multiple_choice_options: Array<{
-			option_label: string
-			option_text: string
-		}>
-	} | null,
-	markScheme: MarkScheme,
-	answer: Answer,
-): {
-	mark_points_results: MarkPointResult[]
-	total_score: number
-	llm_reasoning: string
-	feedback_summary: string
-} {
-	// Parse student answer - expect format like "A,C" or "A, C" or "A C"
-	const studentSelectedOptions = answer.student_answer
-		.toUpperCase()
-		.replace(/[^A-Z]/g, "")
-		.split("")
-		.filter(Boolean)
-		.sort()
-
-	// Get correct options from mark scheme
-	const correctOptions = markScheme.correct_option_labels
-		.map((label: string) => label.toUpperCase())
-		.sort()
-
-	// Get available options from the question/question part
-	const availableOptions = questionPart
-		? questionPart.multiple_choice_options
-		: question.multiple_choice_options
-
-	// Check if student's answer matches correct options exactly
-	const isCorrect =
-		studentSelectedOptions.length === correctOptions.length &&
-		studentSelectedOptions.every((option: string) =>
-			correctOptions.includes(option),
-		)
-
-	// Create mark point results
-	const mark_points_results: MarkPointResult[] = [
-		{
-			point_number: 1,
-			awarded: isCorrect,
-			reasoning: isCorrect
-				? `Student selected options [${studentSelectedOptions.join(", ")}] which exactly matches the correct answer [${correctOptions.join(", ")}].`
-				: `Student selected options [${studentSelectedOptions.join(", ")}] but the correct answer is [${correctOptions.join(", ")}]. ${
-						studentSelectedOptions.length === 0
-							? "No options were selected."
-							: studentSelectedOptions.length !== correctOptions.length
-								? `Wrong number of options selected (${studentSelectedOptions.length} vs ${correctOptions.length} required).`
-								: "Selected options do not match the correct combination."
-					}`,
-			expected_criteria: `Must select exactly: ${correctOptions.join(", ")}`,
-			student_covered:
-				studentSelectedOptions.length > 0
-					? `Selected: ${studentSelectedOptions.join(", ")}`
-					: "No options selected",
-		},
-	]
-
-	const total_score = isCorrect ? markScheme.points_total : 0
-
-	// Create option breakdown for feedback
-	const optionBreakdown = availableOptions
-		.map((option: { option_label: string; option_text: string }) => {
-			const isSelected = studentSelectedOptions.includes(
-				option.option_label.toUpperCase(),
-			)
-			const shouldBeSelected = correctOptions.includes(
-				option.option_label.toUpperCase(),
-			)
-
-			let status = ""
-			if (isSelected && shouldBeSelected) status = "✅ Correctly selected"
-			else if (isSelected && !shouldBeSelected)
-				status = "❌ Incorrectly selected"
-			else if (!isSelected && shouldBeSelected)
-				status = "❌ Should have been selected"
-			else status = "✅ Correctly not selected"
-
-			return `${option.option_label}: ${option.option_text} - ${status}`
-		})
-		.join("\n")
-
-	return {
-		mark_points_results,
-		total_score,
-		llm_reasoning: `Multiple choice question evaluation: Student selected [${studentSelectedOptions.join(", ")}], correct answer is [${correctOptions.join(", ")}]. ${isCorrect ? "Perfect match - full marks awarded." : "No match - zero marks awarded."}`,
-		feedback_summary: isCorrect
-			? `Excellent! You correctly identified all the right options and avoided incorrect ones. Score: ${total_score}/${markScheme.points_total}`
-			: `Incorrect answer. The correct options are: ${correctOptions.join(", ")}. Remember to select ALL correct options for multiple choice questions. Score: ${total_score}/${markScheme.points_total}\n\nOption breakdown:\n${optionBreakdown}`,
-	}
-}

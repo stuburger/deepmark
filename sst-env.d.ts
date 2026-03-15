@@ -5,9 +5,8 @@
 
 declare module "sst" {
   export interface Resource {
-    "Api": {
-      "name": string
-      "type": "sst.aws.Function"
+    "ApiGateway": {
+      "type": "sst.aws.ApiGatewayV2"
       "url": string
     }
     "Auth": {
@@ -31,11 +30,15 @@ declare module "sst" {
       "type": "sst.aws.Function"
       "url": string
     }
-    "MongoDbUri": {
+    "NeonPostgres": {
+      "databaseUrl": string
+      "type": "sst.sst.Linkable"
+    }
+    "OpenAiApiKey": {
       "type": "sst.sst.Secret"
       "value": string
     }
-    "OpenAiApiKey": {
+    "GeminiApiKey": {
       "type": "sst.sst.Secret"
       "value": string
     }

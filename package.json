@@ -5,19 +5,20 @@
     "weather": "./build/index.js"
   },
   "dependencies": {
-    "@ai-sdk/openai": "^1.3.23",
+    "@ai-sdk/openai": "^3.0.7",
     "@aws-sdk/client-sqs": "^3.862.0",
+    "@hono/swagger-ui": "^0.5.2",
     "@modelcontextprotocol/sdk": "^1.17.1",
     "@openauthjs/openauth": "0.4.3",
-    "mongodb": "^6.17.0",
-    "prisma": "^6.13.0",
+    "mongodb": "7.1.0",
     "sst": "3.17.6",
     "ts-node": "^10.9.2",
     "valibot": "1.1.0",
-    "zod": "^3.25.67"
+    "zod": "^4.3.5"
   },
   "devDependencies": {
     "@biomejs/biome": "1.9.4",
+    "turbo": "^2.3.3",
     "@types/aws-lambda": "8.10.150",
     "@types/bun": "1.2.12",
     "@types/node": "^24.0.3",
@@ -27,6 +28,21 @@
   "workspaces": [
     "packages/*"
   ],
+  "scripts": {
+    "build": "turbo build",
+    "typecheck": "turbo typecheck",
+    "check": "bun biome check",
+    "fix": "bun check --write ./",
+    "dev": "sst dev",
+    "deploy": "bun sst deploy",
+    "mcp-inspect": "NODE_TLS_REJECT_UNAUTHORIZED='0' bun --cwd packages/backend mcp-inspect",
+    "db:generate": "turbo db:generate",
+    "db:migrate": "turbo db:migrate",
+    "db:deploy": "turbo db:deploy",
+    "db:studio": "turbo db:studio",
+    "db:push": "turbo db:push",
+    "extract-env": "npx sst shell -- bun --cwd packages/db run extract-env"
+  },
   "engines": {
     "node": ">=22.0.0"
   },
@@ -35,13 +51,5 @@
     "@biomejs/biome",
     "aws-sdk",
     "esbuild"
-  ],
-  "scripts": {
-    "typecheck": "bun --elide-lines 0 --filter=* typecheck",
-    "check": "bun biome check",
-    "fix": "bun check --write ./",
-    "dev": "sst dev",
-    "deploy": "bun sst deploy",
-    "mcp-inspect": "NODE_TLS_REJECT_UNAUTHORIZED='0' bun --cwd packages/backend mcp-inspect"
-  }
+  ]
 }

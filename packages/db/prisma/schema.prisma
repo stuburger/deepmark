@@ -1,0 +1,300 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Subject {
+  biology
+  chemistry
+  physics
+  english
+}
+
+enum DifficultyLevel {
+  easy
+  medium
+  hard
+  expert
+}
+
+enum MarkingStatus {
+  pending
+  completed
+  failed
+}
+
+enum ExamSessionStatus {
+  in_progress
+  completed
+  abandoned
+}
+
+enum TierLevel {
+  foundation
+  higher
+}
+
+enum Season {
+  summer
+  autumn
+  winter
+}
+
+enum UserRole {
+  student
+  teacher
+  admin
+  examiner
+}
+
+enum QuestionType {
+  written
+  multiple_choice
+}
+
+model User {
+  id         String   @id @default(cuid())
+  email      String?  @unique
+  name       String?
+  role       UserRole
+  github_id  String?  @unique
+  avatar_url String?
+  is_active  Boolean  @default(true)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  created_questions      Question[]
+  created_question_parts QuestionPart[]
+  created_exam_papers    ExamPaper[]
+  created_mark_schemes   MarkScheme[]
+  created_exam_sections  ExamSection[]
+  created_question_banks QuestionBank[]
+
+  student_answers Answer[]      @relation("StudentAnswers")
+  exam_sessions   ExamSession[] @relation("Student")
+
+  @@map("users")
+}
+
+model Question {
+  id                      String          @id @default(cuid())
+  text                    String
+  topic                   String
+  created_by_id           String
+  created_at              DateTime        @default(now())
+  updated_at              DateTime        @updatedAt
+  subject                 Subject
+  points                  Int?
+  difficulty_level        DifficultyLevel?
+  question_type           QuestionType    @default(written)
+  // Array of { option_label, option_text } objects
+  multiple_choice_options Json            @default("[]")
+
+  created_by             User                  @relation(fields: [created_by_id], references: [id])
+  question_parts         QuestionPart[]
+  mark_schemes           MarkScheme[]
+  answers                Answer[]
+  exam_section_questions ExamSectionQuestion[]
+  question_bank_items    QuestionBankItem[]
+
+  @@map("questions")
+}
+
+model QuestionPart {
+  id                      String          @id @default(cuid())
+  question_id             String
+  part_label              String
+  text                    String
+  points                  Int?
+  difficulty_level        DifficultyLevel?
+  order                   Int
+  created_by_id           String
+  created_at              DateTime        @default(now())
+  updated_at              DateTime        @updatedAt
+  question_type           QuestionType    @default(written)
+  // Array of { option_label, option_text } objects
+  multiple_choice_options Json            @default("[]")
+
+  created_by   User         @relation(fields: [created_by_id], references: [id])
+  question     Question     @relation(fields: [question_id], references: [id])
+  mark_schemes MarkScheme[]
+  answers      Answer[]
+
+  @@map("question_parts")
+}
+
+model MarkScheme {
+  id                    String   @id @default(cuid())
+  question_id           String
+  question_part_id      String?
+  description           String
+  guidance              String?
+  created_by_id         String
+  created_at            DateTime @default(now())
+  updated_at            DateTime @updatedAt
+  tags                  String[]
+  points_total          Int
+  // Array of { point_number, description, points, criteria } objects
+  mark_points           Json     @default("[]")
+  correct_option_labels String[]
+
+  created_by      User            @relation(fields: [created_by_id], references: [id])
+  question        Question        @relation(fields: [question_id], references: [id])
+  question_part   QuestionPart?   @relation(fields: [question_part_id], references: [id])
+  marking_results MarkingResult[]
+
+  @@map("mark_schemes")
+}
+
+model Answer {
+  id                 String        @id @default(cuid())
+  question_id        String
+  question_part_id   String?
+  student_id         String
+  student_answer     String
+  submitted_at       DateTime      @default(now())
+  marked_at          DateTime?
+  total_score        Int?
+  max_possible_score Int
+  marking_status     MarkingStatus @default(pending)
+  exam_session_id    String?
+
+  student         User            @relation("StudentAnswers", fields: [student_id], references: [id])
+  question        Question        @relation(fields: [question_id], references: [id])
+  question_part   QuestionPart?   @relation(fields: [question_part_id], references: [id])
+  exam_session    ExamSession?    @relation(fields: [exam_session_id], references: [id])
+  marking_results MarkingResult[]
+
+  @@map("answers")
+}
+
+model MarkingResult {
+  id                  String   @id @default(cuid())
+  answer_id           String
+  mark_scheme_id      String
+  // Array of { point_number, awarded, reasoning, expected_criteria, student_covered } objects
+  mark_points_results Json     @default("[]")
+  total_score         Int
+  max_possible_score  Int
+  marked_at           DateTime @default(now())
+  llm_reasoning       String
+  feedback_summary    String
+
+  answer      Answer     @relation(fields: [answer_id], references: [id])
+  mark_scheme MarkScheme @relation(fields: [mark_scheme_id], references: [id])
+
+  @@map("marking_results")
+}
+
+model ExamPaper {
+  id               String   @id @default(cuid())
+  title            String
+  subject          Subject
+  exam_board       String?
+  year             Int
+  paper_number     Int?
+  total_marks      Int
+  duration_minutes Int
+  created_by_id    String
+  created_at       DateTime @default(now())
+  updated_at       DateTime @updatedAt
+  is_active        Boolean  @default(true)
+  // { difficulty_level?, tier?, season? }
+  metadata         Json?
+
+  created_by    User          @relation(fields: [created_by_id], references: [id])
+  sections      ExamSection[]
+  exam_sessions ExamSession[]
+
+  @@map("exam_papers")
+}
+
+model ExamSection {
+  id            String   @id @default(cuid())
+  exam_paper_id String
+  title         String
+  description   String?
+  total_marks   Int
+  instructions  String?
+  order         Int
+  created_by_id String
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  created_by             User                  @relation(fields: [created_by_id], references: [id])
+  exam_paper             ExamPaper             @relation(fields: [exam_paper_id], references: [id])
+  exam_section_questions ExamSectionQuestion[]
+
+  @@unique([exam_paper_id, title])
+  @@map("exam_sections")
+}
+
+model ExamSectionQuestion {
+  id              String @id @default(cuid())
+  exam_section_id String
+  question_id     String
+  order           Int
+
+  exam_section ExamSection @relation(fields: [exam_section_id], references: [id])
+  question     Question    @relation(fields: [question_id], references: [id])
+
+  @@unique([exam_section_id, question_id])
+  @@unique([exam_section_id, order])
+  @@map("exam_section_questions")
+}
+
+model ExamSession {
+  id                 String            @id @default(cuid())
+  exam_paper_id      String
+  student_id         String
+  started_at         DateTime          @default(now())
+  completed_at       DateTime?
+  status             ExamSessionStatus @default(in_progress)
+  total_score        Int?
+  max_possible_score Int
+  // { location?, invigilator?, special_requirements? }
+  metadata           Json?
+
+  student    User      @relation("Student", fields: [student_id], references: [id])
+  exam_paper ExamPaper @relation(fields: [exam_paper_id], references: [id])
+  answers    Answer[]
+
+  @@map("exam_sessions")
+}
+
+model QuestionBank {
+  id            String   @id @default(cuid())
+  name          String
+  description   String?
+  subject       Subject
+  created_by_id String
+  is_public     Boolean  @default(false)
+  tags          String[]
+  is_active     Boolean  @default(true)
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  created_by          User               @relation(fields: [created_by_id], references: [id])
+  question_bank_items QuestionBankItem[]
+
+  @@map("question_banks")
+}
+
+model QuestionBankItem {
+  id               String   @id @default(cuid())
+  question_bank_id String
+  question_id      String
+  order            Int
+  added_at         DateTime @default(now())
+
+  question_bank QuestionBank @relation(fields: [question_bank_id], references: [id])
+  question      Question     @relation(fields: [question_id], references: [id])
+
+  @@unique([question_bank_id, question_id])
+  @@unique([question_bank_id, order])
+  @@map("question_bank_items")
+}

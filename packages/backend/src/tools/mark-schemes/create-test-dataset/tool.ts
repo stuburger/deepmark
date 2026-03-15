@@ -1,5 +1,5 @@
 import { CreateTestDatasetSchema } from "./schema"
-import { generateObject } from "ai"
+import { generateText, Output } from "ai"
 import { createOpenAI } from "@ai-sdk/openai"
 import z from "zod"
 import { Resource } from "sst"
@@ -259,22 +259,31 @@ For each test case, provide:
 Ensure the generated cases complement the provided examples and create a comprehensive test dataset.
 </Task>`
 
-	const { object } = await generateObject({
-		model: openai("gpt-4o"),
-		schema: additionalTestCasesSchema,
-		prompt,
+	const { output } = await generateText({
+		model: openai("gpt-5.1"),
+		messages: [
+			{
+				role: "system",
+				content:
+					"You are an expert in creating GCSE assessment test datasets. Generate clear, diverse test cases with realistic student answers and grading criteria.",
+			},
+			{ role: "user", content: prompt },
+		],
+		output: Output.object({
+			schema: additionalTestCasesSchema,
+		}),
 		temperature: 0.7, // Higher temperature for diversity
 	})
 
 	return {
-		test_cases: object.test_cases.map((tc) => ({
+		test_cases: output.test_cases.map((tc) => ({
 			student_answer: tc.student_answer,
 			expected_score: tc.expected_score,
 			answer_quality: tc.answer_quality,
 			notes: tc.notes,
 			topic_focus: tc.topic_focus,
 		})),
-		generation_summary: object.generation_summary,
+		generation_summary: output.generation_summary,
 	}
 }
 

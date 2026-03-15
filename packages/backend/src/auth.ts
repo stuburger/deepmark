@@ -1,4 +1,5 @@
 import { handle } from "hono/aws-lambda"
+import { Hono } from "hono"
 import { issuer } from "@openauthjs/openauth"
 import { createClient } from "@openauthjs/openauth/client"
 import { GithubProvider } from "@openauthjs/openauth/provider/github"
@@ -6,7 +7,9 @@ import { MemoryStorage } from "@openauthjs/openauth/storage/memory"
 import { subjects } from "./subjects"
 import { z } from "zod"
 import { Resource } from "sst"
-import { db } from "./db"
+import { createPrismaClient } from "@mcp-gcse/db"
+
+const db = createPrismaClient(Resource.NeonPostgres.databaseUrl)
 
 // Validate the registration request according to RFC 7591
 const registrationSchema = z.object({
@@ -180,7 +183,26 @@ app.post("/introspect", async (c) => {
 	}
 })
 
-export const handler = handle(app)
+// OpenAuth's built-in /.well-known/oauth-authorization-server omits
+// registration_endpoint, so MCP clients can't discover /register via the
+// standard discovery flow. Wrapping the issuer app in a parent Hono instance
+// lets us intercept that route and add the missing field, since Hono executes
+// handlers in registration order and our route is added first.
+const issuerUrl = `https://auth.${Resource.App.stage}.supalink.co`
+const wrappedApp = new Hono()
+wrappedApp.get("/.well-known/oauth-authorization-server", (c) => {
+	return c.json({
+		issuer: issuerUrl,
+		authorization_endpoint: `${issuerUrl}/authorize`,
+		token_endpoint: `${issuerUrl}/token`,
+		jwks_uri: `${issuerUrl}/.well-known/jwks.json`,
+		response_types_supported: ["code", "token"],
+		registration_endpoint: `${issuerUrl}/register`,
+	})
+})
+wrappedApp.route("/", app)
+
+export const handler = handle(wrappedApp)
 
 interface UserProfile {
 	id: string

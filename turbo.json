@@ -1,0 +1,31 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "globalEnv": ["NODE_ENV"],
+  "tasks": {
+    "build": {
+      "dependsOn": ["^db:generate", "^build"],
+      "inputs": ["src/**/*.ts", "tsconfig.json", "package.json"],
+      "outputs": ["dist/**"]
+    },
+    "typecheck": {
+      "dependsOn": ["@mcp-gcse/shared#build"],
+      "inputs": ["src/**/*.ts", "tsconfig.json", "package.json"],
+      "outputs": []
+    },
+    "db:generate": {
+      "cache": false
+    },
+    "db:migrate": {
+      "cache": false
+    },
+    "db:deploy": {
+      "cache": false
+    },
+    "db:studio": {
+      "cache": false
+    },
+    "db:push": {
+      "cache": false
+    }
+  }
+}

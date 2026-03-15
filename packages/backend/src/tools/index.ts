@@ -50,6 +50,9 @@ export { UpdateExamPaperSchema } from "./exam-papers/update/schema"
 export { handler as addQuestionToExamPaperHandler } from "./exam-papers/add-question/tool"
 export { AddQuestionToExamPaperSchema } from "./exam-papers/add-question/schema"
 
+export { handler as analyzeHandwritingHandler } from "./handwriting/analyze/tool"
+export { AnalyzeHandwritingSchema } from "./handwriting/analyze/schema"
+
 // // Phase 3: Session Management
 // export { handler as startExamSessionHandler } from "./sessions/start-exam-session/tool";
 // export { StartExamSessionSchema } from "./sessions/start-exam-session/schema";

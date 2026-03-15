@@ -2,7 +2,9 @@
   "workbench.colorCustomizations": {
     "activityBar.background": "#0c0c0c",
     "titleBar.activeBackground": "#030303",
-    "titleBar.activeForeground": "#e6dede"
+    "titleBar.activeForeground": "#e6dede",
+    "titleBar.inactiveBackground": "#0B3428",
+    "titleBar.inactiveForeground": "#F2FCF9"
   },
   "editor.defaultFormatter": "biomejs.biome",
   "[typescript]": {

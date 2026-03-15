@@ -3,19 +3,20 @@
 	"type": "module",
 	"private": true,
 	"scripts": {
+		"build": "echo 'Backend is built by SST at deploy'",
 		"mcp-inspect": "npx @modelcontextprotocol/inspector",
 		"typecheck": "tsc --noEmit"
 	},
 	"dependencies": {
+		"@google/genai": "^1.45.0",
 		"@hono/zod-openapi": "^1.1.0",
+		"@mcp-gcse/db": "*",
+		"@mcp-gcse/shared": "*",
 		"@modelcontextprotocol/sdk": "^1.17.2",
 		"@openauthjs/openauth": "0.4.3",
-		"@prisma/client": "6.13.0",
-		"ai": "^5.0.9",
+		"ai": "^6.0.19",
 		"fetch-to-node": "2.1.0",
 		"hono": "4.9.0",
-		"mongodb": "^6.18.0",
-		"prisma": "^6.13.0",
-		"zod": "^3.25.67"
+		"zod": "^4.3.5"
 	}
 }

@@ -1,7 +1,6 @@
 import { AuthError } from "@/error"
 import type { HonoEnv } from "@/types"
 import type { MiddlewareHandler } from "hono/types"
-import { Resource } from "sst"
 import { createTokenVerifier } from "./create-token-verifier"
 
 const tokenVerifier = createTokenVerifier()
@@ -33,11 +32,12 @@ export const authMiddleware: MiddlewareHandler<HonoEnv> = async (c, next) => {
 		await next()
 	} catch (error) {
 		if (error instanceof AuthError) {
+			const origin = new URL(c.req.url).origin
 			const wwwAuthValue = [
 				`Bearer realm="MCP/API Server"`,
 				`error="${error.errorCode}"`,
 				`error_description="${error.message}"`,
-				`resource_metadata_uri="${Resource.AuthUrl.url}/.well-known/oauth-protected-resource"`,
+				`resource_metadata_uri="${origin}/.well-known/oauth-protected-resource/mcp"`,
 			]
 
 			c.header("WWW-Authenticate", wwwAuthValue.join(", "))

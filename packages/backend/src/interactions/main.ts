@@ -1,27 +1,11 @@
 import type { HonoEnv } from "@/types"
-import { Hono } from "hono"
-import { handle, streamHandle } from "hono/aws-lambda"
+import { OpenAPIHono } from "@hono/zod-openapi"
+import { handle } from "hono/aws-lambda"
 import { compress } from "hono/compress"
 import { cors } from "hono/cors"
 import { logger } from "hono/logger"
 
-export const routes = new Hono<HonoEnv>()
-	.use("*", async (c, next) => {
-		let body: unknown = undefined
-		try {
-			// Try to parse as JSON
-			body = await c.req.json()
-		} catch (e) {
-			try {
-				// Try to parse as text if not JSON
-				body = await c.req.text()
-			} catch (e2) {
-				body = undefined
-			}
-		}
-		console.log("[Request Body]", body)
-		await next()
-	})
+export const routes = new OpenAPIHono<HonoEnv>()
 	.use("*", cors())
 	.use("*", logger())
 	.use("*", compress())

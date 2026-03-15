@@ -37,6 +37,8 @@ import {
 	UpdateExamPaperSchema,
 	addQuestionToExamPaperHandler,
 	AddQuestionToExamPaperSchema,
+	analyzeHandwritingHandler,
+	AnalyzeHandwritingSchema,
 	// // Phase 2: Question Management
 	// listQuestionsByExamPaperHandler,
 	// ListQuestionsByExamPaperSchema,
@@ -346,6 +348,17 @@ server.registerTool(
 		inputSchema: AddQuestionToExamPaperSchema,
 	},
 	addQuestionToExamPaperHandler,
+)
+
+server.registerTool(
+	"analyze-handwriting",
+	{
+		title: "Analyse Handwriting",
+		description:
+			"Upload a JPEG image of handwritten text to receive a full transcript and bounding-box annotations highlighting words, lines, corrections, and other handwriting features using Gemini vision AI",
+		inputSchema: AnalyzeHandwritingSchema,
+	},
+	analyzeHandwritingHandler,
 )
 
 // // Phase 3: Session Management

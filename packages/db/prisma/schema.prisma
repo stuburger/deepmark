@@ -56,6 +56,20 @@ enum QuestionType {
   multiple_choice
 }
 
+enum ScanStatus {
+  pending
+  processing
+  ocr_complete
+  extracting
+  extracted
+  failed
+}
+
+enum AnswerSource {
+  typed
+  scanned
+}
+
 model User {
   id         String   @id @default(cuid())
   email      String?  @unique
@@ -74,8 +88,9 @@ model User {
   created_exam_sections  ExamSection[]
   created_question_banks QuestionBank[]
 
-  student_answers Answer[]      @relation("StudentAnswers")
-  exam_sessions   ExamSession[] @relation("Student")
+  student_answers   Answer[]          @relation("StudentAnswers")
+  exam_sessions     ExamSession[]     @relation("Student")
+  scan_submissions  ScanSubmission[]   @relation("StudentScans")
 
   @@map("users")
 }
@@ -100,6 +115,7 @@ model Question {
   answers                Answer[]
   exam_section_questions ExamSectionQuestion[]
   question_bank_items    QuestionBankItem[]
+  extracted_answers      ExtractedAnswer[]
 
   @@map("questions")
 }
@@ -121,8 +137,9 @@ model QuestionPart {
 
   created_by   User         @relation(fields: [created_by_id], references: [id])
   question     Question     @relation(fields: [question_id], references: [id])
-  mark_schemes MarkScheme[]
-  answers      Answer[]
+  mark_schemes      MarkScheme[]
+  answers          Answer[]
+  extracted_answers ExtractedAnswer[]
 
   @@map("question_parts")
 }
@@ -151,23 +168,25 @@ model MarkScheme {
 }
 
 model Answer {
-  id                 String        @id @default(cuid())
-  question_id        String
-  question_part_id   String?
-  student_id         String
-  student_answer     String
-  submitted_at       DateTime      @default(now())
-  marked_at          DateTime?
-  total_score        Int?
-  max_possible_score Int
-  marking_status     MarkingStatus @default(pending)
-  exam_session_id    String?
+  id                  String        @id @default(cuid())
+  question_id         String
+  question_part_id    String?
+  student_id          String
+  student_answer      String
+  submitted_at        DateTime      @default(now())
+  marked_at           DateTime?
+  total_score         Int?
+  max_possible_score  Int
+  marking_status      MarkingStatus @default(pending)
+  exam_session_id     String?
+  source              AnswerSource  @default(typed)
 
-  student         User            @relation("StudentAnswers", fields: [student_id], references: [id])
-  question        Question        @relation(fields: [question_id], references: [id])
-  question_part   QuestionPart?   @relation(fields: [question_part_id], references: [id])
-  exam_session    ExamSession?    @relation(fields: [exam_session_id], references: [id])
-  marking_results MarkingResult[]
+  student          User            @relation("StudentAnswers", fields: [student_id], references: [id])
+  question         Question        @relation(fields: [question_id], references: [id])
+  question_part    QuestionPart?   @relation(fields: [question_part_id], references: [id])
+  exam_session     ExamSession?    @relation(fields: [exam_session_id], references: [id])
+  marking_results  MarkingResult[]
+  extracted_answer ExtractedAnswer?
 
   @@map("answers")
 }
@@ -206,9 +225,10 @@ model ExamPaper {
   // { difficulty_level?, tier?, season? }
   metadata         Json?
 
-  created_by    User          @relation(fields: [created_by_id], references: [id])
-  sections      ExamSection[]
-  exam_sessions ExamSession[]
+  created_by       User              @relation(fields: [created_by_id], references: [id])
+  sections         ExamSection[]
+  exam_sessions    ExamSession[]
+  scan_submissions ScanSubmission[]
 
   @@map("exam_papers")
 }
@@ -259,11 +279,75 @@ model ExamSession {
   // { location?, invigilator?, special_requirements? }
   metadata           Json?
 
-  student    User      @relation("Student", fields: [student_id], references: [id])
-  exam_paper ExamPaper @relation(fields: [exam_paper_id], references: [id])
-  answers    Answer[]
+  student           User              @relation("Student", fields: [student_id], references: [id])
+  exam_paper        ExamPaper         @relation(fields: [exam_paper_id], references: [id])
+  answers           Answer[]
+  scan_submissions  ScanSubmission[]
 
   @@map("exam_sessions")
+}
+
+model ScanSubmission {
+  id               String     @id @default(cuid())
+  exam_session_id  String
+  student_id       String
+  exam_paper_id    String
+  status           ScanStatus @default(pending)
+  page_count       Int
+  uploaded_at      DateTime   @default(now())
+  processed_at     DateTime?
+  error_message    String?
+  // { source: "photo"|"scan", notes? }
+  metadata         Json?
+
+  exam_session ExamSession @relation(fields: [exam_session_id], references: [id])
+  student      User        @relation("StudentScans", fields: [student_id], references: [id])
+  exam_paper   ExamPaper   @relation(fields: [exam_paper_id], references: [id])
+  pages        ScanPage[]
+
+  @@map("scan_submissions")
+}
+
+model ScanPage {
+  id                 String     @id @default(cuid())
+  scan_submission_id String
+  page_number        Int
+  s3_key             String
+  s3_bucket          String
+  width_px           Int?
+  height_px          Int?
+  ocr_status         ScanStatus @default(pending)
+  // Full Gemini response: { transcript, features[], observations[] }
+  ocr_result         Json?
+  processed_at       DateTime?
+  error_message      String?
+
+  scan_submission   ScanSubmission    @relation(fields: [scan_submission_id], references: [id])
+  extracted_answers ExtractedAnswer[]
+
+  @@unique([scan_submission_id, page_number])
+  @@map("scan_pages")
+}
+
+model ExtractedAnswer {
+  id               String    @id @default(cuid())
+  scan_page_id     String
+  question_id      String
+  question_part_id String?
+  extracted_text   String
+  // [{ box_2d: [y,x,y,x], label, feature_type }]
+  bounding_boxes   Json
+  confidence       Float?
+  // Null until teacher confirms
+  answer_id        String?   @unique
+  created_at       DateTime  @default(now())
+
+  scan_page     ScanPage      @relation(fields: [scan_page_id], references: [id])
+  question      Question      @relation(fields: [question_id], references: [id])
+  question_part QuestionPart?  @relation(fields: [question_part_id], references: [id])
+  answer        Answer?       @relation(fields: [answer_id], references: [id])
+
+  @@map("extracted_answers")
 }
 
 model QuestionBank {

@@ -42,6 +42,18 @@ declare module "sst" {
       "type": "sst.sst.Secret"
       "value": string
     }
+    "ScansBucket": {
+      "type": "sst.aws.Bucket"
+      "name": string
+    }
+    "OcrQueue": {
+      "type": "sst.aws.Queue"
+      "url": string
+    }
+    "ExtractionQueue": {
+      "type": "sst.aws.Queue"
+      "url": string
+    }
   }
 }
 /// <reference path="sst-env.d.ts" />

@@ -10,3 +10,5 @@ build
 
 .turbo
 dist
+
+packages/db/src/generated/

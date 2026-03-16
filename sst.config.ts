@@ -12,8 +12,8 @@ export default $config({
     };
   },
   async run() {
-    const { interactions } = await import("./infra/api");
+    const { interactions, web } = await import("./infra")
 
-    return { interactions: interactions.url };
+    return { interactions: interactions.url, web: web.url }
   },
 });

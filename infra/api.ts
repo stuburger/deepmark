@@ -1,7 +1,9 @@
-import { neonPostgres } from "./database";
+import { neonPostgres } from "./database"
+import { scansBucket } from "./storage"
+import { ocrQueue } from "./queues"
 
-const openAiApiKey = new sst.Secret("OpenAiApiKey");
-const geminiApiKey = new sst.Secret("GeminiApiKey");
+const openAiApiKey = new sst.Secret("OpenAiApiKey")
+const geminiApiKey = new sst.Secret("GeminiApiKey")
 
 const authUrl = `https://auth.${$app.stage}.supalink.co`;
 const authUrlLink = new sst.Linkable("AuthUrl", {
@@ -27,7 +29,7 @@ api.route("$default", {
 	streaming: !$dev,
 	timeout: "30 seconds",
 	handler: "packages/backend/src/main.handler",
-	link: [neonPostgres, authUrlLink, openAiApiKey, geminiApiKey, api],
+	link: [neonPostgres, authUrlLink, openAiApiKey, geminiApiKey, scansBucket, ocrQueue, api],
 	environment: {
 		NODE_ENV: $dev ? "development" : "production",
 	},

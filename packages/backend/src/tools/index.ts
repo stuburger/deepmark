@@ -53,6 +53,15 @@ export { AddQuestionToExamPaperSchema } from "./exam-papers/add-question/schema"
 export { handler as analyzeHandwritingHandler } from "./handwriting/analyze/tool"
 export { AnalyzeHandwritingSchema } from "./handwriting/analyze/schema"
 
+export { handler as createScanSubmissionHandler } from "./scans/create-submission/tool"
+export { CreateScanSubmissionSchema } from "./scans/create-submission/schema"
+export { handler as getScanSubmissionHandler } from "./scans/get-submission/tool"
+export { GetScanSubmissionSchema } from "./scans/get-submission/schema"
+export { handler as reviewExtractedAnswersHandler } from "./scans/review-extracted/tool"
+export { ReviewExtractedAnswersSchema } from "./scans/review-extracted/schema"
+export { handler as confirmScanAnswersHandler } from "./scans/confirm-answers/tool"
+export { ConfirmScanAnswersSchema } from "./scans/confirm-answers/schema"
+
 // // Phase 3: Session Management
 // export { handler as startExamSessionHandler } from "./sessions/start-exam-session/tool";
 // export { StartExamSessionSchema } from "./sessions/start-exam-session/schema";

@@ -101,12 +101,18 @@ export async function handler(event: SqsEvent): Promise<{ batchItemFailures?: { 
 							where: { id: scanSubmissionId },
 							data: { status: ScanStatus.ocr_complete },
 						})
-						await sqs.send(
-							new SendMessageCommand({
-								QueueUrl: Resource.ExtractionQueue.url,
-								MessageBody: JSON.stringify({ scan_submission_id: scanSubmissionId }),
-							}),
-						)
+						const submission = await db.scanSubmission.findUnique({
+							where: { id: scanSubmissionId },
+							select: { exam_paper_id: true },
+						})
+						if (submission?.exam_paper_id) {
+							await sqs.send(
+								new SendMessageCommand({
+									QueueUrl: Resource.ExtractionQueue.url,
+									MessageBody: JSON.stringify({ scan_submission_id: scanSubmissionId }),
+								}),
+							)
+						}
 					}
 				} catch (err) {
 					const message = err instanceof Error ? err.message : String(err)

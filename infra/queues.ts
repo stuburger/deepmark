@@ -1,13 +1,14 @@
+import { geminiApiKey } from "./config"
 import { neonPostgres } from "./database"
 import { scansBucket } from "./storage"
-
-const geminiApiKey = new sst.Secret("GeminiApiKey")
 
 export const ocrQueue = new sst.aws.Queue("OcrQueue", {
 	visibilityTimeout: "5 minutes",
 })
 
-export const extractionQueue = new sst.aws.Queue("ExtractionQueue")
+export const extractionQueue = new sst.aws.Queue("ExtractionQueue", {
+	visibilityTimeout: "4 minutes",
+})
 
 scansBucket.notify({
 	notifications: [

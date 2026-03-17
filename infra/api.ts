@@ -1,28 +1,10 @@
 import { neonPostgres } from "./database"
 import { scansBucket } from "./storage"
 import { ocrQueue } from "./queues"
-
-const openAiApiKey = new sst.Secret("OpenAiApiKey")
-const geminiApiKey = new sst.Secret("GeminiApiKey")
-
-const authUrl = `https://auth.${$app.stage}.supalink.co`;
-const authUrlLink = new sst.Linkable("AuthUrl", {
-	properties: { url: authUrl },
-});
-
-const githubClientId = new sst.Secret("GithubClientId");
-const githubClientSecret = new sst.Secret("GithubClientSecret");
-
-export const auth = new sst.aws.Auth("Auth", {
-	issuer: {
-		handler: "packages/backend/src/auth.handler",
-		link: [neonPostgres, authUrlLink, githubClientId, githubClientSecret],
-	},
-	domain: `auth.${$app.stage}.supalink.co`,
-});
+import { auth, authUrlLink } from "./auth"
+import { geminiApiKey, openAiApiKey } from "./config"
 
 const api = new sst.aws.ApiGatewayV2("ApiGateway")
-
 
 api.route("$default", {
 	url: true,

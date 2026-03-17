@@ -79,7 +79,7 @@ export async function runOcr(
 		: "Identify individual words, lines, corrections, crossed-out text, punctuation, and any notable handwriting characteristics."
 
 	const response = await client.models.generateContent({
-		model: "gemini-2.0-flash",
+		model: "gemini-2.5-flash",
 		contents: [
 			{
 				role: "user",

@@ -3,6 +3,7 @@ import { Hono } from "hono"
 import { issuer } from "@openauthjs/openauth"
 import { createClient } from "@openauthjs/openauth/client"
 import { GithubProvider } from "@openauthjs/openauth/provider/github"
+import { GoogleProvider } from "@openauthjs/openauth/provider/google"
 import { MemoryStorage } from "@openauthjs/openauth/storage/memory"
 import { subjects } from "./subjects"
 import { z } from "zod"
@@ -39,6 +40,14 @@ const app = issuer({
 			clientSecret: Resource.GithubClientSecret.value,
 			scopes: ["email", "profile"],
 		}),
+		google: GoogleProvider({
+			clientID: Resource.GoogleClientId.value,
+			clientSecret: Resource.GoogleClientSecret.value,
+			scopes: ["email", "profile"],
+			query: {
+				prompt: "select_account",
+			},
+		}),
 	},
 	success: async (ctx, value) => {
 		console.log(value)
@@ -63,6 +72,31 @@ const app = issuer({
 						github_id: gh_user.id,
 						name: "Admin User",
 						email: gh_user.email,
+					},
+				})
+			}
+
+			return ctx.subject("user", {
+				userId: user.id,
+			})
+		}
+
+		if (value.provider === "google") {
+			const googleUser = await fetchGoogleUser(value.tokenset.access)
+
+			let user = await db.user.findFirst({
+				where: {
+					email: googleUser.email,
+				},
+			})
+
+			if (!user) {
+				user = await db.user.create({
+					data: {
+						role: "admin",
+						avatar_url: googleUser.avatar_url,
+						name: googleUser.login,
+						email: googleUser.email,
 					},
 				})
 			}
@@ -234,4 +268,33 @@ async function fetchGithubUser(accessToken: string): Promise<UserProfile> {
 		.parse(json)
 
 	return profileData
+}
+
+async function fetchGoogleUser(accessToken: string): Promise<UserProfile> {
+	const response = await fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
+		headers: {
+			Authorization: `Bearer ${accessToken}`,
+		},
+	})
+
+	if (!response.ok) {
+		throw new Error("Failed to fetch Google profile")
+	}
+
+	const json = await response.json()
+	const profileData = z
+		.object({
+			id: z.coerce.string(),
+			email: z.string(),
+			name: z.string(),
+			picture: z.string(),
+		})
+		.parse(json)
+
+	return {
+		id: profileData.id,
+		email: profileData.email,
+		login: profileData.name,
+		avatar_url: profileData.picture,
+	}
 }

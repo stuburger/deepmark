@@ -289,9 +289,9 @@ model ExamSession {
 
 model ScanSubmission {
   id               String     @id @default(cuid())
-  exam_session_id  String
+  exam_session_id  String?
   student_id       String
-  exam_paper_id    String
+  exam_paper_id    String?
   status           ScanStatus @default(pending)
   page_count       Int
   uploaded_at      DateTime   @default(now())
@@ -300,9 +300,9 @@ model ScanSubmission {
   // { source: "photo"|"scan", notes? }
   metadata         Json?
 
-  exam_session ExamSession @relation(fields: [exam_session_id], references: [id])
-  student      User        @relation("StudentScans", fields: [student_id], references: [id])
-  exam_paper   ExamPaper   @relation(fields: [exam_paper_id], references: [id])
+  exam_session ExamSession? @relation(fields: [exam_session_id], references: [id])
+  student      User         @relation("StudentScans", fields: [student_id], references: [id])
+  exam_paper   ExamPaper?   @relation(fields: [exam_paper_id], references: [id])
   pages        ScanPage[]
 
   @@map("scan_submissions")

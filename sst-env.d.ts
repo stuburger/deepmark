@@ -17,11 +17,27 @@ declare module "sst" {
       "type": "sst.sst.Linkable"
       "url": string
     }
+    "ExtractionQueue": {
+      "type": "sst.aws.Queue"
+      "url": string
+    }
+    "GeminiApiKey": {
+      "type": "sst.sst.Secret"
+      "value": string
+    }
     "GithubClientId": {
       "type": "sst.sst.Secret"
       "value": string
     }
     "GithubClientSecret": {
+      "type": "sst.sst.Secret"
+      "value": string
+    }
+    "GoogleClientId": {
+      "type": "sst.sst.Secret"
+      "value": string
+    }
+    "GoogleClientSecret": {
       "type": "sst.sst.Secret"
       "value": string
     }
@@ -34,24 +50,20 @@ declare module "sst" {
       "databaseUrl": string
       "type": "sst.sst.Linkable"
     }
-    "OpenAiApiKey": {
-      "type": "sst.sst.Secret"
-      "value": string
-    }
-    "GeminiApiKey": {
-      "type": "sst.sst.Secret"
-      "value": string
-    }
-    "ScansBucket": {
-      "type": "sst.aws.Bucket"
-      "name": string
-    }
     "OcrQueue": {
       "type": "sst.aws.Queue"
       "url": string
     }
-    "ExtractionQueue": {
-      "type": "sst.aws.Queue"
+    "OpenAiApiKey": {
+      "type": "sst.sst.Secret"
+      "value": string
+    }
+    "ScansBucket": {
+      "name": string
+      "type": "sst.aws.Bucket"
+    }
+    "Web": {
+      "type": "sst.aws.Nextjs"
       "url": string
     }
   }

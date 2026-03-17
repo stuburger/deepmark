@@ -21,6 +21,8 @@ export { UpdateMarkSchemeSchema } from "./mark-schemes/update/schema"
 
 export { handler as createTestDatasetHandler } from "./mark-schemes/create-test-dataset/tool"
 export { CreateTestDatasetSchema } from "./mark-schemes/create-test-dataset/schema"
+export { handler as testAndRefineMarkSchemeHandler } from "./mark-schemes/test-and-refine/tool"
+export { TestAndRefineMarkSchemeSchema } from "./mark-schemes/test-and-refine/schema"
 
 export { handler as answerQuestionHandler } from "./answers/create/tool"
 export { AnswerQuestionSchema } from "./answers/create/schema"
@@ -61,23 +63,8 @@ export { handler as reviewExtractedAnswersHandler } from "./scans/review-extract
 export { ReviewExtractedAnswersSchema } from "./scans/review-extracted/schema"
 export { handler as confirmScanAnswersHandler } from "./scans/confirm-answers/tool"
 export { ConfirmScanAnswersSchema } from "./scans/confirm-answers/schema"
-
-// // Phase 3: Session Management
-// export { handler as startExamSessionHandler } from "./sessions/start-exam-session/tool";
-// export { StartExamSessionSchema } from "./sessions/start-exam-session/schema";
-
-// export { handler as completeExamSessionHandler } from "./sessions/complete-exam-session/tool";
-// export { CompleteExamSessionSchema } from "./sessions/complete-exam-session/schema";
-
-// export { handler as getExamSessionByIdHandler } from "./sessions/get-exam-session-by-id/tool";
-// export { GetExamSessionByIdSchema } from "./sessions/get-exam-session-by-id/schema";
-
-// export { handler as listExamSessionsHandler } from "./sessions/list-exam-sessions/tool";
-// export { ListExamSessionsSchema } from "./sessions/list-exam-sessions/schema";
-
-// // Phase 4: Answer Management
-// export { handler as listAnswersByExamSessionHandler } from "./sessions/list-answers-by-exam-session/tool";
-// export { ListAnswersByExamSessionSchema } from "./sessions/list-answers-by-exam-session/schema";
+export { handler as retriggerPdfIngestionJobHandler } from "./pdf-ingestion/retrigger/tool"
+export { RetriggerPdfIngestionJobSchema } from "./pdf-ingestion/retrigger/schema"
 
 // export { handler as getExamPaperProgressHandler } from "./exam-papers/get-exam-paper-progress/tool";
 // export { GetExamPaperProgressSchema } from "./exam-papers/get-exam-paper-progress/schema";

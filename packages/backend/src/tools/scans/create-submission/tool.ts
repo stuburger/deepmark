@@ -9,23 +9,17 @@ const s3 = new S3Client({})
 const bucketName = Resource.ScansBucket.name
 
 export const handler = tool(CreateScanSubmissionSchema, async (args, extra) => {
-	const { exam_session_id, page_count, mime_type = "image/jpeg" } = args
+	const { exam_paper_id, page_count, mime_type = "image/jpeg" } = args
 	const userId = extra.authInfo.extra.userId
 
-	const session = await db.examSession.findUniqueOrThrow({
-		where: { id: exam_session_id },
-		include: { exam_paper: true },
+	await db.examPaper.findUniqueOrThrow({
+		where: { id: exam_paper_id },
 	})
-
-	if (session.student_id !== userId) {
-		throw new Error("You can only create scan submissions for your own exam session")
-	}
 
 	const submission = await db.scanSubmission.create({
 		data: {
-			exam_session_id,
-			student_id: session.student_id,
-			exam_paper_id: session.exam_paper_id,
+			student_id: userId,
+			exam_paper_id,
 			page_count,
 			status: "pending",
 		},

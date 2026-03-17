@@ -13,8 +13,16 @@ declare module "sst" {
       "type": "sst.aws.Auth"
       "url": string
     }
+    "AuthTable": {
+      "name": string
+      "type": "sst.aws.Dynamo"
+    }
     "AuthUrl": {
       "type": "sst.sst.Linkable"
+      "url": string
+    }
+    "ExemplarQueue": {
+      "type": "sst.aws.Queue"
       "url": string
     }
     "ExtractionQueue": {
@@ -44,6 +52,10 @@ declare module "sst" {
     "Interactions": {
       "name": string
       "type": "sst.aws.Function"
+      "url": string
+    }
+    "MarkSchemePdfQueue": {
+      "type": "sst.aws.Queue"
       "url": string
     }
     "NeonPostgres": {

@@ -1,10 +1,10 @@
 import { z } from "zod"
 
 export const CreateScanSubmissionSchema = {
-	exam_session_id: z
+	exam_paper_id: z
 		.string()
 		.min(1)
-		.describe("ID of the exam session this scan belongs to"),
+		.describe("ID of the exam paper this scan belongs to"),
 	page_count: z
 		.number()
 		.int()

@@ -4,7 +4,7 @@ import { issuer } from "@openauthjs/openauth"
 import { createClient } from "@openauthjs/openauth/client"
 import { GithubProvider } from "@openauthjs/openauth/provider/github"
 import { GoogleProvider } from "@openauthjs/openauth/provider/google"
-import { MemoryStorage } from "@openauthjs/openauth/storage/memory"
+import { DynamoStorage } from "@openauthjs/openauth/storage/dynamo"
 import { subjects } from "./subjects"
 import { z } from "zod"
 import { Resource } from "sst"
@@ -31,7 +31,9 @@ const db_map = new Map()
 
 const app = issuer({
 	subjects,
-	storage: MemoryStorage(),
+	storage: DynamoStorage({
+		table: Resource.AuthTable.name,
+	}),
 	// Remove after setting custom domain
 	allow: async () => true,
 	providers: {

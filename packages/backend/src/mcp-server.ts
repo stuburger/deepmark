@@ -14,8 +14,8 @@ import {
 	CreateMarkSchemeSchema,
 	updateMarkSchemeHandler,
 	UpdateMarkSchemeSchema,
-	// testAndRefineMarkSchemeHandler,
-	// TestAndRefineMarkSchemeSchema,
+	testAndRefineMarkSchemeHandler,
+	TestAndRefineMarkSchemeSchema,
 	createTestDatasetHandler,
 	CreateTestDatasetSchema,
 	answerQuestionHandler,
@@ -47,23 +47,14 @@ import {
 	ReviewExtractedAnswersSchema,
 	confirmScanAnswersHandler,
 	ConfirmScanAnswersSchema,
+	retriggerPdfIngestionJobHandler,
+	RetriggerPdfIngestionJobSchema,
 	// // Phase 2: Question Management
 	// listQuestionsByExamPaperHandler,
 	// ListQuestionsByExamPaperSchema,
 	// reorderQuestionsInExamPaperHandler,
 	// ReorderQuestionsInExamPaperSchema,
-	// // Phase 3: Session Management
-	// startExamSessionHandler,
-	// StartExamSessionSchema,
-	// completeExamSessionHandler,
-	// CompleteExamSessionSchema,
-	// getExamSessionByIdHandler,
-	// GetExamSessionByIdSchema,
-	// listExamSessionsHandler,
-	// ListExamSessionsSchema,
 	// // Phase 4: Answer Management
-	// listAnswersByExamSessionHandler,
-	// ListAnswersByExamSessionSchema,
 	// getExamPaperProgressHandler,
 	// GetExamPaperProgressSchema,
 	// // Phase 5: Analytics
@@ -240,16 +231,16 @@ server.registerTool(
 	updateMarkSchemeHandler,
 )
 
-// server.registerTool(
-// 	"test-and-refine-mark-scheme",
-// 	{
-// 		title: "Test and Refine Mark Scheme",
-// 		description:
-// 			"Automatically test a mark scheme with known answers and refine it using LLM to improve accuracy",
-// 		inputSchema: TestAndRefineMarkSchemeSchema,
-// 	},
-// 	testAndRefineMarkSchemeHandler,
-// )
+server.registerTool(
+	"test-and-refine-mark-scheme",
+	{
+		title: "Test and Refine Mark Scheme",
+		description:
+			"Run the adversarial loop: student agent targets specific scores, grader marks answers. Persists MarkSchemeTestRun records and updates refined_at. Use for mark scheme calibration.",
+		inputSchema: TestAndRefineMarkSchemeSchema,
+	},
+	testAndRefineMarkSchemeHandler,
+)
 
 server.registerTool(
 	"create-test-dataset",
@@ -413,59 +404,16 @@ server.registerTool(
 	confirmScanAnswersHandler,
 )
 
-// // Phase 3: Session Management
-// server.registerTool(
-//   "start-exam-session",
-//   {
-//     title: "Start Exam Session",
-//     description:
-//       "Start a new exam session for a student taking a specific exam paper",
-//     inputSchema: StartExamSessionSchema,
-//   },
-//   startExamSessionHandler
-// );
-
-// server.registerTool(
-//   "complete-exam-session",
-//   {
-//     title: "Complete Exam Session",
-//     description: "Complete an exam session with final score and status",
-//     inputSchema: CompleteExamSessionSchema,
-//   },
-//   completeExamSessionHandler
-// );
-
-// server.registerTool(
-//   "get-exam-session-by-id",
-//   {
-//     title: "Get Exam Session by ID",
-//     description:
-//       "Retrieve a specific exam session by its ID with calculated metrics",
-//     inputSchema: GetExamSessionByIdSchema,
-//   },
-//   getExamSessionByIdHandler
-// );
-
-// server.registerTool(
-//   "list-exam-sessions",
-//   {
-//     title: "List Exam Sessions",
-//     description: "List exam sessions with optional filtering and pagination",
-//     inputSchema: ListExamSessionsSchema,
-//   },
-//   listExamSessionsHandler
-// );
-
-// // Phase 4: Answer Management
-// server.registerTool(
-//   "list-answers-by-exam-session",
-//   {
-//     title: "List Answers by Exam Session",
-//     description: "List all answers submitted in a specific exam session",
-//     inputSchema: ListAnswersByExamSessionSchema,
-//   },
-//   listAnswersByExamSessionHandler
-// );
+server.registerTool(
+	"retrigger-pdf-ingestion-job",
+	{
+		title: "Retrigger PDF Ingestion Job",
+		description:
+			"Re-queue a failed or completed PDF ingestion job for processing. Use to retry after failure or to re-run the pipeline.",
+		inputSchema: RetriggerPdfIngestionJobSchema,
+	},
+	retriggerPdfIngestionJobHandler,
+)
 
 // server.registerTool(
 //   "get-exam-paper-progress",

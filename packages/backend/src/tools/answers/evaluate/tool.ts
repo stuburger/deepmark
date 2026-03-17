@@ -3,19 +3,27 @@ import { createOpenAI } from "@ai-sdk/openai"
 import { Resource } from "sst"
 import { tool } from "@/tools/shared/tool-utils"
 import { db } from "@/db"
-import type { MarkPointResult } from "@/generated/prisma"
+import type { MarkScheme } from "@mcp-gcse/db"
 
 /** Mark scheme row from DB (mark_points is JsonValue at runtime but typed as unknown for assignment). */
-type MarkSchemeRow = Omit<
-	import("@/generated/prisma").MarkScheme,
-	"mark_points"
-> & { mark_points: unknown }
+type MarkSchemeRow = Omit<MarkScheme, "mark_points"> & { mark_points: unknown }
+
+/** Shape of one entry in marking_results.mark_points_results */
+type MarkPointResultItem = {
+	point_number: number
+	awarded: boolean
+	reasoning: string
+	expected_criteria: string
+	student_covered: string
+}
 import {
 	DeterministicMarker,
 	Grader,
+	LevelOfResponseMarker,
 	LlmMarker,
 	MarkerOrchestrator,
 	parseMarkPointsFromPrisma,
+	parseMarkingRulesFromPrisma,
 	type QuestionWithMarkScheme,
 } from "@mcp-gcse/shared"
 
@@ -30,6 +38,7 @@ const grader = new Grader(openai("gpt-4o"), {
 
 const orchestrator = new MarkerOrchestrator([
 	new DeterministicMarker(),
+	new LevelOfResponseMarker(grader),
 	new LlmMarker(grader),
 ])
 
@@ -73,6 +82,8 @@ function buildQuestionWithMarkScheme(
 		points_total: number
 		correct_option_labels: string[]
 		mark_points: unknown
+		marking_method?: string
+		marking_rules?: unknown
 	},
 	questionText: string,
 ): QuestionWithMarkScheme {
@@ -99,6 +110,13 @@ function buildQuestionWithMarkScheme(
 				? markScheme.correct_option_labels
 				: undefined,
 		availableOptions,
+		markingMethod:
+			markScheme.marking_method === "deterministic" ||
+			markScheme.marking_method === "point_based" ||
+			markScheme.marking_method === "level_of_response"
+				? markScheme.marking_method
+				: undefined,
+		markingRules: parseMarkingRulesFromPrisma(markScheme.marking_rules),
 	}
 }
 
@@ -215,6 +233,8 @@ export const handler = tool(EvaluateAnswerSchema, async (args, extra) => {
 			points_total: markScheme.points_total,
 			correct_option_labels: markScheme.correct_option_labels,
 			mark_points: markScheme.mark_points,
+			marking_method: markScheme.marking_method,
+			marking_rules: markScheme.marking_rules,
 		},
 		questionText,
 	)
@@ -225,10 +245,13 @@ export const handler = tool(EvaluateAnswerSchema, async (args, extra) => {
 	)
 
 	const markingResult: {
-		mark_points_results: MarkPointResult[]
+		mark_points_results: MarkPointResultItem[]
 		total_score: number
 		llm_reasoning: string
 		feedback_summary: string
+		level_awarded?: number
+		why_not_next_level?: string
+		cap_applied?: string
 	} = {
 		mark_points_results: grade.markPointsResults.map((mp) => ({
 			point_number: mp.pointNumber,
@@ -240,6 +263,9 @@ export const handler = tool(EvaluateAnswerSchema, async (args, extra) => {
 		total_score: grade.totalScore,
 		llm_reasoning: grade.llmReasoning,
 		feedback_summary: grade.feedbackSummary,
+		level_awarded: grade.levelAwarded,
+		why_not_next_level: grade.whyNotNextLevel,
+		cap_applied: grade.capApplied,
 	}
 
 	console.log("[evaluate-answer] Marking completed", {
@@ -282,6 +308,13 @@ export const handler = tool(EvaluateAnswerSchema, async (args, extra) => {
 ${questionPart ? `📋 **Part ${questionPart.part_label}**: ${questionPart.text.slice(0, 100)}${questionPart.text.length > 100 ? "..." : ""}` : ""}
 
 📊 **Score**: ${markingResult.total_score}/${maxPossibleScore} marks
+${
+	markingResult.level_awarded != null
+		? `
+
+📐 **Level of Response**: Level ${markingResult.level_awarded} awarded${markingResult.why_not_next_level ? `\n- Why not next level: ${markingResult.why_not_next_level}` : ""}${markingResult.cap_applied ? `\n- Cap applied: ${markingResult.cap_applied}` : ""}`
+		: ""
+}
 
 ${
 	testingAnalysis

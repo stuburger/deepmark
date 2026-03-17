@@ -18,6 +18,36 @@ export interface GcseMarkPoint {
 }
 
 /**
+ * Level-of-response level descriptor (stored in marking_rules.levels).
+ */
+export interface MarkingRulesLevel {
+  level: number;
+  mark_range: [number, number];
+  descriptor: string;
+  ao_requirements?: string[];
+}
+
+/**
+ * Level-of-response cap (stored in marking_rules.caps).
+ */
+export interface MarkingRulesCap {
+  condition: string;
+  max_level?: number;
+  max_mark?: number;
+  reason: string;
+}
+
+/**
+ * Marking rules for level_of_response (stored in MarkScheme.marking_rules Json).
+ */
+export interface MarkingRules {
+  command_word?: string;
+  items_required?: number;
+  levels: MarkingRulesLevel[];
+  caps?: MarkingRulesCap[];
+}
+
+/**
  * A question with its mark scheme, adapted for GCSE (written | multiple_choice).
  */
 export interface QuestionWithMarkScheme {
@@ -33,6 +63,10 @@ export interface QuestionWithMarkScheme {
   correctOptionLabels?: string[];
   /** For MCQ: available options for feedback */
   availableOptions?: Array<{ optionLabel: string; optionText: string }>;
+  /** How to mark: deterministic (MCQ), point_based, or level_of_response */
+  markingMethod?: "deterministic" | "point_based" | "level_of_response";
+  /** For level_of_response: levels, caps, command_word, items_required */
+  markingRules?: MarkingRules | null;
 }
 
 /**
@@ -79,6 +113,36 @@ export function parseMarkPointsFromPrisma(json: unknown): GcseMarkPoint[] {
   }));
 }
 
+const markingRulesLevelSchema = z.object({
+  level: z.number(),
+  mark_range: z.tuple([z.number(), z.number()]),
+  descriptor: z.string(),
+  ao_requirements: z.array(z.string()).optional(),
+});
+
+const markingRulesCapSchema = z.object({
+  condition: z.string(),
+  max_level: z.number().optional(),
+  max_mark: z.number().optional(),
+  reason: z.string(),
+});
+
+const markingRulesPrismaSchema = z.object({
+  command_word: z.string().optional(),
+  items_required: z.number().optional(),
+  levels: z.array(markingRulesLevelSchema),
+  caps: z.array(markingRulesCapSchema).optional(),
+});
+
+/**
+ * Parse Prisma marking_rules JSON into MarkingRules, or null if invalid/empty.
+ */
+export function parseMarkingRulesFromPrisma(json: unknown): MarkingRules | null {
+  if (json == null) return null;
+  const result = markingRulesPrismaSchema.safeParse(json);
+  return result.success ? result.data : null;
+}
+
 // ============================================
 // SCHEMAS (LLM output)
 // ============================================
@@ -119,6 +183,44 @@ const QuestionGradeSchema = z.object({
     ),
 });
 
+/** Schema for Level-of-Response grading output (levelAwarded, whyNotNextLevel, capApplied required). */
+export const LoRQuestionGradeSchema = z.object({
+  questionId: z.string().describe("The ID of the question being graded"),
+  markPointsResults: z.array(MarkPointResultSchema),
+  totalScore: z.number(),
+  llmReasoning: z
+    .string()
+    .describe("Chain-of-thought reasoning for the overall marking process"),
+  feedbackSummary: z
+    .string()
+    .describe("Overall feedback summary for the student"),
+  correctAnswer: z
+    .string()
+    .describe(
+      "The correct/model answer for this question - what the student should have answered",
+    ),
+  relevantLearningSnippet: z
+    .string()
+    .describe(
+      "A relevant snippet from the learning material that explains or supports the correct answer. Empty if not applicable.",
+    ),
+  levelAwarded: z
+    .number()
+    .int()
+    .min(0)
+    .describe("The level (1-based) awarded for this response"),
+  whyNotNextLevel: z
+    .string()
+    .describe(
+      "Brief explanation of why the next level was not reached (or empty if full marks)",
+    ),
+  capApplied: z
+    .string()
+    .describe(
+      "If a cap limited the mark, describe it; otherwise empty string",
+    ),
+});
+
 const BatchGradeSchema = z.object({
   questionGrades: z.array(QuestionGradeSchema),
 });
@@ -130,6 +232,9 @@ export type QuestionGrade = QuestionGradeResult & {
   maxPossibleScore: number;
   scorePercentage: number;
   passed: boolean;
+  levelAwarded?: number;
+  whyNotNextLevel?: string;
+  capApplied?: string;
 };
 
 export interface AssessmentGrade {
@@ -275,6 +380,82 @@ Analyze the answer systematically. For each mark point provide reasoning, expect
 </Instructions>`;
   }
 
+  private buildLoRGradingPrompt(
+    question: QuestionWithMarkScheme,
+    answer: string,
+    questionNumber?: number,
+    totalQuestions?: number,
+    learningContent?: LearningContentItem[],
+  ): string {
+    const rules = question.markingRules;
+    if (!rules?.levels?.length) {
+      throw new Error(
+        `LevelOfResponse marking requires markingRules.levels for question ${question.id}`,
+      );
+    }
+
+    const levelSections = rules.levels
+      .map(
+        (l) =>
+          `Level ${l.level} (${l.mark_range[0]}-${l.mark_range[1]} marks): ${l.descriptor}${l.ao_requirements?.length ? `\n  AO requirements: ${l.ao_requirements.join("; ")}` : ""}`,
+      )
+      .join("\n\n");
+
+    const capsSection =
+      rules.caps && rules.caps.length > 0
+        ? `\n<Caps>\n${rules.caps
+            .map(
+              (c) =>
+                `- ${c.condition}: max_level=${c.max_level ?? "—"}, max_mark=${c.max_mark ?? "—"}. ${c.reason}`,
+            )
+            .join("\n")}\n</Caps>`
+        : "";
+
+    const commandWordNote = rules.command_word
+      ? `\nCommand word: ${rules.command_word}.`
+      : "";
+    const itemsNote =
+      rules.items_required != null
+        ? ` Number of items required: ${rules.items_required}.`
+        : "";
+
+    const learningSection =
+      learningContent && learningContent.length > 0
+        ? `<LearningMaterial>\n${learningContent.map((lc) => `## ${lc.title}\n${lc.content}`).join("\n\n---\n\n")}\n</LearningMaterial>\n\n`
+        : "";
+
+    const parsingNote =
+      questionNumber && totalQuestions && totalQuestions > 1
+        ? `\n<ParsingInstructions>This is question ${questionNumber} of ${totalQuestions}. Extract the answer for THIS question from the student's response before marking.</ParsingInstructions>\n`
+        : "";
+
+    return `Mark this answer using Level of Response (AQA-style). First decide which level the response reaches, then award a mark within that level's range. Quote short snippets from the student's text as evidence; do not infer application not present in the text.
+
+${learningSection}<Topic>\n${question.topic}\n</Topic>
+
+<Question>\nQuestion ID: ${question.id}\n\n${question.questionText}\n</Question>
+
+<MarkScheme>\n${question.rubric}${question.guidance ? `\nGuidance: ${question.guidance}` : ""}\n\nTotal marks available: ${question.totalPoints}.${commandWordNote}${itemsNote}
+</MarkScheme>
+
+<LevelDescriptors>
+${levelSections}
+</LevelDescriptors>${capsSection}
+
+<StudentAnswer>\n${answer || "[No answer provided]"}\n</StudentAnswer>${parsingNote}
+
+<MarkingRules>
+- Decide the highest level the response demonstrates (use level descriptors and evidence from the text).
+- Award a mark within that level's range. If a cap applies, do not exceed the cap.
+- Provide levelAwarded (the level number, 1-based), whyNotNextLevel (why the next level was not reached, or empty if full marks), and capApplied (if a cap limited the mark, describe it; otherwise empty string).
+- Evidence: quote short snippets; do not infer application not present in the text.
+</MarkingRules>
+
+<Instructions>
+Output valid JSON matching the schema. Include questionId, markPointsResults, totalScore, llmReasoning, feedbackSummary, correctAnswer, relevantLearningSnippet, levelAwarded, whyNotNextLevel, and capApplied.
+</Instructions>`;
+  }
+
   async gradeResponses(input: GradeResponsesInput): Promise<AssessmentGrade> {
     const { questions, responses, learningContent = [] } = input;
     const prompt = this.buildBatchGradingPrompt(
@@ -411,6 +592,61 @@ Analyze the answer systematically. For each mark point provide reasoning, expect
       maxPossibleScore,
       scorePercentage,
       passed,
+    };
+  }
+
+  /**
+   * Grade a single response using Level-of-Response marking. Uses markingRules.levels and caps.
+   * Returns QuestionGrade with levelAwarded, whyNotNextLevel, capApplied.
+   */
+  async gradeSingleResponseLoR(
+    input: GradeSingleResponseInput,
+  ): Promise<QuestionGrade> {
+    const {
+      question,
+      answer,
+      questionNumber,
+      totalQuestions,
+      learningContent,
+    } = input;
+    const prompt = this.buildLoRGradingPrompt(
+      question,
+      answer,
+      questionNumber,
+      totalQuestions,
+      learningContent,
+    );
+
+    const { output } = await generateText({
+      model: this.model,
+      messages: [
+        { role: "system", content: this.systemPrompt },
+        { role: "user", content: prompt },
+      ],
+      output: Output.object({
+        schema: LoRQuestionGradeSchema,
+      }),
+    });
+
+    const aiGrade = output;
+    const maxPossibleScore = question.totalPoints;
+    const totalScore = Math.min(aiGrade.totalScore, maxPossibleScore);
+    const scorePercentage =
+      maxPossibleScore > 0
+        ? Math.round((totalScore / maxPossibleScore) * 100)
+        : 0;
+    const passed = totalScore > 0;
+
+    return {
+      ...aiGrade,
+      questionId: question.id,
+      totalScore,
+      maxPossibleScore,
+      scorePercentage,
+      passed,
+      levelAwarded: aiGrade.levelAwarded,
+      whyNotNextLevel: aiGrade.whyNotNextLevel,
+      capApplied: aiGrade.capApplied,
     };
   }
 }

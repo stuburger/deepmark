@@ -1,4 +1,4 @@
-import { geminiApiKey } from "./config"
+import { geminiApiKey, openAiApiKey } from "./config"
 import { neonPostgres } from "./database"
 import { scansBucket } from "./storage"
 
@@ -10,6 +10,14 @@ export const extractionQueue = new sst.aws.Queue("ExtractionQueue", {
 	visibilityTimeout: "4 minutes",
 })
 
+export const markSchemePdfQueue = new sst.aws.Queue("MarkSchemePdfQueue", {
+	visibilityTimeout: "10 minutes",
+})
+
+export const exemplarQueue = new sst.aws.Queue("ExemplarQueue", {
+	visibilityTimeout: "10 minutes",
+})
+
 scansBucket.notify({
 	notifications: [
 		{
@@ -17,6 +25,20 @@ scansBucket.notify({
 			queue: ocrQueue,
 			events: ["s3:ObjectCreated:*"],
 			filterPrefix: "scans/",
+		},
+		{
+			name: "MarkSchemePdfTrigger",
+			queue: markSchemePdfQueue,
+			events: ["s3:ObjectCreated:*"],
+			filterPrefix: "pdfs/mark-schemes/",
+			filterSuffix: ".pdf",
+		},
+		{
+			name: "ExemplarTrigger",
+			queue: exemplarQueue,
+			events: ["s3:ObjectCreated:*"],
+			filterPrefix: "pdfs/exemplars/",
+			filterSuffix: ".pdf",
 		},
 	],
 })
@@ -32,4 +54,18 @@ extractionQueue.subscribe({
 	handler: "packages/backend/src/processors/extract-answers.handler",
 	link: [neonPostgres, geminiApiKey],
 	timeout: "3 minutes",
+})
+
+markSchemePdfQueue.subscribe({
+	handler: "packages/backend/src/processors/mark-scheme-pdf.handler",
+	link: [neonPostgres, geminiApiKey, openAiApiKey, scansBucket],
+	timeout: "8 minutes",
+	memory: "1 GB",
+})
+
+exemplarQueue.subscribe({
+	handler: "packages/backend/src/processors/exemplar-pdf.handler",
+	link: [neonPostgres, geminiApiKey, openAiApiKey, scansBucket],
+	timeout: "8 minutes",
+	memory: "1 GB",
 })

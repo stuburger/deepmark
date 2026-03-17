@@ -36,12 +36,6 @@ enum MarkingStatus {
   failed
 }
 
-enum ExamSessionStatus {
-  in_progress
-  completed
-  abandoned
-}
-
 enum TierLevel {
   foundation
   higher
@@ -94,12 +88,6 @@ type ExamPaperMetadata {
   season           String? // summer | autumn | winter
 }
 
-type ExamSessionMetadata {
-  location             String?
-  invigilator          String?
-  special_requirements String[]
-}
-
 // Main models
 model User {
   id         String   @id @default(auto()) @map("_id") @db.ObjectId
@@ -122,7 +110,6 @@ model User {
 
   // Student relations (these need names because multiple User relations exist)
   student_answers Answer[]      @relation("StudentAnswers")
-  exam_sessions   ExamSession[] @relation("Student")
 
   @@map("users")
 }
@@ -208,13 +195,11 @@ model Answer {
   total_score        Int?
   max_possible_score Int // required
   marking_status     MarkingStatus @default(pending)
-  exam_session_id    String?       @db.ObjectId // optional - for grouping answers from same exam session
 
   // Relations
   student         User            @relation("StudentAnswers", fields: [student_id], references: [id])
   question        Question        @relation(fields: [question_id], references: [id])
   question_part   QuestionPart?   @relation(fields: [question_part_id], references: [id])
-  exam_session    ExamSession?    @relation(fields: [exam_session_id], references: [id])
   marking_results MarkingResult[]
 
   @@map("answers")
@@ -256,7 +241,6 @@ model ExamPaper {
   // Relations
   created_by    User          @relation(fields: [created_by_id], references: [id])
   sections      ExamSection[]
-  exam_sessions ExamSession[]
 
   @@map("exam_papers")
 }
@@ -295,25 +279,6 @@ model ExamSectionQuestion {
   @@unique([exam_section_id, question_id]) // Prevent duplicate question in same section
   @@unique([exam_section_id, order]) // Prevent duplicate order in same section
   @@map("exam_section_questions")
-}
-
-model ExamSession {
-  id                 String               @id @default(auto()) @map("_id") @db.ObjectId
-  exam_paper_id      String               @db.ObjectId
-  student_id         String               @db.ObjectId
-  started_at         DateTime             @default(now())
-  completed_at       DateTime?
-  status             ExamSessionStatus    @default(in_progress)
-  total_score        Int?
-  max_possible_score Int
-  metadata           ExamSessionMetadata? // optional metadata
-
-  // Relations
-  student    User      @relation("Student", fields: [student_id], references: [id])
-  exam_paper ExamPaper @relation(fields: [exam_paper_id], references: [id])
-  answers    Answer[]
-
-  @@map("exam_sessions")
 }
 
 model QuestionBank {

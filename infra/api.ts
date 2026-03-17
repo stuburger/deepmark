@@ -1,6 +1,6 @@
 import { neonPostgres } from "./database"
 import { scansBucket } from "./storage"
-import { ocrQueue } from "./queues"
+import { ocrQueue, markSchemePdfQueue, exemplarQueue } from "./queues"
 import { auth, authUrlLink } from "./auth"
 import { geminiApiKey, openAiApiKey } from "./config"
 
@@ -11,7 +11,7 @@ api.route("$default", {
 	streaming: !$dev,
 	timeout: "30 seconds",
 	handler: "packages/backend/src/main.handler",
-	link: [neonPostgres, authUrlLink, openAiApiKey, geminiApiKey, scansBucket, ocrQueue, api],
+	link: [neonPostgres, authUrlLink, openAiApiKey, geminiApiKey, scansBucket, ocrQueue, markSchemePdfQueue, exemplarQueue, api],
 	environment: {
 		NODE_ENV: $dev ? "development" : "production",
 	},

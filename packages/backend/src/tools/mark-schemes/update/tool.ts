@@ -1,12 +1,16 @@
 import { UpdateMarkSchemeSchema } from "./schema"
 import { tool } from "@/tools/shared/tool-utils"
 import { db } from "@/db"
-import type { MarkScheme } from "@/generated/prisma"
+import type { MarkScheme } from "@mcp-gcse/db"
 
 export const handler = tool(UpdateMarkSchemeSchema, async (args) => {
-	const { id, points_total, mark_points } = args
+	const { id, points_total, mark_points, marking_method, marking_rules } = args
 
-	console.log("[update-mark-scheme] Handler invoked", { id, points_total })
+	console.log("[update-mark-scheme] Handler invoked", {
+		id,
+		points_total,
+		marking_method,
+	})
 
 	// Check if the mark scheme exists
 	const mark_scheme = await db.markScheme.findUniqueOrThrow({
@@ -29,61 +33,65 @@ export const handler = tool(UpdateMarkSchemeSchema, async (args) => {
 		updateData.mark_points = mark_points
 	}
 
+	if (marking_method !== undefined) {
+		updateData.marking_method = marking_method
+	}
+
+	if (marking_rules !== undefined) {
+		updateData.marking_rules = marking_rules
+	}
+
+	const effectiveMethod =
+		marking_method ?? mark_scheme.marking_method ?? "point_based"
+	const effectivePointsTotal = points_total ?? mark_scheme.points_total
+	const effectiveMarkPoints = mark_points ?? (mark_scheme.mark_points as typeof mark_points)
+
 	console.log("[update-mark-scheme] Validating update data", {
 		id,
 		points_total,
 		mark_pointsLength: mark_points?.length,
+		marking_method: effectiveMethod,
 	})
 
-	// Validate points consistency if both fields are being updated
-	if (points_total !== undefined && mark_points !== undefined) {
-		// Validate that mark_points length matches points_total
-		if (mark_points.length !== points_total) {
-			console.log("[update-mark-scheme] Validation error: points mismatch", {
-				markPointsLength: mark_points.length,
-				pointsTotal: points_total,
-			})
-
-			throw new Error(
-				`Validation error: Number of mark points (${mark_points.length}) does not match points total (${points_total}).`,
-			)
+	// Method-aware validation
+	if (effectiveMethod === "point_based") {
+		// Point-based: each mark point is 1 point; count must match total
+		if (effectiveMarkPoints && Array.isArray(effectiveMarkPoints)) {
+			if (effectiveMarkPoints.length !== effectivePointsTotal) {
+				throw new Error(
+					`Validation error (point_based): Number of mark points (${effectiveMarkPoints.length}) does not match points total (${effectivePointsTotal}).`,
+				)
+			}
+			const invalidPoints = effectiveMarkPoints.filter((point) => point.points !== 1)
+			if (invalidPoints.length > 0) {
+				throw new Error(
+					`Validation error (point_based): All mark points must have points value of 1. Found ${invalidPoints.length} invalid.`,
+				)
+			}
+		} else if (points_total !== undefined && mark_points === undefined) {
+			const existing = mark_scheme.mark_points
+			const len = Array.isArray(existing) ? existing.length : 0
+			if (points_total !== len) {
+				throw new Error(
+					`Validation error (point_based): Points total (${points_total}) does not match existing number of mark points (${len}).`,
+				)
+			}
 		}
-
-		// Validate that all mark points have points value of 1
-		const invalidPoints = mark_points.filter((point) => point.points !== 1)
-
-		if (invalidPoints.length > 0) {
-			throw new Error(
-				`Validation error: All mark points must have a points value of 1. Found ${invalidPoints.length} invalid mark points.`,
+	} else if (effectiveMethod === "level_of_response") {
+		// LoR: mark_points can represent levels; total can come from highest mark_range
+		if (effectiveMarkPoints && Array.isArray(effectiveMarkPoints)) {
+			const maxMark = effectiveMarkPoints.reduce(
+				(max, p) => Math.max(max, typeof p.points === "number" ? p.points : 0),
+				0,
 			)
-		}
-	}
-
-	// If only mark_points is being updated, validate against existing points_total
-	if (mark_points !== undefined && points_total === undefined) {
-		if (mark_points.length !== mark_scheme.points_total) {
-			throw new Error(
-				`Validation error: Number of mark points (${mark_points.length}) does not match existing points total (${mark_scheme.points_total}).`,
-			)
-		}
-
-		// Validate that all mark points have points value of 1
-		const invalidPoints = mark_points.filter((point) => point.points !== 1)
-		if (invalidPoints.length > 0) {
-			throw new Error(
-				`Validation error: All mark points must have a points value of 1. Found ${invalidPoints.length} invalid mark points.`,
-			)
+			if (points_total !== undefined && points_total < maxMark) {
+				throw new Error(
+					`Validation error (level_of_response): points_total (${points_total}) should be at least the maximum mark from mark points (${maxMark}).`,
+				)
+			}
 		}
 	}
-
-	// If only points_total is being updated, validate against existing mark_points
-	if (points_total !== undefined && mark_points === undefined) {
-		if (points_total !== mark_scheme.mark_points.length) {
-			throw new Error(
-				`Validation error: Points total (${points_total}) does not match existing number of mark points (${mark_scheme.mark_points.length}).`,
-			)
-		}
-	}
+	// deterministic: no mark_points required; skip strict validation
 
 	console.log("[update-mark-scheme] Updating mark scheme", { id, updateData })
 
@@ -105,5 +113,5 @@ Updated Fields: ${Object.keys(updateData)
 		.join(", ")}
 Question ID: ${updatedMarkScheme.question_id}
 Total Points: ${updatedMarkScheme.points_total}
-Number of Mark Points: ${updatedMarkScheme.mark_points.length}`
+Number of Mark Points: ${Array.isArray(updatedMarkScheme.mark_points) ? updatedMarkScheme.mark_points.length : 0}`
 })

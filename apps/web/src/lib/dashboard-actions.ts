@@ -1,0 +1,274 @@
+"use server"
+
+import { createPrismaClient } from "@mcp-gcse/db"
+import { Resource } from "sst"
+
+const db = createPrismaClient(Resource.NeonPostgres.databaseUrl)
+
+export type DashboardStats = {
+	totalUsers: number
+	totalQuestions: number
+	totalExamPapers: number
+	totalQuestionBanks: number
+	pendingAnswers: number
+	completedAnswers: number
+	failedAnswers: number
+	totalScanSubmissions: number
+	pendingScanSubmissions: number
+}
+
+export type MarkingStatusBreakdown = {
+	status: string
+	count: number
+}
+
+export type QuestionsBySubject = {
+	subject: string
+	count: number
+}
+
+export type UsersByRole = {
+	role: string
+	count: number
+}
+
+export type RecentScanSubmission = {
+	id: string
+	studentName: string | null
+	studentEmail: string | null
+	status: string
+	pageCount: number
+	uploadedAt: Date
+	processedAt: Date | null
+	errorMessage: string | null
+}
+
+export type DashboardData = {
+	stats: DashboardStats
+	markingStatusBreakdown: MarkingStatusBreakdown[]
+	questionsBySubject: QuestionsBySubject[]
+	usersByRole: UsersByRole[]
+	recentScanSubmissions: RecentScanSubmission[]
+}
+
+export type QuestionListItem = {
+	id: string
+	text: string
+	topic: string
+	subject: string
+	points: number | null
+	difficulty_level: string | null
+	question_type: string
+	created_at: Date
+	_count: {
+		question_parts: number
+		mark_schemes: number
+		answers: number
+	}
+}
+
+export type ListQuestionsResult =
+	| { ok: true; questions: QuestionListItem[] }
+	| { ok: false; error: string }
+
+export async function listQuestions(): Promise<ListQuestionsResult> {
+	try {
+		const questions = await db.question.findMany({
+			orderBy: { created_at: "desc" },
+			select: {
+				id: true,
+				text: true,
+				topic: true,
+				subject: true,
+				points: true,
+				difficulty_level: true,
+				question_type: true,
+				created_at: true,
+				_count: {
+					select: {
+						question_parts: true,
+						mark_schemes: true,
+						answers: true,
+					},
+				},
+			},
+		})
+		return { ok: true, questions }
+	} catch {
+		return { ok: false, error: "Failed to load questions" }
+	}
+}
+
+export type ExamPaperListItem = {
+	id: string
+	title: string
+	subject: string
+	exam_board: string | null
+	year: number
+	paper_number: number | null
+	total_marks: number
+	duration_minutes: number
+	is_active: boolean
+	created_at: Date
+	_count: {
+		sections: number
+		scan_submissions: number
+	}
+}
+
+export type ListExamPapersResult =
+	| { ok: true; papers: ExamPaperListItem[] }
+	| { ok: false; error: string }
+
+export async function listExamPapers(): Promise<ListExamPapersResult> {
+	try {
+		const papers = await db.examPaper.findMany({
+			orderBy: { created_at: "desc" },
+			select: {
+				id: true,
+				title: true,
+				subject: true,
+				exam_board: true,
+				year: true,
+				paper_number: true,
+				total_marks: true,
+				duration_minutes: true,
+				is_active: true,
+				created_at: true,
+				_count: {
+					select: {
+						sections: true,
+						scan_submissions: true,
+					},
+				},
+			},
+		})
+		return { ok: true, papers }
+	} catch {
+		return { ok: false, error: "Failed to load exam papers" }
+	}
+}
+
+export type ExemplarAnswerListItem = {
+	id: string
+	pdf_ingestion_job_id: string
+	raw_question_text: string
+	source_exam_board: string
+	level: number
+	is_fake_exemplar: boolean
+	answer_text: string
+	word_count: number | null
+	mark_band: string | null
+	expected_score: number | null
+	created_at: Date
+	question: { id: string; text: string; subject: string } | null
+	question_part: { id: string; part_label: string } | null
+}
+
+export type ListExemplarAnswersResult =
+	| { ok: true; exemplars: ExemplarAnswerListItem[] }
+	| { ok: false; error: string }
+
+export async function listExemplarAnswers(): Promise<ListExemplarAnswersResult> {
+	try {
+		const exemplars = await db.exemplarAnswer.findMany({
+			orderBy: { created_at: "desc" },
+			select: {
+				id: true,
+				pdf_ingestion_job_id: true,
+				raw_question_text: true,
+				source_exam_board: true,
+				level: true,
+				is_fake_exemplar: true,
+				answer_text: true,
+				word_count: true,
+				mark_band: true,
+				expected_score: true,
+				created_at: true,
+				question: {
+					select: { id: true, text: true, subject: true },
+				},
+				question_part: {
+					select: { id: true, part_label: true },
+				},
+			},
+		})
+		return { ok: true, exemplars }
+	} catch {
+		return { ok: false, error: "Failed to load exemplar answers" }
+	}
+}
+
+export async function getDashboardData(): Promise<DashboardData> {
+	const [
+		totalUsers,
+		totalQuestions,
+		totalExamPapers,
+		totalQuestionBanks,
+		pendingAnswers,
+		completedAnswers,
+		failedAnswers,
+		totalScanSubmissions,
+		pendingScanSubmissions,
+		answersByStatus,
+		questionsBySubjectRaw,
+		usersByRoleRaw,
+		recentScansRaw,
+	] = await Promise.all([
+		db.user.count(),
+		db.question.count(),
+		db.examPaper.count({ where: { is_active: true } }),
+		db.questionBank.count({ where: { is_active: true } }),
+		db.answer.count({ where: { marking_status: "pending" } }),
+		db.answer.count({ where: { marking_status: "completed" } }),
+		db.answer.count({ where: { marking_status: "failed" } }),
+		db.scanSubmission.count(),
+		db.scanSubmission.count({ where: { status: "pending" } }),
+		db.answer.groupBy({ by: ["marking_status"], _count: { id: true } }),
+		db.question.groupBy({ by: ["subject"], _count: { id: true } }),
+		db.user.groupBy({ by: ["role"], _count: { id: true } }),
+		db.scanSubmission.findMany({
+			take: 10,
+			orderBy: { uploaded_at: "desc" },
+			include: {
+				student: { select: { name: true, email: true } },
+			},
+		}),
+	])
+
+	return {
+		stats: {
+			totalUsers,
+			totalQuestions,
+			totalExamPapers,
+			totalQuestionBanks,
+			pendingAnswers,
+			completedAnswers,
+			failedAnswers,
+			totalScanSubmissions,
+			pendingScanSubmissions,
+		},
+		markingStatusBreakdown: answersByStatus.map((row) => ({
+			status: row.marking_status,
+			count: row._count.id,
+		})),
+		questionsBySubject: questionsBySubjectRaw.map((row) => ({
+			subject: row.subject,
+			count: row._count.id,
+		})),
+		usersByRole: usersByRoleRaw.map((row) => ({
+			role: row.role,
+			count: row._count.id,
+		})),
+		recentScanSubmissions: recentScansRaw.map((s) => ({
+			id: s.id,
+			studentName: s.student.name,
+			studentEmail: s.student.email,
+			status: s.status,
+			pageCount: s.page_count,
+			uploadedAt: s.uploaded_at,
+			processedAt: s.processed_at,
+			errorMessage: s.error_message,
+		})),
+	}
+}

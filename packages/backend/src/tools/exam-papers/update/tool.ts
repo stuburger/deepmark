@@ -23,14 +23,9 @@ export const handler = tool(UpdateExamPaperSchema, async (args, extra) => {
 	})
 
 	// Check if exam paper exists
-	const existingExamPaper = await db.examPaper.findUniqueOrThrow({
+	await db.examPaper.findUniqueOrThrow({
 		where: { id: exam_paper_id },
-		include: { exam_sessions: true },
 	})
-
-	if (existingExamPaper.exam_sessions.length > 0) {
-		throw new Error("Cannot update an exam paper with more than 0 sessions")
-	}
 
 	// Prepare update object
 	const update: Partial<ExamPaper> = {}

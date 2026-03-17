@@ -4,9 +4,11 @@ import { db } from "@/db"
 import {
 	DeterministicMarker,
 	Grader,
+	LevelOfResponseMarker,
 	LlmMarker,
 	MarkerOrchestrator,
 	parseMarkPointsFromPrisma,
+	parseMarkingRulesFromPrisma,
 	type QuestionWithMarkScheme,
 } from "@mcp-gcse/shared"
 
@@ -21,6 +23,7 @@ const grader = new Grader(openai("gpt-4o"), {
 
 const orchestrator = new MarkerOrchestrator([
 	new DeterministicMarker(),
+	new LevelOfResponseMarker(grader),
 	new LlmMarker(grader),
 ])
 
@@ -53,7 +56,7 @@ async function loadAnswer(answer_id: string) {
 	})
 }
 
-async function loadMarkScheme(answer: AnswerWithRelations): Promise<MarkSchemeForAnswer> {
+async function loadMarkScheme(answer: AnswerWithRelations) {
 	return db.markScheme.findFirstOrThrow({
 		where: {
 			question_id: answer.question_id,
@@ -92,6 +95,8 @@ function buildQuestionWithMarkScheme(
 				? markScheme.correct_option_labels
 				: undefined,
 		availableOptions,
+		markingMethod: markScheme.marking_method ?? undefined,
+		markingRules: parseMarkingRulesFromPrisma(markScheme.marking_rules),
 	}
 }
 
@@ -148,6 +153,9 @@ export async function markAnswerById(answer_id: string): Promise<{
 			marked_at: new Date(),
 			llm_reasoning: grade.llmReasoning,
 			feedback_summary: grade.feedbackSummary,
+			level_awarded: grade.levelAwarded ?? null,
+			why_not_next_level: grade.whyNotNextLevel ?? null,
+			cap_applied: grade.capApplied ?? null,
 		},
 	})
 

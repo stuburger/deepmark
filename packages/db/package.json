@@ -20,7 +20,9 @@
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
     "db:studio": "prisma studio",
-    "db:push": "prisma db push"
+    "db:setup-extensions": "prisma db execute --file ./prisma/00-create-vector-extension.sql",
+    "db:push": "prisma db execute --file ./prisma/00-create-vector-extension.sql && prisma db push && prisma db execute --file ./prisma/setup-vectors.sql",
+    "db:push:reset": "prisma db execute --file ./prisma/00-create-vector-extension.sql && prisma db push --force-reset && prisma db execute --file ./prisma/setup-vectors.sql"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.0.2",

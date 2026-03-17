@@ -9,7 +9,6 @@ export const handler = tool(ConfirmScanAnswersSchema, async (args, extra) => {
 
 	const submission = await db.scanSubmission.findFirstOrThrow({
 		where: { id: scan_submission_id, student_id: userId },
-		include: { exam_session: true },
 	})
 
 	if (submission.status !== "extracted") {
@@ -51,7 +50,6 @@ export const handler = tool(ConfirmScanAnswersSchema, async (args, extra) => {
 				question_part_id: e.question_part_id,
 				student_id: submission.student_id,
 				student_answer: studentAnswer,
-				exam_session_id: submission.exam_session_id,
 				max_possible_score: markScheme.points_total,
 				source: "scanned",
 			},

@@ -6,6 +6,18 @@ import {
 	googleClientSecret,
 } from "./config";
 
+export const authTable = new sst.aws.Dynamo("AuthTable", {
+	fields: {
+		pk: "string",
+		sk: "string",
+	},
+	ttl: "expiry",
+	primaryIndex: {
+		hashKey: "pk",
+		rangeKey: "sk",
+	},
+});
+
 export const authUrl = `https://auth.${$app.stage}.supalink.co`;
 
 export const authUrlLink = new sst.Linkable("AuthUrl", {
@@ -18,6 +30,7 @@ export const auth = new sst.aws.Auth("Auth", {
 		link: [
 			neonPostgres,
 			authUrlLink,
+			authTable,
 			githubClientId,
 			githubClientSecret,
 			googleClientId,

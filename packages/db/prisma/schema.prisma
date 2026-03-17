@@ -12,6 +12,7 @@ enum Subject {
   chemistry
   physics
   english
+  business
 }
 
 enum DifficultyLevel {
@@ -25,12 +26,6 @@ enum MarkingStatus {
   pending
   completed
   failed
-}
-
-enum ExamSessionStatus {
-  in_progress
-  completed
-  abandoned
 }
 
 enum TierLevel {
@@ -70,6 +65,17 @@ enum AnswerSource {
   scanned
 }
 
+enum PdfDocumentType {
+  mark_scheme
+  exemplar
+}
+
+enum MarkingMethod {
+  deterministic
+  point_based
+  level_of_response
+}
+
 model User {
   id         String   @id @default(cuid())
   email      String?  @unique
@@ -88,34 +94,38 @@ model User {
   created_exam_sections  ExamSection[]
   created_question_banks QuestionBank[]
 
-  student_answers   Answer[]          @relation("StudentAnswers")
-  exam_sessions     ExamSession[]     @relation("Student")
+  student_answers   Answer[]           @relation("StudentAnswers")
   scan_submissions  ScanSubmission[]   @relation("StudentScans")
+  pdf_ingestion_jobs PdfIngestionJob[] @relation("PdfIngestionJobUploader")
 
   @@map("users")
 }
 
 model Question {
-  id                      String          @id @default(cuid())
-  text                    String
-  topic                   String
-  created_by_id           String
-  created_at              DateTime        @default(now())
-  updated_at              DateTime        @updatedAt
-  subject                 Subject
-  points                  Int?
-  difficulty_level        DifficultyLevel?
-  question_type           QuestionType    @default(written)
+  id                          String          @id @default(cuid())
+  text                        String
+  topic                       String
+  created_by_id               String
+  created_at                  DateTime        @default(now())
+  updated_at                  DateTime        @updatedAt
+  subject                     Subject
+  points                      Int?
+  difficulty_level            DifficultyLevel?
+  question_type               QuestionType    @default(written)
   // Array of { option_label, option_text } objects
-  multiple_choice_options Json            @default("[]")
+  multiple_choice_options     Json            @default("[]")
+  embedding                   Unsupported("vector(1536)")?
+  source_pdf_ingestion_job_id String?
 
-  created_by             User                  @relation(fields: [created_by_id], references: [id])
-  question_parts         QuestionPart[]
-  mark_schemes           MarkScheme[]
-  answers                Answer[]
-  exam_section_questions ExamSectionQuestion[]
-  question_bank_items    QuestionBankItem[]
-  extracted_answers      ExtractedAnswer[]
+  created_by                  User                  @relation(fields: [created_by_id], references: [id])
+  question_parts              QuestionPart[]
+  mark_schemes                MarkScheme[]
+  answers                     Answer[]
+  exam_section_questions      ExamSectionQuestion[]
+  question_bank_items         QuestionBankItem[]
+  extracted_answers           ExtractedAnswer[]
+  source_pdf_ingestion_job    PdfIngestionJob?     @relation("QuestionSource", fields: [source_pdf_ingestion_job_id], references: [id])
+  exemplar_answers            ExemplarAnswer[]
 
   @@map("questions")
 }
@@ -135,34 +145,42 @@ model QuestionPart {
   // Array of { option_label, option_text } objects
   multiple_choice_options Json            @default("[]")
 
-  created_by   User         @relation(fields: [created_by_id], references: [id])
-  question     Question     @relation(fields: [question_id], references: [id])
+  created_by        User             @relation(fields: [created_by_id], references: [id])
+  question          Question         @relation(fields: [question_id], references: [id])
   mark_schemes      MarkScheme[]
-  answers          Answer[]
+  answers           Answer[]
   extracted_answers ExtractedAnswer[]
+  exemplar_answers  ExemplarAnswer[]
 
   @@map("question_parts")
 }
 
 model MarkScheme {
-  id                    String   @id @default(cuid())
+  id                    String        @id @default(cuid())
   question_id           String
   question_part_id      String?
   description           String
   guidance              String?
   created_by_id         String
-  created_at            DateTime @default(now())
-  updated_at            DateTime @updatedAt
+  created_at            DateTime      @default(now())
+  updated_at            DateTime      @updatedAt
   tags                  String[]
   points_total          Int
   // Array of { point_number, description, points, criteria } objects
-  mark_points           Json     @default("[]")
+  mark_points           Json          @default("[]")
   correct_option_labels String[]
+  marking_method        MarkingMethod @default(point_based)
+  // For level_of_response: { command_word?, items_required?, levels[], caps[] }
+  marking_rules         Json?
+  refined_at            DateTime?
+  refinement_iterations Int            @default(0)
 
-  created_by      User            @relation(fields: [created_by_id], references: [id])
-  question        Question        @relation(fields: [question_id], references: [id])
-  question_part   QuestionPart?   @relation(fields: [question_part_id], references: [id])
+  created_by      User               @relation(fields: [created_by_id], references: [id])
+  question        Question           @relation(fields: [question_id], references: [id])
+  question_part   QuestionPart?     @relation(fields: [question_part_id], references: [id])
   marking_results MarkingResult[]
+  test_runs       MarkSchemeTestRun[]
+  exemplar_answers ExemplarAnswer[]
 
   @@map("mark_schemes")
 }
@@ -178,13 +196,11 @@ model Answer {
   total_score         Int?
   max_possible_score  Int
   marking_status      MarkingStatus @default(pending)
-  exam_session_id     String?
   source              AnswerSource  @default(typed)
 
   student          User            @relation("StudentAnswers", fields: [student_id], references: [id])
   question         Question        @relation(fields: [question_id], references: [id])
   question_part    QuestionPart?   @relation(fields: [question_part_id], references: [id])
-  exam_session     ExamSession?    @relation(fields: [exam_session_id], references: [id])
   marking_results  MarkingResult[]
   extracted_answer ExtractedAnswer?
 
@@ -192,16 +208,19 @@ model Answer {
 }
 
 model MarkingResult {
-  id                  String   @id @default(cuid())
-  answer_id           String
-  mark_scheme_id      String
+  id                    String   @id @default(cuid())
+  answer_id             String
+  mark_scheme_id        String
   // Array of { point_number, awarded, reasoning, expected_criteria, student_covered } objects
-  mark_points_results Json     @default("[]")
-  total_score         Int
-  max_possible_score  Int
-  marked_at           DateTime @default(now())
-  llm_reasoning       String
-  feedback_summary    String
+  mark_points_results   Json     @default("[]")
+  total_score           Int
+  max_possible_score    Int
+  marked_at             DateTime @default(now())
+  llm_reasoning         String
+  feedback_summary      String
+  level_awarded         Int?
+  why_not_next_level    String?
+  cap_applied           String?
 
   answer      Answer     @relation(fields: [answer_id], references: [id])
   mark_scheme MarkScheme @relation(fields: [mark_scheme_id], references: [id])
@@ -227,7 +246,6 @@ model ExamPaper {
 
   created_by       User              @relation(fields: [created_by_id], references: [id])
   sections         ExamSection[]
-  exam_sessions    ExamSession[]
   scan_submissions ScanSubmission[]
 
   @@map("exam_papers")
@@ -267,31 +285,10 @@ model ExamSectionQuestion {
   @@map("exam_section_questions")
 }
 
-model ExamSession {
-  id                 String            @id @default(cuid())
-  exam_paper_id      String
-  student_id         String
-  started_at         DateTime          @default(now())
-  completed_at       DateTime?
-  status             ExamSessionStatus @default(in_progress)
-  total_score        Int?
-  max_possible_score Int
-  // { location?, invigilator?, special_requirements? }
-  metadata           Json?
-
-  student           User              @relation("Student", fields: [student_id], references: [id])
-  exam_paper        ExamPaper         @relation(fields: [exam_paper_id], references: [id])
-  answers           Answer[]
-  scan_submissions  ScanSubmission[]
-
-  @@map("exam_sessions")
-}
-
 model ScanSubmission {
   id               String     @id @default(cuid())
-  exam_session_id  String?
   student_id       String
-  exam_paper_id    String?
+  exam_paper_id    String
   status           ScanStatus @default(pending)
   page_count       Int
   uploaded_at      DateTime   @default(now())
@@ -300,9 +297,8 @@ model ScanSubmission {
   // { source: "photo"|"scan", notes? }
   metadata         Json?
 
-  exam_session ExamSession? @relation(fields: [exam_session_id], references: [id])
   student      User         @relation("StudentScans", fields: [student_id], references: [id])
-  exam_paper   ExamPaper?   @relation(fields: [exam_paper_id], references: [id])
+  exam_paper   ExamPaper    @relation(fields: [exam_paper_id], references: [id])
   pages        ScanPage[]
 
   @@map("scan_submissions")
@@ -381,4 +377,73 @@ model QuestionBankItem {
   @@unique([question_bank_id, question_id])
   @@unique([question_bank_id, order])
   @@map("question_bank_items")
+}
+
+model PdfIngestionJob {
+  id                           String          @id @default(cuid())
+  document_type                PdfDocumentType
+  s3_key                       String
+  s3_bucket                    String
+  status                       ScanStatus      @default(pending)
+  uploaded_by                  String
+  exam_board                   String
+  subject                      Subject?
+  year                         Int?
+  paper_reference              String?
+  attempt_count                Int             @default(0)
+  auto_create_exam_paper       Boolean         @default(true)
+  detected_exam_paper_metadata Json?
+  error                        String?
+  created_at                   DateTime        @default(now())
+  processed_at                 DateTime?
+
+  uploader          User             @relation("PdfIngestionJobUploader", fields: [uploaded_by], references: [id])
+  exemplars         ExemplarAnswer[]
+  created_questions Question[]       @relation("QuestionSource")
+
+  @@map("pdf_ingestion_jobs")
+}
+
+model ExemplarAnswer {
+  id                   String   @id @default(cuid())
+  pdf_ingestion_job_id String
+  question_id          String?
+  question_part_id     String?
+  mark_scheme_id       String?
+  raw_question_text    String
+  source_exam_board    String
+  level                Int
+  is_fake_exemplar     Boolean  @default(false)
+  answer_text          String
+  word_count           Int?
+  why_criteria        String[]
+  mark_band            String?
+  expected_score       Int?
+  created_at           DateTime @default(now())
+
+  pdf_ingestion_job PdfIngestionJob @relation(fields: [pdf_ingestion_job_id], references: [id])
+  question          Question?       @relation(fields: [question_id], references: [id])
+  question_part     QuestionPart?   @relation(fields: [question_part_id], references: [id])
+  mark_scheme       MarkScheme?     @relation(fields: [mark_scheme_id], references: [id])
+
+  @@map("exemplar_answers")
+}
+
+model MarkSchemeTestRun {
+  id               String   @id @default(cuid())
+  mark_scheme_id   String
+  iteration        Int
+  target_score     Int
+  actual_score     Int
+  delta            Int
+  student_answer   String
+  grader_reasoning String
+  schema_patch     String?
+  converged        Boolean  @default(false)
+  triggered_by     String   @default("pdf_pipeline")
+  created_at       DateTime @default(now())
+
+  mark_scheme MarkScheme @relation(fields: [mark_scheme_id], references: [id])
+
+  @@map("mark_scheme_test_runs")
 }

@@ -70,6 +70,10 @@ declare module "sst" {
       "type": "sst.sst.Secret"
       "value": string
     }
+    "QuestionPaperQueue": {
+      "type": "sst.aws.Queue"
+      "url": string
+    }
     "ScansBucket": {
       "name": string
       "type": "sst.aws.Bucket"

@@ -103,7 +103,12 @@ export default function AdminUploadPage() {
 					subject,
 					year: year ? parseInt(year, 10) : undefined,
 					paper_reference: paperReference.trim() || undefined,
-					auto_create_exam_paper: documentType === "mark_scheme" ? autoCreateExamPaper : false,
+					auto_create_exam_paper:
+				documentType === "mark_scheme"
+					? autoCreateExamPaper
+					: documentType === "question_paper"
+						? true
+						: false,
 				})
 				if (!result.ok) {
 					setError(result.error)
@@ -203,10 +208,10 @@ export default function AdminUploadPage() {
 			<Card className="mt-4">
 				<CardHeader>
 					<CardTitle>PDF ingestion</CardTitle>
-					<CardDescription>
-						Upload a mark scheme PDF or exemplar memo PDF. Mark scheme uploads can optionally create an
-						exam paper from detected metadata.
-					</CardDescription>
+				<CardDescription>
+					Upload a mark scheme, exemplar memo, or question paper PDF. Mark scheme and question paper
+					uploads will prompt to create an exam paper from detected metadata.
+				</CardDescription>
 				</CardHeader>
 				<CardContent className="space-y-4">
 					<div className="space-y-2">
@@ -216,8 +221,9 @@ export default function AdminUploadPage() {
 							value={documentType}
 							onChange={(e) => setDocumentType(e.target.value as PdfDocumentType)}
 						>
-							<option value="mark_scheme">Mark scheme</option>
-							<option value="exemplar">Exemplar memo</option>
+						<option value="mark_scheme">Mark scheme</option>
+						<option value="exemplar">Exemplar memo</option>
+						<option value="question_paper">Question paper</option>
 						</select>
 					</div>
 					<div className="space-y-2">
@@ -248,19 +254,24 @@ export default function AdminUploadPage() {
 							))}
 						</select>
 					</div>
-					{documentType === "mark_scheme" && (
-						<div className="flex items-center gap-2">
-							<input
-								type="checkbox"
-								id="auto-create"
-								checked={autoCreateExamPaper}
-								onChange={(e) => setAutoCreateExamPaper(e.target.checked)}
-							/>
-							<label htmlFor="auto-create" className="text-sm font-medium">
-								Create Exam Paper automatically (detect metadata and show amendment form)
-							</label>
-						</div>
-					)}
+				{documentType === "mark_scheme" && (
+					<div className="flex items-center gap-2">
+						<input
+							type="checkbox"
+							id="auto-create"
+							checked={autoCreateExamPaper}
+							onChange={(e) => setAutoCreateExamPaper(e.target.checked)}
+						/>
+						<label htmlFor="auto-create" className="text-sm font-medium">
+							Create Exam Paper automatically (detect metadata and show amendment form)
+						</label>
+					</div>
+				)}
+				{documentType === "question_paper" && (
+					<p className="text-sm text-muted-foreground">
+						An exam paper will always be created from the detected metadata. You can review and amend it after processing.
+					</p>
+				)}
 					<div className="grid grid-cols-2 gap-4">
 						<div className="space-y-2">
 							<label className="text-sm font-medium">Year (optional)</label>
@@ -309,12 +320,16 @@ export default function AdminUploadPage() {
 							{retrying ? "Retrying…" : "Retry"}
 						</Button>
 					)}
-					{jobId && status === "ocr_complete" && !showAmendmentForm && documentType === "mark_scheme" && (
-						<div className="space-y-2">
-							<p className="text-sm text-muted-foreground">Questions imported. You can create an exam paper from them.</p>
-							<Button onClick={handleManualCreateExamPaper}>Create Exam Paper</Button>
-						</div>
-					)}
+				{jobId && status === "ocr_complete" && !showAmendmentForm && (documentType === "mark_scheme" || documentType === "question_paper") && (
+					<div className="space-y-2">
+						<p className="text-sm text-muted-foreground">
+							{documentType === "question_paper"
+								? "Questions imported. Review and create the exam paper."
+								: "Questions imported. You can create an exam paper from them."}
+						</p>
+						<Button onClick={handleManualCreateExamPaper}>Create Exam Paper</Button>
+					</div>
+				)}
 					{showAmendmentForm && (
 						<Card>
 							<CardHeader>

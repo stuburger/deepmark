@@ -13,7 +13,7 @@ const s3 = new S3Client({})
 const sqs = new SQSClient({})
 const db = createPrismaClient(Resource.NeonPostgres.databaseUrl)
 
-export type PdfDocumentType = "mark_scheme" | "exemplar"
+export type PdfDocumentType = "mark_scheme" | "exemplar" | "question_paper"
 
 export type CreatePdfIngestionUploadResult =
 	| { ok: true; jobId: string; url: string }
@@ -35,7 +35,11 @@ export async function createPdfIngestionUpload(input: {
 	}
 
 	const prefix =
-		input.document_type === "mark_scheme" ? "pdfs/mark-schemes" : "pdfs/exemplars"
+		input.document_type === "mark_scheme"
+			? "pdfs/mark-schemes"
+			: input.document_type === "question_paper"
+				? "pdfs/question-papers"
+				: "pdfs/exemplars"
 	const job = await db.pdfIngestionJob.create({
 		data: {
 			document_type: input.document_type,
@@ -109,8 +113,8 @@ export async function createExamPaperFromJob(input: {
 	if (job.status !== "ocr_complete") {
 		return { ok: false, error: "Job has not completed processing" }
 	}
-	if (job.document_type !== "mark_scheme") {
-		return { ok: false, error: "Only mark scheme jobs can create an exam paper" }
+	if (job.document_type !== "mark_scheme" && job.document_type !== "question_paper") {
+		return { ok: false, error: "Only mark scheme and question paper jobs can create an exam paper" }
 	}
 
 	const questions = await db.question.findMany({
@@ -160,7 +164,7 @@ export async function createExamPaperFromJob(input: {
 
 export type PdfIngestionJobListItem = {
 	id: string
-	document_type: PdfDocumentType
+	document_type: string
 	status: string
 	exam_board: string
 	subject: string | null
@@ -302,7 +306,9 @@ export async function retriggerPdfIngestionJob(
 	const queueUrl =
 		job.document_type === "mark_scheme"
 			? Resource.MarkSchemePdfQueue.url
-			: Resource.ExemplarQueue.url
+			: job.document_type === "question_paper"
+				? Resource.QuestionPaperQueue.url
+				: Resource.ExemplarQueue.url
 	await sqs.send(
 		new SendMessageCommand({
 			QueueUrl: queueUrl,

@@ -68,6 +68,14 @@ enum AnswerSource {
 enum PdfDocumentType {
   mark_scheme
   exemplar
+  question_paper
+}
+
+enum QuestionOrigin {
+  mark_scheme
+  exemplar
+  question_paper
+  manual
 }
 
 enum MarkingMethod {
@@ -112,6 +120,7 @@ model Question {
   points                      Int?
   difficulty_level            DifficultyLevel?
   question_type               QuestionType    @default(written)
+  origin                      QuestionOrigin  @default(mark_scheme)
   // Array of { option_label, option_text } objects
   multiple_choice_options     Json            @default("[]")
   embedding                   Unsupported("vector(1536)")?

@@ -149,6 +149,12 @@ export async function listExamPapers(): Promise<ListExamPapersResult> {
 	}
 }
 
+export type ExemplarValidationStats = {
+	total: number
+	passed: number
+	accuracyPercent: number
+}
+
 export type ExemplarAnswerListItem = {
 	id: string
 	pdf_ingestion_job_id: string
@@ -163,6 +169,7 @@ export type ExemplarAnswerListItem = {
 	created_at: Date
 	question: { id: string; text: string; subject: string } | null
 	question_part: { id: string; part_label: string } | null
+	validation: ExemplarValidationStats | null
 }
 
 export type ListExemplarAnswersResult =
@@ -171,7 +178,7 @@ export type ListExemplarAnswersResult =
 
 export async function listExemplarAnswers(): Promise<ListExemplarAnswersResult> {
 	try {
-		const exemplars = await db.exemplarAnswer.findMany({
+		const raw = await db.exemplarAnswer.findMany({
 			orderBy: { created_at: "desc" },
 			select: {
 				id: true,
@@ -191,8 +198,43 @@ export async function listExemplarAnswers(): Promise<ListExemplarAnswersResult> 
 				question_part: {
 					select: { id: true, part_label: true },
 				},
+				test_runs: {
+					where: { triggered_by: "exemplar_validation" },
+					select: { converged: true },
+				},
 			},
 		})
+
+		const exemplars: ExemplarAnswerListItem[] = raw.map((e) => {
+			const runs = e.test_runs
+			const validation: ExemplarValidationStats | null =
+				runs.length > 0
+					? {
+							total: runs.length,
+							passed: runs.filter((r) => r.converged).length,
+							accuracyPercent: Math.round(
+								(runs.filter((r) => r.converged).length / runs.length) * 100,
+							),
+						}
+					: null
+			return {
+				id: e.id,
+				pdf_ingestion_job_id: e.pdf_ingestion_job_id,
+				raw_question_text: e.raw_question_text,
+				source_exam_board: e.source_exam_board,
+				level: e.level,
+				is_fake_exemplar: e.is_fake_exemplar,
+				answer_text: e.answer_text,
+				word_count: e.word_count,
+				mark_band: e.mark_band,
+				expected_score: e.expected_score,
+				created_at: e.created_at,
+				question: e.question,
+				question_part: e.question_part,
+				validation,
+			}
+		})
+
 		return { ok: true, exemplars }
 	} catch {
 		return { ok: false, error: "Failed to load exemplar answers" }

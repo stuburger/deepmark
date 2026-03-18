@@ -425,6 +425,7 @@ model ExemplarAnswer {
   question          Question?       @relation(fields: [question_id], references: [id])
   question_part     QuestionPart?   @relation(fields: [question_part_id], references: [id])
   mark_scheme       MarkScheme?     @relation(fields: [mark_scheme_id], references: [id])
+  test_runs         MarkSchemeTestRun[]
 
   @@map("exemplar_answers")
 }
@@ -441,9 +442,11 @@ model MarkSchemeTestRun {
   schema_patch     String?
   converged        Boolean  @default(false)
   triggered_by     String   @default("pdf_pipeline")
+  exemplar_id      String?
   created_at       DateTime @default(now())
 
-  mark_scheme MarkScheme @relation(fields: [mark_scheme_id], references: [id])
+  mark_scheme MarkScheme      @relation(fields: [mark_scheme_id], references: [id])
+  exemplar    ExemplarAnswer? @relation(fields: [exemplar_id], references: [id])
 
   @@map("mark_scheme_test_runs")
 }

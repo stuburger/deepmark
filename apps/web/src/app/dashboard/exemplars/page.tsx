@@ -9,7 +9,7 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table"
-import { listExemplarAnswers, type ExemplarAnswerListItem } from "@/lib/dashboard-actions"
+import { listExemplarAnswers, type ExemplarAnswerListItem, type ExemplarValidationStats } from "@/lib/dashboard-actions"
 
 type BadgeVariant = "default" | "secondary" | "destructive" | "outline"
 
@@ -46,6 +46,21 @@ function levelVariant(level: number): BadgeVariant {
 	return "outline"
 }
 
+function accuracyVariant(pct: number): BadgeVariant {
+	if (pct >= 80) return "default"
+	if (pct >= 50) return "secondary"
+	return "destructive"
+}
+
+function ValidationBadge({ validation }: { validation: ExemplarValidationStats | null }) {
+	if (!validation) return <span className="text-muted-foreground text-xs">—</span>
+	return (
+		<Badge variant={accuracyVariant(validation.accuracyPercent)} className="tabular-nums whitespace-nowrap">
+			{validation.accuracyPercent}% — {validation.passed}/{validation.total}
+		</Badge>
+	)
+}
+
 function ExemplarRow({ exemplar }: { exemplar: ExemplarAnswerListItem }) {
 	const questionText = exemplar.question?.text ?? exemplar.raw_question_text
 	const subject = exemplar.question?.subject
@@ -77,24 +92,27 @@ function ExemplarRow({ exemplar }: { exemplar: ExemplarAnswerListItem }) {
 			<TableCell className="text-center tabular-nums">{exemplar.word_count ?? "—"}</TableCell>
 			<TableCell className="whitespace-nowrap">{exemplar.mark_band ?? "—"}</TableCell>
 			<TableCell className="text-center tabular-nums">{exemplar.expected_score ?? "—"}</TableCell>
-			<TableCell>
-				{exemplar.is_fake_exemplar ? (
-					<Badge variant="outline">Synthetic</Badge>
-				) : (
-					<Badge variant="secondary">Real</Badge>
-				)}
-			</TableCell>
-			<TableCell>
-				<Link
-					href={`/dashboard/upload/${exemplar.pdf_ingestion_job_id}`}
-					className="text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground whitespace-nowrap"
-				>
-					View job
-				</Link>
-			</TableCell>
-			<TableCell className="text-muted-foreground whitespace-nowrap">{formatDate(exemplar.created_at)}</TableCell>
-		</TableRow>
-	)
+		<TableCell>
+			{exemplar.is_fake_exemplar ? (
+				<Badge variant="outline">Synthetic</Badge>
+			) : (
+				<Badge variant="secondary">Real</Badge>
+			)}
+		</TableCell>
+		<TableCell>
+			<ValidationBadge validation={exemplar.validation} />
+		</TableCell>
+		<TableCell>
+			<Link
+				href={`/dashboard/upload/${exemplar.pdf_ingestion_job_id}`}
+				className="text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground whitespace-nowrap"
+			>
+				View job
+			</Link>
+		</TableCell>
+		<TableCell className="text-muted-foreground whitespace-nowrap">{formatDate(exemplar.created_at)}</TableCell>
+	</TableRow>
+)
 }
 
 export default async function ExemplarAnswersPage() {
@@ -143,6 +161,7 @@ export default async function ExemplarAnswersPage() {
 									<TableHead className="w-[6%]">Band</TableHead>
 									<TableHead className="w-[5%] text-center">Score</TableHead>
 									<TableHead className="w-[8%]">Type</TableHead>
+									<TableHead className="w-[10%]">Validation</TableHead>
 									<TableHead className="w-[6%]">Source</TableHead>
 									<TableHead className="w-[7%]">Created</TableHead>
 								</TableRow>

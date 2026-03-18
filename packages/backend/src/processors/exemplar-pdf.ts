@@ -3,6 +3,7 @@ import { Resource } from "sst"
 import { GoogleGenAI, Type } from "@google/genai"
 import { db } from "@/db"
 import type { ScanStatus } from "@mcp-gcse/db"
+import { validateWithExemplars } from "@/services/validate-with-exemplars"
 
 const s3 = new S3Client({})
 
@@ -184,6 +185,8 @@ export async function handler(
 				}>
 			}
 
+			const markSchemeIdsToValidate = new Set<string>()
+
 			for (const q of parsed.questions ?? []) {
 				const questionText = q.question_text
 
@@ -217,9 +220,12 @@ export async function handler(
 							level: ex.level,
 						},
 					})
-					if (existing) continue
+					if (existing) {
+						if (existing.mark_scheme_id) markSchemeIdsToValidate.add(existing.mark_scheme_id)
+						continue
+					}
 
-					await db.exemplarAnswer.create({
+					const created = await db.exemplarAnswer.create({
 						data: {
 							pdf_ingestion_job_id: jobId,
 							question_id: question.id,
@@ -234,6 +240,19 @@ export async function handler(
 							expected_score: ex.expected_score ?? null,
 						},
 					})
+
+					if (created.mark_scheme_id) markSchemeIdsToValidate.add(created.mark_scheme_id)
+				}
+			}
+
+			for (const markSchemeId of markSchemeIdsToValidate) {
+				try {
+					const summary = await validateWithExemplars(markSchemeId)
+					console.log(
+						`Exemplar validation for mark scheme ${markSchemeId}: ${summary.passCount}/${summary.totalTested} passed (${summary.accuracyPercent}%)`,
+					)
+				} catch (err) {
+					console.error(`Exemplar validation failed for mark scheme ${markSchemeId}:`, err)
 				}
 			}
 

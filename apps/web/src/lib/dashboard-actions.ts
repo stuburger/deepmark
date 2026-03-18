@@ -1,7 +1,9 @@
 "use server"
 
 import { createPrismaClient } from "@mcp-gcse/db"
+import type { Subject } from "@mcp-gcse/db"
 import { Resource } from "sst"
+import { auth } from "./auth"
 
 const db = createPrismaClient(Resource.NeonPostgres.databaseUrl)
 
@@ -112,6 +114,7 @@ export type ExamPaperListItem = {
 	total_marks: number
 	duration_minutes: number
 	is_active: boolean
+	is_public: boolean
 	created_at: Date
 	_count: {
 		sections: number
@@ -123,10 +126,15 @@ export type ListExamPapersResult =
 	| { ok: true; papers: ExamPaperListItem[] }
 	| { ok: false; error: string }
 
-export async function listExamPapers(): Promise<ListExamPapersResult> {
+export async function listExamPapers(options?: {
+	publicOnly?: boolean
+}): Promise<ListExamPapersResult> {
 	try {
 		const papers = await db.examPaper.findMany({
-			orderBy: { created_at: "desc" },
+			where: options?.publicOnly
+				? { is_public: true, is_active: true }
+				: undefined,
+			orderBy: [{ year: "desc" }, { created_at: "desc" }],
 			select: {
 				id: true,
 				title: true,
@@ -137,6 +145,7 @@ export async function listExamPapers(): Promise<ListExamPapersResult> {
 				total_marks: true,
 				duration_minutes: true,
 				is_active: true,
+				is_public: true,
 				created_at: true,
 				_count: {
 					select: {
@@ -270,7 +279,9 @@ export async function getDashboardData(): Promise<DashboardData> {
 		db.answer.count({ where: { marking_status: "failed" } }),
 		db.scanSubmission.count(),
 		db.scanSubmission.count({ where: { status: "pending" } }),
-		db.markScheme.count({ where: { link_status: { in: ["unlinked", "auto_linked"] } } }),
+		db.markScheme.count({
+			where: { link_status: { in: ["unlinked", "auto_linked"] } },
+		}),
 		db.answer.groupBy({ by: ["marking_status"], _count: { id: true } }),
 		db.question.groupBy({ by: ["subject"], _count: { id: true } }),
 		db.user.groupBy({ by: ["role"], _count: { id: true } }),
@@ -318,5 +329,228 @@ export async function getDashboardData(): Promise<DashboardData> {
 			processedAt: s.processed_at,
 			errorMessage: s.error_message,
 		})),
+	}
+}
+
+// ─── Exam Paper Catalog ───────────────────────────────────────────────────────
+
+export type CreateExamPaperInput = {
+	title: string
+	subject: Subject
+	exam_board: string
+	year: number
+	paper_number?: number
+	total_marks: number
+	duration_minutes: number
+	is_public?: boolean
+}
+
+export type CreateExamPaperResult =
+	| { ok: true; id: string }
+	| { ok: false; error: string }
+
+export async function createExamPaperStandalone(
+	input: CreateExamPaperInput,
+): Promise<CreateExamPaperResult> {
+	const session = await auth()
+	if (!session) return { ok: false, error: "Not authenticated" }
+	try {
+		const paper = await db.examPaper.create({
+			data: {
+				title: input.title,
+				subject: input.subject,
+				exam_board: input.exam_board || null,
+				year: input.year,
+				paper_number: input.paper_number ?? null,
+				total_marks: input.total_marks,
+				duration_minutes: input.duration_minutes,
+				is_public: input.is_public ?? false,
+				created_by_id: session.userId,
+			},
+		})
+		return { ok: true, id: paper.id }
+	} catch {
+		return { ok: false, error: "Failed to create exam paper" }
+	}
+}
+
+export type ToggleExamPaperPublicResult =
+	| { ok: true }
+	| { ok: false; error: string }
+
+export async function toggleExamPaperPublic(
+	id: string,
+	is_public: boolean,
+): Promise<ToggleExamPaperPublicResult> {
+	const session = await auth()
+	if (!session) return { ok: false, error: "Not authenticated" }
+	try {
+		await db.examPaper.update({ where: { id }, data: { is_public } })
+		return { ok: true }
+	} catch {
+		return { ok: false, error: "Failed to update exam paper" }
+	}
+}
+
+export type ExamPaperQuestion = {
+	id: string
+	text: string
+	question_type: string
+	points: number | null
+	origin: string
+	mark_scheme_count: number
+	mark_scheme_status: string | null
+	order: number
+	section_title: string
+}
+
+export type ExamPaperDetail = {
+	id: string
+	title: string
+	subject: string
+	exam_board: string | null
+	year: number
+	paper_number: number | null
+	total_marks: number
+	duration_minutes: number
+	is_active: boolean
+	is_public: boolean
+	created_at: Date
+	questions: ExamPaperQuestion[]
+	section_count: number
+}
+
+export type GetExamPaperDetailResult =
+	| { ok: true; paper: ExamPaperDetail }
+	| { ok: false; error: string }
+
+export async function getExamPaperDetail(
+	id: string,
+): Promise<GetExamPaperDetailResult> {
+	try {
+		const paper = await db.examPaper.findUnique({
+			where: { id },
+			include: {
+				sections: {
+					orderBy: { order: "asc" },
+					include: {
+						exam_section_questions: {
+							orderBy: { order: "asc" },
+							include: {
+								question: {
+									select: {
+										id: true,
+										text: true,
+										question_type: true,
+										points: true,
+										origin: true,
+										mark_schemes: {
+											select: { id: true, link_status: true },
+											take: 1,
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		})
+		if (!paper) return { ok: false, error: "Exam paper not found" }
+
+		const questions: ExamPaperQuestion[] = []
+		for (const section of paper.sections) {
+			for (const esq of section.exam_section_questions) {
+				const ms = esq.question.mark_schemes[0]
+				questions.push({
+					id: esq.question.id,
+					text: esq.question.text,
+					question_type: esq.question.question_type,
+					points: esq.question.points,
+					origin: esq.question.origin,
+					mark_scheme_count: esq.question.mark_schemes.length,
+					mark_scheme_status: ms?.link_status ?? null,
+					order: esq.order,
+					section_title: section.title,
+				})
+			}
+		}
+
+		return {
+			ok: true,
+			paper: {
+				id: paper.id,
+				title: paper.title,
+				subject: paper.subject,
+				exam_board: paper.exam_board,
+				year: paper.year,
+				paper_number: paper.paper_number,
+				total_marks: paper.total_marks,
+				duration_minutes: paper.duration_minutes,
+				is_active: paper.is_active,
+				is_public: paper.is_public,
+				created_at: paper.created_at,
+				questions,
+				section_count: paper.sections.length,
+			},
+		}
+	} catch {
+		return { ok: false, error: "Failed to load exam paper" }
+	}
+}
+
+export type CatalogExamPaper = {
+	id: string
+	title: string
+	subject: string
+	exam_board: string | null
+	year: number
+	paper_number: number | null
+	total_marks: number
+	question_count: number
+}
+
+export type ListCatalogExamPapersResult =
+	| { ok: true; papers: CatalogExamPaper[] }
+	| { ok: false; error: string }
+
+export async function listCatalogExamPapers(): Promise<ListCatalogExamPapersResult> {
+	try {
+		const papers = await db.examPaper.findMany({
+			where: { is_public: true, is_active: true },
+			orderBy: [{ subject: "asc" }, { year: "desc" }],
+			select: {
+				id: true,
+				title: true,
+				subject: true,
+				exam_board: true,
+				year: true,
+				paper_number: true,
+				total_marks: true,
+				sections: {
+					select: {
+						_count: { select: { exam_section_questions: true } },
+					},
+				},
+			},
+		})
+		return {
+			ok: true,
+			papers: papers.map((p) => ({
+				id: p.id,
+				title: p.title,
+				subject: p.subject,
+				exam_board: p.exam_board,
+				year: p.year,
+				paper_number: p.paper_number,
+				total_marks: p.total_marks,
+				question_count: p.sections.reduce(
+					(s, sec) => s + sec._count.exam_section_questions,
+					0,
+				),
+			})),
+		}
+	} catch {
+		return { ok: false, error: "Failed to load catalog" }
 	}
 }

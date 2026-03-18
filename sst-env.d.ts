@@ -78,6 +78,10 @@ declare module "sst" {
       "name": string
       "type": "sst.aws.Bucket"
     }
+    "StudentPaperQueue": {
+      "type": "sst.aws.Queue"
+      "url": string
+    }
     "Web": {
       "type": "sst.aws.Nextjs"
       "url": string

@@ -1,0 +1,44 @@
+---
+description: Next.js server component rules — avoid calling client functions from the server
+globs: apps/web/src/app/**/*.tsx
+alwaysApply: false
+---
+
+# Next.js Server Component Rules
+
+## Never call `buttonVariants()` from a server component
+
+`button.tsx` is `"use client"`. Importing `buttonVariants` from it will throw:
+> _"Attempted to call buttonVariants() from the server"_
+
+**Fix:** Import directly from the variants file which has no client directive.
+
+```tsx
+// ❌ BAD — button.tsx is "use client"
+import { buttonVariants } from "@/components/ui/button"
+
+// ✅ GOOD — button-variants.ts has no "use client"
+import { buttonVariants } from "@/components/ui/button-variants"
+```
+
+The rule: **server components that need `buttonVariants` must import from `@/components/ui/button-variants`**. Client components (`"use client"`) may import from either.
+
+## Never call client functions as plain functions in server components
+
+If a module is marked `"use client"`, its exported functions cannot be invoked on the server — they can only be rendered as JSX or passed as props.
+
+Check the first line of any UI component file before importing it into a server component. If it starts with `"use client"`, you can:
+- Render it as JSX (`<Button>`) ✓
+- Import pure helpers from a separate non-client file ✓
+- Move the consuming code into a `"use client"` component ✓
+
+You cannot call its exports as functions (`buttonVariants()`, `cn(something)` from a client module, etc.).
+
+## Hydration errors from dark mode
+
+Do not add `suppressHydrationWarning` or dynamic `className` based on `window` in the root `<html>` tag. The theme provider handles dark mode class injection — the root layout should only set the font variable:
+
+```tsx
+// ✅
+<html lang="en" className={plusJakartaSans.variable}>
+```

@@ -1,12 +1,16 @@
 "use server"
 
-import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3"
+import {
+	GetObjectCommand,
+	PutObjectCommand,
+	S3Client,
+} from "@aws-sdk/client-s3"
+import { SQSClient, SendMessageCommand } from "@aws-sdk/client-sqs"
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner"
-import { SendMessageCommand, SQSClient } from "@aws-sdk/client-sqs"
 import { createPrismaClient } from "@mcp-gcse/db"
+import type { Subject } from "@mcp-gcse/db"
 import { Resource } from "sst"
 import { auth } from "./auth"
-import type { Subject } from "@mcp-gcse/db"
 
 const bucketName = Resource.ScansBucket.name
 const s3 = new S3Client({})
@@ -26,10 +30,12 @@ export async function createPdfIngestionUpload(input: {
 	year?: number
 	paper_reference?: string
 	auto_create_exam_paper?: boolean
+	exam_paper_id?: string
 }): Promise<CreatePdfIngestionUploadResult> {
 	const session = await auth()
 	if (!session) return { ok: false, error: "Not authenticated" }
-	if (!input.exam_board.trim()) return { ok: false, error: "Exam board is required" }
+	if (!input.exam_board.trim())
+		return { ok: false, error: "Exam board is required" }
 	if (!input.subject) {
 		return { ok: false, error: "Subject is required" }
 	}
@@ -51,7 +57,10 @@ export async function createPdfIngestionUpload(input: {
 			subject: input.subject ?? null,
 			year: input.year ?? null,
 			paper_reference: input.paper_reference?.trim() ?? null,
-			auto_create_exam_paper: input.auto_create_exam_paper ?? true,
+			auto_create_exam_paper: input.exam_paper_id
+				? false
+				: (input.auto_create_exam_paper ?? true),
+			exam_paper_id: input.exam_paper_id ?? null,
 		},
 	})
 	const key = `${prefix}/${job.id}/document.pdf`
@@ -69,7 +78,13 @@ export async function createPdfIngestionUpload(input: {
 }
 
 export type GetPdfIngestionJobStatusResult =
-	| { ok: true; status: string; error: string | null; detected_exam_paper_metadata: unknown; auto_create_exam_paper: boolean }
+	| {
+			ok: true
+			status: string
+			error: string | null
+			detected_exam_paper_metadata: unknown
+			auto_create_exam_paper: boolean
+	  }
 	| { ok: false; error: string }
 
 export async function getPdfIngestionJobStatus(
@@ -113,8 +128,15 @@ export async function createExamPaperFromJob(input: {
 	if (job.status !== "ocr_complete") {
 		return { ok: false, error: "Job has not completed processing" }
 	}
-	if (job.document_type !== "mark_scheme" && job.document_type !== "question_paper") {
-		return { ok: false, error: "Only mark scheme and question paper jobs can create an exam paper" }
+	if (
+		job.document_type !== "mark_scheme" &&
+		job.document_type !== "question_paper"
+	) {
+		return {
+			ok: false,
+			error:
+				"Only mark scheme and question paper jobs can create an exam paper",
+		}
 	}
 
 	const questions = await db.question.findMany({
@@ -205,7 +227,7 @@ export async function listPdfIngestionJobs(): Promise<ListPdfIngestionJobsResult
 
 export type PdfIngestionJobDetail = {
 	id: string
-	document_type: PdfDocumentType
+	document_type: string
 	status: string
 	s3_key: string
 	s3_bucket: string
@@ -278,12 +300,17 @@ export async function getPdfIngestionJobDownloadUrl(
 	})
 	if (!job) return { ok: false, error: "Job not found" }
 	if (!job.s3_key) return { ok: false, error: "No PDF on file for this job" }
-	const command = new GetObjectCommand({ Bucket: job.s3_bucket, Key: job.s3_key })
+	const command = new GetObjectCommand({
+		Bucket: job.s3_bucket,
+		Key: job.s3_key,
+	})
 	const url = await getSignedUrl(s3, command, { expiresIn: 300 })
 	return { ok: true, url }
 }
 
-export type RetriggerPdfIngestionJobResult = { ok: true } | { ok: false; error: string }
+export type RetriggerPdfIngestionJobResult =
+	| { ok: true }
+	| { ok: false; error: string }
 
 export async function retriggerPdfIngestionJob(
 	jobId: string,
@@ -296,7 +323,10 @@ export async function retriggerPdfIngestionJob(
 	if (!job) return { ok: false, error: "Job not found" }
 	const terminal = ["failed", "ocr_complete"]
 	if (!terminal.includes(job.status)) {
-		return { ok: false, error: "Job can only be retriggered when failed or completed" }
+		return {
+			ok: false,
+			error: "Job can only be retriggered when failed or completed",
+		}
 	}
 
 	await db.pdfIngestionJob.update({
@@ -308,7 +338,9 @@ export async function retriggerPdfIngestionJob(
 			? Resource.MarkSchemePdfQueue.url
 			: job.document_type === "question_paper"
 				? Resource.QuestionPaperQueue.url
-				: Resource.ExemplarQueue.url
+				: job.document_type === "student_paper"
+					? Resource.StudentPaperQueue.url
+					: Resource.ExemplarQueue.url
 	await sqs.send(
 		new SendMessageCommand({
 			QueueUrl: queueUrl,

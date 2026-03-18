@@ -1,5 +1,12 @@
 import { Badge } from "@/components/ui/badge"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { buttonVariants } from "@/components/ui/button-variants"
+import {
+	Card,
+	CardContent,
+	CardDescription,
+	CardHeader,
+	CardTitle,
+} from "@/components/ui/card"
 import {
 	Table,
 	TableBody,
@@ -8,18 +15,26 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table"
-import { listExamPapers, type ExamPaperListItem } from "@/lib/dashboard-actions"
+import { type ExamPaperListItem, listExamPapers } from "@/lib/dashboard-actions"
+import { Globe, Lock, PlusCircle } from "lucide-react"
+import Link from "next/link"
 
 type BadgeVariant = "default" | "secondary" | "destructive" | "outline"
 
 function subjectVariant(subject: string): BadgeVariant {
 	switch (subject) {
-		case "biology": return "secondary"
-		case "chemistry": return "default"
-		case "physics": return "outline"
-		case "english": return "secondary"
-		case "business": return "outline"
-		default: return "outline"
+		case "biology":
+			return "secondary"
+		case "chemistry":
+			return "default"
+		case "physics":
+			return "outline"
+		case "english":
+			return "secondary"
+		case "business":
+			return "outline"
+		default:
+			return "outline"
 	}
 }
 
@@ -41,26 +56,43 @@ function truncate(s: string, max = 60) {
 
 function ExamPaperRow({ paper }: { paper: ExamPaperListItem }) {
 	return (
-		<TableRow>
-			<TableCell className="font-medium max-w-xs" title={paper.title}>
-				{truncate(paper.title)}
+		<TableRow className="cursor-pointer hover:bg-muted/50">
+			<TableCell className="font-medium max-w-xs">
+				<Link
+					href={`/dashboard/exam-papers/${paper.id}`}
+					className="hover:underline underline-offset-4"
+					title={paper.title}
+				>
+					{truncate(paper.title)}
+				</Link>
 			</TableCell>
 			<TableCell>
-				<Badge variant={subjectVariant(paper.subject)}>{capitalize(paper.subject)}</Badge>
+				<Badge variant={subjectVariant(paper.subject)}>
+					{capitalize(paper.subject)}
+				</Badge>
 			</TableCell>
 			<TableCell>{paper.exam_board ?? "—"}</TableCell>
 			<TableCell>{paper.year}</TableCell>
 			<TableCell className="text-center">{paper.paper_number ?? "—"}</TableCell>
 			<TableCell className="text-center">{paper.total_marks}</TableCell>
-			<TableCell className="text-center">{paper.duration_minutes} min</TableCell>
-			<TableCell className="text-center">{paper._count.sections}</TableCell>
-			<TableCell className="text-center">{paper._count.scan_submissions}</TableCell>
-			<TableCell>
-				<Badge variant={paper.is_active ? "secondary" : "outline"}>
-					{paper.is_active ? "Active" : "Inactive"}
-				</Badge>
+			<TableCell className="text-center">
+				{paper.duration_minutes} min
 			</TableCell>
-			<TableCell className="text-muted-foreground">{formatDate(paper.created_at)}</TableCell>
+			<TableCell className="text-center">{paper._count.sections}</TableCell>
+			<TableCell>
+				{paper.is_public ? (
+					<Badge variant="default" className="gap-1">
+						<Globe className="h-3 w-3" /> Public
+					</Badge>
+				) : (
+					<Badge variant="outline" className="gap-1 text-muted-foreground">
+						<Lock className="h-3 w-3" /> Draft
+					</Badge>
+				)}
+			</TableCell>
+			<TableCell className="text-muted-foreground">
+				{formatDate(paper.created_at)}
+			</TableCell>
 		</TableRow>
 	)
 }
@@ -70,11 +102,18 @@ export default async function ExamPapersPage() {
 
 	return (
 		<div className="space-y-6">
-			<div>
-				<h1 className="text-2xl font-semibold">Exam Papers</h1>
-				<p className="text-sm text-muted-foreground mt-1">
-					All exam papers created from mark scheme ingestion or manually.
-				</p>
+			<div className="flex items-center justify-between">
+				<div>
+					<h1 className="text-2xl font-semibold">Exam Papers</h1>
+					<p className="text-sm text-muted-foreground mt-1">
+						Manage the exam paper catalog. Published papers appear in the
+						teacher marking flow.
+					</p>
+				</div>
+				<Link href="/dashboard/exam-papers/new" className={buttonVariants()}>
+					<PlusCircle className="h-4 w-4 mr-2" />
+					New exam paper
+				</Link>
 			</div>
 
 			<Card>
@@ -87,13 +126,23 @@ export default async function ExamPapersPage() {
 							</span>
 						)}
 					</CardTitle>
-					<CardDescription>Exam papers grouped by subject and exam board.</CardDescription>
+					<CardDescription>
+						Click a row to view questions, mark schemes, and upload PDFs.
+					</CardDescription>
 				</CardHeader>
 				<CardContent>
 					{!result.ok ? (
 						<p className="text-sm text-destructive">{result.error}</p>
 					) : result.papers.length === 0 ? (
-						<p className="text-sm text-muted-foreground py-8 text-center">No exam papers yet.</p>
+						<p className="text-sm text-muted-foreground py-8 text-center">
+							No exam papers yet.{" "}
+							<Link
+								href="/dashboard/exam-papers/new"
+								className="underline underline-offset-4"
+							>
+								Create your first one.
+							</Link>
+						</p>
 					) : (
 						<Table>
 							<TableHeader>
@@ -106,8 +155,7 @@ export default async function ExamPapersPage() {
 									<TableHead className="text-center">Marks</TableHead>
 									<TableHead className="text-center">Duration</TableHead>
 									<TableHead className="text-center">Sections</TableHead>
-									<TableHead className="text-center">Submissions</TableHead>
-									<TableHead>Status</TableHead>
+									<TableHead>Visibility</TableHead>
 									<TableHead>Created</TableHead>
 								</TableRow>
 							</TableHeader>

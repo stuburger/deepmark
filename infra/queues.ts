@@ -22,6 +22,10 @@ export const questionPaperQueue = new sst.aws.Queue("QuestionPaperQueue", {
 	visibilityTimeout: "10 minutes",
 })
 
+export const studentPaperQueue = new sst.aws.Queue("StudentPaperQueue", {
+	visibilityTimeout: "10 minutes",
+})
+
 scansBucket.notify({
 	notifications: [
 		{
@@ -49,6 +53,13 @@ scansBucket.notify({
 			queue: questionPaperQueue,
 			events: ["s3:ObjectCreated:*"],
 			filterPrefix: "pdfs/question-papers/",
+			filterSuffix: ".pdf",
+		},
+		{
+			name: "StudentPaperTrigger",
+			queue: studentPaperQueue,
+			events: ["s3:ObjectCreated:*"],
+			filterPrefix: "pdfs/student-papers/",
 			filterSuffix: ".pdf",
 		},
 	],
@@ -83,6 +94,13 @@ exemplarQueue.subscribe({
 
 questionPaperQueue.subscribe({
 	handler: "packages/backend/src/processors/question-paper-pdf.handler",
+	link: [neonPostgres, geminiApiKey, openAiApiKey, scansBucket],
+	timeout: "8 minutes",
+	memory: "1 GB",
+})
+
+studentPaperQueue.subscribe({
+	handler: "packages/backend/src/processors/student-paper-pdf.handler",
 	link: [neonPostgres, geminiApiKey, openAiApiKey, scansBucket],
 	timeout: "8 minutes",
 	memory: "1 GB",

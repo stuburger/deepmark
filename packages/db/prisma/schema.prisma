@@ -12,6 +12,14 @@ enum Subject {
   chemistry
   physics
   english
+  english_literature
+  mathematics
+  history
+  geography
+  computer_science
+  french
+  spanish
+  religious_studies
   business
 }
 
@@ -411,6 +419,7 @@ model PdfIngestionJob {
   paper_reference              String?
   attempt_count                Int             @default(0)
   auto_create_exam_paper       Boolean         @default(true)
+  run_adversarial_loop         Boolean         @default(false)
   detected_exam_paper_metadata Json?
   exam_paper_id                String?
   student_name                 String?

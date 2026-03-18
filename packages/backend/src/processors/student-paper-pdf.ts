@@ -1,8 +1,8 @@
-import { GetObjectCommand, S3Client } from "@aws-sdk/client-s3"
-import { Resource } from "sst"
-import { GoogleGenAI, Type } from "@google/genai"
-import { createOpenAI } from "@ai-sdk/openai"
 import { db } from "@/db"
+import { logger } from "@/lib/logger"
+import { createOpenAI } from "@ai-sdk/openai"
+import { GetObjectCommand, S3Client } from "@aws-sdk/client-s3"
+import { GoogleGenAI, Type } from "@google/genai"
 import type { ScanStatus } from "@mcp-gcse/db"
 import {
 	DeterministicMarker,
@@ -10,10 +10,13 @@ import {
 	LevelOfResponseMarker,
 	LlmMarker,
 	MarkerOrchestrator,
+	type QuestionWithMarkScheme,
 	parseMarkPointsFromPrisma,
 	parseMarkingRulesFromPrisma,
-	type QuestionWithMarkScheme,
 } from "@mcp-gcse/shared"
+import { Resource } from "sst"
+
+const TAG = "student-paper-pdf"
 
 const s3 = new S3Client({})
 
@@ -64,7 +67,11 @@ const STUDENT_PAPER_SCHEMA = {
 function parseJobIdFromKey(key: string): string {
 	const decoded = decodeURIComponent(key)
 	const parts = decoded.split("/")
-	if (parts.length < 4 || parts[0] !== "pdfs" || parts[1] !== "student-papers") {
+	if (
+		parts.length < 4 ||
+		parts[0] !== "pdfs" ||
+		parts[1] !== "student-papers"
+	) {
 		throw new Error(`Unexpected student-paper S3 key format: ${key}`)
 	}
 	return parts[2] ?? ""
@@ -106,11 +113,18 @@ export async function handler(
 			let key: string
 			let jobId: string
 
+			logger.info(TAG, "Message received", { messageId })
+
 			if ("job_id" in body && typeof body.job_id === "string") {
 				jobId = body.job_id
-				const job = await db.pdfIngestionJob.findUniqueOrThrow({ where: { id: jobId } })
+				const job = await db.pdfIngestionJob.findUniqueOrThrow({
+					where: { id: jobId },
+				})
 				if (job.document_type !== "student_paper") {
-					console.warn(`Job ${jobId} is not student_paper, skipping`)
+					logger.warn(TAG, "Job is not student_paper — skipping", {
+						jobId,
+						document_type: job.document_type,
+					})
 					continue
 				}
 				bucket = job.s3_bucket
@@ -119,28 +133,53 @@ export async function handler(
 				const s3Event = body as { Records?: S3Record[] }
 				const s3Record = s3Event.Records?.[0]
 				if (!s3Record) {
-					console.warn("No S3 record in message")
+					logger.warn(TAG, "No S3 record in SQS message", { messageId })
 					continue
 				}
 				bucket = s3Record.s3.bucket.name
 				key = decodeURIComponent(s3Record.s3.object.key)
 				jobId = parseJobIdFromKey(key)
+				logger.info(TAG, "Triggered by S3 event", { jobId, bucket, key })
 			}
 
-			const job = await db.pdfIngestionJob.findUniqueOrThrow({ where: { id: jobId } })
+			const job = await db.pdfIngestionJob.findUniqueOrThrow({
+				where: { id: jobId },
+			})
 
 			if (job.document_type !== "student_paper" || !job.exam_paper_id) {
-				console.warn(`Job ${jobId} invalid for student paper processing (wrong type or missing exam_paper_id)`)
+				logger.warn(TAG, "Job invalid — wrong type or missing exam_paper_id", {
+					jobId,
+					document_type: job.document_type,
+					exam_paper_id: job.exam_paper_id,
+				})
 				await db.pdfIngestionJob.update({
 					where: { id: jobId },
-					data: { status: "failed" as ScanStatus, error: "Student paper job requires a linked exam_paper_id" },
+					data: {
+						status: "failed" as ScanStatus,
+						error: "Student paper job requires a linked exam_paper_id",
+					},
 				})
 				continue
 			}
 
+			logger.info(TAG, "Job started", {
+				jobId,
+				exam_paper_id: job.exam_paper_id,
+				attempt: job.attempt_count + 1,
+			})
+
 			await db.pdfIngestionJob.update({
 				where: { id: jobId },
-				data: { attempt_count: { increment: 1 }, status: "processing" as ScanStatus, error: null },
+				data: {
+					attempt_count: { increment: 1 },
+					status: "processing" as ScanStatus,
+					error: null,
+				},
+			})
+
+			logger.info(TAG, "Loading exam paper questions and mark schemes", {
+				jobId,
+				exam_paper_id: job.exam_paper_id,
 			})
 
 			// Load all questions + mark schemes for this exam paper
@@ -161,7 +200,10 @@ export async function handler(
 											},
 											question_parts: {
 												include: {
-													mark_schemes: { take: 1, orderBy: { created_at: "desc" } },
+													mark_schemes: {
+														take: 1,
+														orderBy: { created_at: "desc" },
+													},
 												},
 											},
 										},
@@ -178,8 +220,10 @@ export async function handler(
 				question_number: string
 				question_id: string
 				question_text: string
-				mark_scheme: typeof examPaper.sections[0]["exam_section_questions"][0]["question"]["mark_schemes"][0] | null
-				question_obj: typeof examPaper.sections[0]["exam_section_questions"][0]["question"]
+				mark_scheme:
+					| (typeof examPaper.sections)[0]["exam_section_questions"][0]["question"]["mark_schemes"][0]
+					| null
+				question_obj: (typeof examPaper.sections)[0]["exam_section_questions"][0]["question"]
 			}> = []
 
 			let questionIndex = 1
@@ -198,8 +242,20 @@ export async function handler(
 				}
 			}
 
+			logger.info(TAG, "Exam paper loaded", {
+				jobId,
+				question_count: questionList.length,
+				questions_without_scheme: questionList.filter((q) => !q.mark_scheme)
+					.length,
+			})
+
+			logger.info(TAG, "Fetching PDF from S3", { jobId, bucket, key })
 			const pdfBase64 = await getPdfBase64(bucket, key)
 
+			logger.info(TAG, "Calling Gemini to extract student answers", {
+				jobId,
+				question_count: questionList.length,
+			})
 			// Build prompt describing all questions so Gemini can match answers
 			const questionPromptList = questionList
 				.map((q) => `Question ${q.question_number}: ${q.question_text}`)
@@ -241,6 +297,16 @@ Return:
 				answers: Array<{ question_number: string; answer_text: string }>
 			}
 
+			const answersExtracted = (parsed.answers ?? []).filter((a) =>
+				a.answer_text.trim(),
+			).length
+			logger.info(TAG, "Gemini extraction complete", {
+				jobId,
+				student_name: parsed.student_name || null,
+				answers_extracted: answersExtracted,
+				answers_blank: questionList.length - answersExtracted,
+			})
+
 			// Build answer lookup by question_number
 			const answerMap = new Map<string, string>()
 			for (const a of parsed.answers ?? []) {
@@ -255,6 +321,11 @@ Return:
 				const ms = qItem.mark_scheme
 
 				if (!ms) {
+					logger.warn(TAG, "No mark scheme for question — skipping grade", {
+						jobId,
+						question_id: qItem.question_id,
+						question_number: qItem.question_number,
+					})
 					gradingResults.push({
 						question_id: qItem.question_id,
 						question_text: qItem.question_text,
@@ -273,26 +344,54 @@ Return:
 					| null
 					| undefined
 				const availableOptions = Array.isArray(rawOptions)
-					? rawOptions.map((o) => ({ optionLabel: o.option_label, optionText: o.option_text }))
+					? rawOptions.map((o) => ({
+							optionLabel: o.option_label,
+							optionText: o.option_text,
+						}))
 					: undefined
 
 				const questionWithScheme: QuestionWithMarkScheme = {
 					id: qItem.question_id,
-					questionType: qItem.question_obj.question_type === "multiple_choice" ? "multiple_choice" : "written",
+					questionType:
+						qItem.question_obj.question_type === "multiple_choice"
+							? "multiple_choice"
+							: "written",
 					questionText: qItem.question_text,
 					topic: qItem.question_obj.subject ?? examPaper.subject,
 					rubric: ms.description,
 					guidance: ms.guidance ?? null,
 					totalPoints: ms.points_total,
 					markPoints: parseMarkPointsFromPrisma(ms.mark_points),
-					correctOptionLabels: ms.correct_option_labels?.length > 0 ? ms.correct_option_labels : undefined,
+					correctOptionLabels:
+						ms.correct_option_labels?.length > 0
+							? ms.correct_option_labels
+							: undefined,
 					availableOptions,
-					markingMethod: (ms.marking_method as "deterministic" | "point_based" | "level_of_response") ?? undefined,
+					markingMethod:
+						(ms.marking_method as
+							| "deterministic"
+							| "point_based"
+							| "level_of_response") ?? undefined,
 					markingRules: parseMarkingRulesFromPrisma(ms.marking_rules),
 				}
 
+				logger.info(TAG, "Grading question", {
+					jobId,
+					question_number: qItem.question_number,
+					question_id: qItem.question_id,
+					marking_method: ms.marking_method,
+				})
 				try {
-					const grade = await orchestrator.mark(questionWithScheme, studentAnswer)
+					const grade = await orchestrator.mark(
+						questionWithScheme,
+						studentAnswer,
+					)
+					logger.info(TAG, "Question graded", {
+						jobId,
+						question_number: qItem.question_number,
+						awarded: grade.totalScore,
+						max: grade.maxPossibleScore,
+					})
 					gradingResults.push({
 						question_id: qItem.question_id,
 						question_text: qItem.question_text,
@@ -305,7 +404,12 @@ Return:
 						level_awarded: grade.levelAwarded ?? undefined,
 					})
 				} catch (err) {
-					console.error(`Grading failed for question ${qItem.question_id}:`, err)
+					logger.error(TAG, "Grading failed for question", {
+						jobId,
+						question_number: qItem.question_number,
+						question_id: qItem.question_id,
+						error: String(err),
+					})
 					gradingResults.push({
 						question_id: qItem.question_id,
 						question_text: qItem.question_text,
@@ -319,6 +423,19 @@ Return:
 				}
 			}
 
+			const totalAwarded = gradingResults.reduce(
+				(s, r) => s + r.awarded_score,
+				0,
+			)
+			const totalMax = gradingResults.reduce((s, r) => s + r.max_score, 0)
+			logger.info(TAG, "Job completed successfully", {
+				jobId,
+				student_name: parsed.student_name?.trim() || null,
+				total_awarded: totalAwarded,
+				total_max: totalMax,
+				questions_graded: gradingResults.length,
+			})
+
 			await db.pdfIngestionJob.update({
 				where: { id: jobId },
 				data: {
@@ -330,15 +447,22 @@ Return:
 				},
 			})
 		} catch (err) {
-			console.error("Student paper PDF processor error:", err)
+			logger.error(TAG, "Job failed with unhandled error", {
+				error: String(err),
+			})
 			const message = err instanceof Error ? err.message : String(err)
 			try {
-				const b = JSON.parse(record.body) as { job_id?: string } | { Records?: S3Record[] }
+				const b = JSON.parse(record.body) as
+					| { job_id?: string }
+					| { Records?: S3Record[] }
 				const jId =
 					"job_id" in b && b.job_id
 						? b.job_id
 						: parseJobIdFromKey(
-								(record.body && (JSON.parse(record.body) as { Records?: S3Record[] }).Records?.[0]?.s3?.object?.key) ?? "",
+								(record.body &&
+									(JSON.parse(record.body) as { Records?: S3Record[] })
+										.Records?.[0]?.s3?.object?.key) ??
+									"",
 							)
 				if (jId) {
 					await db.pdfIngestionJob.update({

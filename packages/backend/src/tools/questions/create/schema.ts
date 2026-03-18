@@ -1,3 +1,4 @@
+import { SUBJECT_VALUES } from "@mcp-gcse/db"
 import { z } from "zod"
 
 export const MultipleChoiceOptionSchema = z.object({
@@ -50,9 +51,7 @@ export const CreateQuestionSchema = {
 	difficulty_level: z
 		.enum(["easy", "medium", "hard", "expert"])
 		.describe("Difficulty level of the question"),
-	subject: z
-		.enum(["biology", "chemistry", "physics", "english"])
-		.describe("Subject area for the question"),
+	subject: z.enum(SUBJECT_VALUES).describe("Subject area for the question"),
 	question_type: z
 		.enum(["written", "multiple_choice"])
 		.default("written")

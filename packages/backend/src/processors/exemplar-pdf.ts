@@ -1,9 +1,12 @@
-import { GetObjectCommand, S3Client } from "@aws-sdk/client-s3"
-import { Resource } from "sst"
-import { GoogleGenAI, Type } from "@google/genai"
 import { db } from "@/db"
-import type { ScanStatus } from "@mcp-gcse/db"
+import { logger } from "@/lib/logger"
 import { validateWithExemplars } from "@/services/validate-with-exemplars"
+import { GetObjectCommand, S3Client } from "@aws-sdk/client-s3"
+import { GoogleGenAI, Type } from "@google/genai"
+import type { ScanStatus } from "@mcp-gcse/db"
+import { Resource } from "sst"
+
+const TAG = "exemplar-pdf"
 
 const s3 = new S3Client({})
 
@@ -45,7 +48,12 @@ const EXEMPLAR_SCHEMA = {
 								mark_band: { type: Type.STRING },
 								expected_score: { type: Type.INTEGER },
 							},
-							required: ["level", "is_fake_exemplar", "answer_text", "why_criteria"],
+							required: [
+								"level",
+								"is_fake_exemplar",
+								"answer_text",
+								"why_criteria",
+							],
 						},
 					},
 				},
@@ -90,13 +98,18 @@ export async function handler(
 			let key: string
 			let jobId: string
 
+			logger.info(TAG, "Message received", { messageId })
+
 			if ("job_id" in body && typeof body.job_id === "string") {
 				jobId = body.job_id
 				const job = await db.pdfIngestionJob.findUniqueOrThrow({
 					where: { id: jobId },
 				})
 				if (job.document_type !== "exemplar") {
-					console.warn(`Job ${jobId} is not exemplar, skipping`)
+					logger.warn(TAG, "Job is not exemplar — skipping", {
+						jobId,
+						document_type: job.document_type,
+					})
 					continue
 				}
 				bucket = job.s3_bucket
@@ -106,12 +119,13 @@ export async function handler(
 				const s3Records = s3Event.Records ?? []
 				const s3Record = s3Records[0]
 				if (!s3Record) {
-					console.warn("No S3 record in message")
+					logger.warn(TAG, "No S3 record in SQS message", { messageId })
 					continue
 				}
 				bucket = s3Record.s3.bucket.name
 				key = decodeURIComponent(s3Record.s3.object.key)
 				jobId = parseJobIdFromKey(key)
+				logger.info(TAG, "Triggered by S3 event", { jobId, bucket, key })
 			}
 
 			const job = await db.pdfIngestionJob.findUniqueOrThrow({
@@ -119,13 +133,27 @@ export async function handler(
 			})
 
 			if (job.document_type !== "exemplar" || !job.subject) {
-				console.warn(`Job ${jobId} invalid for exemplar processing (missing subject or wrong type)`)
+				logger.warn(TAG, "Job invalid — wrong type or missing subject", {
+					jobId,
+					document_type: job.document_type,
+					subject: job.subject,
+				})
 				await db.pdfIngestionJob.update({
 					where: { id: jobId },
-					data: { status: "failed" as ScanStatus, error: "Exemplar job missing required subject" },
+					data: {
+						status: "failed" as ScanStatus,
+						error: "Exemplar job missing required subject",
+					},
 				})
 				continue
 			}
+
+			logger.info(TAG, "Job started", {
+				jobId,
+				subject: job.subject,
+				exam_board: job.exam_board,
+				attempt: job.attempt_count + 1,
+			})
 
 			const subject = job.subject
 			const examBoard = job.exam_board
@@ -140,8 +168,10 @@ export async function handler(
 				},
 			})
 
+			logger.info(TAG, "Fetching PDF from S3", { jobId, bucket, key })
 			const pdfBase64 = await getPdfBase64(bucket, key)
 
+			logger.info(TAG, "Calling Gemini to extract exemplar answers", { jobId })
 			const response = await gemini.models.generateContent({
 				model: "gemini-2.5-flash",
 				contents: [
@@ -170,6 +200,7 @@ export async function handler(
 			const responseText = response.text
 			if (!responseText) throw new Error("No response from Gemini")
 
+			logger.info(TAG, "Gemini extraction complete", { jobId })
 			const parsed = JSON.parse(responseText) as {
 				questions?: Array<{
 					question_text: string
@@ -184,6 +215,15 @@ export async function handler(
 					}>
 				}>
 			}
+
+			const questionCount = parsed.questions?.length ?? 0
+			const exemplarCount =
+				parsed.questions?.reduce((s, q) => s + q.exemplars.length, 0) ?? 0
+			logger.info(TAG, "Exemplars extracted", {
+				jobId,
+				question_count: questionCount,
+				exemplar_count: exemplarCount,
+			})
 
 			const markSchemeIdsToValidate = new Set<string>()
 
@@ -221,7 +261,8 @@ export async function handler(
 						},
 					})
 					if (existing) {
-						if (existing.mark_scheme_id) markSchemeIdsToValidate.add(existing.mark_scheme_id)
+						if (existing.mark_scheme_id)
+							markSchemeIdsToValidate.add(existing.mark_scheme_id)
 						continue
 					}
 
@@ -241,21 +282,39 @@ export async function handler(
 						},
 					})
 
-					if (created.mark_scheme_id) markSchemeIdsToValidate.add(created.mark_scheme_id)
+					if (created.mark_scheme_id)
+						markSchemeIdsToValidate.add(created.mark_scheme_id)
 				}
 			}
 
 			for (const markSchemeId of markSchemeIdsToValidate) {
 				try {
+					logger.info(TAG, "Running exemplar validation", {
+						jobId,
+						mark_scheme_id: markSchemeId,
+					})
 					const summary = await validateWithExemplars(markSchemeId)
-					console.log(
-						`Exemplar validation for mark scheme ${markSchemeId}: ${summary.passCount}/${summary.totalTested} passed (${summary.accuracyPercent}%)`,
-					)
+					logger.info(TAG, "Exemplar validation complete", {
+						jobId,
+						mark_scheme_id: markSchemeId,
+						pass_count: summary.passCount,
+						total_tested: summary.totalTested,
+						accuracy_percent: summary.accuracyPercent,
+					})
 				} catch (err) {
-					console.error(`Exemplar validation failed for mark scheme ${markSchemeId}:`, err)
+					logger.error(TAG, "Exemplar validation failed", {
+						jobId,
+						mark_scheme_id: markSchemeId,
+						error: String(err),
+					})
 				}
 			}
 
+			logger.info(TAG, "Job completed successfully", {
+				jobId,
+				question_count: questionCount,
+				exemplar_count: exemplarCount,
+			})
 			await db.pdfIngestionJob.update({
 				where: { id: jobId },
 				data: {
@@ -265,15 +324,22 @@ export async function handler(
 				},
 			})
 		} catch (err) {
-			console.error("Exemplar PDF processor error:", err)
+			logger.error(TAG, "Job failed with unhandled error", {
+				error: String(err),
+			})
 			const message = err instanceof Error ? err.message : String(err)
 			try {
-				const body = JSON.parse(record.body) as { job_id?: string } | { Records?: S3Record[] }
+				const body = JSON.parse(record.body) as
+					| { job_id?: string }
+					| { Records?: S3Record[] }
 				const jobId =
 					"job_id" in body && body.job_id
 						? body.job_id
 						: parseJobIdFromKey(
-								(record.body && (JSON.parse(record.body) as { Records?: S3Record[] }).Records?.[0]?.s3?.object?.key) ?? "",
+								(record.body &&
+									(JSON.parse(record.body) as { Records?: S3Record[] })
+										.Records?.[0]?.s3?.object?.key) ??
+									"",
 							)
 				if (jobId) {
 					await db.pdfIngestionJob.update({

@@ -1,3 +1,4 @@
+import { SUBJECT_VALUES } from "@mcp-gcse/db"
 import { z } from "zod"
 import { CreateQuestionPartSchema } from "../create/schema"
 
@@ -20,7 +21,7 @@ export const UpdateQuestionByIdSchema = {
 		.optional()
 		.describe("Difficulty level of the question"),
 	subject: z
-		.enum(["biology", "chemistry", "physics", "english"])
+		.enum(SUBJECT_VALUES)
 		.optional()
 		.describe("Subject area for the question"),
 	question_parts: z

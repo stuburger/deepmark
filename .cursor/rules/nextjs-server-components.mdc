@@ -34,6 +34,24 @@ Check the first line of any UI component file before importing it into a server 
 
 You cannot call its exports as functions (`buttonVariants()`, `cn(something)` from a client module, etc.).
 
+## Never import values from `@mcp-gcse/db` in client components
+
+`@mcp-gcse/db` exports the Prisma client which uses Node.js-only modules (`node:module` etc). Importing any **value** from it in a `"use client"` component will bundle Prisma into the browser and throw a build error.
+
+```tsx
+// ❌ BAD — pulls Prisma into the client bundle
+import { SUBJECTS, SUBJECT_VALUES } from "@mcp-gcse/db"
+import type { Subject } from "@mcp-gcse/db" // ✅ type-only is fine (erased at compile time)
+
+// ✅ GOOD — use the client-safe copy
+import { SUBJECTS, SUBJECT_VALUES, type Subject } from "@/lib/subjects"
+```
+
+Rules:
+- `"use server"` files (server actions): may import values from `@mcp-gcse/db` freely
+- `"use client"` files: **only `import type`** from `@mcp-gcse/db`. For values like `SUBJECTS`, import from `@/lib/subjects` instead
+- Server components (no directive): same as server actions — value imports are fine
+
 ## Hydration errors from dark mode
 
 Do not add `suppressHydrationWarning` or dynamic `className` based on `window` in the root `<html>` tag. The theme provider handles dark mode class injection — the root layout should only set the font variable:

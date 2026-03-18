@@ -1,10 +1,11 @@
+import { SUBJECT_VALUES } from "@mcp-gcse/db"
 import { z } from "zod"
 
 export const UpdateExamPaperSchema = {
 	exam_paper_id: z.string().describe("The ID of the exam paper to update"),
 	title: z.string().optional().describe("The updated title of the exam paper"),
 	subject: z
-		.enum(["biology", "chemistry", "physics", "english"])
+		.enum(SUBJECT_VALUES)
 		.optional()
 		.describe("Updated subject area for the exam paper"),
 	year: z

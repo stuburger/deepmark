@@ -1,16 +1,19 @@
-import { GetObjectCommand, S3Client } from "@aws-sdk/client-s3"
-import { Resource } from "sst"
-import { GoogleGenAI, Type } from "@google/genai"
-import { createOpenAI } from "@ai-sdk/openai"
 import { db } from "@/db"
+import { logger } from "@/lib/logger"
+import { createOpenAI } from "@ai-sdk/openai"
+import { GetObjectCommand, S3Client } from "@aws-sdk/client-s3"
+import { GoogleGenAI, Type } from "@google/genai"
+import type { ScanStatus } from "@mcp-gcse/db"
 import {
-	runAdversarialLoop,
-	probeBoundaries,
-	parseMarkPointsFromPrisma,
 	Grader,
 	type QuestionWithMarkScheme,
+	parseMarkPointsFromPrisma,
+	probeBoundaries,
+	runAdversarialLoop,
 } from "@mcp-gcse/shared"
-import type { ScanStatus } from "@mcp-gcse/db"
+import { Resource } from "sst"
+
+const TAG = "mark-scheme-pdf"
 
 const s3 = new S3Client({})
 
@@ -61,8 +64,7 @@ const MARK_SCHEME_SCHEMA = {
 					marking_method: {
 						type: Type.STRING,
 						nullable: true,
-						description:
-							"multiple_choice | level_of_response | point_based",
+						description: "multiple_choice | level_of_response | point_based",
 					},
 					command_word: { type: Type.STRING, nullable: true },
 					items_required: { type: Type.INTEGER, nullable: true },
@@ -102,7 +104,12 @@ const MARK_SCHEME_SCHEMA = {
 						},
 					},
 				},
-				required: ["question_text", "question_type", "total_marks", "mark_points"],
+				required: [
+					"question_text",
+					"question_type",
+					"total_marks",
+					"mark_points",
+				],
 			},
 		},
 	},
@@ -119,7 +126,13 @@ const EXAM_PAPER_METADATA_SCHEMA = {
 		duration_minutes: { type: Type.INTEGER },
 		year: { type: Type.INTEGER, nullable: true },
 	},
-	required: ["title", "subject", "exam_board", "total_marks", "duration_minutes"],
+	required: [
+		"title",
+		"subject",
+		"exam_board",
+		"total_marks",
+		"duration_minutes",
+	],
 }
 
 function parseJobIdFromKey(key: string): string {
@@ -202,13 +215,18 @@ export async function handler(
 			let key: string
 			let jobId: string
 
+			logger.info(TAG, "Message received", { messageId })
+
 			if ("job_id" in body && typeof body.job_id === "string") {
 				jobId = body.job_id
 				const job = await db.pdfIngestionJob.findUniqueOrThrow({
 					where: { id: jobId },
 				})
 				if (job.document_type !== "mark_scheme") {
-					console.warn(`Job ${jobId} is not mark_scheme, skipping`)
+					logger.warn(TAG, "Job is not mark_scheme — skipping", {
+						jobId,
+						document_type: job.document_type,
+					})
 					continue
 				}
 				bucket = job.s3_bucket
@@ -218,21 +236,34 @@ export async function handler(
 				const s3Records = s3Event.Records ?? []
 				const s3Record = s3Records[0]
 				if (!s3Record) {
-					console.warn("No S3 record in message")
+					logger.warn(TAG, "No S3 record in SQS message", { messageId })
 					continue
 				}
 				bucket = s3Record.s3.bucket.name
 				key = decodeURIComponent(s3Record.s3.object.key)
 				jobId = parseJobIdFromKey(key)
+				logger.info(TAG, "Triggered by S3 event", { jobId, bucket, key })
 			}
 
 			const job = await db.pdfIngestionJob.findUniqueOrThrow({
 				where: { id: jobId },
 			})
 			if (job.document_type !== "mark_scheme" || !job.subject) {
-				console.warn(`Job ${jobId} invalid for mark scheme processing`)
+				logger.warn(TAG, "Job invalid — wrong type or missing subject", {
+					jobId,
+					document_type: job.document_type,
+					subject: job.subject,
+				})
 				continue
 			}
+
+			logger.info(TAG, "Job started", {
+				jobId,
+				subject: job.subject,
+				exam_board: job.exam_board,
+				attempt: job.attempt_count + 1,
+				auto_create_exam_paper: job.auto_create_exam_paper,
+			})
 
 			await db.pdfIngestionJob.update({
 				where: { id: jobId },
@@ -243,12 +274,17 @@ export async function handler(
 				},
 			})
 
+			logger.info(TAG, "Fetching PDF from S3", { jobId, bucket, key })
 			const pdfBase64 = await getPdfBase64(bucket, key)
 			const examBoard = job.exam_board
 			const subject = job.subject
 			const uploadedBy = job.uploaded_by
 			const autoCreateExamPaper = job.auto_create_exam_paper
 
+			logger.info(TAG, "Calling Gemini for mark scheme + metadata extraction", {
+				jobId,
+				auto_create_exam_paper: autoCreateExamPaper,
+			})
 			const [markSchemeResponse, metadataResponse] = await Promise.all([
 				gemini.models.generateContent({
 					model: "gemini-2.5-flash",
@@ -302,15 +338,21 @@ export async function handler(
 					: Promise.resolve(null),
 			])
 
+			logger.info(TAG, "Gemini extraction complete", { jobId })
 			const markSchemeText = markSchemeResponse.text
-			if (!markSchemeText) throw new Error("No mark scheme response from Gemini")
+			if (!markSchemeText)
+				throw new Error("No mark scheme response from Gemini")
 			const parsed = JSON.parse(markSchemeText) as {
 				questions: Array<{
 					question_text: string
 					question_type: string
 					total_marks: number
 					ao_breakdown?: string
-					mark_points: Array<{ description: string; criteria: string; points: number }>
+					mark_points: Array<{
+						description: string
+						criteria: string
+						points: number
+					}>
 					acceptable_answers?: string[]
 					guidance?: string
 					question_number?: string
@@ -344,24 +386,53 @@ export async function handler(
 			let detectedMetadata: DetectedMetadata | null = null
 			if (metadataResponse?.text) {
 				try {
-					detectedMetadata = JSON.parse(metadataResponse.text) as DetectedMetadata
+					detectedMetadata = JSON.parse(
+						metadataResponse.text,
+					) as DetectedMetadata
 				} catch {
 					// ignore
 				}
 			}
 
-			const openai = createOpenAI({ apiKey: Resource.OpenAiApiKey.value })
-			const grader = new Grader(openai("gpt-4o"), {
-				systemPrompt:
-					"You are an expert GCSE examiner. Mark the student's answer against the provided mark scheme. Return valid JSON matching the schema. Be consistent and conservative.",
+			const runAdversarialLoopEnabled = job.run_adversarial_loop
+
+			// Only instantiate grader if the adversarial loop is enabled — it's expensive
+			// and not needed for a plain extraction run.
+			const openai = runAdversarialLoopEnabled
+				? createOpenAI({ apiKey: Resource.OpenAiApiKey.value })
+				: null
+			const grader = openai
+				? new Grader(openai("gpt-4o"), {
+						systemPrompt:
+							"You are an expert GCSE examiner. Mark the student's answer against the provided mark scheme. Return valid JSON matching the schema. Be consistent and conservative.",
+					})
+				: null
+
+			const questionCount = parsed.questions?.length ?? 0
+			logger.info(TAG, "Processing questions from mark scheme", {
+				jobId,
+				question_count: questionCount,
 			})
 
-			for (let i = 0; i < (parsed.questions?.length ?? 0); i++) {
+			for (let i = 0; i < questionCount; i++) {
 				const q = parsed.questions[i]
 				if (!q) continue
 				const questionText = q.question_text
+				logger.info(TAG, "Processing question", {
+					jobId,
+					index: i + 1,
+					total: questionCount,
+					marking_method: q.marking_method ?? "point_based",
+				})
 				const embeddingVec = await embedText(questionText)
 				const existingId = await findMatchingQuestionId(examBoard, embeddingVec)
+				logger.info(
+					TAG,
+					existingId
+						? "Matched existing question via embedding"
+						: "No match — creating new question",
+					{ jobId, question_index: i + 1, existing_id: existingId },
+				)
 				const vecStr = embeddingToVectorStr(embeddingVec)
 				const markPointsPrisma = (q.mark_points ?? []).map((mp, idx) => ({
 					point_number: idx + 1,
@@ -369,12 +440,16 @@ export async function handler(
 					points: mp.points ?? 1,
 					criteria: mp.criteria,
 				}))
-				const pointsTotal = q.total_marks ?? markPointsPrisma.reduce((s, mp) => s + mp.points, 0)
+				const pointsTotal =
+					q.total_marks ?? markPointsPrisma.reduce((s, mp) => s + mp.points, 0)
 				const correctOptionLabels =
 					q.question_type === "multiple_choice" && q.correct_option
 						? [q.correct_option.trim()]
 						: []
-				const effectiveMarkingMethod: "deterministic" | "point_based" | "level_of_response" =
+				const effectiveMarkingMethod:
+					| "deterministic"
+					| "point_based"
+					| "level_of_response" =
 					q.question_type === "multiple_choice"
 						? "deterministic"
 						: q.marking_method === "level_of_response"
@@ -399,8 +474,12 @@ export async function handler(
 							text: questionText,
 							topic: subject,
 							points: pointsTotal,
-							question_type: q.question_type === "multiple_choice" ? "multiple_choice" : "written",
-							multiple_choice_options: q.question_type === "multiple_choice" ? [] : [],
+							question_type:
+								q.question_type === "multiple_choice"
+									? "multiple_choice"
+									: "written",
+							multiple_choice_options:
+								q.question_type === "multiple_choice" ? [] : [],
 						},
 					})
 					await db.$executeRaw`
@@ -409,63 +488,67 @@ export async function handler(
 					const markScheme = await db.markScheme.findFirst({
 						where: { question_id: existingId },
 					})
-				if (markScheme) {
-					await db.markScheme.update({
-						where: { id: markScheme.id },
-						data: {
-							description: q.ao_breakdown ?? q.question_text.slice(0, 500),
-							guidance: q.guidance ?? null,
-							points_total: pointsTotal,
-							mark_points: markPointsPrisma,
-							correct_option_labels: correctOptionLabels,
-							marking_method: effectiveMarkingMethod,
-							marking_rules: markingRules ?? undefined,
-							link_status: "auto_linked",
-						},
-					})
-						const questionWithScheme = buildQuestionWithMarkScheme(
-							existingId,
-							questionText,
-							subject,
-							q.question_type,
-							markPointsPrisma,
-							pointsTotal,
-							q.guidance,
-							q.ao_breakdown ?? "",
-							correctOptionLabels,
-							effectiveMarkingMethod,
-							markingRules ?? null,
-						)
-						const testResults = await runAdversarialLoop(
-							questionWithScheme,
-							grader,
-							openai("gpt-4o"),
-							{ targetScores: probeBoundaries(pointsTotal), maxIterations: 3 },
-						)
-						for (const tr of testResults) {
-							await db.markSchemeTestRun.create({
-								data: {
-									mark_scheme_id: markScheme.id,
-									iteration: tr.iteration,
-									target_score: tr.targetScore,
-									actual_score: tr.actualScore,
-									delta: tr.delta,
-									student_answer: tr.studentAnswer,
-									grader_reasoning: tr.graderReasoning,
-									schema_patch: tr.schemaPatch ?? null,
-									converged: tr.converged,
-									triggered_by: "pdf_pipeline",
-								},
-							})
-						}
-						const totalIterations = testResults.length
+					if (markScheme) {
 						await db.markScheme.update({
 							where: { id: markScheme.id },
 							data: {
-								refined_at: new Date(),
-								refinement_iterations: totalIterations,
+								description: q.ao_breakdown ?? q.question_text.slice(0, 500),
+								guidance: q.guidance ?? null,
+								points_total: pointsTotal,
+								mark_points: markPointsPrisma,
+								correct_option_labels: correctOptionLabels,
+								marking_method: effectiveMarkingMethod,
+								marking_rules: markingRules ?? undefined,
+								link_status: "auto_linked",
 							},
 						})
+						if (runAdversarialLoopEnabled && grader && openai) {
+							const questionWithScheme = buildQuestionWithMarkScheme(
+								existingId,
+								questionText,
+								subject,
+								q.question_type,
+								markPointsPrisma,
+								pointsTotal,
+								q.guidance,
+								q.ao_breakdown ?? "",
+								correctOptionLabels,
+								effectiveMarkingMethod,
+								markingRules ?? null,
+							)
+							const testResults = await runAdversarialLoop(
+								questionWithScheme,
+								grader,
+								openai("gpt-4o"),
+								{
+									targetScores: probeBoundaries(pointsTotal),
+									maxIterations: 3,
+								},
+							)
+							for (const tr of testResults) {
+								await db.markSchemeTestRun.create({
+									data: {
+										mark_scheme_id: markScheme.id,
+										iteration: tr.iteration,
+										target_score: tr.targetScore,
+										actual_score: tr.actualScore,
+										delta: tr.delta,
+										student_answer: tr.studentAnswer,
+										grader_reasoning: tr.graderReasoning,
+										schema_patch: tr.schemaPatch ?? null,
+										converged: tr.converged,
+										triggered_by: "pdf_pipeline",
+									},
+								})
+							}
+							await db.markScheme.update({
+								where: { id: markScheme.id },
+								data: {
+									refined_at: new Date(),
+									refinement_iterations: testResults.length,
+								},
+							})
+						}
 					} else {
 						const newMarkScheme = await db.markScheme.create({
 							data: {
@@ -482,8 +565,92 @@ export async function handler(
 								link_status: "auto_linked",
 							},
 						})
+						if (runAdversarialLoopEnabled && grader && openai) {
+							const questionWithScheme = buildQuestionWithMarkScheme(
+								existingId,
+								questionText,
+								subject,
+								q.question_type,
+								markPointsPrisma,
+								pointsTotal,
+								q.guidance,
+								q.ao_breakdown ?? "",
+								correctOptionLabels,
+								effectiveMarkingMethod,
+								markingRules ?? null,
+							)
+							const testResults = await runAdversarialLoop(
+								questionWithScheme,
+								grader,
+								openai("gpt-4o"),
+								{
+									targetScores: probeBoundaries(pointsTotal),
+									maxIterations: 3,
+								},
+							)
+							for (const tr of testResults) {
+								await db.markSchemeTestRun.create({
+									data: {
+										mark_scheme_id: newMarkScheme.id,
+										iteration: tr.iteration,
+										target_score: tr.targetScore,
+										actual_score: tr.actualScore,
+										delta: tr.delta,
+										student_answer: tr.studentAnswer,
+										grader_reasoning: tr.graderReasoning,
+										schema_patch: tr.schemaPatch ?? null,
+										converged: tr.converged,
+										triggered_by: "pdf_pipeline",
+									},
+								})
+							}
+							await db.markScheme.update({
+								where: { id: newMarkScheme.id },
+								data: {
+									refined_at: new Date(),
+									refinement_iterations: testResults.length,
+								},
+							})
+						}
+					}
+				} else {
+					const newQuestion = await db.question.create({
+						data: {
+							text: questionText,
+							topic: subject,
+							created_by_id: uploadedBy,
+							subject,
+							points: pointsTotal,
+							question_type:
+								q.question_type === "multiple_choice"
+									? "multiple_choice"
+									: "written",
+							multiple_choice_options: [],
+							source_pdf_ingestion_job_id: jobId,
+							origin: "mark_scheme",
+						},
+					})
+					await db.$executeRaw`
+					UPDATE questions SET embedding = (${vecStr}::text)::vector WHERE id = ${newQuestion.id}
+				`
+					const newMarkScheme = await db.markScheme.create({
+						data: {
+							question_id: newQuestion.id,
+							description: q.ao_breakdown ?? questionText.slice(0, 500),
+							guidance: q.guidance ?? null,
+							created_by_id: uploadedBy,
+							tags: [],
+							points_total: pointsTotal,
+							mark_points: markPointsPrisma,
+							correct_option_labels: correctOptionLabels,
+							marking_method: effectiveMarkingMethod,
+							marking_rules: markingRules ?? undefined,
+							link_status: "linked",
+						},
+					})
+					if (runAdversarialLoopEnabled && grader && openai) {
 						const questionWithScheme = buildQuestionWithMarkScheme(
-							existingId,
+							newQuestion.id,
 							questionText,
 							subject,
 							q.question_type,
@@ -525,83 +692,19 @@ export async function handler(
 							},
 						})
 					}
-				} else {
-				const newQuestion = await db.question.create({
-					data: {
-						text: questionText,
-						topic: subject,
-						created_by_id: uploadedBy,
-						subject,
-						points: pointsTotal,
-						question_type: q.question_type === "multiple_choice" ? "multiple_choice" : "written",
-						multiple_choice_options: [],
-						source_pdf_ingestion_job_id: jobId,
-						origin: "mark_scheme",
-					},
-				})
-				await db.$executeRaw`
-					UPDATE questions SET embedding = (${vecStr}::text)::vector WHERE id = ${newQuestion.id}
-				`
-				const newMarkScheme = await db.markScheme.create({
-					data: {
-						question_id: newQuestion.id,
-						description: q.ao_breakdown ?? questionText.slice(0, 500),
-						guidance: q.guidance ?? null,
-						created_by_id: uploadedBy,
-						tags: [],
-						points_total: pointsTotal,
-						mark_points: markPointsPrisma,
-						correct_option_labels: correctOptionLabels,
-						marking_method: effectiveMarkingMethod,
-						marking_rules: markingRules ?? undefined,
-						link_status: "linked",
-					},
-				})
-					const questionWithScheme = buildQuestionWithMarkScheme(
-						newQuestion.id,
-						questionText,
-						subject,
-						q.question_type,
-						markPointsPrisma,
-						pointsTotal,
-						q.guidance,
-						q.ao_breakdown ?? "",
-						correctOptionLabels,
-						effectiveMarkingMethod,
-						markingRules ?? null,
-					)
-					const testResults = await runAdversarialLoop(
-						questionWithScheme,
-						grader,
-						openai("gpt-4o"),
-						{ targetScores: probeBoundaries(pointsTotal), maxIterations: 3 },
-					)
-					for (const tr of testResults) {
-						await db.markSchemeTestRun.create({
-							data: {
-								mark_scheme_id: newMarkScheme.id,
-								iteration: tr.iteration,
-								target_score: tr.targetScore,
-								actual_score: tr.actualScore,
-								delta: tr.delta,
-								student_answer: tr.studentAnswer,
-								grader_reasoning: tr.graderReasoning,
-								schema_patch: tr.schemaPatch ?? null,
-								converged: tr.converged,
-								triggered_by: "pdf_pipeline",
-							},
-						})
-					}
-					await db.markScheme.update({
-						where: { id: newMarkScheme.id },
-						data: {
-							refined_at: new Date(),
-							refinement_iterations: testResults.length,
-						},
-					})
 				}
 			}
 
+			// If the job is linked to an existing exam paper, add all created questions
+			// to that paper's first section (creating the section if it doesn't exist yet).
+			if (job.exam_paper_id) {
+				await linkJobQuestionsToExamPaper(jobId, job.exam_paper_id, uploadedBy)
+			}
+
+			logger.info(TAG, "Job completed successfully", {
+				jobId,
+				question_count: questionCount,
+			})
 			await db.pdfIngestionJob.update({
 				where: { id: jobId },
 				data: {
@@ -612,15 +715,22 @@ export async function handler(
 				},
 			})
 		} catch (err) {
-			console.error("Mark scheme PDF processor error:", err)
+			logger.error(TAG, "Job failed with unhandled error", {
+				error: String(err),
+			})
 			const message = err instanceof Error ? err.message : String(err)
 			try {
-				const body = JSON.parse(record.body) as { job_id?: string } | { Records?: S3Record[] }
+				const body = JSON.parse(record.body) as
+					| { job_id?: string }
+					| { Records?: S3Record[] }
 				const jobId =
 					"job_id" in body && body.job_id
 						? body.job_id
 						: parseJobIdFromKey(
-								(record.body && (JSON.parse(record.body) as { Records?: S3Record[] }).Records?.[0]?.s3?.object?.key) ?? "",
+								(record.body &&
+									(JSON.parse(record.body) as { Records?: S3Record[] })
+										.Records?.[0]?.s3?.object?.key) ??
+									"",
 							)
 				if (jobId) {
 					await db.pdfIngestionJob.update({
@@ -643,7 +753,12 @@ function buildQuestionWithMarkScheme(
 	questionText: string,
 	topic: string,
 	questionType: string,
-	markPointsPrisma: Array<{ point_number: number; description: string; points: number; criteria: string }>,
+	markPointsPrisma: Array<{
+		point_number: number
+		description: string
+		points: number
+		criteria: string
+	}>,
 	totalPoints: number,
 	guidance: string | undefined,
 	rubric: string,
@@ -652,23 +767,97 @@ function buildQuestionWithMarkScheme(
 	markingRules?: {
 		command_word?: string
 		items_required?: number
-		levels: Array<{ level: number; mark_range: [number, number]; descriptor: string; ao_requirements?: string[] }>
-		caps?: Array<{ condition: string; max_level?: number; max_mark?: number; reason: string }>
+		levels: Array<{
+			level: number
+			mark_range: [number, number]
+			descriptor: string
+			ao_requirements?: string[]
+		}>
+		caps?: Array<{
+			condition: string
+			max_level?: number
+			max_mark?: number
+			reason: string
+		}>
 	} | null,
 ): QuestionWithMarkScheme {
 	const markPoints = parseMarkPointsFromPrisma(markPointsPrisma)
 	return {
 		id: questionId,
-		questionType: questionType === "multiple_choice" ? "multiple_choice" : "written",
+		questionType:
+			questionType === "multiple_choice" ? "multiple_choice" : "written",
 		questionText,
 		topic,
 		rubric,
 		guidance: guidance ?? null,
 		totalPoints,
 		markPoints,
-		correctOptionLabels: correctOptionLabels.length > 0 ? correctOptionLabels : undefined,
+		correctOptionLabels:
+			correctOptionLabels.length > 0 ? correctOptionLabels : undefined,
 		availableOptions: undefined,
 		markingMethod: markingMethod ?? undefined,
 		markingRules: markingRules ?? undefined,
+	}
+}
+
+/**
+ * Links all questions created by a job to the given exam paper's first section.
+ * Creates the section if the paper has none yet.
+ * Skips questions already linked to avoid unique constraint violations (idempotent).
+ */
+async function linkJobQuestionsToExamPaper(
+	jobId: string,
+	examPaperId: string,
+	uploadedBy: string,
+): Promise<void> {
+	const questions = await db.question.findMany({
+		where: { source_pdf_ingestion_job_id: jobId },
+		orderBy: { created_at: "asc" },
+		select: { id: true },
+	})
+	if (questions.length === 0) return
+
+	let section = await db.examSection.findFirst({
+		where: { exam_paper_id: examPaperId },
+		orderBy: { order: "asc" },
+	})
+	if (!section) {
+		const paper = await db.examPaper.findUnique({
+			where: { id: examPaperId },
+			select: { total_marks: true },
+		})
+		section = await db.examSection.create({
+			data: {
+				exam_paper_id: examPaperId,
+				title: "Section 1",
+				total_marks: paper?.total_marks ?? 0,
+				order: 1,
+				created_by_id: uploadedBy,
+			},
+		})
+	}
+
+	const existingLinks = await db.examSectionQuestion.findMany({
+		where: { exam_section_id: section.id },
+		select: { question_id: true, order: true },
+		orderBy: { order: "asc" },
+	})
+	const existingQuestionIds = new Set(existingLinks.map((l) => l.question_id))
+	const maxOrder =
+		existingLinks.length > 0
+			? Math.max(...existingLinks.map((l) => l.order))
+			: 0
+
+	let orderOffset = maxOrder
+	for (const q of questions) {
+		if (existingQuestionIds.has(q.id)) continue
+		orderOffset++
+		await db.examSectionQuestion.create({
+			data: {
+				exam_section_id: section.id,
+				question_id: q.id,
+				order: orderOffset,
+			},
+		})
 	}
 }

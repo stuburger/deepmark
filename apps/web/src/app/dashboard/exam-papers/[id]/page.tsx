@@ -151,7 +151,7 @@ export default async function ExamPaperDetailPage({
 					<div className="flex shrink-0 items-center gap-2">
 						<TogglePublicForm id={paper.id} isPublic={paper.is_public} />
 						<Link
-							href={`/dashboard/upload/new?exam_paper_id=${paper.id}`}
+							href={`/dashboard/exam-papers/${paper.id}/upload`}
 							className={buttonVariants({ size: "sm" })}
 						>
 							<Upload className="h-3.5 w-3.5 mr-1.5" />
@@ -217,7 +217,7 @@ export default async function ExamPaperDetailPage({
 								<div className="py-8 text-center text-sm text-muted-foreground">
 									No questions yet.{" "}
 									<Link
-										href={`/dashboard/upload/new?exam_paper_id=${paper.id}`}
+										href={`/dashboard/exam-papers/${paper.id}/upload`}
 										className="underline underline-offset-4"
 									>
 										Upload a question paper or mark scheme PDF
@@ -329,26 +329,11 @@ export default async function ExamPaperDetailPage({
 			<Separator />
 
 			<div className="text-sm text-muted-foreground">
-				Upload a{" "}
 				<Link
-					href={`/dashboard/upload/new?exam_paper_id=${paper.id}`}
+					href={`/dashboard/exam-papers/${paper.id}/upload`}
 					className="underline underline-offset-4"
 				>
-					mark scheme
-				</Link>
-				,{" "}
-				<Link
-					href={`/dashboard/upload/new?exam_paper_id=${paper.id}`}
-					className="underline underline-offset-4"
-				>
-					question paper
-				</Link>
-				, or{" "}
-				<Link
-					href={`/dashboard/upload/new?exam_paper_id=${paper.id}`}
-					className="underline underline-offset-4"
-				>
-					exemplar PDF
+					Upload a mark scheme, question paper, or exemplar PDF
 				</Link>{" "}
 				to populate questions and mark schemes.
 			</div>

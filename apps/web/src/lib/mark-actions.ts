@@ -5,6 +5,9 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner"
 import { createPrismaClient } from "@mcp-gcse/db"
 import { Resource } from "sst"
 import { auth } from "./auth"
+import { log } from "./logger"
+
+const TAG = "mark-actions"
 
 const bucketName = Resource.ScansBucket.name
 const s3 = new S3Client({})
@@ -34,11 +37,19 @@ export async function createStudentPaperUpload(
 	const session = await auth()
 	if (!session) return { ok: false, error: "Not authenticated" }
 
+	log.info(TAG, "createStudentPaperUpload called", {
+		userId: session.userId,
+		examPaperId,
+	})
+
 	const examPaper = await db.examPaper.findFirst({
 		where: { id: examPaperId, is_active: true },
 		select: { id: true, exam_board: true, subject: true, year: true },
 	})
-	if (!examPaper) return { ok: false, error: "Exam paper not found" }
+	if (!examPaper) {
+		log.warn(TAG, "Exam paper not found", { examPaperId })
+		return { ok: false, error: "Exam paper not found" }
+	}
 
 	const job = await db.pdfIngestionJob.create({
 		data: {
@@ -67,6 +78,12 @@ export async function createStudentPaperUpload(
 		ContentType: "application/pdf",
 	})
 	const url = await getSignedUrl(s3, command, { expiresIn: 3600 })
+	log.info(TAG, "Student paper upload job created", {
+		userId: session.userId,
+		jobId: job.id,
+		examPaperId,
+		key,
+	})
 	return { ok: true, jobId: job.id, url }
 }
 
@@ -102,8 +119,19 @@ export async function getStudentPaperResult(
 		},
 		include: { exam_paper: { select: { id: true, title: true } } },
 	})
-	if (!job) return { ok: false, error: "Job not found" }
+	if (!job) {
+		log.warn(TAG, "getStudentPaperResult — job not found", {
+			jobId,
+			userId: session.userId,
+		})
+		return { ok: false, error: "Job not found" }
+	}
 
+	log.info(TAG, "getStudentPaperResult", {
+		jobId,
+		status: job.status,
+		student_name: job.student_name,
+	})
 	const rawResults = (job.grading_results ?? []) as GradingResult[]
 	const totalAwarded = rawResults.reduce((s, r) => s + r.awarded_score, 0)
 	const totalMax = rawResults.reduce((s, r) => s + r.max_score, 0)

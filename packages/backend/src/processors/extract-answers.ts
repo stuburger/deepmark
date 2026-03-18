@@ -1,8 +1,10 @@
-import { GoogleGenAI, Type } from "@google/genai"
-import { Resource } from "sst"
 import { db } from "@/db"
+import { logger } from "@/lib/logger"
+import { GoogleGenAI, Type } from "@google/genai"
 import { ScanStatus } from "@mcp-gcse/db"
+import { Resource } from "sst"
 
+const TAG = "extract-answers"
 const client = new GoogleGenAI({ apiKey: Resource.GeminiApiKey.value })
 
 interface ExtractionItem {
@@ -10,7 +12,11 @@ interface ExtractionItem {
 	question_id: string
 	question_part_id: string | null
 	extracted_text: string
-	bounding_boxes: Array<{ box_2d: number[]; label: string; feature_type: string }>
+	bounding_boxes: Array<{
+		box_2d: number[]
+		label: string
+		feature_type: string
+	}>
 	confidence?: number
 }
 
@@ -44,7 +50,12 @@ const EXTRACTION_SCHEMA = {
 					},
 					confidence: { type: Type.NUMBER },
 				},
-				required: ["page_number", "question_id", "extracted_text", "bounding_boxes"],
+				required: [
+					"page_number",
+					"question_id",
+					"extracted_text",
+					"bounding_boxes",
+				],
 			},
 		},
 	},
@@ -68,9 +79,11 @@ export async function handler(
 	for (const record of event.Records) {
 		const messageId = record.messageId
 		try {
+			logger.info(TAG, "Message received", { messageId })
 			const body = JSON.parse(record.body) as { scan_submission_id: string }
 			const { scan_submission_id } = body
 
+			logger.info(TAG, "Loading submission", { scan_submission_id })
 			const submission = await db.scanSubmission.findUniqueOrThrow({
 				where: { id: scan_submission_id },
 				include: {
@@ -98,7 +111,10 @@ export async function handler(
 			})
 
 			if (submission.status !== ScanStatus.ocr_complete) {
-				console.warn(`Submission ${scan_submission_id} not ocr_complete, skipping`)
+				logger.warn(TAG, "Submission not ocr_complete — skipping", {
+					scan_submission_id,
+					status: submission.status,
+				})
 				continue
 			}
 
@@ -109,25 +125,40 @@ export async function handler(
 
 			const pageContext = submission.pages
 				.map((p) => {
-					const result = p.ocr_result as { transcript?: string; features?: unknown[] } | null
+					const result = p.ocr_result as {
+						transcript?: string
+						features?: unknown[]
+					} | null
 					if (!result) return null
 					return `Page ${p.page_number} (id: ${p.id}):\nTranscript: ${result.transcript ?? ""}\nFeatures: ${JSON.stringify(result.features ?? [])}`
 				})
 				.filter(Boolean)
 				.join("\n\n")
 
-			const questionContext = submission.exam_paper.sections.flatMap((sec) =>
-				sec.exam_section_questions.map((esq) => {
-					const q = esq.question
-					const parts = (q.question_parts ?? [])
-						.map(
-							(part: { id: string; part_label: string; text: string }) =>
-								`  Part ${part.part_label} (id: ${part.id}): ${part.text}`,
-						)
-						.join("\n")
-					return `Question ${esq.order} (id: ${q.id}): ${q.text}${parts ? `\n${parts}` : ""}`
-				}),
-			).join("\n\n")
+			const questionContext = submission.exam_paper.sections
+				.flatMap((sec) =>
+					sec.exam_section_questions.map((esq) => {
+						const q = esq.question
+						const parts = (q.question_parts ?? [])
+							.map(
+								(part: { id: string; part_label: string; text: string }) =>
+									`  Part ${part.part_label} (id: ${part.id}): ${part.text}`,
+							)
+							.join("\n")
+						return `Question ${esq.order} (id: ${q.id}): ${q.text}${parts ? `\n${parts}` : ""}`
+					}),
+				)
+				.join("\n\n")
+
+			const questionCount = submission.exam_paper.sections.reduce(
+				(s, sec) => s + sec.exam_section_questions.length,
+				0,
+			)
+			logger.info(TAG, "Calling Gemini for answer extraction", {
+				scan_submission_id,
+				page_count: submission.pages.length,
+				question_count: questionCount,
+			})
 
 			const response = await client.models.generateContent({
 				model: "gemini-2.0-flash",
@@ -162,7 +193,13 @@ For each distinct answer region in the OCR output, determine which question (and
 			}
 
 			const result = JSON.parse(responseText) as ExtractionResult
-			const pageByNumber = new Map(submission.pages.map((p) => [p.page_number, p]))
+			logger.info(TAG, "Gemini extraction complete", {
+				scan_submission_id,
+				extractions_count: result.extractions?.length ?? 0,
+			})
+			const pageByNumber = new Map(
+				submission.pages.map((p) => [p.page_number, p]),
+			)
 
 			for (const ext of result.extractions ?? []) {
 				const page = pageByNumber.get(ext.page_number)
@@ -179,12 +216,16 @@ For each distinct answer region in the OCR output, determine which question (and
 				})
 			}
 
+			logger.info(TAG, "Submission extraction complete", { scan_submission_id })
 			await db.scanSubmission.update({
 				where: { id: scan_submission_id },
 				data: { status: ScanStatus.extracted, processed_at: new Date() },
 			})
 		} catch (err) {
-			console.error("Extract-answers processor error:", err)
+			logger.error(TAG, "Job failed with unhandled error", {
+				messageId,
+				error: String(err),
+			})
 			failures.push({ itemIdentifier: messageId })
 		}
 	}

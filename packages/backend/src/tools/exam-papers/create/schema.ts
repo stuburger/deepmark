@@ -1,10 +1,9 @@
+import { SUBJECT_VALUES } from "@mcp-gcse/db"
 import { z } from "zod"
 
 export const CreateExamPaperSchema = {
 	title: z.string().describe("The title of the exam paper"),
-	subject: z
-		.enum(["biology", "chemistry", "physics", "english"])
-		.describe("Subject area for the exam paper"),
+	subject: z.enum(SUBJECT_VALUES).describe("Subject area for the exam paper"),
 	year: z.number().int().positive().describe("The year of the exam paper"),
 	paper_number: z
 		.number()

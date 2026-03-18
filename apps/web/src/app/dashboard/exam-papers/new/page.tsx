@@ -1,23 +1,24 @@
 "use client"
 
-import { useRouter } from "next/navigation"
-import { useState } from "react"
-import Link from "next/link"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+	Card,
+	CardContent,
+	CardDescription,
+	CardHeader,
+	CardTitle,
+} from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
-import { createExamPaperStandalone, type CreateExamPaperInput } from "@/lib/dashboard-actions"
-import type { Subject } from "@mcp-gcse/db"
-
-const SUBJECTS: { value: Subject; label: string }[] = [
-	{ value: "biology", label: "Biology" },
-	{ value: "chemistry", label: "Chemistry" },
-	{ value: "physics", label: "Physics" },
-	{ value: "english", label: "English" },
-	{ value: "business", label: "Business" },
-]
+import {
+	type CreateExamPaperInput,
+	createExamPaperStandalone,
+} from "@/lib/dashboard-actions"
+import { SUBJECTS, type Subject } from "@/lib/subjects"
+import Link from "next/link"
+import { useRouter } from "next/navigation"
+import { useState } from "react"
 
 const EXAM_BOARDS = ["AQA", "OCR", "Edexcel", "WJEC", "Cambridge", "Other"]
 
@@ -36,10 +37,22 @@ export default function NewExamPaperPage() {
 
 	async function handleSubmit(e: React.FormEvent) {
 		e.preventDefault()
-		if (!title.trim()) { setError("Title is required"); return }
-		if (!year || isNaN(parseInt(year, 10))) { setError("Valid year is required"); return }
-		if (!totalMarks || isNaN(parseInt(totalMarks, 10))) { setError("Total marks is required"); return }
-		if (!durationMinutes || isNaN(parseInt(durationMinutes, 10))) { setError("Duration is required"); return }
+		if (!title.trim()) {
+			setError("Title is required")
+			return
+		}
+		if (!year || isNaN(Number.parseInt(year, 10))) {
+			setError("Valid year is required")
+			return
+		}
+		if (!totalMarks || isNaN(Number.parseInt(totalMarks, 10))) {
+			setError("Total marks is required")
+			return
+		}
+		if (!durationMinutes || isNaN(Number.parseInt(durationMinutes, 10))) {
+			setError("Duration is required")
+			return
+		}
 
 		setSubmitting(true)
 		setError(null)
@@ -47,10 +60,10 @@ export default function NewExamPaperPage() {
 			title: title.trim(),
 			subject,
 			exam_board: examBoard,
-			year: parseInt(year, 10),
-			paper_number: paperNumber ? parseInt(paperNumber, 10) : undefined,
-			total_marks: parseInt(totalMarks, 10),
-			duration_minutes: parseInt(durationMinutes, 10),
+			year: Number.parseInt(year, 10),
+			paper_number: paperNumber ? Number.parseInt(paperNumber, 10) : undefined,
+			total_marks: Number.parseInt(totalMarks, 10),
+			duration_minutes: Number.parseInt(durationMinutes, 10),
 			is_public: isPublic,
 		}
 		const result = await createExamPaperStandalone(input)
@@ -73,14 +86,17 @@ export default function NewExamPaperPage() {
 				</Link>
 				<h1 className="mt-2 text-2xl font-semibold">New exam paper</h1>
 				<p className="text-sm text-muted-foreground mt-1">
-					Create an exam paper record. You can upload PDFs to populate its questions and mark scheme afterwards.
+					Create an exam paper record. You can upload PDFs to populate its
+					questions and mark scheme afterwards.
 				</p>
 			</div>
 
 			<Card>
 				<CardHeader>
 					<CardTitle>Paper details</CardTitle>
-					<CardDescription>Fill in the metadata for this exam paper.</CardDescription>
+					<CardDescription>
+						Fill in the metadata for this exam paper.
+					</CardDescription>
 				</CardHeader>
 				<CardContent>
 					<form onSubmit={handleSubmit} className="space-y-4">
@@ -104,7 +120,9 @@ export default function NewExamPaperPage() {
 									onChange={(e) => setSubject(e.target.value as Subject)}
 								>
 									{SUBJECTS.map((s) => (
-										<option key={s.value} value={s.value}>{s.label}</option>
+										<option key={s.value} value={s.value}>
+											{s.label}
+										</option>
 									))}
 								</select>
 							</div>
@@ -117,7 +135,9 @@ export default function NewExamPaperPage() {
 									onChange={(e) => setExamBoard(e.target.value)}
 								>
 									{EXAM_BOARDS.map((b) => (
-										<option key={b} value={b}>{b}</option>
+										<option key={b} value={b}>
+											{b}
+										</option>
 									))}
 								</select>
 							</div>
@@ -173,21 +193,24 @@ export default function NewExamPaperPage() {
 							<div>
 								<p className="text-sm font-medium">Publish to catalog</p>
 								<p className="text-xs text-muted-foreground">
-									Teachers can browse and select this paper for marking sessions.
+									Teachers can browse and select this paper for marking
+									sessions.
 								</p>
 							</div>
 							<Switch checked={isPublic} onCheckedChange={setIsPublic} />
 						</div>
 
-						{error && (
-							<p className="text-sm text-destructive">{error}</p>
-						)}
+						{error && <p className="text-sm text-destructive">{error}</p>}
 
 						<div className="flex gap-2">
 							<Button type="submit" disabled={submitting}>
 								{submitting ? "Creating…" : "Create exam paper"}
 							</Button>
-							<Button type="button" variant="outline" onClick={() => router.back()}>
+							<Button
+								type="button"
+								variant="outline"
+								onClick={() => router.back()}
+							>
 								Cancel
 							</Button>
 						</div>

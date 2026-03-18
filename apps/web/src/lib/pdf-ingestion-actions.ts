@@ -11,7 +11,9 @@ import { createPrismaClient } from "@mcp-gcse/db"
 import type { Subject } from "@mcp-gcse/db"
 import { Resource } from "sst"
 import { auth } from "./auth"
+import { log } from "./logger"
 
+const TAG = "pdf-ingestion-actions"
 const bucketName = Resource.ScansBucket.name
 const s3 = new S3Client({})
 const sqs = new SQSClient({})
@@ -31,6 +33,7 @@ export async function createPdfIngestionUpload(input: {
 	paper_reference?: string
 	auto_create_exam_paper?: boolean
 	exam_paper_id?: string
+	run_adversarial_loop?: boolean
 }): Promise<CreatePdfIngestionUploadResult> {
 	const session = await auth()
 	if (!session) return { ok: false, error: "Not authenticated" }
@@ -39,6 +42,14 @@ export async function createPdfIngestionUpload(input: {
 	if (!input.subject) {
 		return { ok: false, error: "Subject is required" }
 	}
+
+	log.info(TAG, "createPdfIngestionUpload called", {
+		userId: session.userId,
+		document_type: input.document_type,
+		subject: input.subject,
+		exam_board: input.exam_board,
+		exam_paper_id: input.exam_paper_id ?? null,
+	})
 
 	const prefix =
 		input.document_type === "mark_scheme"
@@ -60,6 +71,7 @@ export async function createPdfIngestionUpload(input: {
 			auto_create_exam_paper: input.exam_paper_id
 				? false
 				: (input.auto_create_exam_paper ?? true),
+			run_adversarial_loop: input.run_adversarial_loop ?? false,
 			exam_paper_id: input.exam_paper_id ?? null,
 		},
 	})
@@ -74,6 +86,68 @@ export async function createPdfIngestionUpload(input: {
 		ContentType: "application/pdf",
 	})
 	const url = await getSignedUrl(s3, command, { expiresIn: 3600 })
+	log.info(TAG, "PDF ingestion job created", {
+		userId: session.userId,
+		jobId: job.id,
+		document_type: input.document_type,
+		key,
+	})
+	return { ok: true, jobId: job.id, url }
+}
+
+export async function createLinkedPdfUpload(input: {
+	exam_paper_id: string
+	document_type: "mark_scheme" | "exemplar" | "question_paper"
+	run_adversarial_loop?: boolean
+}): Promise<CreatePdfIngestionUploadResult> {
+	const session = await auth()
+	if (!session) return { ok: false, error: "Not authenticated" }
+
+	const examPaper = await db.examPaper.findFirst({
+		where: { id: input.exam_paper_id, is_active: true },
+		select: { id: true, exam_board: true, subject: true, year: true },
+	})
+	if (!examPaper) return { ok: false, error: "Exam paper not found" }
+
+	const prefix =
+		input.document_type === "mark_scheme"
+			? "pdfs/mark-schemes"
+			: input.document_type === "question_paper"
+				? "pdfs/question-papers"
+				: "pdfs/exemplars"
+
+	const job = await db.pdfIngestionJob.create({
+		data: {
+			document_type: input.document_type,
+			s3_key: "",
+			s3_bucket: bucketName,
+			status: "pending",
+			uploaded_by: session.userId,
+			exam_board: examPaper.exam_board ?? "Other",
+			subject: examPaper.subject,
+			year: examPaper.year,
+			auto_create_exam_paper: false,
+			run_adversarial_loop: input.run_adversarial_loop ?? false,
+			exam_paper_id: examPaper.id,
+		},
+	})
+	const key = `${prefix}/${job.id}/document.pdf`
+	await db.pdfIngestionJob.update({
+		where: { id: job.id },
+		data: { s3_key: key },
+	})
+	const command = new PutObjectCommand({
+		Bucket: bucketName,
+		Key: key,
+		ContentType: "application/pdf",
+	})
+	const url = await getSignedUrl(s3, command, { expiresIn: 3600 })
+	log.info(TAG, "Linked PDF upload job created", {
+		userId: session.userId,
+		jobId: job.id,
+		document_type: input.document_type,
+		exam_paper_id: examPaper.id,
+	})
 	return { ok: true, jobId: job.id, url }
 }
 
@@ -225,6 +299,51 @@ export async function listPdfIngestionJobs(): Promise<ListPdfIngestionJobsResult
 	return { ok: true, jobs }
 }
 
+export type JobMarkPoint = {
+	point_number: number
+	description: string
+	points: number
+	criteria: string
+}
+
+export type JobTestRun = {
+	id: string
+	target_score: number
+	actual_score: number
+	delta: number
+	converged: boolean
+	grader_reasoning: string
+	student_answer: string
+}
+
+export type JobMarkScheme = {
+	id: string
+	description: string
+	points_total: number
+	link_status: string
+	marking_method: string
+	mark_points: JobMarkPoint[]
+	test_runs: JobTestRun[]
+}
+
+export type JobQuestion = {
+	id: string
+	text: string
+	points: number | null
+	question_type: string
+	origin: string
+	mark_schemes: JobMarkScheme[]
+}
+
+export type JobExemplar = {
+	id: string
+	raw_question_text: string
+	level: number
+	answer_text: string
+	expected_score: number | null
+	mark_band: string | null
+}
+
 export type PdfIngestionJobDetail = {
 	id: string
 	document_type: string
@@ -237,12 +356,17 @@ export type PdfIngestionJobDetail = {
 	paper_reference: string | null
 	attempt_count: number
 	auto_create_exam_paper: boolean
+	run_adversarial_loop: boolean
 	detected_exam_paper_metadata: unknown
+	exam_paper_id: string | null
+	exam_paper_title: string | null
 	error: string | null
 	created_at: Date
 	processed_at: Date | null
 	question_count: number
 	exemplar_count: number
+	questions: JobQuestion[]
+	exemplars: JobExemplar[]
 }
 
 export type GetPdfIngestionJobDetailResult =
@@ -257,10 +381,60 @@ export async function getPdfIngestionJobDetail(
 	const job = await db.pdfIngestionJob.findFirst({
 		where: { id: jobId, uploaded_by: session.userId },
 		include: {
-			_count: { select: { created_questions: true, exemplars: true } },
+			exam_paper: { select: { id: true, title: true } },
+			created_questions: {
+				orderBy: { created_at: "asc" },
+				include: {
+					mark_schemes: {
+						include: {
+							test_runs: {
+								orderBy: { created_at: "asc" },
+								select: {
+									id: true,
+									target_score: true,
+									actual_score: true,
+									delta: true,
+									converged: true,
+									grader_reasoning: true,
+									student_answer: true,
+								},
+							},
+						},
+					},
+				},
+			},
+			exemplars: {
+				orderBy: { created_at: "asc" },
+				select: {
+					id: true,
+					raw_question_text: true,
+					level: true,
+					answer_text: true,
+					expected_score: true,
+					mark_band: true,
+				},
+			},
 		},
 	})
 	if (!job) return { ok: false, error: "Job not found" }
+
+	const questions: JobQuestion[] = job.created_questions.map((q) => ({
+		id: q.id,
+		text: q.text,
+		points: q.points,
+		question_type: q.question_type,
+		origin: q.origin,
+		mark_schemes: q.mark_schemes.map((ms) => ({
+			id: ms.id,
+			description: ms.description,
+			points_total: ms.points_total,
+			link_status: ms.link_status,
+			marking_method: ms.marking_method,
+			mark_points: (ms.mark_points as JobMarkPoint[] | null) ?? [],
+			test_runs: ms.test_runs,
+		})),
+	}))
+
 	return {
 		ok: true,
 		job: {
@@ -275,12 +449,17 @@ export async function getPdfIngestionJobDetail(
 			paper_reference: job.paper_reference,
 			attempt_count: job.attempt_count,
 			auto_create_exam_paper: job.auto_create_exam_paper,
+			run_adversarial_loop: job.run_adversarial_loop,
 			detected_exam_paper_metadata: job.detected_exam_paper_metadata,
+			exam_paper_id: job.exam_paper_id,
+			exam_paper_title: job.exam_paper?.title ?? null,
 			error: job.error,
 			created_at: job.created_at,
 			processed_at: job.processed_at,
-			question_count: job._count.created_questions,
-			exemplar_count: job._count.exemplars,
+			question_count: job.created_questions.length,
+			exemplar_count: job.exemplars.length,
+			questions,
+			exemplars: job.exemplars,
 		},
 	}
 }
@@ -329,6 +508,13 @@ export async function retriggerPdfIngestionJob(
 		}
 	}
 
+	log.info(TAG, "retriggerPdfIngestionJob called", {
+		userId: session.userId,
+		jobId,
+		document_type: job.document_type,
+		previous_status: job.status,
+	})
+
 	await db.pdfIngestionJob.update({
 		where: { id: jobId },
 		data: { status: "pending", error: null },
@@ -347,5 +533,6 @@ export async function retriggerPdfIngestionJob(
 			MessageBody: JSON.stringify({ job_id: jobId }),
 		}),
 	)
+	log.info(TAG, "Job retriggered", { jobId, document_type: job.document_type })
 	return { ok: true }
 }

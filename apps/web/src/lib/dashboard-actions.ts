@@ -4,7 +4,9 @@ import { createPrismaClient } from "@mcp-gcse/db"
 import type { Subject } from "@mcp-gcse/db"
 import { Resource } from "sst"
 import { auth } from "./auth"
+import { log } from "./logger"
 
+const TAG = "dashboard-actions"
 const db = createPrismaClient(Resource.NeonPostgres.databaseUrl)
 
 export type DashboardStats = {
@@ -354,6 +356,12 @@ export async function createExamPaperStandalone(
 ): Promise<CreateExamPaperResult> {
 	const session = await auth()
 	if (!session) return { ok: false, error: "Not authenticated" }
+	log.info(TAG, "createExamPaperStandalone called", {
+		userId: session.userId,
+		title: input.title,
+		subject: input.subject,
+		is_public: input.is_public,
+	})
 	try {
 		const paper = await db.examPaper.create({
 			data: {
@@ -368,8 +376,14 @@ export async function createExamPaperStandalone(
 				created_by_id: session.userId,
 			},
 		})
+		log.info(TAG, "Exam paper created", {
+			userId: session.userId,
+			id: paper.id,
+			title: paper.title,
+		})
 		return { ok: true, id: paper.id }
-	} catch {
+	} catch (err) {
+		log.error(TAG, "createExamPaperStandalone failed", { error: String(err) })
 		return { ok: false, error: "Failed to create exam paper" }
 	}
 }
@@ -384,10 +398,17 @@ export async function toggleExamPaperPublic(
 ): Promise<ToggleExamPaperPublicResult> {
 	const session = await auth()
 	if (!session) return { ok: false, error: "Not authenticated" }
+	log.info(TAG, "toggleExamPaperPublic called", {
+		userId: session.userId,
+		id,
+		is_public,
+	})
 	try {
 		await db.examPaper.update({ where: { id }, data: { is_public } })
+		log.info(TAG, "Exam paper visibility updated", { id, is_public })
 		return { ok: true }
-	} catch {
+	} catch (err) {
+		log.error(TAG, "toggleExamPaperPublic failed", { id, error: String(err) })
 		return { ok: false, error: "Failed to update exam paper" }
 	}
 }

@@ -180,7 +180,7 @@ async function findMatchingQuestionId(
 		WHERE q.id = ${row.id}
 	`
 	const d = withDistance[0]?.dist
-	if (d == null || Number(d) >= 0.1) return null
+	if (d == null || Number(d) >= 0.2) return null
 	return row.id
 }
 
@@ -333,10 +333,18 @@ export async function handler(
 				}>
 			}
 
-			let detectedMetadata: Record<string, unknown> | null = null
+			type DetectedMetadata = {
+				title?: string
+				subject?: string
+				exam_board?: string
+				total_marks?: number
+				duration_minutes?: number
+				year?: number | null
+			}
+			let detectedMetadata: DetectedMetadata | null = null
 			if (metadataResponse?.text) {
 				try {
-					detectedMetadata = JSON.parse(metadataResponse.text) as Record<string, unknown>
+					detectedMetadata = JSON.parse(metadataResponse.text) as DetectedMetadata
 				} catch {
 					// ignore
 				}
@@ -401,19 +409,20 @@ export async function handler(
 					const markScheme = await db.markScheme.findFirst({
 						where: { question_id: existingId },
 					})
-					if (markScheme) {
-						await db.markScheme.update({
-							where: { id: markScheme.id },
-							data: {
-								description: q.ao_breakdown ?? q.question_text.slice(0, 500),
-								guidance: q.guidance ?? null,
-								points_total: pointsTotal,
-								mark_points: markPointsPrisma,
-								correct_option_labels: correctOptionLabels,
-								marking_method: effectiveMarkingMethod,
-								marking_rules: markingRules ?? undefined,
-							},
-						})
+				if (markScheme) {
+					await db.markScheme.update({
+						where: { id: markScheme.id },
+						data: {
+							description: q.ao_breakdown ?? q.question_text.slice(0, 500),
+							guidance: q.guidance ?? null,
+							points_total: pointsTotal,
+							mark_points: markPointsPrisma,
+							correct_option_labels: correctOptionLabels,
+							marking_method: effectiveMarkingMethod,
+							marking_rules: markingRules ?? undefined,
+							link_status: "auto_linked",
+						},
+					})
 						const questionWithScheme = buildQuestionWithMarkScheme(
 							existingId,
 							questionText,
@@ -457,37 +466,97 @@ export async function handler(
 								refinement_iterations: totalIterations,
 							},
 						})
+					} else {
+						const newMarkScheme = await db.markScheme.create({
+							data: {
+								question_id: existingId,
+								description: q.ao_breakdown ?? questionText.slice(0, 500),
+								guidance: q.guidance ?? null,
+								created_by_id: uploadedBy,
+								tags: [],
+								points_total: pointsTotal,
+								mark_points: markPointsPrisma,
+								correct_option_labels: correctOptionLabels,
+								marking_method: effectiveMarkingMethod,
+								marking_rules: markingRules ?? undefined,
+								link_status: "auto_linked",
+							},
+						})
+						const questionWithScheme = buildQuestionWithMarkScheme(
+							existingId,
+							questionText,
+							subject,
+							q.question_type,
+							markPointsPrisma,
+							pointsTotal,
+							q.guidance,
+							q.ao_breakdown ?? "",
+							correctOptionLabels,
+							effectiveMarkingMethod,
+							markingRules ?? null,
+						)
+						const testResults = await runAdversarialLoop(
+							questionWithScheme,
+							grader,
+							openai("gpt-4o"),
+							{ targetScores: probeBoundaries(pointsTotal), maxIterations: 3 },
+						)
+						for (const tr of testResults) {
+							await db.markSchemeTestRun.create({
+								data: {
+									mark_scheme_id: newMarkScheme.id,
+									iteration: tr.iteration,
+									target_score: tr.targetScore,
+									actual_score: tr.actualScore,
+									delta: tr.delta,
+									student_answer: tr.studentAnswer,
+									grader_reasoning: tr.graderReasoning,
+									schema_patch: tr.schemaPatch ?? null,
+									converged: tr.converged,
+									triggered_by: "pdf_pipeline",
+								},
+							})
+						}
+						await db.markScheme.update({
+							where: { id: newMarkScheme.id },
+							data: {
+								refined_at: new Date(),
+								refinement_iterations: testResults.length,
+							},
+						})
 					}
 				} else {
-					const newQuestion = await db.question.create({
-						data: {
-							text: questionText,
-							topic: subject,
-							created_by_id: uploadedBy,
-							subject,
-							points: pointsTotal,
-							question_type: q.question_type === "multiple_choice" ? "multiple_choice" : "written",
-							multiple_choice_options: [],
-							source_pdf_ingestion_job_id: jobId,
-						},
-					})
-					await db.$executeRaw`
-						UPDATE questions SET embedding = (${vecStr}::text)::vector WHERE id = ${newQuestion.id}
-					`
-					const newMarkScheme = await db.markScheme.create({
-						data: {
-							question_id: newQuestion.id,
-							description: q.ao_breakdown ?? questionText.slice(0, 500),
-							guidance: q.guidance ?? null,
-							created_by_id: uploadedBy,
-							tags: [],
-							points_total: pointsTotal,
-							mark_points: markPointsPrisma,
-							correct_option_labels: correctOptionLabels,
-							marking_method: effectiveMarkingMethod,
-							marking_rules: markingRules ?? undefined,
-						},
-					})
+				const newQuestion = await db.question.create({
+					data: {
+						text: questionText,
+						topic: subject,
+						created_by_id: uploadedBy,
+						subject,
+						points: pointsTotal,
+						question_type: q.question_type === "multiple_choice" ? "multiple_choice" : "written",
+						multiple_choice_options: [],
+						source_pdf_ingestion_job_id: jobId,
+						origin: "mark_scheme",
+					},
+				})
+				await db.$executeRaw`
+					UPDATE questions SET embedding = (${vecStr}::text)::vector WHERE id = ${newQuestion.id}
+				`
+				const newMarkScheme = await db.markScheme.create({
+					data: {
+						question_id: newQuestion.id,
+						description: q.ao_breakdown ?? questionText.slice(0, 500),
+						guidance: q.guidance ?? null,
+						created_by_id: uploadedBy,
+						tags: [],
+						points_total: pointsTotal,
+						mark_points: markPointsPrisma,
+						correct_option_labels: correctOptionLabels,
+						marking_method: effectiveMarkingMethod,
+						marking_rules: markingRules ?? undefined,
+						link_status: "linked",
+					},
+				})
 					const questionWithScheme = buildQuestionWithMarkScheme(
 						newQuestion.id,
 						questionText,

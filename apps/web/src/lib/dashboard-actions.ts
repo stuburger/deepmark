@@ -15,6 +15,7 @@ export type DashboardStats = {
 	failedAnswers: number
 	totalScanSubmissions: number
 	pendingScanSubmissions: number
+	markSchemesNeedingReview: number
 }
 
 export type MarkingStatusBreakdown = {
@@ -59,6 +60,7 @@ export type QuestionListItem = {
 	points: number | null
 	difficulty_level: string | null
 	question_type: string
+	origin: string
 	created_at: Date
 	_count: {
 		question_parts: number
@@ -83,6 +85,7 @@ export async function listQuestions(): Promise<ListQuestionsResult> {
 				points: true,
 				difficulty_level: true,
 				question_type: true,
+				origin: true,
 				created_at: true,
 				_count: {
 					select: {
@@ -252,6 +255,7 @@ export async function getDashboardData(): Promise<DashboardData> {
 		failedAnswers,
 		totalScanSubmissions,
 		pendingScanSubmissions,
+		markSchemesNeedingReview,
 		answersByStatus,
 		questionsBySubjectRaw,
 		usersByRoleRaw,
@@ -266,6 +270,7 @@ export async function getDashboardData(): Promise<DashboardData> {
 		db.answer.count({ where: { marking_status: "failed" } }),
 		db.scanSubmission.count(),
 		db.scanSubmission.count({ where: { status: "pending" } }),
+		db.markScheme.count({ where: { link_status: { in: ["unlinked", "auto_linked"] } } }),
 		db.answer.groupBy({ by: ["marking_status"], _count: { id: true } }),
 		db.question.groupBy({ by: ["subject"], _count: { id: true } }),
 		db.user.groupBy({ by: ["role"], _count: { id: true } }),
@@ -289,6 +294,7 @@ export async function getDashboardData(): Promise<DashboardData> {
 			failedAnswers,
 			totalScanSubmissions,
 			pendingScanSubmissions,
+			markSchemesNeedingReview,
 		},
 		markingStatusBreakdown: answersByStatus.map((row) => ({
 			status: row.marking_status,

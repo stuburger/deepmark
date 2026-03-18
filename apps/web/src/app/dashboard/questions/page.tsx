@@ -29,6 +29,25 @@ function subjectVariant(subject: string): BadgeVariant {
 	}
 }
 
+function originLabel(origin: string): string {
+	switch (origin) {
+		case "mark_scheme": return "Mark Scheme"
+		case "question_paper": return "Question Paper"
+		case "exemplar": return "Exemplar"
+		case "manual": return "Manual"
+		default: return origin
+	}
+}
+
+function originVariant(origin: string): BadgeVariant {
+	switch (origin) {
+		case "mark_scheme": return "secondary"
+		case "question_paper": return "default"
+		case "exemplar": return "outline"
+		default: return "outline"
+	}
+}
+
 function difficultyVariant(level: string | null): BadgeVariant {
 	switch (level) {
 		case "easy":
@@ -87,9 +106,12 @@ function QuestionRow({ q }: { q: QuestionListItem }) {
 			<TableCell className="text-center">{q._count.question_parts}</TableCell>
 			<TableCell className="text-center">{q._count.mark_schemes}</TableCell>
 			<TableCell className="text-center">{q._count.answers}</TableCell>
-			<TableCell className="text-muted-foreground text-sm">{formatDate(q.created_at)}</TableCell>
-		</TableRow>
-	)
+		<TableCell>
+			<Badge variant={originVariant(q.origin)}>{originLabel(q.origin)}</Badge>
+		</TableCell>
+		<TableCell className="text-muted-foreground text-sm">{formatDate(q.created_at)}</TableCell>
+	</TableRow>
+)
 }
 
 export default async function QuestionsPage() {
@@ -114,7 +136,7 @@ export default async function QuestionsPage() {
 							</span>
 						)}
 					</CardTitle>
-					<CardDescription>Questions sourced from mark scheme PDFs and manual entry.</CardDescription>
+					<CardDescription>Questions sourced from mark scheme PDFs, question papers, and manual entry.</CardDescription>
 				</CardHeader>
 				<CardContent>
 					{!result.ok ? (
@@ -132,8 +154,9 @@ export default async function QuestionsPage() {
 									<TableHead className="text-center">Pts</TableHead>
 									<TableHead className="text-center">Parts</TableHead>
 									<TableHead className="text-center">Schemes</TableHead>
-									<TableHead className="text-center">Answers</TableHead>
-									<TableHead>Created</TableHead>
+								<TableHead className="text-center">Answers</TableHead>
+								<TableHead>Origin</TableHead>
+								<TableHead>Created</TableHead>
 								</TableRow>
 							</TableHeader>
 							<TableBody>

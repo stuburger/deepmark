@@ -84,6 +84,12 @@ enum MarkingMethod {
   level_of_response
 }
 
+enum MarkSchemeStatus {
+  linked
+  auto_linked
+  unlinked
+}
+
 model User {
   id         String   @id @default(cuid())
   email      String?  @unique
@@ -181,6 +187,7 @@ model MarkScheme {
   marking_method        MarkingMethod @default(point_based)
   // For level_of_response: { command_word?, items_required?, levels[], caps[] }
   marking_rules         Json?
+  link_status           MarkSchemeStatus @default(linked)
   refined_at            DateTime?
   refinement_iterations Int            @default(0)
 

@@ -18,6 +18,7 @@ import {
 	Clock,
 	CheckCircle2,
 	XCircle,
+	Link2Off,
 } from "lucide-react"
 import { MarkingStatusChart } from "./_components/marking-status-chart"
 import { QuestionsBySubjectChart } from "./_components/questions-by-subject-chart"
@@ -107,6 +108,13 @@ export default async function DashboardPage() {
 			description: `${stats.pendingScanSubmissions} pending processing`,
 			icon: ScanLine,
 			color: "text-pink-500",
+		},
+		{
+			title: "Link Review",
+			value: stats.markSchemesNeedingReview,
+			description: "Mark schemes auto-linked or unlinked",
+			icon: Link2Off,
+			color: "text-amber-500",
 		},
 	]
 

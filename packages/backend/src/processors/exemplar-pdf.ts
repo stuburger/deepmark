@@ -1,4 +1,8 @@
 import { db } from "@/db"
+import {
+	type CancellationToken,
+	createCancellationToken,
+} from "@/lib/cancellation"
 import { logger } from "@/lib/logger"
 import { validateWithExemplars } from "@/services/validate-with-exemplars"
 import { GetObjectCommand, S3Client } from "@aws-sdk/client-s3"
@@ -89,6 +93,7 @@ export async function handler(
 
 	for (const record of event.Records) {
 		const messageId = record.messageId
+		let cancellation: CancellationToken | undefined
 		try {
 			const body = JSON.parse(record.body) as
 				| { Records?: S3Record[] }
@@ -147,6 +152,13 @@ export async function handler(
 				})
 				continue
 			}
+
+			if (job.status === "cancelled") {
+				logger.info(TAG, "Job was cancelled — skipping", { jobId })
+				continue
+			}
+
+			cancellation = createCancellationToken(jobId)
 
 			logger.info(TAG, "Job started", {
 				jobId,
@@ -228,6 +240,17 @@ export async function handler(
 			const markSchemeIdsToValidate = new Set<string>()
 
 			for (const q of parsed.questions ?? []) {
+				if (cancellation.isCancelled()) {
+					logger.info(
+						TAG,
+						"Job cancelled mid-processing — stopping question loop",
+						{
+							jobId,
+						},
+					)
+					break
+				}
+
 				const questionText = q.question_text
 
 				// Find or create the Question row for this job + question text
@@ -285,6 +308,11 @@ export async function handler(
 					if (created.mark_scheme_id)
 						markSchemeIdsToValidate.add(created.mark_scheme_id)
 				}
+			}
+
+			if (cancellation.isCancelled()) {
+				logger.info(TAG, "Job was cancelled — skipping completion", { jobId })
+				continue
 			}
 
 			for (const markSchemeId of markSchemeIdsToValidate) {
@@ -351,6 +379,8 @@ export async function handler(
 				// ignore
 			}
 			failures.push({ itemIdentifier: messageId })
+		} finally {
+			cancellation?.stop()
 		}
 	}
 

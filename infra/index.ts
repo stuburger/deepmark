@@ -1,4 +1,5 @@
 import "./storage"
 import "./queues"
 export { interactions } from "./api"
+export { router } from "./router"
 export { web } from "./web"

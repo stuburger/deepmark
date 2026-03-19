@@ -11,7 +11,7 @@ import {
 import { createScanUpload } from "@/lib/scan-actions"
 import { cn } from "@/lib/utils"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { useCallback, useRef, useState } from "react"
 
 const ACCEPT = "image/jpeg,image/png,image/webp,application/pdf"
@@ -52,6 +52,8 @@ async function pdfToJpegBlobs(file: File): Promise<Blob[]> {
 
 export default function ScanUploadPage() {
 	const router = useRouter()
+	const searchParams = useSearchParams()
+	const examPaperId = searchParams.get("examPaperId")
 	const fileInputRef = useRef<HTMLInputElement>(null)
 	const [uploading, setUploading] = useState(false)
 	const [progress, setProgress] = useState<string | null>(null)
@@ -60,6 +62,12 @@ export default function ScanUploadPage() {
 
 	const upload = useCallback(
 		async (file: File) => {
+			if (!examPaperId) {
+				setError(
+					"No exam paper selected. Please navigate here from an exam paper.",
+				)
+				return
+			}
 			setError(null)
 			setUploading(true)
 			setProgress(null)
@@ -86,7 +94,10 @@ export default function ScanUploadPage() {
 						blobs.length !== 1 ? "s" : ""
 					}…`,
 				)
-				const result = await createScanUpload(blobs.map(() => ({ mimeType })))
+				const result = await createScanUpload(
+					examPaperId,
+					blobs.map(() => ({ mimeType })),
+				)
 				if (!result.ok) {
 					setError(result.error)
 					return
@@ -121,7 +132,7 @@ export default function ScanUploadPage() {
 				setProgress(null)
 			}
 		},
-		[router],
+		[router, examPaperId],
 	)
 
 	const onDrop = useCallback(

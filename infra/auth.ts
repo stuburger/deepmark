@@ -1,10 +1,13 @@
-import { neonPostgres } from "./database";
 import {
 	githubClientId,
 	githubClientSecret,
 	googleClientId,
 	googleClientSecret,
-} from "./config";
+	hostedZoneId,
+	subdomain,
+	webUrl,
+} from "./config"
+import { neonPostgres } from "./database"
 
 export const authTable = new sst.aws.Dynamo("AuthTable", {
 	fields: {
@@ -16,14 +19,23 @@ export const authTable = new sst.aws.Dynamo("AuthTable", {
 		hashKey: "pk",
 		rangeKey: "sk",
 	},
-});
+})
 
-export const authUrl = `https://auth.${$app.stage}.supalink.co`;
+const authDomain = subdomain("auth")
+
+export const authUrl = `https://${authDomain}`
 
 export const authUrlLink = new sst.Linkable("AuthUrl", {
 	properties: { url: authUrl },
-});
+})
 
+/**
+ * OpenAuth issuer with custom domain per stage
+ *
+ * - Production: auth.getdeepmark.com
+ * - Development: auth.dev.getdeepmark.com
+ * - PR stages: auth-pr-123.dev.getdeepmark.com
+ */
 export const auth = new sst.aws.Auth("Auth", {
 	issuer: {
 		handler: "packages/backend/src/auth.handler",
@@ -36,6 +48,14 @@ export const auth = new sst.aws.Auth("Auth", {
 			googleClientId,
 			googleClientSecret,
 		],
+		environment: {
+			WEB_URL: webUrl,
+		},
 	},
-	domain: `auth.${$app.stage}.supalink.co`,
-});
+	domain: {
+		name: authDomain,
+		dns: sst.aws.dns({
+			zone: hostedZoneId,
+		}),
+	},
+})

@@ -1,6 +1,10 @@
 "use server"
 
-import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3"
+import {
+	GetObjectCommand,
+	PutObjectCommand,
+	S3Client,
+} from "@aws-sdk/client-s3"
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner"
 import { createPrismaClient } from "@mcp-gcse/db"
 import { Resource } from "sst"
@@ -25,7 +29,10 @@ function extFromMime(mimeType: "image/jpeg" | "image/png" | "image/webp") {
 	return "jpg"
 }
 
-export async function createScanUpload(pages: PageInput[]): Promise<CreateScanUploadResult> {
+export async function createScanUpload(
+	examPaperId: string,
+	pages: PageInput[],
+): Promise<CreateScanUploadResult> {
 	const session = await auth()
 	if (!session) {
 		return { ok: false, error: "Not authenticated" }
@@ -34,10 +41,10 @@ export async function createScanUpload(pages: PageInput[]): Promise<CreateScanUp
 		return { ok: false, error: "At least one page is required" }
 	}
 
-
 	const submission = await db.scanSubmission.create({
 		data: {
 			student_id: session.userId,
+			exam_paper_id: examPaperId,
 			page_count: pages.length,
 			status: "pending",
 		},
@@ -101,7 +108,9 @@ export type PollScanStatusResult =
 	| { ok: true; allComplete: boolean; pages: PageStatus[] }
 	| { ok: false; error: string }
 
-export async function pollScanStatus(submissionId: string): Promise<PollScanStatusResult> {
+export async function pollScanStatus(
+	submissionId: string,
+): Promise<PollScanStatusResult> {
 	const session = await auth()
 	if (!session) {
 		return { ok: false, error: "Not authenticated" }
@@ -124,7 +133,10 @@ export async function pollScanStatus(submissionId: string): Promise<PollScanStat
 			let imageUrl: string | null = null
 
 			if (p.ocr_status === "ocr_complete" && p.s3_key) {
-				const getCommand = new GetObjectCommand({ Bucket: p.s3_bucket, Key: p.s3_key })
+				const getCommand = new GetObjectCommand({
+					Bucket: p.s3_bucket,
+					Key: p.s3_key,
+				})
 				imageUrl = await getSignedUrl(s3, getCommand, { expiresIn: 3600 })
 			}
 
@@ -137,7 +149,8 @@ export async function pollScanStatus(submissionId: string): Promise<PollScanStat
 		}),
 	)
 
-	const allComplete = pages.length > 0 && pages.every((p) => TERMINAL.includes(p.ocrStatus))
+	const allComplete =
+		pages.length > 0 && pages.every((p) => TERMINAL.includes(p.ocrStatus))
 
 	return { ok: true, allComplete, pages }
 }

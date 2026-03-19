@@ -1,4 +1,8 @@
 import { db } from "@/db"
+import {
+	type CancellationToken,
+	createCancellationToken,
+} from "@/lib/cancellation"
 import { embedQuestionText } from "@/lib/google-generative-ai"
 import { logger } from "@/lib/logger"
 import { GetObjectCommand, S3Client } from "@aws-sdk/client-s3"
@@ -98,6 +102,7 @@ export async function handler(
 
 	for (const record of event.Records) {
 		const messageId = record.messageId
+		let cancellation: CancellationToken | undefined
 		try {
 			const body = JSON.parse(record.body) as
 				| { Records?: S3Record[] }
@@ -156,6 +161,13 @@ export async function handler(
 				})
 				continue
 			}
+
+			if (job.status === "cancelled") {
+				logger.info(TAG, "Job was cancelled — skipping", { jobId })
+				continue
+			}
+
+			cancellation = createCancellationToken(jobId)
 
 			logger.info(TAG, "Job started", {
 				jobId,
@@ -278,6 +290,14 @@ export async function handler(
 				const q = parsed.questions?.[i]
 				if (!q) continue
 
+				if (cancellation.isCancelled()) {
+					logger.info(TAG, "Job cancelled mid-processing — stopping loop", {
+						jobId,
+						question_index: i + 1,
+					})
+					break
+				}
+
 				const questionText = q.question_text
 				logger.info(TAG, "Creating question", {
 					jobId,
@@ -309,6 +329,11 @@ export async function handler(
 				await db.$executeRaw`
 					UPDATE questions SET embedding = (${vecStr}::text)::vector WHERE id = ${newQuestion.id}
 				`
+			}
+
+			if (cancellation.isCancelled()) {
+				logger.info(TAG, "Job was cancelled — skipping completion", { jobId })
+				continue
 			}
 
 			// If the job is linked to an existing exam paper, add all created questions
@@ -358,6 +383,8 @@ export async function handler(
 				// ignore
 			}
 			failures.push({ itemIdentifier: messageId })
+		} finally {
+			cancellation?.stop()
 		}
 	}
 

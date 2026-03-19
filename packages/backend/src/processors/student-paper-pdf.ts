@@ -1,4 +1,8 @@
 import { db } from "@/db"
+import {
+	type CancellationToken,
+	createCancellationToken,
+} from "@/lib/cancellation"
 import { defaultChatModel } from "@/lib/google-generative-ai"
 import { logger } from "@/lib/logger"
 import { S3Client } from "@aws-sdk/client-s3"
@@ -63,6 +67,7 @@ export async function handler(
 	for (const record of event.Records) {
 		const messageId = record.messageId
 		let jobId: string | undefined
+		let cancellation: CancellationToken | undefined
 
 		try {
 			const body = JSON.parse(record.body) as { job_id: string }
@@ -112,6 +117,13 @@ export async function handler(
 				})
 				continue
 			}
+
+			if (job.status === "cancelled") {
+				logger.info(TAG, "Job was cancelled — skipping", { jobId })
+				continue
+			}
+
+			cancellation = createCancellationToken(jobId)
 
 			await db.pdfIngestionJob.update({
 				where: { id: jobId },
@@ -207,6 +219,14 @@ export async function handler(
 			const gradingResults: GradingResult[] = []
 
 			for (const qItem of questionList) {
+				if (cancellation.isCancelled()) {
+					logger.info(TAG, "Job cancelled mid-grading — stopping loop", {
+						jobId,
+						question_id: qItem.question_id,
+					})
+					break
+				}
+
 				const studentAnswer = answerMap.get(qItem.question_number) ?? ""
 				const ms = qItem.mark_scheme
 
@@ -313,6 +333,11 @@ export async function handler(
 				}
 			}
 
+			if (cancellation.isCancelled()) {
+				logger.info(TAG, "Job was cancelled — skipping completion", { jobId })
+				continue
+			}
+
 			const totalAwarded = gradingResults.reduce(
 				(s, r) => s + r.awarded_score,
 				0,
@@ -355,6 +380,8 @@ export async function handler(
 				}
 			}
 			failures.push({ itemIdentifier: messageId })
+		} finally {
+			cancellation?.stop()
 		}
 	}
 

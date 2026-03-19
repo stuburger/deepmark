@@ -1,4 +1,8 @@
 import { db } from "@/db"
+import {
+	type CancellationToken,
+	createCancellationToken,
+} from "@/lib/cancellation"
 import { defaultChatModel, embedQuestionText } from "@/lib/google-generative-ai"
 import { logger } from "@/lib/logger"
 import { GetObjectCommand, S3Client } from "@aws-sdk/client-s3"
@@ -190,6 +194,7 @@ export async function handler(
 
 	for (const record of event.Records) {
 		const messageId = record.messageId
+		let cancellation: CancellationToken | undefined
 		try {
 			const body = JSON.parse(record.body) as
 				| { Records?: S3Record[] }
@@ -244,6 +249,8 @@ export async function handler(
 				logger.info(TAG, "Job was cancelled — skipping", { jobId })
 				continue
 			}
+
+			cancellation = createCancellationToken(jobId)
 
 			logger.info(TAG, "Job started", {
 				jobId,
@@ -403,12 +410,7 @@ export async function handler(
 				const q = parsed.questions[i]
 				if (!q) continue
 
-				// Cooperative cancellation: check between questions so we can stop promptly.
-				const freshJob = await db.pdfIngestionJob.findUnique({
-					where: { id: jobId },
-					select: { status: true },
-				})
-				if (freshJob?.status === "cancelled") {
+				if (cancellation.isCancelled()) {
 					logger.info(TAG, "Job cancelled mid-processing — stopping loop", {
 						jobId,
 						question_index: i + 1,
@@ -694,6 +696,11 @@ export async function handler(
 				}
 			}
 
+			if (cancellation.isCancelled()) {
+				logger.info(TAG, "Job was cancelled — skipping completion", { jobId })
+				continue
+			}
+
 			// If the job is linked to an existing exam paper, add all created questions
 			// to that paper's first section (creating the section if it doesn't exist yet).
 			if (job.exam_paper_id) {
@@ -741,6 +748,8 @@ export async function handler(
 				// ignore
 			}
 			failures.push({ itemIdentifier: messageId })
+		} finally {
+			cancellation?.stop()
 		}
 	}
 

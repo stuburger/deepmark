@@ -26,6 +26,7 @@ import { BookOpen, Clock, FileText, Globe, Lock, Upload } from "lucide-react"
 import { revalidatePath } from "next/cache"
 import Link from "next/link"
 import { notFound } from "next/navigation"
+import { EditableTitle } from "./editable-title"
 
 function capitalize(s: string) {
 	return s.charAt(0).toUpperCase() + s.slice(1)
@@ -131,7 +132,7 @@ export default async function ExamPaperDetailPage({
 				</Link>
 				<div className="mt-2 flex items-start justify-between gap-4">
 					<div>
-						<h1 className="text-2xl font-semibold">{paper.title}</h1>
+						<EditableTitle id={paper.id} initialTitle={paper.title} />
 						<div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
 							<Badge variant="secondary">{capitalize(paper.subject)}</Badge>
 							{paper.exam_board && <span>{paper.exam_board}</span>}

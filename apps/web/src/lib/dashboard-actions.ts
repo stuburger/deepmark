@@ -392,6 +392,29 @@ export type ToggleExamPaperPublicResult =
 	| { ok: true }
 	| { ok: false; error: string }
 
+export type UpdateExamPaperTitleResult =
+	| { ok: true }
+	| { ok: false; error: string }
+
+export async function updateExamPaperTitle(
+	id: string,
+	title: string,
+): Promise<UpdateExamPaperTitleResult> {
+	const session = await auth()
+	if (!session) return { ok: false, error: "Not authenticated" }
+	const trimmed = title.trim()
+	if (!trimmed) return { ok: false, error: "Title cannot be empty" }
+	log.info(TAG, "updateExamPaperTitle called", { userId: session.userId, id })
+	try {
+		await db.examPaper.update({ where: { id }, data: { title: trimmed } })
+		log.info(TAG, "Exam paper title updated", { id })
+		return { ok: true }
+	} catch (err) {
+		log.error(TAG, "updateExamPaperTitle failed", { id, error: String(err) })
+		return { ok: false, error: "Failed to update exam paper title" }
+	}
+}
+
 export async function toggleExamPaperPublic(
 	id: string,
 	is_public: boolean,

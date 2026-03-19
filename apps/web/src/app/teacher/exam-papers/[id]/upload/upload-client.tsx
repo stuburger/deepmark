@@ -229,7 +229,6 @@ export function LinkedPdfUploadClient({
 				setError("Upload to storage failed. Please try again.")
 				return
 			}
-			// Redirect to persistent job page — survives refreshes
 			router.push(`/admin/upload/${result.jobId}`)
 		} catch {
 			setError("Upload failed. Please try again.")
@@ -244,7 +243,6 @@ export function LinkedPdfUploadClient({
 		setError(null)
 		setJobId(null)
 		setJobStatus(null)
-		// Reset file input so the user can pick again
 		fileInputRef.current.value = ""
 		setRetrying(false)
 	}
@@ -266,7 +264,6 @@ export function LinkedPdfUploadClient({
 				</p>
 			</div>
 
-			{/* Read-only paper context */}
 			<Card>
 				<CardHeader>
 					<CardTitle className="text-base">Exam paper</CardTitle>
@@ -281,7 +278,6 @@ export function LinkedPdfUploadClient({
 				</CardContent>
 			</Card>
 
-			{/* Upload form */}
 			<Card>
 				<CardHeader>
 					<CardTitle>Upload PDF</CardTitle>
@@ -291,7 +287,6 @@ export function LinkedPdfUploadClient({
 					</CardDescription>
 				</CardHeader>
 				<CardContent className="space-y-4">
-					{/* Document type */}
 					<div className="space-y-2">
 						<p className="text-sm font-medium">Document type</p>
 						<div className="space-y-2">
@@ -324,7 +319,6 @@ export function LinkedPdfUploadClient({
 						</div>
 					</div>
 
-					{/* Adversarial loop toggle — mark scheme only */}
 					{documentType === "mark_scheme" && !isProcessing && (
 						<div className="flex items-center justify-between rounded-lg border p-3">
 							<div>
@@ -344,7 +338,6 @@ export function LinkedPdfUploadClient({
 						</div>
 					)}
 
-					{/* File input */}
 					{!isProcessing && (
 						<>
 							<label
@@ -372,7 +365,6 @@ export function LinkedPdfUploadClient({
 						</>
 					)}
 
-					{/* States */}
 					{uploading && (
 						<div className="flex items-center gap-2 text-sm text-muted-foreground">
 							<Spinner className="h-4 w-4" />

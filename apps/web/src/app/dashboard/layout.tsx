@@ -1,5 +1,0 @@
-import { redirect } from "next/navigation"
-
-export default async function DashboardLayout() {
-	redirect("/teacher/mark")
-}

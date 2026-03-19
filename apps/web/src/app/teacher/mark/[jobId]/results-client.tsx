@@ -119,7 +119,6 @@ export function MarkingResultsClient({
 
 	return (
 		<div className="max-w-3xl space-y-6">
-			{/* Header */}
 			<div className="flex items-start justify-between gap-4">
 				<div>
 					<p className="text-sm text-muted-foreground mb-1">
@@ -144,7 +143,6 @@ export function MarkingResultsClient({
 				</Link>
 			</div>
 
-			{/* Score summary */}
 			<Card>
 				<CardHeader>
 					<CardTitle className="flex items-center justify-between">
@@ -165,7 +163,6 @@ export function MarkingResultsClient({
 				</CardContent>
 			</Card>
 
-			{/* Per-question results */}
 			<div>
 				<h2 className="text-lg font-semibold mb-3">Question breakdown</h2>
 				{data.grading_results.length === 0 ? (

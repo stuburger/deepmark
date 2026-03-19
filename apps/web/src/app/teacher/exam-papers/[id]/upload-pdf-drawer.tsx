@@ -15,13 +15,16 @@ import {
 import { Spinner } from "@/components/ui/spinner"
 import { Switch } from "@/components/ui/switch"
 import {
+	archiveExistingDocument,
 	cancelPdfIngestionJob,
+	checkExistingDocument,
 	createLinkedPdfUpload,
 	getPdfIngestionJobStatus,
 	retriggerPdfIngestionJob,
 } from "@/lib/pdf-ingestion-actions"
 import {
 	AlertCircle,
+	AlertTriangle,
 	CheckCircle2,
 	RefreshCw,
 	Upload,
@@ -75,15 +78,97 @@ function docTypeToIngestionType(type: string): PdfIngestionDocumentType {
 	}
 }
 
+type ExistingInfo = { questionCount: number; exemplarCount: number }
+
+function ReplaceConfirmView({
+	documentType,
+	existingInfo,
+	onConfirm,
+	onCancel,
+	archiving,
+}: {
+	documentType: DocumentType
+	existingInfo: ExistingInfo
+	onConfirm: () => void
+	onCancel: () => void
+	archiving: boolean
+}) {
+	const docLabel =
+		documentType === "mark_scheme"
+			? "mark scheme"
+			: documentType === "question_paper"
+				? "question paper"
+				: "exemplar"
+
+	const count =
+		documentType === "exemplar"
+			? existingInfo.exemplarCount
+			: existingInfo.questionCount
+
+	const countLabel =
+		documentType === "exemplar"
+			? `${count} exemplar answer${count !== 1 ? "s" : ""}`
+			: `${count} question${count !== 1 ? "s" : ""}`
+
+	return (
+		<div className="space-y-4 py-2">
+			<div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-950/30">
+				<AlertTriangle className="h-5 w-5 shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
+				<div className="min-w-0">
+					<p className="text-sm font-medium text-amber-900 dark:text-amber-100">
+						Replace existing {docLabel}?
+					</p>
+					<p className="mt-1 text-xs text-amber-700 dark:text-amber-300">
+						This paper already has {countLabel} from a {docLabel} upload. They
+						will be removed from the paper and replaced with the new PDF.
+					</p>
+				</div>
+			</div>
+
+			<div className="space-y-2">
+				<Button
+					className="w-full"
+					variant="destructive"
+					onClick={onConfirm}
+					disabled={archiving}
+				>
+					{archiving ? (
+						<>
+							<Spinner className="h-4 w-4 mr-2" />
+							Removing existing…
+						</>
+					) : (
+						<>Replace {docLabel}</>
+					)}
+				</Button>
+				<Button
+					className="w-full"
+					variant="outline"
+					onClick={onCancel}
+					disabled={archiving}
+				>
+					Keep existing
+				</Button>
+			</div>
+		</div>
+	)
+}
+
 // ─── Upload state hook ────────────────────────────────────────────────────────
 
 function useUploadState(examPaperId: string, onComplete: () => void) {
 	const [documentType, setDocumentType] = useState<DocumentType>("mark_scheme")
 	const [runAdversarialLoop, setRunAdversarialLoop] = useState(false)
+	const [checking, setChecking] = useState(false)
+	const [pendingFile, setPendingFile] = useState<File | null>(null)
+	const [existingInfo, setExistingInfo] = useState<ExistingInfo | null>(null)
+	const [archiving, setArchiving] = useState(false)
 	const [uploading, setUploading] = useState(false)
 	const [jobId, setJobId] = useState<string | null>(null)
 	const [jobStatus, setJobStatus] = useState<string | null>(null)
 	const [error, setError] = useState<string | null>(null)
+
+	const isConfirming = pendingFile !== null && existingInfo !== null
 
 	const pollStatus = useCallback(
 		async (id: string) => {
@@ -104,11 +189,7 @@ function useUploadState(examPaperId: string, onComplete: () => void) {
 		return () => clearInterval(interval)
 	}, [jobId, jobStatus, pollStatus])
 
-	async function handleFile(file: File) {
-		if (!file.type.includes("pdf")) {
-			setError("Please select a PDF file.")
-			return
-		}
+	async function doUpload(file: File) {
 		setError(null)
 		setUploading(true)
 		try {
@@ -139,9 +220,66 @@ function useUploadState(examPaperId: string, onComplete: () => void) {
 		}
 	}
 
+	async function handleFile(file: File) {
+		if (!file.type.includes("pdf")) {
+			setError("Please select a PDF file.")
+			return
+		}
+		setError(null)
+		setChecking(true)
+		try {
+			const check = await checkExistingDocument(examPaperId, documentType)
+			if (!check.ok) {
+				setError(check.error)
+				return
+			}
+			if (check.exists) {
+				setPendingFile(file)
+				setExistingInfo({
+					questionCount: check.questionCount,
+					exemplarCount: check.exemplarCount,
+				})
+				return
+			}
+			await doUpload(file)
+		} finally {
+			setChecking(false)
+		}
+	}
+
+	async function handleConfirmReplace() {
+		if (!pendingFile) return
+		setArchiving(true)
+		setError(null)
+		try {
+			const result = await archiveExistingDocument(examPaperId, documentType)
+			if (!result.ok) {
+				setError(result.error)
+				setPendingFile(null)
+				setExistingInfo(null)
+				return
+			}
+			const file = pendingFile
+			setPendingFile(null)
+			setExistingInfo(null)
+			await doUpload(file)
+		} finally {
+			setArchiving(false)
+		}
+	}
+
+	function handleCancelReplace() {
+		setPendingFile(null)
+		setExistingInfo(null)
+	}
+
 	function reset() {
 		setDocumentType("mark_scheme")
 		setRunAdversarialLoop(false)
+		setChecking(false)
+		setPendingFile(null)
+		setExistingInfo(null)
+		setArchiving(false)
 		setUploading(false)
 		setJobId(null)
 		setJobStatus(null)
@@ -151,17 +289,27 @@ function useUploadState(examPaperId: string, onComplete: () => void) {
 	const isProcessing =
 		!!jobId && jobStatus !== "failed" && jobStatus !== "cancelled"
 
+	const showSelector =
+		!isConfirming && !isProcessing && !uploading && !checking && !archiving
+
 	return {
 		documentType,
 		setDocumentType,
 		runAdversarialLoop,
 		setRunAdversarialLoop,
+		checking,
 		uploading,
 		jobStatus,
 		error,
 		setError,
 		isProcessing,
+		isConfirming,
+		existingInfo,
+		archiving,
+		showSelector,
 		handleFile,
+		handleConfirmReplace,
+		handleCancelReplace,
 		reset,
 	}
 }
@@ -333,18 +481,25 @@ export function UploadPdfDrawer({
 		setDocumentType,
 		runAdversarialLoop,
 		setRunAdversarialLoop,
+		checking,
 		uploading,
 		jobStatus,
 		error,
 		setError,
 		isProcessing,
+		isConfirming,
+		existingInfo,
+		archiving,
+		showSelector,
 		handleFile,
+		handleConfirmReplace,
+		handleCancelReplace,
 		reset,
 	} = useUploadState(examPaperId, onUploadComplete)
 
 	function handleOpenChange(next: boolean) {
-		// Don't close while an upload-initiated job is processing
-		if (!next && isProcessing && !isTrackingMode) return
+		if (!next && !isTrackingMode && (isProcessing || uploading || archiving))
+			return
 		onOpenChange(next)
 		if (!next) reset()
 	}
@@ -359,6 +514,8 @@ export function UploadPdfDrawer({
 		: isProcessing
 			? undefined
 			: "Add a mark scheme, question paper, or exemplar to this exam paper."
+
+	const controlsDisabled = uploading || checking || archiving
 
 	return (
 		<Drawer open={open} onOpenChange={handleOpenChange}>
@@ -384,8 +541,25 @@ export function UploadPdfDrawer({
 						/>
 					)}
 
-					{/* ── Upload mode — form ── */}
-					{!isTrackingMode && !isProcessing && (
+					{/* ── Upload mode ── */}
+					{!isTrackingMode && checking && (
+						<div className="flex items-center gap-2 py-4 text-sm text-muted-foreground">
+							<Spinner className="h-4 w-4" />
+							<span>Checking for existing uploads…</span>
+						</div>
+					)}
+
+					{!isTrackingMode && isConfirming && existingInfo && (
+						<ReplaceConfirmView
+							documentType={documentType}
+							existingInfo={existingInfo}
+							onConfirm={handleConfirmReplace}
+							onCancel={handleCancelReplace}
+							archiving={archiving}
+						/>
+					)}
+
+					{!isTrackingMode && showSelector && (
 						<>
 							<div className="space-y-2">
 								<p className="text-sm font-medium">Document type</p>
@@ -406,7 +580,7 @@ export function UploadPdfDrawer({
 												checked={documentType === dt.value}
 												onChange={() => setDocumentType(dt.value)}
 												className="mt-0.5 accent-primary"
-												disabled={uploading}
+												disabled={controlsDisabled}
 											/>
 											<div className="min-w-0">
 												<p className="text-sm font-medium">{dt.label}</p>
@@ -433,7 +607,7 @@ export function UploadPdfDrawer({
 									<Switch
 										checked={runAdversarialLoop}
 										onCheckedChange={setRunAdversarialLoop}
-										disabled={uploading}
+										disabled={controlsDisabled}
 										className="shrink-0"
 									/>
 								</div>
@@ -441,7 +615,7 @@ export function UploadPdfDrawer({
 
 							<button
 								type="button"
-								disabled={uploading}
+								disabled={controlsDisabled}
 								onClick={() => fileInputRef.current?.click()}
 								className="w-full flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-input bg-muted/20 py-10 gap-3 transition-colors active:bg-muted/40 disabled:opacity-50 disabled:pointer-events-none"
 							>
@@ -469,49 +643,53 @@ export function UploadPdfDrawer({
 								type="file"
 								accept=".pdf,application/pdf"
 								className="sr-only"
-								disabled={uploading}
+								disabled={controlsDisabled}
 								onChange={(e) => {
 									const f = e.target.files?.[0]
 									if (f) handleFile(f)
 									e.target.value = ""
 								}}
 							/>
-
-							{error && (
-								<div className="flex items-start gap-2 rounded-xl border border-destructive/30 bg-destructive/5 p-3">
-									<XCircle className="h-4 w-4 shrink-0 mt-0.5 text-destructive" />
-									<div className="min-w-0 flex-1">
-										<p className="text-sm text-destructive">{error}</p>
-										<button
-											type="button"
-											onClick={() => setError(null)}
-											className="mt-1 text-xs underline underline-offset-2 text-destructive/70"
-										>
-											Dismiss
-										</button>
-									</div>
-								</div>
-							)}
 						</>
 					)}
 
-					{/* ── Upload mode — progress ── */}
 					{!isTrackingMode && isProcessing && (
 						<PdfIngestionProgressView
 							status={jobStatus}
 							documentType={documentType}
 						/>
 					)}
+
+					{!isTrackingMode && error && (
+						<div className="flex items-start gap-2 rounded-xl border border-destructive/30 bg-destructive/5 p-3">
+							<XCircle className="h-4 w-4 shrink-0 mt-0.5 text-destructive" />
+							<div className="min-w-0 flex-1">
+								<p className="text-sm text-destructive">{error}</p>
+								<button
+									type="button"
+									onClick={() => setError(null)}
+									className="mt-1 text-xs underline underline-offset-2 text-destructive/70"
+								>
+									Dismiss
+								</button>
+							</div>
+						</div>
+					)}
 				</div>
 
 				<DrawerFooter className="pt-2">
-					{!isTrackingMode && !isProcessing && !uploading && (
-						<DrawerClose asChild>
-							<Button variant="outline" className="w-full">
-								Cancel
-							</Button>
-						</DrawerClose>
-					)}
+					{!isTrackingMode &&
+						!isProcessing &&
+						!uploading &&
+						!checking &&
+						!archiving &&
+						!isConfirming && (
+							<DrawerClose asChild>
+								<Button variant="outline" className="w-full">
+									Cancel
+								</Button>
+							</DrawerClose>
+						)}
 					{!isTrackingMode && isProcessing && jobStatus !== "ocr_complete" && (
 						<p className="text-center text-xs text-muted-foreground pb-1">
 							Please keep this page open while processing.

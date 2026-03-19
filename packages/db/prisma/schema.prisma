@@ -67,6 +67,7 @@ enum ScanStatus {
   extracting
   extracted
   failed
+  cancelled
 }
 
 enum AnswerSource {

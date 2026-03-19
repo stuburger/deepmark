@@ -1,5 +1,7 @@
 "use client"
 
+import { PdfIngestionProgressView } from "@/components/pdf-ingestion-progress"
+import type { PdfIngestionDocumentType } from "@/components/pdf-ingestion-progress"
 import { Button } from "@/components/ui/button"
 import {
 	Drawer,
@@ -9,20 +11,34 @@ import {
 	DrawerFooter,
 	DrawerHeader,
 	DrawerTitle,
-	DrawerTrigger,
 } from "@/components/ui/drawer"
-import { Progress } from "@/components/ui/progress"
 import { Spinner } from "@/components/ui/spinner"
 import { Switch } from "@/components/ui/switch"
 import {
+	cancelPdfIngestionJob,
 	createLinkedPdfUpload,
 	getPdfIngestionJobStatus,
+	retriggerPdfIngestionJob,
 } from "@/lib/pdf-ingestion-actions"
-import { CheckCircle2, Upload, XCircle } from "lucide-react"
-import { useRouter } from "next/navigation"
+import {
+	AlertCircle,
+	CheckCircle2,
+	RefreshCw,
+	Upload,
+	XCircle,
+} from "lucide-react"
 import { useCallback, useEffect, useRef, useState } from "react"
 
 type DocumentType = "mark_scheme" | "exemplar" | "question_paper"
+
+type TrackingJob = {
+	id: string
+	document_type: string
+	status: string
+	error: string | null
+}
+
+const TERMINAL = new Set(["ocr_complete", "failed", "cancelled"])
 
 const DOCUMENT_TYPES: {
 	value: DocumentType
@@ -46,97 +62,20 @@ const DOCUMENT_TYPES: {
 	},
 ]
 
-type ProcessingStep = { label: string; detail: string; progress: number }
-
-const STATUS_STEPS: Record<string, ProcessingStep> = {
-	pending: { label: "Queued", detail: "Waiting to start…", progress: 10 },
-	processing: {
-		label: "Reading PDF",
-		detail: "Extracting questions and criteria…",
-		progress: 40,
-	},
-	extracting: {
-		label: "Extracting data",
-		detail: "Structuring questions and mark points…",
-		progress: 70,
-	},
-	extracted: {
-		label: "Finalising",
-		detail: "Saving and running quality checks…",
-		progress: 90,
-	},
-	ocr_complete: { label: "Complete", detail: "All done!", progress: 100 },
+function docTypeToIngestionType(type: string): PdfIngestionDocumentType {
+	switch (type) {
+		case "mark_scheme":
+			return "mark_scheme"
+		case "question_paper":
+			return "question_paper"
+		case "student_paper":
+			return "student_paper"
+		default:
+			return "exemplar"
+	}
 }
 
-function ProcessingView({
-	status,
-	documentType,
-}: {
-	status: string | null
-	documentType: DocumentType
-}) {
-	const step = status
-		? (STATUS_STEPS[status] ?? STATUS_STEPS.pending)
-		: STATUS_STEPS.pending
-	const docLabel =
-		documentType === "mark_scheme"
-			? "mark scheme"
-			: documentType === "question_paper"
-				? "question paper"
-				: "exemplar"
-
-	return (
-		<div className="space-y-4 py-2">
-			<div className="flex items-center gap-3">
-				{step.progress === 100 ? (
-					<CheckCircle2 className="h-5 w-5 shrink-0 text-green-500" />
-				) : (
-					<Spinner className="h-5 w-5 shrink-0" />
-				)}
-				<div className="min-w-0 flex-1">
-					<p className="text-sm font-medium">{step.label}</p>
-					<p className="text-xs text-muted-foreground">{step.detail}</p>
-				</div>
-			</div>
-			<Progress value={step.progress} className="h-2" />
-			<div className="space-y-1.5">
-				{Object.entries(STATUS_STEPS)
-					.filter(([key]) => key !== "ocr_complete")
-					.map(([key, s]) => {
-						const isComplete = s.progress < step.progress
-						const isActive = s.progress === step.progress
-						return (
-							<div key={key} className="flex items-center gap-2 text-xs">
-								<span
-									className={`h-1.5 w-1.5 shrink-0 rounded-full ${
-										isComplete
-											? "bg-green-500"
-											: isActive
-												? "bg-primary"
-												: "bg-muted-foreground/30"
-									}`}
-								/>
-								<span
-									className={
-										isComplete
-											? "text-muted-foreground line-through"
-											: isActive
-												? "font-medium"
-												: "text-muted-foreground/50"
-									}
-								>
-									{s.label}
-								</span>
-							</div>
-						)
-					})}
-			</div>
-			<p className="text-xs text-muted-foreground">
-				Processing your {docLabel} PDF. Usually takes 30–90 seconds.
-			</p>
-		</div>
-	)
-}
+// ─── Upload state hook ────────────────────────────────────────────────────────
 
 function useUploadState(examPaperId: string, onComplete: () => void) {
 	const [documentType, setDocumentType] = useState<DocumentType>("mark_scheme")
@@ -160,7 +99,7 @@ function useUploadState(examPaperId: string, onComplete: () => void) {
 	)
 
 	useEffect(() => {
-		if (!jobId || jobStatus === "ocr_complete" || jobStatus === "failed") return
+		if (!jobId || TERMINAL.has(jobStatus ?? "")) return
 		const interval = setInterval(() => pollStatus(jobId), 3000)
 		return () => clearInterval(interval)
 	}, [jobId, jobStatus, pollStatus])
@@ -209,7 +148,8 @@ function useUploadState(examPaperId: string, onComplete: () => void) {
 		setError(null)
 	}
 
-	const isProcessing = !!jobId && jobStatus !== "failed"
+	const isProcessing =
+		!!jobId && jobStatus !== "failed" && jobStatus !== "cancelled"
 
 	return {
 		documentType,
@@ -226,15 +166,167 @@ function useUploadState(examPaperId: string, onComplete: () => void) {
 	}
 }
 
-export function UploadPdfDrawer({ examPaperId }: { examPaperId: string }) {
-	const [open, setOpen] = useState(false)
-	const fileInputRef = useRef<HTMLInputElement>(null)
-	const router = useRouter()
+// ─── Tracking view ────────────────────────────────────────────────────────────
 
-	function handleComplete() {
-		setOpen(false)
-		router.refresh()
+function TrackingView({
+	job,
+	onClose,
+	onJobUpdated,
+}: {
+	job: TrackingJob
+	onClose: () => void
+	onJobUpdated: (updated: Partial<TrackingJob>) => void
+}) {
+	const isFailed = job.status === "failed"
+	const isCancelled = job.status === "cancelled"
+	const isComplete = job.status === "ocr_complete"
+	const isActive = !TERMINAL.has(job.status)
+	const [retrying, setRetrying] = useState(false)
+	const [cancelling, setCancelling] = useState(false)
+
+	async function handleCancel() {
+		setCancelling(true)
+		await cancelPdfIngestionJob(job.id)
+		onJobUpdated({ status: "cancelled" })
+		setCancelling(false)
 	}
+
+	async function handleRetry() {
+		setRetrying(true)
+		await retriggerPdfIngestionJob(job.id)
+		onJobUpdated({ status: "pending", error: null })
+		setRetrying(false)
+	}
+
+	return (
+		<div className="space-y-4">
+			{isActive && (
+				<PdfIngestionProgressView
+					status={job.status}
+					documentType={docTypeToIngestionType(job.document_type)}
+				/>
+			)}
+
+			{isComplete && (
+				<div className="flex items-center gap-3 rounded-xl border border-green-500/30 bg-green-500/5 px-3 py-3">
+					<CheckCircle2 className="h-5 w-5 shrink-0 text-green-500" />
+					<div>
+						<p className="text-sm font-medium">Processing complete</p>
+						<p className="text-xs text-muted-foreground">
+							Questions and mark scheme criteria have been added.
+						</p>
+					</div>
+				</div>
+			)}
+
+			{isFailed && (
+				<div className="space-y-3">
+					<div className="flex items-start gap-3 rounded-xl border border-destructive/30 bg-destructive/5 px-3 py-3">
+						<AlertCircle className="h-5 w-5 shrink-0 mt-0.5 text-destructive" />
+						<div>
+							<p className="text-sm font-medium text-destructive">
+								Processing failed
+							</p>
+							{job.error && (
+								<p className="mt-0.5 text-xs text-destructive/80">
+									{job.error}
+								</p>
+							)}
+						</div>
+					</div>
+				</div>
+			)}
+
+			{isCancelled && (
+				<div className="flex items-center gap-3 rounded-xl border px-3 py-3 text-muted-foreground">
+					<XCircle className="h-5 w-5 shrink-0" />
+					<p className="text-sm">This job was cancelled.</p>
+				</div>
+			)}
+
+			{isActive && (
+				<div className="flex justify-end">
+					<Button
+						size="sm"
+						variant="outline"
+						className="text-destructive hover:text-destructive"
+						disabled={cancelling}
+						onClick={handleCancel}
+					>
+						{cancelling ? (
+							<Spinner className="h-3.5 w-3.5 mr-1.5" />
+						) : (
+							<XCircle className="h-3.5 w-3.5 mr-1.5" />
+						)}
+						Cancel job
+					</Button>
+				</div>
+			)}
+
+			{isFailed && (
+				<div className="flex gap-2">
+					<Button
+						size="sm"
+						variant="outline"
+						className="flex-1"
+						disabled={retrying}
+						onClick={handleRetry}
+					>
+						{retrying ? (
+							<Spinner className="h-3.5 w-3.5 mr-1.5" />
+						) : (
+							<RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+						)}
+						Try again
+					</Button>
+					<Button
+						size="sm"
+						variant="ghost"
+						className="flex-1 text-muted-foreground"
+						onClick={onClose}
+					>
+						Dismiss
+					</Button>
+				</div>
+			)}
+
+			{(isComplete || isCancelled) && (
+				<Button variant="outline" className="w-full" onClick={onClose}>
+					Close
+				</Button>
+			)}
+		</div>
+	)
+}
+
+// ─── Drawer ───────────────────────────────────────────────────────────────────
+
+export function UploadPdfDrawer({
+	examPaperId,
+	open,
+	onOpenChange,
+	trackingJob: trackingJobProp,
+	onUploadComplete,
+}: {
+	examPaperId: string
+	open: boolean
+	onOpenChange: (open: boolean) => void
+	/** When set, the drawer opens in tracking mode for this job instead of upload mode. */
+	trackingJob: TrackingJob | null
+	onUploadComplete: () => void
+}) {
+	// Local mutable copy of the tracking job (so retry/cancel can optimistically update)
+	const [localTrackingJob, setLocalTrackingJob] = useState<TrackingJob | null>(
+		trackingJobProp,
+	)
+	const fileInputRef = useRef<HTMLInputElement>(null)
+
+	// Keep local copy in sync with parent prop updates (polling)
+	useEffect(() => {
+		setLocalTrackingJob(trackingJobProp)
+	}, [trackingJobProp])
+
+	const isTrackingMode = localTrackingJob !== null
 
 	const {
 		documentType,
@@ -248,33 +340,52 @@ export function UploadPdfDrawer({ examPaperId }: { examPaperId: string }) {
 		isProcessing,
 		handleFile,
 		reset,
-	} = useUploadState(examPaperId, handleComplete)
+	} = useUploadState(examPaperId, onUploadComplete)
 
 	function handleOpenChange(next: boolean) {
-		if (!next && isProcessing) return
-		setOpen(next)
+		// Don't close while an upload-initiated job is processing
+		if (!next && isProcessing && !isTrackingMode) return
+		onOpenChange(next)
 		if (!next) reset()
 	}
 
+	const drawerTitle = isTrackingMode
+		? "Processing progress"
+		: isProcessing
+			? "Uploading…"
+			: "Upload PDF"
+	const drawerDescription = isTrackingMode
+		? undefined
+		: isProcessing
+			? undefined
+			: "Add a mark scheme, question paper, or exemplar to this exam paper."
+
 	return (
 		<Drawer open={open} onOpenChange={handleOpenChange}>
-			<DrawerTrigger asChild>
-				<Button size="sm">
-					<Upload className="h-3.5 w-3.5 mr-1.5" />
-					Upload PDF
-				</Button>
-			</DrawerTrigger>
-
 			<DrawerContent className="max-h-[92dvh]">
 				<DrawerHeader className="pb-2">
-					<DrawerTitle>Upload PDF</DrawerTitle>
-					<DrawerDescription>
-						Add a mark scheme, question paper, or exemplar to this exam paper.
-					</DrawerDescription>
+					<DrawerTitle>{drawerTitle}</DrawerTitle>
+					{drawerDescription && (
+						<DrawerDescription>{drawerDescription}</DrawerDescription>
+					)}
 				</DrawerHeader>
 
 				<div className="flex-1 overflow-y-auto px-4 pb-2 space-y-4">
-					{!isProcessing && (
+					{/* ── Tracking mode ── */}
+					{isTrackingMode && localTrackingJob && (
+						<TrackingView
+							job={localTrackingJob}
+							onClose={() => onOpenChange(false)}
+							onJobUpdated={(updated) =>
+								setLocalTrackingJob((prev) =>
+									prev ? { ...prev, ...updated } : prev,
+								)
+							}
+						/>
+					)}
+
+					{/* ── Upload mode — form ── */}
+					{!isTrackingMode && !isProcessing && (
 						<>
 							<div className="space-y-2">
 								<p className="text-sm font-medium">Document type</p>
@@ -384,20 +495,24 @@ export function UploadPdfDrawer({ examPaperId }: { examPaperId: string }) {
 						</>
 					)}
 
-					{isProcessing && (
-						<ProcessingView status={jobStatus} documentType={documentType} />
+					{/* ── Upload mode — progress ── */}
+					{!isTrackingMode && isProcessing && (
+						<PdfIngestionProgressView
+							status={jobStatus}
+							documentType={documentType}
+						/>
 					)}
 				</div>
 
 				<DrawerFooter className="pt-2">
-					{!isProcessing && (
+					{!isTrackingMode && !isProcessing && !uploading && (
 						<DrawerClose asChild>
 							<Button variant="outline" className="w-full">
 								Cancel
 							</Button>
 						</DrawerClose>
 					)}
-					{isProcessing && jobStatus !== "ocr_complete" && (
+					{!isTrackingMode && isProcessing && jobStatus !== "ocr_complete" && (
 						<p className="text-center text-xs text-muted-foreground pb-1">
 							Please keep this page open while processing.
 						</p>

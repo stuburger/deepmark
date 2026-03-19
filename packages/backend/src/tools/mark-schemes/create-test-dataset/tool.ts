@@ -1,14 +1,9 @@
-import { CreateTestDatasetSchema } from "./schema"
-import { generateText, Output } from "ai"
-import { createOpenAI } from "@ai-sdk/openai"
-import z from "zod"
-import { Resource } from "sst"
-import { tool } from "@/tools/shared/tool-utils"
 import { db } from "@/db"
-
-const openai = createOpenAI({
-	apiKey: Resource.OpenAiApiKey.value,
-})
+import { defaultChatModel } from "@/lib/google-generative-ai"
+import { tool } from "@/tools/shared/tool-utils"
+import { type LanguageModel, Output, generateText } from "ai"
+import z from "zod"
+import { CreateTestDatasetSchema } from "./schema"
 
 interface TestCase {
 	student_answer: string
@@ -259,8 +254,9 @@ For each test case, provide:
 Ensure the generated cases complement the provided examples and create a comprehensive test dataset.
 </Task>`
 
+	const chatModel: LanguageModel = defaultChatModel()
 	const { output } = await generateText({
-		model: openai("gpt-5.1"),
+		model: chatModel,
 		messages: [
 			{
 				role: "system",

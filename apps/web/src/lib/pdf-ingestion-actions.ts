@@ -161,6 +161,59 @@ export type GetPdfIngestionJobStatusResult =
 	  }
 	| { ok: false; error: string }
 
+export type ActiveExamPaperIngestionJob = {
+	id: string
+	document_type: string
+	status: string
+	error: string | null
+}
+
+export type GetActiveIngestionJobsForExamPaperResult =
+	| { ok: true; jobs: ActiveExamPaperIngestionJob[] }
+	| { ok: false; error: string }
+
+/**
+ * Returns in-progress jobs linked to this exam paper (for teacher UI polling),
+ * plus any recently failed/cancelled jobs so the teacher can see what went wrong.
+ */
+export async function getActiveIngestionJobsForExamPaper(
+	examPaperId: string,
+): Promise<GetActiveIngestionJobsForExamPaperResult> {
+	const session = await auth()
+	if (!session) return { ok: false, error: "Not authenticated" }
+	const jobs = await db.pdfIngestionJob.findMany({
+		where: {
+			exam_paper_id: examPaperId,
+			uploaded_by: session.userId,
+			OR: [
+				// Actively running
+				{ status: { notIn: ["ocr_complete", "failed", "cancelled"] } },
+				// Failed/cancelled within the last hour — shown so the teacher can see the error
+				{
+					status: { in: ["failed", "cancelled"] },
+					created_at: { gte: new Date(Date.now() - 60 * 60 * 1000) },
+				},
+			],
+		},
+		orderBy: { created_at: "desc" },
+		select: {
+			id: true,
+			document_type: true,
+			status: true,
+			error: true,
+		},
+	})
+	return {
+		ok: true,
+		jobs: jobs.map((j) => ({
+			id: j.id,
+			document_type: j.document_type,
+			status: j.status,
+			error: j.error,
+		})),
+	}
+}
+
 export async function getPdfIngestionJobStatus(
 	jobId: string,
 ): Promise<GetPdfIngestionJobStatusResult> {
@@ -250,7 +303,7 @@ export async function createExamPaperFromJob(input: {
 		await db.examSectionQuestion.create({
 			data: {
 				exam_section_id: section.id,
-				question_id: questions[i]!.id,
+				question_id: questions[i]?.id ?? "",
 				order: i + 1,
 			},
 		})
@@ -490,6 +543,31 @@ export async function getPdfIngestionJobDownloadUrl(
 export type RetriggerPdfIngestionJobResult =
 	| { ok: true }
 	| { ok: false; error: string }
+
+export type CancelPdfIngestionJobResult =
+	| { ok: true }
+	| { ok: false; error: string }
+
+export async function cancelPdfIngestionJob(
+	jobId: string,
+): Promise<CancelPdfIngestionJobResult> {
+	const session = await auth()
+	if (!session) return { ok: false, error: "Not authenticated" }
+	const job = await db.pdfIngestionJob.findFirst({
+		where: { id: jobId, uploaded_by: session.userId },
+		select: { id: true, status: true },
+	})
+	if (!job) return { ok: false, error: "Job not found" }
+	const terminal = ["ocr_complete", "failed", "cancelled"]
+	if (terminal.includes(job.status)) {
+		return { ok: false, error: "Job is already in a terminal state" }
+	}
+	await db.pdfIngestionJob.update({
+		where: { id: job.id },
+		data: { status: "cancelled", error: "Cancelled by user" },
+	})
+	return { ok: true }
+}
 
 export async function retriggerPdfIngestionJob(
 	jobId: string,

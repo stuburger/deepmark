@@ -1,6 +1,6 @@
 import { db } from "@/db"
+import { defaultChatModel, embedQuestionText } from "@/lib/google-generative-ai"
 import { logger } from "@/lib/logger"
-import { createOpenAI } from "@ai-sdk/openai"
 import { GetObjectCommand, S3Client } from "@aws-sdk/client-s3"
 import { GoogleGenAI, Type } from "@google/genai"
 import type { ScanStatus } from "@mcp-gcse/db"
@@ -153,22 +153,6 @@ async function getPdfBase64(bucket: string, key: string): Promise<string> {
 	return Buffer.from(body).toString("base64")
 }
 
-async function embedText(text: string): Promise<number[]> {
-	const res = await fetch("https://api.openai.com/v1/embeddings", {
-		method: "POST",
-		headers: {
-			"Content-Type": "application/json",
-			Authorization: `Bearer ${Resource.OpenAiApiKey.value}`,
-		},
-		body: JSON.stringify({ model: "text-embedding-3-small", input: text }),
-	})
-	if (!res.ok) throw new Error(`OpenAI embeddings failed: ${res.status}`)
-	const json = (await res.json()) as { data?: Array<{ embedding?: number[] }> }
-	const vec = json.data?.[0]?.embedding
-	if (!vec || !Array.isArray(vec)) throw new Error("No embedding returned")
-	return vec
-}
-
 function embeddingToVectorStr(vec: number[]): string {
 	return `[${vec.join(",")}]`
 }
@@ -254,6 +238,10 @@ export async function handler(
 					document_type: job.document_type,
 					subject: job.subject,
 				})
+				continue
+			}
+			if (job.status === "cancelled") {
+				logger.info(TAG, "Job was cancelled — skipping", { jobId })
 				continue
 			}
 
@@ -398,11 +386,8 @@ export async function handler(
 
 			// Only instantiate grader if the adversarial loop is enabled — it's expensive
 			// and not needed for a plain extraction run.
-			const openai = runAdversarialLoopEnabled
-				? createOpenAI({ apiKey: Resource.OpenAiApiKey.value })
-				: null
-			const grader = openai
-				? new Grader(openai("gpt-4o"), {
+			const grader = runAdversarialLoopEnabled
+				? new Grader(defaultChatModel(), {
 						systemPrompt:
 							"You are an expert GCSE examiner. Mark the student's answer against the provided mark scheme. Return valid JSON matching the schema. Be consistent and conservative.",
 					})
@@ -417,6 +402,20 @@ export async function handler(
 			for (let i = 0; i < questionCount; i++) {
 				const q = parsed.questions[i]
 				if (!q) continue
+
+				// Cooperative cancellation: check between questions so we can stop promptly.
+				const freshJob = await db.pdfIngestionJob.findUnique({
+					where: { id: jobId },
+					select: { status: true },
+				})
+				if (freshJob?.status === "cancelled") {
+					logger.info(TAG, "Job cancelled mid-processing — stopping loop", {
+						jobId,
+						question_index: i + 1,
+					})
+					break
+				}
+
 				const questionText = q.question_text
 				logger.info(TAG, "Processing question", {
 					jobId,
@@ -424,7 +423,7 @@ export async function handler(
 					total: questionCount,
 					marking_method: q.marking_method ?? "point_based",
 				})
-				const embeddingVec = await embedText(questionText)
+				const embeddingVec = await embedQuestionText(questionText)
 				const existingId = await findMatchingQuestionId(examBoard, embeddingVec)
 				logger.info(
 					TAG,
@@ -502,7 +501,7 @@ export async function handler(
 								link_status: "auto_linked",
 							},
 						})
-						if (runAdversarialLoopEnabled && grader && openai) {
+						if (runAdversarialLoopEnabled && grader) {
 							const questionWithScheme = buildQuestionWithMarkScheme(
 								existingId,
 								questionText,
@@ -519,7 +518,7 @@ export async function handler(
 							const testResults = await runAdversarialLoop(
 								questionWithScheme,
 								grader,
-								openai("gpt-4o"),
+								defaultChatModel(),
 								{
 									targetScores: probeBoundaries(pointsTotal),
 									maxIterations: 3,
@@ -565,7 +564,7 @@ export async function handler(
 								link_status: "auto_linked",
 							},
 						})
-						if (runAdversarialLoopEnabled && grader && openai) {
+						if (runAdversarialLoopEnabled && grader) {
 							const questionWithScheme = buildQuestionWithMarkScheme(
 								existingId,
 								questionText,
@@ -582,7 +581,7 @@ export async function handler(
 							const testResults = await runAdversarialLoop(
 								questionWithScheme,
 								grader,
-								openai("gpt-4o"),
+								defaultChatModel(),
 								{
 									targetScores: probeBoundaries(pointsTotal),
 									maxIterations: 3,
@@ -648,7 +647,7 @@ export async function handler(
 							link_status: "linked",
 						},
 					})
-					if (runAdversarialLoopEnabled && grader && openai) {
+					if (runAdversarialLoopEnabled && grader) {
 						const questionWithScheme = buildQuestionWithMarkScheme(
 							newQuestion.id,
 							questionText,
@@ -665,7 +664,7 @@ export async function handler(
 						const testResults = await runAdversarialLoop(
 							questionWithScheme,
 							grader,
-							openai("gpt-4o"),
+							defaultChatModel(),
 							{ targetScores: probeBoundaries(pointsTotal), maxIterations: 3 },
 						)
 						for (const tr of testResults) {

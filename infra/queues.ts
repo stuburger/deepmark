@@ -68,14 +68,20 @@ scansBucket.notify({
 
 ocrQueue.subscribe({
 	handler: "packages/backend/src/processors/ocr.handler",
-	link: [neonPostgres, geminiApiKey, scansBucket, extractionQueue],
+	link: [
+		neonPostgres,
+		geminiApiKey,
+		openAiApiKey,
+		scansBucket,
+		extractionQueue,
+	],
 	timeout: "4 minutes",
 	memory: "512 MB",
 })
 
 extractionQueue.subscribe({
 	handler: "packages/backend/src/processors/extract-answers.handler",
-	link: [neonPostgres, geminiApiKey],
+	link: [neonPostgres, geminiApiKey, openAiApiKey],
 	timeout: "3 minutes",
 })
 
@@ -102,14 +108,14 @@ questionPaperQueue.subscribe({
 
 studentPaperOcrQueue.subscribe({
 	handler: "packages/backend/src/processors/student-paper-ocr.handler",
-	link: [neonPostgres, geminiApiKey, scansBucket],
+	link: [neonPostgres, geminiApiKey, openAiApiKey, scansBucket],
 	timeout: "8 minutes",
 	memory: "1 GB",
 })
 
 studentPaperQueue.subscribe({
 	handler: "packages/backend/src/processors/student-paper-pdf.handler",
-	link: [neonPostgres, openAiApiKey, scansBucket],
+	link: [neonPostgres, geminiApiKey, openAiApiKey, scansBucket],
 	timeout: "8 minutes",
 	memory: "1 GB",
 })

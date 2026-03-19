@@ -1,22 +1,17 @@
-import { createOpenAI } from "@ai-sdk/openai"
-import { Resource } from "sst"
 import { db } from "@/db"
+import { defaultChatModel } from "@/lib/google-generative-ai"
 import {
 	DeterministicMarker,
 	Grader,
 	LevelOfResponseMarker,
 	LlmMarker,
 	MarkerOrchestrator,
+	type QuestionWithMarkScheme,
 	parseMarkPointsFromPrisma,
 	parseMarkingRulesFromPrisma,
-	type QuestionWithMarkScheme,
 } from "@mcp-gcse/shared"
 
-const openai = createOpenAI({
-	apiKey: Resource.OpenAiApiKey.value,
-})
-
-const grader = new Grader(openai("gpt-4o"), {
+const grader = new Grader(defaultChatModel(), {
 	systemPrompt:
 		"You are an expert GCSE examiner. Mark the student's answer against the provided mark scheme. Return valid JSON matching the schema. Ignore spelling and grammar; focus on understanding and correct science. Be consistent and conservative: only award marks when there is clear evidence.",
 })
@@ -73,12 +68,16 @@ function buildQuestionWithMarkScheme(
 	const q = answer.question
 	const part = answer.question_part
 	const questionType = part ? part.question_type : q.question_type
-	const rawOptions = (part?.multiple_choice_options ?? q.multiple_choice_options) as
+	const rawOptions = (part?.multiple_choice_options ??
+		q.multiple_choice_options) as
 		| Array<{ option_label: string; option_text: string }>
 		| null
 		| undefined
 	const availableOptions = Array.isArray(rawOptions)
-		? rawOptions.map((o) => ({ optionLabel: o.option_label, optionText: o.option_text }))
+		? rawOptions.map((o) => ({
+				optionLabel: o.option_label,
+				optionText: o.option_text,
+			}))
 		: undefined
 
 	return {

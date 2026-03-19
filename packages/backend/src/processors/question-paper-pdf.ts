@@ -1,4 +1,5 @@
 import { db } from "@/db"
+import { embedQuestionText } from "@/lib/google-generative-ai"
 import { logger } from "@/lib/logger"
 import { GetObjectCommand, S3Client } from "@aws-sdk/client-s3"
 import { GoogleGenAI, Type } from "@google/genai"
@@ -83,22 +84,6 @@ async function getPdfBase64(bucket: string, key: string): Promise<string> {
 	const body = await response.Body?.transformToByteArray()
 	if (!body?.length) throw new Error("Empty S3 object")
 	return Buffer.from(body).toString("base64")
-}
-
-async function embedText(text: string): Promise<number[]> {
-	const res = await fetch("https://api.openai.com/v1/embeddings", {
-		method: "POST",
-		headers: {
-			"Content-Type": "application/json",
-			Authorization: `Bearer ${Resource.OpenAiApiKey.value}`,
-		},
-		body: JSON.stringify({ model: "text-embedding-3-small", input: text }),
-	})
-	if (!res.ok) throw new Error(`OpenAI embeddings failed: ${res.status}`)
-	const json = (await res.json()) as { data?: Array<{ embedding?: number[] }> }
-	const vec = json.data?.[0]?.embedding
-	if (!vec || !Array.isArray(vec)) throw new Error("No embedding returned")
-	return vec
 }
 
 function embeddingToVectorStr(vec: number[]): string {
@@ -301,7 +286,7 @@ export async function handler(
 					marks: q.total_marks,
 					type: q.question_type ?? "written",
 				})
-				const embeddingVec = await embedText(questionText)
+				const embeddingVec = await embedQuestionText(questionText)
 				const vecStr = embeddingToVectorStr(embeddingVec)
 
 				const newQuestion = await db.question.create({

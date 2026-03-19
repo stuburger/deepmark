@@ -1,11 +1,10 @@
-import { createOpenAI } from "@ai-sdk/openai"
-import { Resource } from "sst"
 import { db } from "@/db"
+import { defaultChatModel } from "@/lib/google-generative-ai"
 import {
 	Grader,
+	type QuestionWithMarkScheme,
 	parseMarkPointsFromPrisma,
 	parseMarkingRulesFromPrisma,
-	type QuestionWithMarkScheme,
 } from "@mcp-gcse/shared"
 
 export interface ExemplarValidationSummary {
@@ -15,44 +14,46 @@ export interface ExemplarValidationSummary {
 	accuracyPercent: number
 }
 
-function buildQuestionWithMarkScheme(
-	markScheme: {
+function buildQuestionWithMarkScheme(markScheme: {
+	id: string
+	description: string
+	guidance: string | null
+	points_total: number
+	mark_points: unknown
+	marking_method: string
+	marking_rules: unknown
+	correct_option_labels: string[]
+	question: {
 		id: string
-		description: string
-		guidance: string | null
-		points_total: number
-		mark_points: unknown
-		marking_method: string
-		marking_rules: unknown
-		correct_option_labels: string[]
-		question: {
-			id: string
-			text: string
-			topic: string
-			question_type: string
-			multiple_choice_options: unknown
-		}
-		question_part: {
-			id: string
-			text: string
-			part_label: string
-			question_type: string
-			multiple_choice_options: unknown
-		} | null
-	},
-): QuestionWithMarkScheme {
+		text: string
+		topic: string
+		question_type: string
+		multiple_choice_options: unknown
+	}
+	question_part: {
+		id: string
+		text: string
+		part_label: string
+		question_type: string
+		multiple_choice_options: unknown
+	} | null
+}): QuestionWithMarkScheme {
 	const q = markScheme.question
 	const part = markScheme.question_part
 	const questionText = part ? q.text + part.text : q.text
 	const questionType = (part ? part.question_type : q.question_type) as
 		| "written"
 		| "multiple_choice"
-	const rawOptions = (part?.multiple_choice_options ?? q.multiple_choice_options) as
+	const rawOptions = (part?.multiple_choice_options ??
+		q.multiple_choice_options) as
 		| Array<{ option_label: string; option_text: string }>
 		| null
 		| undefined
 	const availableOptions = Array.isArray(rawOptions)
-		? rawOptions.map((o) => ({ optionLabel: o.option_label, optionText: o.option_text }))
+		? rawOptions.map((o) => ({
+				optionLabel: o.option_label,
+				optionText: o.option_text,
+			}))
 		: undefined
 
 	return {
@@ -69,7 +70,11 @@ function buildQuestionWithMarkScheme(
 				? markScheme.correct_option_labels
 				: undefined,
 		availableOptions,
-		markingMethod: (markScheme.marking_method as "deterministic" | "point_based" | "level_of_response") ?? undefined,
+		markingMethod:
+			(markScheme.marking_method as
+				| "deterministic"
+				| "point_based"
+				| "level_of_response") ?? undefined,
 		markingRules: parseMarkingRulesFromPrisma(markScheme.marking_rules),
 	}
 }
@@ -120,8 +125,7 @@ export async function validateWithExemplars(
 		return { markSchemeId, totalTested: 0, passCount: 0, accuracyPercent: 0 }
 	}
 
-	const openai = createOpenAI({ apiKey: Resource.OpenAiApiKey.value })
-	const grader = new Grader(openai("gpt-4o"), {
+	const grader = new Grader(defaultChatModel(), {
 		systemPrompt:
 			"You are an expert GCSE examiner. Mark the student's answer against the provided mark scheme. Return valid JSON matching the schema. Be consistent and conservative.",
 	})
@@ -134,8 +138,14 @@ export async function validateWithExemplars(
 	for (const exemplar of exemplars) {
 		try {
 			const grade = isLoR
-				? await grader.gradeSingleResponseLoR({ question: questionWithScheme, answer: exemplar.answer_text })
-				: await grader.gradeSingleResponse({ question: questionWithScheme, answer: exemplar.answer_text })
+				? await grader.gradeSingleResponseLoR({
+						question: questionWithScheme,
+						answer: exemplar.answer_text,
+					})
+				: await grader.gradeSingleResponse({
+						question: questionWithScheme,
+						answer: exemplar.answer_text,
+					})
 
 			const targetScore = exemplar.expected_score ?? 0
 			const actualScore = grade.totalScore
@@ -160,12 +170,16 @@ export async function validateWithExemplars(
 				},
 			})
 		} catch (err) {
-			console.error(`Failed to grade exemplar ${exemplar.id} against mark scheme ${markSchemeId}:`, err)
+			console.error(
+				`Failed to grade exemplar ${exemplar.id} against mark scheme ${markSchemeId}:`,
+				err,
+			)
 		}
 	}
 
 	const totalTested = exemplars.length
-	const accuracyPercent = totalTested > 0 ? Math.round((passCount / totalTested) * 100) : 0
+	const accuracyPercent =
+		totalTested > 0 ? Math.round((passCount / totalTested) * 100) : 0
 
 	return { markSchemeId, totalTested, passCount, accuracyPercent }
 }

@@ -5,7 +5,6 @@
     "weather": "./build/index.js"
   },
   "dependencies": {
-    "@ai-sdk/openai": "^3.0.7",
     "@aws-sdk/client-sqs": "^3.862.0",
     "@hono/swagger-ui": "^0.5.2",
     "@modelcontextprotocol/sdk": "^1.17.1",

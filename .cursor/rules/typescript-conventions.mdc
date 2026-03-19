@@ -44,7 +44,7 @@ export const handler = tool(ToolNameSchema, async (args) => {  if(/* there is an
 - Update document status on failure (e.g., marking_status: "failed")
 
 ## Environment Variables
-- Use SST Resource pattern: `Resource.OpenAiApiKey.value`
+- Use SST Resource pattern: `Resource.GeminiApiKey.value` for Google AI; `Resource.OpenAiApiKey.value` is linked to the same backend functions for future use (`infra/queues.ts`, `infra/api.ts`).
 - Define types in [sst-env.d.ts](mdc:sst-env.d.ts)
 - Never hardcode sensitive values
 description:

@@ -1,9 +1,8 @@
-import { EvaluateAnswerSchema } from "./schema"
-import { createOpenAI } from "@ai-sdk/openai"
-import { Resource } from "sst"
-import { tool } from "@/tools/shared/tool-utils"
 import { db } from "@/db"
+import { defaultChatModel } from "@/lib/google-generative-ai"
+import { tool } from "@/tools/shared/tool-utils"
 import type { MarkScheme } from "@mcp-gcse/db"
+import { EvaluateAnswerSchema } from "./schema"
 
 /** Mark scheme row from DB (mark_points is JsonValue at runtime but typed as unknown for assignment). */
 type MarkSchemeRow = Omit<MarkScheme, "mark_points"> & { mark_points: unknown }
@@ -22,16 +21,12 @@ import {
 	LevelOfResponseMarker,
 	LlmMarker,
 	MarkerOrchestrator,
+	type QuestionWithMarkScheme,
 	parseMarkPointsFromPrisma,
 	parseMarkingRulesFromPrisma,
-	type QuestionWithMarkScheme,
 } from "@mcp-gcse/shared"
 
-const openai = createOpenAI({
-	apiKey: Resource.OpenAiApiKey.value,
-})
-
-const grader = new Grader(openai("gpt-4o"), {
+const grader = new Grader(defaultChatModel(), {
 	systemPrompt:
 		"You are an expert GCSE examiner. Mark the student's answer against the provided mark scheme. Return valid JSON matching the schema. Ignore spelling and grammar; focus on understanding and correct science. Be consistent and conservative: only award marks when there is clear evidence.",
 })
@@ -239,10 +234,7 @@ export const handler = tool(EvaluateAnswerSchema, async (args, extra) => {
 		questionText,
 	)
 
-	const grade = await orchestrator.mark(
-		questionWithMarkScheme,
-		student_answer,
-	)
+	const grade = await orchestrator.mark(questionWithMarkScheme, student_answer)
 
 	const markingResult: {
 		mark_points_results: MarkPointResultItem[]

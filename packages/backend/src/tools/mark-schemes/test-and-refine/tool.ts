@@ -1,13 +1,12 @@
-import { createOpenAI } from "@ai-sdk/openai"
-import { Resource } from "sst"
-import { tool } from "@/tools/shared/tool-utils"
 import { db } from "@/db"
+import { defaultChatModel } from "@/lib/google-generative-ai"
+import { tool } from "@/tools/shared/tool-utils"
 import {
-	runAdversarialLoop,
-	probeBoundaries,
-	parseMarkPointsFromPrisma,
 	Grader,
 	type QuestionWithMarkScheme,
+	parseMarkPointsFromPrisma,
+	probeBoundaries,
+	runAdversarialLoop,
 } from "@mcp-gcse/shared"
 import { TestAndRefineMarkSchemeSchema } from "./schema"
 
@@ -83,10 +82,8 @@ export const handler = tool(TestAndRefineMarkSchemeSchema, async (args) => {
 		availableOptions,
 	}
 
-	const scores =
-		target_scores ?? probeBoundaries(markScheme.points_total)
-	const openai = createOpenAI({ apiKey: Resource.OpenAiApiKey.value })
-	const grader = new Grader(openai("gpt-4o"), {
+	const scores = target_scores ?? probeBoundaries(markScheme.points_total)
+	const grader = new Grader(defaultChatModel(), {
 		systemPrompt:
 			"You are an expert GCSE examiner. Mark the student's answer against the provided mark scheme. Return valid JSON matching the schema. Be consistent and conservative.",
 	})
@@ -94,7 +91,7 @@ export const handler = tool(TestAndRefineMarkSchemeSchema, async (args) => {
 	const testResults = await runAdversarialLoop(
 		questionWithScheme,
 		grader,
-		openai("gpt-4o"),
+		defaultChatModel(),
 		{ targetScores: scores, maxIterations: max_iterations },
 	)
 

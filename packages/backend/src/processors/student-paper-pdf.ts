@@ -1,6 +1,6 @@
 import { db } from "@/db"
+import { defaultChatModel } from "@/lib/google-generative-ai"
 import { logger } from "@/lib/logger"
-import { createOpenAI } from "@ai-sdk/openai"
 import { S3Client } from "@aws-sdk/client-s3"
 import type { ScanStatus } from "@mcp-gcse/db"
 import {
@@ -13,7 +13,6 @@ import {
 	parseMarkPointsFromPrisma,
 	parseMarkingRulesFromPrisma,
 } from "@mcp-gcse/shared"
-import { Resource } from "sst"
 
 const TAG = "student-paper-pdf"
 
@@ -50,9 +49,8 @@ export async function handler(
 	event: SqsEvent,
 ): Promise<{ batchItemFailures?: { itemIdentifier: string }[] }> {
 	const failures: { itemIdentifier: string }[] = []
-	const openai = createOpenAI({ apiKey: Resource.OpenAiApiKey.value })
 
-	const grader = new Grader(openai("gpt-4o"), {
+	const grader = new Grader(defaultChatModel(), {
 		systemPrompt:
 			"You are an expert GCSE examiner. Mark the student's answer against the provided mark scheme. Return valid JSON matching the schema. Ignore spelling and grammar; focus on understanding and correct concepts. Be consistent and conservative: only award marks when there is clear evidence.",
 	})

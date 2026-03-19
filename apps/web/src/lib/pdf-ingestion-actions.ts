@@ -519,13 +519,16 @@ export async function retriggerPdfIngestionJob(
 		where: { id: jobId },
 		data: { status: "pending", error: null },
 	})
+	// Student papers route to OCR queue if not yet extracted, grading queue otherwise
 	const queueUrl =
 		job.document_type === "mark_scheme"
 			? Resource.MarkSchemePdfQueue.url
 			: job.document_type === "question_paper"
 				? Resource.QuestionPaperQueue.url
 				: job.document_type === "student_paper"
-					? Resource.StudentPaperQueue.url
+					? job.extracted_answers_raw
+						? Resource.StudentPaperQueue.url
+						: Resource.StudentPaperOcrQueue.url
 					: Resource.ExemplarQueue.url
 	await sqs.send(
 		new SendMessageCommand({

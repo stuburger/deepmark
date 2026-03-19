@@ -22,6 +22,12 @@ export const questionPaperQueue = new sst.aws.Queue("QuestionPaperQueue", {
 	visibilityTimeout: "10 minutes",
 })
 
+// OCR queue: manually triggered by server action after teacher finalises upload
+export const studentPaperOcrQueue = new sst.aws.Queue("StudentPaperOcrQueue", {
+	visibilityTimeout: "10 minutes",
+})
+
+// Grading queue: manually triggered by server action after teacher selects exam paper
 export const studentPaperQueue = new sst.aws.Queue("StudentPaperQueue", {
 	visibilityTimeout: "10 minutes",
 })
@@ -55,13 +61,8 @@ scansBucket.notify({
 			filterPrefix: "pdfs/question-papers/",
 			filterSuffix: ".pdf",
 		},
-		{
-			name: "StudentPaperTrigger",
-			queue: studentPaperQueue,
-			events: ["s3:ObjectCreated:*"],
-			filterPrefix: "pdfs/student-papers/",
-			filterSuffix: ".pdf",
-		},
+		// StudentPaperTrigger intentionally removed — student paper OCR and grading
+		// are manually queued by server actions, not auto-triggered on S3 upload.
 	],
 })
 
@@ -99,9 +100,16 @@ questionPaperQueue.subscribe({
 	memory: "1 GB",
 })
 
+studentPaperOcrQueue.subscribe({
+	handler: "packages/backend/src/processors/student-paper-ocr.handler",
+	link: [neonPostgres, geminiApiKey, scansBucket],
+	timeout: "8 minutes",
+	memory: "1 GB",
+})
+
 studentPaperQueue.subscribe({
 	handler: "packages/backend/src/processors/student-paper-pdf.handler",
-	link: [neonPostgres, geminiApiKey, openAiApiKey, scansBucket],
+	link: [neonPostgres, openAiApiKey, scansBucket],
 	timeout: "8 minutes",
 	memory: "1 GB",
 })

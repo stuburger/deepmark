@@ -1,8 +1,7 @@
 import { db } from "@/db"
 import { logger } from "@/lib/logger"
 import { createOpenAI } from "@ai-sdk/openai"
-import { GetObjectCommand, S3Client } from "@aws-sdk/client-s3"
-import { GoogleGenAI, Type } from "@google/genai"
+import { S3Client } from "@aws-sdk/client-s3"
 import type { ScanStatus } from "@mcp-gcse/db"
 import {
 	DeterministicMarker,
@@ -18,11 +17,8 @@ import { Resource } from "sst"
 
 const TAG = "student-paper-pdf"
 
-const s3 = new S3Client({})
-
-interface S3Record {
-	s3: { bucket: { name: string }; object: { key: string } }
-}
+// S3 client kept for potential future use (e.g. fetching pages for re-OCR)
+const _s3 = new S3Client({})
 
 interface SqsRecord {
 	messageId: string
@@ -45,51 +41,15 @@ type GradingResult = {
 	level_awarded?: number
 }
 
-const STUDENT_PAPER_SCHEMA = {
-	type: Type.OBJECT,
-	properties: {
-		student_name: { type: Type.STRING, nullable: true },
-		answers: {
-			type: Type.ARRAY,
-			items: {
-				type: Type.OBJECT,
-				properties: {
-					question_number: { type: Type.STRING },
-					answer_text: { type: Type.STRING },
-				},
-				required: ["question_number", "answer_text"],
-			},
-		},
-	},
-	required: ["answers"],
-}
-
-function parseJobIdFromKey(key: string): string {
-	const decoded = decodeURIComponent(key)
-	const parts = decoded.split("/")
-	if (
-		parts.length < 4 ||
-		parts[0] !== "pdfs" ||
-		parts[1] !== "student-papers"
-	) {
-		throw new Error(`Unexpected student-paper S3 key format: ${key}`)
-	}
-	return parts[2] ?? ""
-}
-
-async function getPdfBase64(bucket: string, key: string): Promise<string> {
-	const cmd = new GetObjectCommand({ Bucket: bucket, Key: key })
-	const response = await s3.send(cmd)
-	const body = await response.Body?.transformToByteArray()
-	if (!body?.length) throw new Error("Empty S3 object")
-	return Buffer.from(body).toString("base64")
+type ExtractedAnswersRaw = {
+	student_name?: string | null
+	answers: Array<{ question_number: string; answer_text: string }>
 }
 
 export async function handler(
 	event: SqsEvent,
 ): Promise<{ batchItemFailures?: { itemIdentifier: string }[] }> {
 	const failures: { itemIdentifier: string }[] = []
-	const gemini = new GoogleGenAI({ apiKey: Resource.GeminiApiKey.value })
 	const openai = createOpenAI({ apiKey: Resource.OpenAiApiKey.value })
 
 	const grader = new Grader(openai("gpt-4o"), {
@@ -104,69 +64,56 @@ export async function handler(
 
 	for (const record of event.Records) {
 		const messageId = record.messageId
+		let jobId: string | undefined
+
 		try {
-			const body = JSON.parse(record.body) as
-				| { Records?: S3Record[] }
-				| { job_id: string }
+			const body = JSON.parse(record.body) as { job_id: string }
+			jobId = body.job_id
 
-			let bucket: string
-			let key: string
-			let jobId: string
-
-			logger.info(TAG, "Message received", { messageId })
-
-			if ("job_id" in body && typeof body.job_id === "string") {
-				jobId = body.job_id
-				const job = await db.pdfIngestionJob.findUniqueOrThrow({
-					where: { id: jobId },
-				})
-				if (job.document_type !== "student_paper") {
-					logger.warn(TAG, "Job is not student_paper — skipping", {
-						jobId,
-						document_type: job.document_type,
-					})
-					continue
-				}
-				bucket = job.s3_bucket
-				key = job.s3_key
-			} else {
-				const s3Event = body as { Records?: S3Record[] }
-				const s3Record = s3Event.Records?.[0]
-				if (!s3Record) {
-					logger.warn(TAG, "No S3 record in SQS message", { messageId })
-					continue
-				}
-				bucket = s3Record.s3.bucket.name
-				key = decodeURIComponent(s3Record.s3.object.key)
-				jobId = parseJobIdFromKey(key)
-				logger.info(TAG, "Triggered by S3 event", { jobId, bucket, key })
+			if (!jobId) {
+				logger.warn(TAG, "Message missing job_id", { messageId })
+				continue
 			}
+
+			logger.info(TAG, "Grading job received", { jobId, messageId })
 
 			const job = await db.pdfIngestionJob.findUniqueOrThrow({
 				where: { id: jobId },
 			})
 
-			if (job.document_type !== "student_paper" || !job.exam_paper_id) {
-				logger.warn(TAG, "Job invalid — wrong type or missing exam_paper_id", {
+			if (job.document_type !== "student_paper") {
+				logger.warn(TAG, "Job is not student_paper — skipping", {
 					jobId,
 					document_type: job.document_type,
-					exam_paper_id: job.exam_paper_id,
 				})
+				continue
+			}
+
+			if (!job.exam_paper_id) {
+				logger.warn(TAG, "Job has no exam_paper_id — cannot grade", { jobId })
 				await db.pdfIngestionJob.update({
 					where: { id: jobId },
 					data: {
 						status: "failed" as ScanStatus,
-						error: "Student paper job requires a linked exam_paper_id",
+						error: "No exam paper selected — cannot grade",
 					},
 				})
 				continue
 			}
 
-			logger.info(TAG, "Job started", {
-				jobId,
-				exam_paper_id: job.exam_paper_id,
-				attempt: job.attempt_count + 1,
-			})
+			if (!job.extracted_answers_raw) {
+				logger.warn(TAG, "Job has no extracted_answers_raw — run OCR first", {
+					jobId,
+				})
+				await db.pdfIngestionJob.update({
+					where: { id: jobId },
+					data: {
+						status: "failed" as ScanStatus,
+						error: "No extracted answers — run OCR before grading",
+					},
+				})
+				continue
+			}
 
 			await db.pdfIngestionJob.update({
 				where: { id: jobId },
@@ -182,7 +129,6 @@ export async function handler(
 				exam_paper_id: job.exam_paper_id,
 			})
 
-			// Load all questions + mark schemes for this exam paper
 			const examPaper = await db.examPaper.findUniqueOrThrow({
 				where: { id: job.exam_paper_id },
 				include: {
@@ -215,7 +161,6 @@ export async function handler(
 				},
 			})
 
-			// Build ordered question list with numbering
 			const questionList: Array<{
 				question_number: string
 				question_id: string
@@ -249,71 +194,18 @@ export async function handler(
 					.length,
 			})
 
-			logger.info(TAG, "Fetching PDF from S3", { jobId, bucket, key })
-			const pdfBase64 = await getPdfBase64(bucket, key)
+			const extractedRaw = job.extracted_answers_raw as ExtractedAnswersRaw
 
-			logger.info(TAG, "Calling Gemini to extract student answers", {
-				jobId,
-				question_count: questionList.length,
-			})
-			// Build prompt describing all questions so Gemini can match answers
-			const questionPromptList = questionList
-				.map((q) => `Question ${q.question_number}: ${q.question_text}`)
-				.join("\n")
-
-			const response = await gemini.models.generateContent({
-				model: "gemini-2.5-flash",
-				contents: [
-					{
-						role: "user",
-						parts: [
-							{ inlineData: { data: pdfBase64, mimeType: "application/pdf" } },
-							{
-								text: `This is a student's exam paper. Extract the student's name if visible on the paper.
-Then, for each question below, find and extract the student's written answer exactly as written.
-
-Questions:
-${questionPromptList}
-
-Return:
-- student_name: the student's name from the paper (or empty string if not found)
-- answers: array of { question_number, answer_text } for each question. Use an empty string if no answer is written.`,
-							},
-						],
-					},
-				],
-				config: {
-					responseMimeType: "application/json",
-					responseSchema: STUDENT_PAPER_SCHEMA,
-					temperature: 0.1,
-				},
-			})
-
-			const responseText = response.text
-			if (!responseText) throw new Error("No response from Gemini")
-
-			const parsed = JSON.parse(responseText) as {
-				student_name?: string
-				answers: Array<{ question_number: string; answer_text: string }>
-			}
-
-			const answersExtracted = (parsed.answers ?? []).filter((a) =>
-				a.answer_text.trim(),
-			).length
-			logger.info(TAG, "Gemini extraction complete", {
-				jobId,
-				student_name: parsed.student_name || null,
-				answers_extracted: answersExtracted,
-				answers_blank: questionList.length - answersExtracted,
-			})
-
-			// Build answer lookup by question_number
 			const answerMap = new Map<string, string>()
-			for (const a of parsed.answers ?? []) {
+			for (const a of extractedRaw.answers ?? []) {
 				answerMap.set(a.question_number, a.answer_text)
 			}
 
-			// Grade each question
+			logger.info(TAG, "Grading using pre-extracted answers", {
+				jobId,
+				answer_count: answerMap.size,
+			})
+
 			const gradingResults: GradingResult[] = []
 
 			for (const qItem of questionList) {
@@ -428,9 +320,8 @@ Return:
 				0,
 			)
 			const totalMax = gradingResults.reduce((s, r) => s + r.max_score, 0)
-			logger.info(TAG, "Job completed successfully", {
+			logger.info(TAG, "Grading job complete", {
 				jobId,
-				student_name: parsed.student_name?.trim() || null,
 				total_awarded: totalAwarded,
 				total_max: totalMax,
 				questions_graded: gradingResults.length,
@@ -441,37 +332,29 @@ Return:
 				data: {
 					status: "ocr_complete" as ScanStatus,
 					processed_at: new Date(),
-					student_name: parsed.student_name?.trim() || null,
+					student_name:
+						(
+							job.extracted_answers_raw as ExtractedAnswersRaw
+						).student_name?.trim() || job.student_name,
 					grading_results: gradingResults,
 					error: null,
 				},
 			})
 		} catch (err) {
-			logger.error(TAG, "Job failed with unhandled error", {
+			logger.error(TAG, "Grading job failed with unhandled error", {
+				jobId,
 				error: String(err),
 			})
 			const message = err instanceof Error ? err.message : String(err)
-			try {
-				const b = JSON.parse(record.body) as
-					| { job_id?: string }
-					| { Records?: S3Record[] }
-				const jId =
-					"job_id" in b && b.job_id
-						? b.job_id
-						: parseJobIdFromKey(
-								(record.body &&
-									(JSON.parse(record.body) as { Records?: S3Record[] })
-										.Records?.[0]?.s3?.object?.key) ??
-									"",
-							)
-				if (jId) {
+			if (jobId) {
+				try {
 					await db.pdfIngestionJob.update({
-						where: { id: jId },
+						where: { id: jobId },
 						data: { status: "failed" as ScanStatus, error: message },
 					})
+				} catch {
+					// ignore
 				}
-			} catch {
-				// ignore
 			}
 			failures.push({ itemIdentifier: messageId })
 		}

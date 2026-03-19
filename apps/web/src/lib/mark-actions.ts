@@ -1,6 +1,7 @@
 "use server"
 
 import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3"
+import { SQSClient, SendMessageCommand } from "@aws-sdk/client-sqs"
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner"
 import { createPrismaClient } from "@mcp-gcse/db"
 import { Resource } from "sst"
@@ -11,6 +12,7 @@ const TAG = "mark-actions"
 
 const bucketName = Resource.ScansBucket.name
 const s3 = new S3Client({})
+const sqs = new SQSClient({})
 const db = createPrismaClient(Resource.NeonPostgres.databaseUrl)
 
 export type GradingResult = {
@@ -25,31 +27,21 @@ export type GradingResult = {
 	level_awarded?: number
 }
 
-// ─── Upload ───────────────────────────────────────────────────────────────────
+// ─── Create job ───────────────────────────────────────────────────────────────
 
-export type CreateStudentPaperUploadResult =
-	| { ok: true; jobId: string; url: string }
+export type CreateStudentPaperJobResult =
+	| { ok: true; jobId: string }
 	| { ok: false; error: string }
 
-export async function createStudentPaperUpload(
-	examPaperId: string,
-): Promise<CreateStudentPaperUploadResult> {
+/**
+ * Creates a new student paper job without requiring an exam paper upfront.
+ * Pages are added separately via addPageToJob.
+ */
+export async function createStudentPaperJob(): Promise<CreateStudentPaperJobResult> {
 	const session = await auth()
 	if (!session) return { ok: false, error: "Not authenticated" }
 
-	log.info(TAG, "createStudentPaperUpload called", {
-		userId: session.userId,
-		examPaperId,
-	})
-
-	const examPaper = await db.examPaper.findFirst({
-		where: { id: examPaperId, is_active: true },
-		select: { id: true, exam_board: true, subject: true, year: true },
-	})
-	if (!examPaper) {
-		log.warn(TAG, "Exam paper not found", { examPaperId })
-		return { ok: false, error: "Exam paper not found" }
-	}
+	log.info(TAG, "createStudentPaperJob called", { userId: session.userId })
 
 	const job = await db.pdfIngestionJob.create({
 		data: {
@@ -58,56 +50,260 @@ export async function createStudentPaperUpload(
 			s3_bucket: bucketName,
 			status: "pending",
 			uploaded_by: session.userId,
-			exam_board: examPaper.exam_board ?? "Other",
-			subject: examPaper.subject,
-			year: examPaper.year,
-			exam_paper_id: examPaperId,
-			auto_create_exam_paper: false,
+			exam_board: "Unknown",
+			pages: [],
 		},
 	})
 
-	const key = `pdfs/student-papers/${job.id}/document.pdf`
-	await db.pdfIngestionJob.update({
-		where: { id: job.id },
-		data: { s3_key: key },
+	log.info(TAG, "Student paper job created", {
+		userId: session.userId,
+		jobId: job.id,
 	})
+	return { ok: true, jobId: job.id }
+}
+
+// ─── Add page ─────────────────────────────────────────────────────────────────
+
+export type AddPageToJobResult =
+	| { ok: true; uploadUrl: string; key: string }
+	| { ok: false; error: string }
+
+/**
+ * Generates a presigned S3 PUT URL for one page of a student submission.
+ * The caller uploads the file directly to S3, then the key is stored on the job.
+ */
+export async function addPageToJob(
+	jobId: string,
+	order: number,
+	mimeType: string,
+): Promise<AddPageToJobResult> {
+	const session = await auth()
+	if (!session) return { ok: false, error: "Not authenticated" }
+
+	const job = await db.pdfIngestionJob.findFirst({
+		where: { id: jobId, uploaded_by: session.userId },
+	})
+	if (!job) return { ok: false, error: "Job not found" }
+
+	const ext =
+		mimeType === "application/pdf" ? "pdf" : (mimeType.split("/")[1] ?? "jpg")
+	const paddedOrder = String(order).padStart(3, "0")
+	const key = `pdfs/student-papers/${jobId}/page-${paddedOrder}.${ext}`
 
 	const command = new PutObjectCommand({
 		Bucket: bucketName,
 		Key: key,
-		ContentType: "application/pdf",
+		ContentType: mimeType,
 	})
-	const url = await getSignedUrl(s3, command, { expiresIn: 3600 })
-	log.info(TAG, "Student paper upload job created", {
+	const uploadUrl = await getSignedUrl(s3, command, { expiresIn: 3600 })
+
+	type PageEntry = { key: string; order: number; mime_type: string }
+	const existingPages = (job.pages ?? []) as PageEntry[]
+	const updatedPages: PageEntry[] = [
+		...existingPages.filter((p) => p.order !== order),
+		{ key, order, mime_type: mimeType },
+	].sort((a, b) => a.order - b.order)
+
+	await db.pdfIngestionJob.update({
+		where: { id: jobId },
+		data: { pages: updatedPages, s3_key: key },
+	})
+
+	log.info(TAG, "Page added to job", {
 		userId: session.userId,
-		jobId: job.id,
-		examPaperId,
+		jobId,
+		order,
 		key,
 	})
-	return { ok: true, jobId: job.id, url }
+	return { ok: true, uploadUrl, key }
 }
 
-// ─── Poll result ──────────────────────────────────────────────────────────────
+// ─── Remove page ─────────────────────────────────────────────────────────────
 
-export type StudentPaperResultPayload = {
+export type RemovePageFromJobResult =
+	| { ok: true }
+	| { ok: false; error: string }
+
+export async function removePageFromJob(
+	jobId: string,
+	order: number,
+): Promise<RemovePageFromJobResult> {
+	const session = await auth()
+	if (!session) return { ok: false, error: "Not authenticated" }
+
+	const job = await db.pdfIngestionJob.findFirst({
+		where: { id: jobId, uploaded_by: session.userId },
+	})
+	if (!job) return { ok: false, error: "Job not found" }
+
+	type PageEntry = { key: string; order: number; mime_type: string }
+	const existingPages = (job.pages ?? []) as PageEntry[]
+	const updatedPages = existingPages.filter((p) => p.order !== order)
+
+	await db.pdfIngestionJob.update({
+		where: { id: jobId },
+		data: { pages: updatedPages },
+	})
+
+	return { ok: true }
+}
+
+// ─── Reorder pages ────────────────────────────────────────────────────────────
+
+export type ReorderPagesResult = { ok: true } | { ok: false; error: string }
+
+/**
+ * Saves a new page order. orderedKeys is the array of S3 keys in new order.
+ */
+export async function reorderPages(
+	jobId: string,
+	orderedKeys: string[],
+): Promise<ReorderPagesResult> {
+	const session = await auth()
+	if (!session) return { ok: false, error: "Not authenticated" }
+
+	const job = await db.pdfIngestionJob.findFirst({
+		where: { id: jobId, uploaded_by: session.userId },
+	})
+	if (!job) return { ok: false, error: "Job not found" }
+
+	type PageEntry = { key: string; order: number; mime_type: string }
+	const existingPages = (job.pages ?? []) as PageEntry[]
+	const byKey = new Map(existingPages.map((p) => [p.key, p]))
+
+	const reordered: PageEntry[] = orderedKeys
+		.map((key, idx) => {
+			const existing = byKey.get(key)
+			if (!existing) return null
+			return { ...existing, order: idx + 1 }
+		})
+		.filter((p): p is PageEntry => p !== null)
+
+	await db.pdfIngestionJob.update({
+		where: { id: jobId },
+		data: { pages: reordered },
+	})
+
+	return { ok: true }
+}
+
+// ─── Trigger OCR ──────────────────────────────────────────────────────────────
+
+export type TriggerOcrResult = { ok: true } | { ok: false; error: string }
+
+/**
+ * Enqueues the job for OCR text extraction. No exam paper needed yet.
+ */
+export async function triggerOcr(jobId: string): Promise<TriggerOcrResult> {
+	const session = await auth()
+	if (!session) return { ok: false, error: "Not authenticated" }
+
+	const job = await db.pdfIngestionJob.findFirst({
+		where: { id: jobId, uploaded_by: session.userId },
+	})
+	if (!job) return { ok: false, error: "Job not found" }
+
+	type PageEntry = { key: string; order: number; mime_type: string }
+	const pages = (job.pages ?? []) as PageEntry[]
+	if (pages.length === 0) {
+		return { ok: false, error: "No pages uploaded yet" }
+	}
+
+	await db.pdfIngestionJob.update({
+		where: { id: jobId },
+		data: { status: "pending" },
+	})
+
+	await sqs.send(
+		new SendMessageCommand({
+			QueueUrl: Resource.StudentPaperOcrQueue.url,
+			MessageBody: JSON.stringify({ job_id: jobId }),
+		}),
+	)
+
+	log.info(TAG, "OCR triggered", { userId: session.userId, jobId })
+	return { ok: true }
+}
+
+// ─── Trigger grading ──────────────────────────────────────────────────────────
+
+export type TriggerGradingResult = { ok: true } | { ok: false; error: string }
+
+/**
+ * Sets the exam paper on the job and enqueues it for grading.
+ * Requires OCR to have completed first (status: text_extracted).
+ */
+export async function triggerGrading(
+	jobId: string,
+	examPaperId: string,
+): Promise<TriggerGradingResult> {
+	const session = await auth()
+	if (!session) return { ok: false, error: "Not authenticated" }
+
+	const job = await db.pdfIngestionJob.findFirst({
+		where: { id: jobId, uploaded_by: session.userId },
+	})
+	if (!job) return { ok: false, error: "Job not found" }
+
+	if (!job.extracted_answers_raw) {
+		return { ok: false, error: "OCR must complete before marking" }
+	}
+
+	const examPaper = await db.examPaper.findFirst({
+		where: { id: examPaperId, is_active: true },
+		select: { id: true, exam_board: true, subject: true, year: true },
+	})
+	if (!examPaper) return { ok: false, error: "Exam paper not found" }
+
+	await db.pdfIngestionJob.update({
+		where: { id: jobId },
+		data: {
+			exam_paper_id: examPaperId,
+			exam_board: examPaper.exam_board ?? "Unknown",
+			subject: examPaper.subject,
+			year: examPaper.year,
+			status: "pending",
+		},
+	})
+
+	await sqs.send(
+		new SendMessageCommand({
+			QueueUrl: Resource.StudentPaperQueue.url,
+			MessageBody: JSON.stringify({ job_id: jobId }),
+		}),
+	)
+
+	log.info(TAG, "Grading triggered", {
+		userId: session.userId,
+		jobId,
+		examPaperId,
+	})
+	return { ok: true }
+}
+
+// ─── Poll job status ──────────────────────────────────────────────────────────
+
+export type StudentPaperJobPayload = {
 	status: string
 	error: string | null
 	student_name: string | null
+	detected_subject: string | null
+	pages_count: number
 	grading_results: GradingResult[]
-	exam_paper_title: string
-	exam_paper_id: string
+	exam_paper_title: string | null
+	exam_paper_id: string | null
 	total_awarded: number
 	total_max: number
 	created_at: Date
 }
 
-export type GetStudentPaperResultResult =
-	| { ok: true; data: StudentPaperResultPayload }
+export type GetStudentPaperJobResult =
+	| { ok: true; data: StudentPaperJobPayload }
 	| { ok: false; error: string }
 
-export async function getStudentPaperResult(
+export async function getStudentPaperJob(
 	jobId: string,
-): Promise<GetStudentPaperResultResult> {
+): Promise<GetStudentPaperJobResult> {
 	const session = await auth()
 	if (!session) return { ok: false, error: "Not authenticated" }
 
@@ -119,19 +315,10 @@ export async function getStudentPaperResult(
 		},
 		include: { exam_paper: { select: { id: true, title: true } } },
 	})
-	if (!job) {
-		log.warn(TAG, "getStudentPaperResult — job not found", {
-			jobId,
-			userId: session.userId,
-		})
-		return { ok: false, error: "Job not found" }
-	}
+	if (!job) return { ok: false, error: "Job not found" }
 
-	log.info(TAG, "getStudentPaperResult", {
-		jobId,
-		status: job.status,
-		student_name: job.student_name,
-	})
+	type PageEntry = { key: string; order: number; mime_type: string }
+	const pages = (job.pages ?? []) as PageEntry[]
 	const rawResults = (job.grading_results ?? []) as GradingResult[]
 	const totalAwarded = rawResults.reduce((s, r) => s + r.awarded_score, 0)
 	const totalMax = rawResults.reduce((s, r) => s + r.max_score, 0)
@@ -142,15 +329,22 @@ export async function getStudentPaperResult(
 			status: job.status,
 			error: job.error,
 			student_name: job.student_name,
+			detected_subject: job.detected_subject,
+			pages_count: pages.length,
 			grading_results: rawResults,
-			exam_paper_title: job.exam_paper?.title ?? "Unknown paper",
-			exam_paper_id: job.exam_paper_id ?? "",
+			exam_paper_title: job.exam_paper?.title ?? null,
+			exam_paper_id: job.exam_paper_id,
 			total_awarded: totalAwarded,
 			total_max: totalMax,
 			created_at: job.created_at,
 		},
 	}
 }
+
+// Keep legacy alias for existing result page compatibility
+export const getStudentPaperResult = getStudentPaperJob
+
+export type StudentPaperResultPayload = StudentPaperJobPayload
 
 // ─── Update student name ──────────────────────────────────────────────────────
 
@@ -175,13 +369,14 @@ export async function updateStudentName(
 	return { ok: true }
 }
 
-// ─── History (Phase 3) ────────────────────────────────────────────────────────
+// ─── Submission history ────────────────────────────────────────────────────────
 
 export type SubmissionHistoryItem = {
 	id: string
 	student_name: string | null
 	exam_paper_id: string | null
 	exam_paper_title: string | null
+	detected_subject: string | null
 	total_awarded: number
 	total_max: number
 	status: string
@@ -211,6 +406,7 @@ export async function listMySubmissions(): Promise<ListMySubmissionsResult> {
 				student_name: job.student_name,
 				exam_paper_id: job.exam_paper_id,
 				exam_paper_title: job.exam_paper?.title ?? null,
+				detected_subject: job.detected_subject,
 				total_awarded: results.reduce((s, r) => s + r.awarded_score, 0),
 				total_max: results.reduce((s, r) => s + r.max_score, 0),
 				status: job.status,
@@ -220,7 +416,7 @@ export async function listMySubmissions(): Promise<ListMySubmissionsResult> {
 	}
 }
 
-// ─── Per-paper stats (Phase 3) ────────────────────────────────────────────────
+// ─── Per-paper stats ──────────────────────────────────────────────────────────
 
 export type QuestionStat = {
 	question_id: string
@@ -281,7 +477,6 @@ export async function getExamPaperStats(
 		(j) => (j.grading_results ?? []) as GradingResult[],
 	)
 
-	// Group by question_id
 	const byQuestion = new Map<string, GradingResult[]>()
 	for (const r of allResults) {
 		const existing = byQuestion.get(r.question_id) ?? []

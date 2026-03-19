@@ -529,6 +529,7 @@ export type CatalogExamPaper = {
 	paper_number: number | null
 	total_marks: number
 	question_count: number
+	has_mark_scheme: boolean
 }
 
 export type ListCatalogExamPapersResult =
@@ -550,26 +551,39 @@ export async function listCatalogExamPapers(): Promise<ListCatalogExamPapersResu
 				total_marks: true,
 				sections: {
 					select: {
-						_count: { select: { exam_section_questions: true } },
+						exam_section_questions: {
+							select: {
+								question: {
+									select: {
+										_count: { select: { mark_schemes: true } },
+									},
+								},
+							},
+						},
 					},
 				},
 			},
 		})
 		return {
 			ok: true,
-			papers: papers.map((p) => ({
-				id: p.id,
-				title: p.title,
-				subject: p.subject,
-				exam_board: p.exam_board,
-				year: p.year,
-				paper_number: p.paper_number,
-				total_marks: p.total_marks,
-				question_count: p.sections.reduce(
-					(s, sec) => s + sec._count.exam_section_questions,
-					0,
-				),
-			})),
+			papers: papers.map((p) => {
+				const allQuestions = p.sections.flatMap(
+					(sec) => sec.exam_section_questions,
+				)
+				return {
+					id: p.id,
+					title: p.title,
+					subject: p.subject,
+					exam_board: p.exam_board,
+					year: p.year,
+					paper_number: p.paper_number,
+					total_marks: p.total_marks,
+					question_count: allQuestions.length,
+					has_mark_scheme: allQuestions.some(
+						(esq) => esq.question._count.mark_schemes > 0,
+					),
+				}
+			}),
 		}
 	} catch {
 		return { ok: false, error: "Failed to load catalog" }

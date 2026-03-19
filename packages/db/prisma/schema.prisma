@@ -62,6 +62,7 @@ enum QuestionType {
 enum ScanStatus {
   pending
   processing
+  text_extracted
   ocr_complete
   extracting
   extracted
@@ -423,6 +424,11 @@ model PdfIngestionJob {
   detected_exam_paper_metadata Json?
   exam_paper_id                String?
   student_name                 String?
+  // Multi-page support: [{ key: string, order: number, mime_type: string }]
+  pages                        Json?
+  detected_subject             Subject?
+  // Raw OCR extraction before grading: { student_name?, answers: [{question_number, answer_text}] }
+  extracted_answers_raw        Json?
   grading_results              Json?
   error                        String?
   created_at                   DateTime        @default(now())

@@ -84,7 +84,7 @@ export default function MarkNewPage() {
 			if (!result.ok) return
 			setProcessingStatus(result.data.status)
 			if (result.data.status === "ocr_complete") {
-				router.push(`/dashboard/mark/${id}`)
+				router.push(`/teacher/mark/${id}`)
 			}
 			if (result.data.status === "failed") {
 				setError(result.data.error ?? "Processing failed")

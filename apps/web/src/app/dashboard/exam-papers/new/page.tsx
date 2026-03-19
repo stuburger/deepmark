@@ -72,14 +72,14 @@ export default function NewExamPaperPage() {
 			setError(result.error)
 			return
 		}
-		router.push(`/dashboard/exam-papers/${result.id}`)
+		router.push(`/teacher/exam-papers/${result.id}`)
 	}
 
 	return (
 		<div className="max-w-xl space-y-6">
 			<div>
 				<Link
-					href="/dashboard/exam-papers"
+					href="/teacher/exam-papers"
 					className="text-sm text-muted-foreground hover:text-foreground"
 				>
 					← Back to exam papers

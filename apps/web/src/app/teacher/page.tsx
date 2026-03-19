@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation"
 
-export default async function DashboardLayout() {
+export default function TeacherRootPage() {
 	redirect("/teacher/mark")
 }

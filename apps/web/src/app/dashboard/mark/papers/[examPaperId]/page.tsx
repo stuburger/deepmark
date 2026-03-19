@@ -51,7 +51,7 @@ export default async function ExamPaperStatsPage({
 		<div className="space-y-6">
 			<div>
 				<Link
-					href="/dashboard/mark"
+					href="/teacher/mark"
 					className="text-sm text-muted-foreground hover:text-foreground"
 				>
 					← Mark history
@@ -168,7 +168,7 @@ export default async function ExamPaperStatsPage({
 											</TableCell>
 											<TableCell>
 												<Link
-													href={`/dashboard/mark/${sub.id}`}
+													href={`/teacher/mark/${sub.id}`}
 													className="text-sm text-primary underline underline-offset-4 hover:no-underline"
 												>
 													View

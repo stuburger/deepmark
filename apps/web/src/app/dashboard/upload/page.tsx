@@ -1,7 +1,12 @@
-import Link from "next/link"
-import { buttonVariants } from "@/components/ui/button-variants"
 import { Badge } from "@/components/ui/badge"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { buttonVariants } from "@/components/ui/button-variants"
+import {
+	Card,
+	CardContent,
+	CardDescription,
+	CardHeader,
+	CardTitle,
+} from "@/components/ui/card"
 import {
 	Table,
 	TableBody,
@@ -10,9 +15,13 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table"
-import { listPdfIngestionJobs, type PdfIngestionJobListItem } from "@/lib/pdf-ingestion-actions"
-import { DownloadButton } from "./_components/download-button"
+import {
+	type PdfIngestionJobListItem,
+	listPdfIngestionJobs,
+} from "@/lib/pdf-ingestion-actions"
 import { PlusCircle } from "lucide-react"
+import Link from "next/link"
+import { DownloadButton } from "./_components/download-button"
 
 type StatusVariant = "default" | "secondary" | "destructive" | "outline"
 
@@ -70,26 +79,32 @@ function JobRow({ job }: { job: PdfIngestionJobListItem }) {
 	return (
 		<TableRow>
 			<TableCell>
-				<Badge variant={statusBadgeVariant(job.status)}>{statusLabel(job.status)}</Badge>
+				<Badge variant={statusBadgeVariant(job.status)}>
+					{statusLabel(job.status)}
+				</Badge>
 			</TableCell>
-			<TableCell className="font-medium">{docTypeLabel(job.document_type)}</TableCell>
+			<TableCell className="font-medium">
+				{docTypeLabel(job.document_type)}
+			</TableCell>
 			<TableCell>{job.exam_board}</TableCell>
 			<TableCell className="capitalize">{job.subject ?? "—"}</TableCell>
 			<TableCell>{job.year ?? "—"}</TableCell>
 			<TableCell>{job.paper_reference ?? "—"}</TableCell>
-			<TableCell className="text-muted-foreground">{formatDate(job.created_at)}</TableCell>
+			<TableCell className="text-muted-foreground">
+				{formatDate(job.created_at)}
+			</TableCell>
 			<TableCell>
 				<div className="flex items-center gap-1">
 					<DownloadButton jobId={job.id} />
 					<Link
-						href={`/dashboard/upload/${job.id}`}
+						href={`/admin/upload/${job.id}`}
 						className={buttonVariants({ variant: "ghost", size: "sm" })}
 					>
 						View
 					</Link>
 					{job.status === "failed" || job.status === "ocr_complete" ? (
 						<Link
-							href={`/dashboard/upload/new?retrigger=${job.id}`}
+							href={`/admin/upload/new?retrigger=${job.id}`}
 							className={buttonVariants({ variant: "outline", size: "sm" })}
 						>
 							Retry
@@ -113,7 +128,7 @@ export default async function PdfIngestionJobsPage() {
 						View and manage your uploaded PDF processing jobs.
 					</p>
 				</div>
-				<Link href="/dashboard/upload/new" className={buttonVariants()}>
+				<Link href="/admin/upload/new" className={buttonVariants()}>
 					<PlusCircle />
 					New upload
 				</Link>
@@ -132,7 +147,10 @@ export default async function PdfIngestionJobsPage() {
 					) : result.jobs.length === 0 ? (
 						<p className="text-sm text-muted-foreground py-8 text-center">
 							No jobs yet.{" "}
-							<Link href="/dashboard/upload/new" className="underline underline-offset-4">
+							<Link
+								href="/admin/upload/new"
+								className="underline underline-offset-4"
+							>
 								Upload your first PDF.
 							</Link>
 						</p>

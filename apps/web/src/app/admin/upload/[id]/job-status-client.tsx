@@ -42,8 +42,6 @@ import Link from "next/link"
 import { useCallback, useEffect, useState } from "react"
 import { DownloadButton } from "../_components/download-button"
 
-// ─── Status helpers ───────────────────────────────────────────────────────────
-
 const STATUS_CONFIG: Record<
 	string,
 	{
@@ -94,8 +92,6 @@ function formatDate(d: Date) {
 		minute: "2-digit",
 	}).format(new Date(d))
 }
-
-// ─── Mark scheme detail ───────────────────────────────────────────────────────
 
 function MarkSchemeDetail({ ms }: { ms: JobMarkScheme }) {
 	const [showTestRuns, setShowTestRuns] = useState(false)
@@ -216,8 +212,6 @@ function MarkSchemeDetail({ ms }: { ms: JobMarkScheme }) {
 	)
 }
 
-// ─── Questions list ───────────────────────────────────────────────────────────
-
 function QuestionsList({
 	questions,
 	isProcessing,
@@ -294,8 +288,6 @@ function QuestionsList({
 	)
 }
 
-// ─── Exemplars list ───────────────────────────────────────────────────────────
-
 function ExemplarsList({ exemplars }: { exemplars: JobExemplar[] }) {
 	if (exemplars.length === 0) return null
 	return (
@@ -327,8 +319,6 @@ function ExemplarsList({ exemplars }: { exemplars: JobExemplar[] }) {
 	)
 }
 
-// ─── Main component ───────────────────────────────────────────────────────────
-
 export function JobStatusPage({
 	initialJob,
 	jobId,
@@ -356,7 +346,6 @@ export function JobStatusPage({
 
 	return (
 		<div className="max-w-3xl space-y-6">
-			{/* Header */}
 			<div className="flex items-start justify-between gap-4">
 				<div>
 					<Link
@@ -386,7 +375,6 @@ export function JobStatusPage({
 				</div>
 			</div>
 
-			{/* Status + progress */}
 			<Card>
 				<CardContent className="pt-5 space-y-3">
 					<div className="flex items-center gap-3">
@@ -420,7 +408,6 @@ export function JobStatusPage({
 				</CardContent>
 			</Card>
 
-			{/* Error */}
 			{isFailed && job.error && (
 				<Alert variant="destructive">
 					<AlertCircle />
@@ -429,7 +416,6 @@ export function JobStatusPage({
 				</Alert>
 			)}
 
-			{/* Linked exam paper */}
 			{job.exam_paper_id && (
 				<Card>
 					<CardContent className="pt-4 flex items-center justify-between gap-4">
@@ -455,7 +441,6 @@ export function JobStatusPage({
 				</Card>
 			)}
 
-			{/* Stats row */}
 			<div className="grid grid-cols-3 gap-4">
 				<Card>
 					<CardContent className="pt-4 flex items-center gap-3">
@@ -486,7 +471,6 @@ export function JobStatusPage({
 				</Card>
 			</div>
 
-			{/* Questions / mark schemes */}
 			{(job.document_type === "mark_scheme" ||
 				job.document_type === "question_paper") && (
 				<Card>
@@ -510,7 +494,6 @@ export function JobStatusPage({
 				</Card>
 			)}
 
-			{/* Exemplars */}
 			{job.document_type === "exemplar" && (
 				<Card>
 					<CardHeader>
@@ -533,7 +516,6 @@ export function JobStatusPage({
 				</Card>
 			)}
 
-			{/* Job metadata */}
 			<Card>
 				<CardHeader>
 					<CardTitle>Job details</CardTitle>

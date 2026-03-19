@@ -187,7 +187,7 @@ export function LinkedPdfUploadClient({
 			if (!result.ok) return
 			setJobStatus(result.status)
 			if (result.status === "ocr_complete") {
-				router.push(`/dashboard/exam-papers/${examPaperId}`)
+				router.push(`/teacher/exam-papers/${examPaperId}`)
 			}
 			if (result.status === "failed") {
 				setError(result.error ?? "Processing failed. Please try again.")
@@ -230,7 +230,7 @@ export function LinkedPdfUploadClient({
 				return
 			}
 			// Redirect to persistent job page — survives refreshes
-			router.push(`/dashboard/upload/${result.jobId}`)
+			router.push(`/admin/upload/${result.jobId}`)
 		} catch {
 			setError("Upload failed. Please try again.")
 		} finally {
@@ -255,7 +255,7 @@ export function LinkedPdfUploadClient({
 		<div className="max-w-xl space-y-6">
 			<div>
 				<Link
-					href={`/dashboard/exam-papers/${examPaperId}`}
+					href={`/teacher/exam-papers/${examPaperId}`}
 					className="text-sm text-muted-foreground hover:text-foreground"
 				>
 					← Back to {examPaperTitle}

@@ -70,7 +70,9 @@ function accuracyVariant(pct: number): BadgeVariant {
 
 function ValidationBadge({
 	validation,
-}: { validation: ExemplarValidationStats | null }) {
+}: {
+	validation: ExemplarValidationStats | null
+}) {
 	if (!validation)
 		return <span className="text-muted-foreground text-xs">—</span>
 	return (

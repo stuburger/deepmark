@@ -1,14 +1,20 @@
 "use client"
 
+import { BoundingBoxViewer } from "@/components/BoundingBoxViewer"
+import { buttonVariants } from "@/components/ui/button"
+import {
+	Card,
+	CardContent,
+	CardDescription,
+	CardHeader,
+	CardTitle,
+} from "@/components/ui/card"
+import { Skeleton } from "@/components/ui/skeleton"
+import { type PageStatus, pollScanStatus } from "@/lib/scan-actions"
+import { cn } from "@/lib/utils"
 import Link from "next/link"
 import { useParams } from "next/navigation"
 import { useCallback, useEffect, useState } from "react"
-import { BoundingBoxViewer } from "@/components/BoundingBoxViewer"
-import { buttonVariants } from "@/components/ui/button"
-import { cn } from "@/lib/utils"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Skeleton } from "@/components/ui/skeleton"
-import { pollScanStatus, type PageStatus } from "@/lib/scan-actions"
 
 const POLL_INTERVAL_MS = 2000
 
@@ -32,11 +38,11 @@ export default function ScanResultPage() {
 	}, [id])
 
 	useEffect(() => {
-		if (!id) {
-			setError("Missing scan ID")
-			return
-		}
-		poll()
+		if (!id) return
+		const timeout = setTimeout(() => {
+			void poll()
+		}, 0)
+		return () => clearTimeout(timeout)
 	}, [id, poll])
 
 	useEffect(() => {
@@ -44,6 +50,27 @@ export default function ScanResultPage() {
 		const t = setInterval(poll, POLL_INTERVAL_MS)
 		return () => clearInterval(t)
 	}, [id, allComplete, poll])
+
+	if (!id) {
+		return (
+			<main className="mx-auto flex min-h-screen w-full max-w-2xl flex-col gap-6 px-6 py-16">
+				<Card>
+					<CardHeader>
+						<CardTitle>Error</CardTitle>
+						<CardDescription>Missing scan ID</CardDescription>
+					</CardHeader>
+					<CardContent>
+						<Link
+							href="/teacher/mark"
+							className={cn(buttonVariants({ variant: "outline" }))}
+						>
+							Back to dashboard
+						</Link>
+					</CardContent>
+				</Card>
+			</main>
+		)
+	}
 
 	if (error) {
 		return (
@@ -54,7 +81,10 @@ export default function ScanResultPage() {
 						<CardDescription>{error}</CardDescription>
 					</CardHeader>
 					<CardContent>
-						<Link href="/" className={cn(buttonVariants({ variant: "outline" }))}>
+						<Link
+							href="/teacher/mark"
+							className={cn(buttonVariants({ variant: "outline" }))}
+						>
 							Back to dashboard
 						</Link>
 					</CardContent>
@@ -86,10 +116,15 @@ export default function ScanResultPage() {
 						{!anyFailed && (
 							<div className="flex items-center gap-2">
 								<Skeleton className="size-5 rounded" />
-								<span className="text-sm text-muted-foreground">Waiting for results…</span>
+								<span className="text-sm text-muted-foreground">
+									Waiting for results…
+								</span>
 							</div>
 						)}
-						<Link href="/" className={cn(buttonVariants({ variant: "outline" }))}>
+						<Link
+							href="/teacher/mark"
+							className={cn(buttonVariants({ variant: "outline" }))}
+						>
 							Back to dashboard
 						</Link>
 					</CardContent>
@@ -104,7 +139,10 @@ export default function ScanResultPage() {
 		<main className="mx-auto flex min-h-screen w-full max-w-4xl flex-col gap-6 px-6 py-16">
 			<div className="flex items-center justify-between">
 				<h1 className="text-xl font-semibold">Handwriting OCR result</h1>
-				<Link href="/" className={cn(buttonVariants({ variant: "outline" }))}>
+				<Link
+					href="/teacher/mark"
+					className={cn(buttonVariants({ variant: "outline" }))}
+				>
 					Dashboard
 				</Link>
 			</div>
@@ -120,7 +158,8 @@ export default function ScanResultPage() {
 								p.pageNumber === activePage
 									? "bg-primary text-primary-foreground"
 									: "bg-background text-foreground hover:bg-muted",
-								p.ocrStatus === "failed" && "border-destructive text-destructive",
+								p.ocrStatus === "failed" &&
+									"border-destructive text-destructive",
 							)}
 						>
 							Page {p.pageNumber}
@@ -135,12 +174,16 @@ export default function ScanResultPage() {
 					<CardHeader>
 						<CardTitle>Page {currentPage.pageNumber} failed</CardTitle>
 						<CardDescription>
-							OCR could not be completed for this page. Check the image quality and try again.
+							OCR could not be completed for this page. Check the image quality
+							and try again.
 						</CardDescription>
 					</CardHeader>
 				</Card>
 			) : currentPage?.ocrResult && currentPage.imageUrl ? (
-				<BoundingBoxViewer imageUrl={currentPage.imageUrl} analysis={currentPage.ocrResult} />
+				<BoundingBoxViewer
+					imageUrl={currentPage.imageUrl}
+					analysis={currentPage.ocrResult}
+				/>
 			) : null}
 		</main>
 	)

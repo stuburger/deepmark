@@ -124,7 +124,7 @@ export function MarkingResultsClient({
 				<div>
 					<p className="text-sm text-muted-foreground mb-1">
 						<Link
-							href="/dashboard/mark"
+							href="/teacher/mark"
 							className="hover:underline underline-offset-4"
 						>
 							← Mark history
@@ -136,7 +136,7 @@ export function MarkingResultsClient({
 					</p>
 				</div>
 				<Link
-					href="/dashboard/mark/new"
+					href="/teacher/mark/new"
 					className={buttonVariants({ size: "sm" })}
 				>
 					<PlusCircle className="h-3.5 w-3.5 mr-1.5" />

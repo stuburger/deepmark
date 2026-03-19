@@ -59,7 +59,7 @@ function ExamPaperRow({ paper }: { paper: ExamPaperListItem }) {
 		<TableRow className="cursor-pointer hover:bg-muted/50">
 			<TableCell className="font-medium max-w-xs">
 				<Link
-					href={`/dashboard/exam-papers/${paper.id}`}
+					href={`/teacher/exam-papers/${paper.id}`}
 					className="hover:underline underline-offset-4"
 					title={paper.title}
 				>
@@ -110,7 +110,7 @@ export default async function ExamPapersPage() {
 						teacher marking flow.
 					</p>
 				</div>
-				<Link href="/dashboard/exam-papers/new" className={buttonVariants()}>
+				<Link href="/teacher/exam-papers/new" className={buttonVariants()}>
 					<PlusCircle className="h-4 w-4 mr-2" />
 					New exam paper
 				</Link>
@@ -137,7 +137,7 @@ export default async function ExamPapersPage() {
 						<p className="text-sm text-muted-foreground py-8 text-center">
 							No exam papers yet.{" "}
 							<Link
-								href="/dashboard/exam-papers/new"
+								href="/teacher/exam-papers/new"
 								className="underline underline-offset-4"
 							>
 								Create your first one.

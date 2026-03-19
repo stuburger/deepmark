@@ -143,7 +143,6 @@ export default function AdminUploadPage() {
 					setError("Upload to storage failed")
 					return
 				}
-				// Redirect to persistent job page — survives refreshes
 				router.push(`/admin/upload/${result.jobId}`)
 			} catch (e) {
 				setError(e instanceof Error ? e.message : "Upload failed")

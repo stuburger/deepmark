@@ -1,6 +1,5 @@
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { buttonVariants } from "@/components/ui/button-variants"
 import {
 	Card,
 	CardContent,
@@ -22,11 +21,12 @@ import {
 	getExamPaperDetail,
 	toggleExamPaperPublic,
 } from "@/lib/dashboard-actions"
-import { BookOpen, Clock, FileText, Globe, Lock, Upload } from "lucide-react"
+import { BookOpen, Clock, FileText, Globe, Lock } from "lucide-react"
 import { revalidatePath } from "next/cache"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { EditableTitle } from "./editable-title"
+import { UploadPdfDrawer } from "./upload-pdf-drawer"
 
 function capitalize(s: string) {
 	return s.charAt(0).toUpperCase() + s.slice(1)
@@ -151,13 +151,7 @@ export default async function ExamPaperDetailPage({
 					</div>
 					<div className="flex shrink-0 items-center gap-2">
 						<TogglePublicForm id={paper.id} isPublic={paper.is_public} />
-						<Link
-							href={`/teacher/exam-papers/${paper.id}/upload`}
-							className={buttonVariants({ size: "sm" })}
-						>
-							<Upload className="h-3.5 w-3.5 mr-1.5" />
-							Upload PDF
-						</Link>
+						<UploadPdfDrawer examPaperId={paper.id} />
 					</div>
 				</div>
 			</div>

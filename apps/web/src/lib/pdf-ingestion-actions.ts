@@ -539,3 +539,91 @@ export async function retriggerPdfIngestionJob(
 	log.info(TAG, "Job retriggered", { jobId, document_type: job.document_type })
 	return { ok: true }
 }
+
+export type CheckExistingDocumentResult =
+	| { ok: true; exists: false }
+	| { ok: true; exists: true; questionCount: number; exemplarCount: number }
+	| { ok: false; error: string }
+
+export async function checkExistingDocument(
+	examPaperId: string,
+	documentType: "mark_scheme" | "exemplar" | "question_paper",
+): Promise<CheckExistingDocumentResult> {
+	const session = await auth()
+	if (!session) return { ok: false, error: "Not authenticated" }
+
+	const jobs = await db.pdfIngestionJob.findMany({
+		where: {
+			exam_paper_id: examPaperId,
+			document_type: documentType,
+			status: "ocr_complete",
+		},
+		select: {
+			id: true,
+			_count: { select: { created_questions: true, exemplars: true } },
+		},
+	})
+
+	if (jobs.length === 0) return { ok: true, exists: false }
+
+	const questionCount = jobs.reduce(
+		(sum, j) => sum + j._count.created_questions,
+		0,
+	)
+	const exemplarCount = jobs.reduce((sum, j) => sum + j._count.exemplars, 0)
+
+	return { ok: true, exists: true, questionCount, exemplarCount }
+}
+
+export type ArchiveExistingDocumentResult =
+	| { ok: true }
+	| { ok: false; error: string }
+
+export async function archiveExistingDocument(
+	examPaperId: string,
+	documentType: "mark_scheme" | "exemplar" | "question_paper",
+): Promise<ArchiveExistingDocumentResult> {
+	const session = await auth()
+	if (!session) return { ok: false, error: "Not authenticated" }
+
+	const jobs = await db.pdfIngestionJob.findMany({
+		where: {
+			exam_paper_id: examPaperId,
+			document_type: documentType,
+			status: "ocr_complete",
+		},
+		select: { id: true },
+	})
+
+	if (jobs.length === 0) return { ok: true }
+
+	const jobIds = jobs.map((j) => j.id)
+
+	log.info(TAG, "archiveExistingDocument called", {
+		userId: session.userId,
+		examPaperId,
+		documentType,
+		jobCount: jobs.length,
+	})
+
+	if (documentType === "exemplar") {
+		await db.exemplarAnswer.deleteMany({
+			where: { pdf_ingestion_job_id: { in: jobIds } },
+		})
+	} else {
+		const questions = await db.question.findMany({
+			where: { source_pdf_ingestion_job_id: { in: jobIds } },
+			select: { id: true },
+		})
+		await db.examSectionQuestion.deleteMany({
+			where: { question_id: { in: questions.map((q) => q.id) } },
+		})
+	}
+
+	log.info(TAG, "archiveExistingDocument complete", {
+		examPaperId,
+		documentType,
+	})
+
+	return { ok: true }
+}

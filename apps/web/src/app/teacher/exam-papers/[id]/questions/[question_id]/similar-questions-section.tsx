@@ -1,38 +1,46 @@
 "use client"
 
 import { Button } from "@/components/ui/button"
-import { Spinner } from "@/components/ui/spinner"
-import {
-	consolidateQuestions,
-	getSimilarQuestionsForPaper,
-} from "@/lib/dashboard-actions"
+import { getSimilarQuestionsForPaper } from "@/lib/dashboard-actions"
 import { AlertTriangle, GitMerge } from "lucide-react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
+import { MergeQuestionsDialog } from "./merge-questions-dialog"
 
 type SimilarQuestion = {
 	id: string
 	text: string
 	question_number: string | null
 	origin: string
+	mark_scheme_status: string | null
+	mark_scheme_id: string | null
+	mark_scheme_description: string | null
+}
+
+type CurrentQuestion = {
+	id: string
+	text: string
+	question_number: string | null
+	origin: string
+	mark_scheme_id: string | null
+	mark_scheme_description: string | null
 }
 
 export function SimilarQuestionsSection({
 	questionId,
 	examPaperId,
 	questions,
+	currentQuestion,
 }: {
 	questionId: string
 	examPaperId: string
 	/** All questions in the paper (passed from server component to avoid re-fetching) */
 	questions: SimilarQuestion[]
+	/** The current page's question details for the merge dialog */
+	currentQuestion: CurrentQuestion
 }) {
-	const router = useRouter()
 	const [similarIds, setSimilarIds] = useState<string[] | null>(null)
-	const [confirmingId, setConfirmingId] = useState<string | null>(null)
-	const [merging, setMerging] = useState(false)
-	const [error, setError] = useState<string | null>(null)
+	const [mergeTarget, setMergeTarget] = useState<SimilarQuestion | null>(null)
 
 	useEffect(() => {
 		getSimilarQuestionsForPaper(examPaperId).then((r) => {
@@ -57,19 +65,6 @@ export function SimilarQuestionsSection({
 
 	if (similarQuestions.length === 0) return null
 
-	async function handleMerge(discardId: string) {
-		setMerging(true)
-		setError(null)
-		const result = await consolidateQuestions(questionId, discardId)
-		setMerging(false)
-		if (!result.ok) {
-			setError(result.error)
-			return
-		}
-		router.push(`/teacher/exam-papers/${examPaperId}`)
-		router.refresh()
-	}
-
 	return (
 		<div className="space-y-3">
 			<div className="flex items-center gap-2">
@@ -81,8 +76,8 @@ export function SimilarQuestionsSection({
 			</div>
 			<p className="text-xs text-muted-foreground">
 				These questions may be duplicates from uploading both a question paper
-				and mark scheme. You can merge them — the mark scheme will be moved to
-				this question and the other will be deleted.
+				and mark scheme. You can merge them — choose which question text and
+				mark scheme to keep.
 			</p>
 			<div className="space-y-2">
 				{similarQuestions.map((sq) => (
@@ -107,52 +102,31 @@ export function SimilarQuestionsSection({
 									Source: {sq.origin.replace(/_/g, " ")}
 								</p>
 							</div>
-							{confirmingId === sq.id ? (
-								<div className="flex items-center gap-2 shrink-0">
-									<Button
-										size="sm"
-										variant="destructive"
-										disabled={merging}
-										onClick={() => handleMerge(sq.id)}
-									>
-										{merging ? (
-											<Spinner className="h-3.5 w-3.5 mr-1.5" />
-										) : (
-											<GitMerge className="h-3.5 w-3.5 mr-1.5" />
-										)}
-										{merging ? "Merging…" : "Confirm merge"}
-									</Button>
-									<Button
-										size="sm"
-										variant="ghost"
-										disabled={merging}
-										onClick={() => setConfirmingId(null)}
-									>
-										Cancel
-									</Button>
-								</div>
-							) : (
-								<Button
-									size="sm"
-									variant="outline"
-									className="shrink-0"
-									onClick={() => setConfirmingId(sq.id)}
-								>
-									<GitMerge className="h-3.5 w-3.5 mr-1.5" />
-									Merge into this
-								</Button>
-							)}
+							<Button
+								size="sm"
+								variant="outline"
+								className="shrink-0"
+								onClick={() => setMergeTarget(sq)}
+							>
+								<GitMerge className="h-3.5 w-3.5 mr-1.5" />
+								Merge
+							</Button>
 						</div>
-						{confirmingId === sq.id && (
-							<p className="text-xs text-destructive">
-								This will delete the other question and move its mark scheme
-								here. This cannot be undone.
-							</p>
-						)}
 					</div>
 				))}
 			</div>
-			{error && <p className="text-sm text-destructive">{error}</p>}
+
+			{mergeTarget && (
+				<MergeQuestionsDialog
+					open={mergeTarget !== null}
+					onOpenChange={(open) => {
+						if (!open) setMergeTarget(null)
+					}}
+					currentQuestion={currentQuestion}
+					similarQuestion={mergeTarget}
+					examPaperId={examPaperId}
+				/>
+			)}
 		</div>
 	)
 }

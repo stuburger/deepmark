@@ -10,6 +10,13 @@ import {
 	CardTitle,
 } from "@/components/ui/card"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
+import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogHeader,
+	DialogTitle,
+} from "@/components/ui/dialog"
 import { Separator } from "@/components/ui/separator"
 import { Spinner } from "@/components/ui/spinner"
 import {
@@ -20,10 +27,16 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table"
-import type { ExamPaperDetail, SimilarPair } from "@/lib/dashboard-actions"
+import type {
+	ExamPaperDetail,
+	SimilarPair,
+	UnlinkedMarkScheme,
+} from "@/lib/dashboard-actions"
 import {
 	deleteExamPaper,
 	getSimilarQuestionsForPaper,
+	getUnlinkedMarkSchemes,
+	linkMarkSchemeToQuestion,
 } from "@/lib/dashboard-actions"
 import { getActiveIngestionJobsForExamPaper } from "@/lib/pdf-ingestion-actions"
 import {
@@ -37,6 +50,7 @@ import {
 	Clock,
 	FileText,
 	Globe,
+	Link2,
 	Lock,
 	Trash2,
 	Upload,
@@ -184,6 +198,15 @@ export function ExamPaperPageShell({
 	const [duplicateBannerDismissed, setDuplicateBannerDismissed] =
 		useState(false)
 
+	// Unlinked mark schemes
+	const [unlinkedItems, setUnlinkedItems] = useState<UnlinkedMarkScheme[]>([])
+	const [linkingItem, setLinkingItem] = useState<UnlinkedMarkScheme | null>(
+		null,
+	)
+	const [linkingTargetId, setLinkingTargetId] = useState<string>("")
+	const [linkingBusy, setLinkingBusy] = useState(false)
+	const [linkingError, setLinkingError] = useState<string | null>(null)
+
 	// Delete
 	const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
 	const [deleting, setDeleting] = useState(false)
@@ -240,6 +263,35 @@ export function ExamPaperPageShell({
 			if (r.ok) setSimilarPairs(r.pairs)
 		})
 	}, [paper.id])
+
+	// Load unlinked mark schemes on mount (lazy, non-blocking)
+	useEffect(() => {
+		getUnlinkedMarkSchemes(paper.id).then((r) => {
+			if (r.ok) setUnlinkedItems(r.items)
+		})
+	}, [paper.id])
+
+	async function handleLinkMarkScheme() {
+		if (!linkingItem || !linkingTargetId) return
+		setLinkingBusy(true)
+		setLinkingError(null)
+		const result = await linkMarkSchemeToQuestion(
+			linkingItem.ghostQuestionId,
+			linkingTargetId,
+		)
+		setLinkingBusy(false)
+		if (!result.ok) {
+			setLinkingError(result.error)
+			return
+		}
+		setLinkingItem(null)
+		setLinkingTargetId("")
+		router.refresh()
+		// Re-fetch unlinked items after linking
+		getUnlinkedMarkSchemes(paper.id).then((r) => {
+			if (r.ok) setUnlinkedItems(r.items)
+		})
+	}
 
 	function toggleSort(key: SortKey) {
 		setSort((prev) =>
@@ -472,6 +524,155 @@ export function ExamPaperPageShell({
 					</button>
 				</div>
 			)}
+
+			{/* Unlinked mark schemes panel */}
+			{unlinkedItems.length > 0 && (
+				<div className="rounded-lg border border-destructive/40 bg-destructive/5 p-3 space-y-3">
+					<div className="flex items-center gap-2">
+						<AlertTriangle className="h-4 w-4 shrink-0 text-destructive" />
+						<p className="text-sm font-medium text-destructive">
+							{unlinkedItems.length} unlinked mark scheme
+							{unlinkedItems.length !== 1 ? "s" : ""} — created during ingestion
+							but not matched to a question
+						</p>
+					</div>
+					<div className="space-y-2">
+						{unlinkedItems.map((item) => (
+							<div
+								key={item.markSchemeId}
+								className="flex items-start justify-between gap-3 rounded-md bg-background border px-3 py-2.5"
+							>
+								<div className="min-w-0 flex-1">
+									{item.ghostQuestionNumber && (
+										<p className="text-xs text-muted-foreground mb-0.5">
+											Extracted as Q{item.ghostQuestionNumber}
+										</p>
+									)}
+									<p
+										className="text-sm truncate"
+										title={item.ghostQuestionText}
+									>
+										{item.ghostQuestionText}
+									</p>
+									{item.markSchemeDescription && (
+										<p
+											className="text-xs text-muted-foreground truncate mt-0.5"
+											title={item.markSchemeDescription}
+										>
+											Mark scheme: {item.markSchemeDescription}
+										</p>
+									)}
+									<p className="text-xs text-muted-foreground">
+										{item.pointsTotal} mark{item.pointsTotal !== 1 ? "s" : ""}
+									</p>
+								</div>
+								<Button
+									size="sm"
+									variant="outline"
+									className="shrink-0"
+									onClick={() => {
+										setLinkingItem(item)
+										setLinkingTargetId("")
+										setLinkingError(null)
+									}}
+								>
+									<Link2 className="h-3.5 w-3.5 mr-1.5" />
+									Link to question
+								</Button>
+							</div>
+						))}
+					</div>
+				</div>
+			)}
+
+			{/* Link mark scheme dialog */}
+			<Dialog
+				open={linkingItem !== null}
+				onOpenChange={(open) => {
+					if (!linkingBusy) {
+						setLinkingItem(open ? linkingItem : null)
+						if (!open) setLinkingError(null)
+					}
+				}}
+			>
+				<DialogContent className="max-w-md">
+					<DialogHeader>
+						<DialogTitle>Link mark scheme to question</DialogTitle>
+						<DialogDescription>
+							Choose which question in this paper should receive this mark
+							scheme. Only questions without a mark scheme are shown.
+						</DialogDescription>
+					</DialogHeader>
+					<div className="space-y-3">
+						<div className="space-y-1.5 max-h-64 overflow-y-auto">
+							{paper.questions
+								.filter((q) => q.mark_scheme_status === null)
+								.map((q) => (
+									<label
+										key={q.id}
+										className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors ${
+											linkingTargetId === q.id
+												? "border-primary bg-primary/5"
+												: "hover:bg-muted/50"
+										}`}
+									>
+										<input
+											type="radio"
+											name="link-target"
+											value={q.id}
+											checked={linkingTargetId === q.id}
+											onChange={() => setLinkingTargetId(q.id)}
+											className="mt-0.5"
+											disabled={linkingBusy}
+										/>
+										<div className="min-w-0">
+											{q.question_number && (
+												<p className="text-xs text-muted-foreground">
+													Q{q.question_number}
+												</p>
+											)}
+											<p className="text-sm line-clamp-2">{q.text}</p>
+										</div>
+									</label>
+								))}
+							{paper.questions.filter((q) => q.mark_scheme_status === null)
+								.length === 0 && (
+								<p className="text-sm text-muted-foreground py-4 text-center">
+									All questions already have a mark scheme.
+								</p>
+							)}
+						</div>
+						{linkingError && (
+							<p className="text-sm text-destructive">{linkingError}</p>
+						)}
+						<div className="flex gap-2 justify-end">
+							<Button
+								variant="outline"
+								disabled={linkingBusy}
+								onClick={() => {
+									setLinkingItem(null)
+									setLinkingError(null)
+								}}
+							>
+								Cancel
+							</Button>
+							<Button
+								disabled={!linkingTargetId || linkingBusy}
+								onClick={handleLinkMarkScheme}
+							>
+								{linkingBusy ? (
+									<>
+										<Spinner className="h-3.5 w-3.5 mr-1.5" />
+										Linking…
+									</>
+								) : (
+									"Link mark scheme"
+								)}
+							</Button>
+						</div>
+					</div>
+				</DialogContent>
+			</Dialog>
 
 			{/* Questions table */}
 			<Card>

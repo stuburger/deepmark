@@ -18,6 +18,7 @@ import {
 import { getExamPaperDetail, getQuestionDetail } from "@/lib/dashboard-actions"
 import Link from "next/link"
 import { notFound } from "next/navigation"
+import { DeleteQuestionButton } from "./delete-question-button"
 import { EvalDialog } from "./eval-dialog"
 import { QuestionEditForm } from "./question-edit-form"
 import { SimilarQuestionsSection } from "./similar-questions-section"
@@ -107,6 +108,9 @@ export default async function QuestionDetailPage({
 				text: q.text,
 				question_number: q.question_number,
 				origin: q.origin,
+				mark_scheme_status: q.mark_scheme_status,
+				mark_scheme_id: q.mark_scheme_id,
+				mark_scheme_description: q.mark_scheme_description,
 			}))
 		: []
 
@@ -143,7 +147,13 @@ export default async function QuestionDetailPage({
 								<Badge variant="outline">{question.topic}</Badge>
 							)}
 						</div>
-						<EvalDialog questionId={question.id} />
+						<div className="flex items-center gap-1 shrink-0">
+							<EvalDialog questionId={question.id} />
+							<DeleteQuestionButton
+								questionId={question.id}
+								examPaperId={examPaperId}
+							/>
+						</div>
 					</div>
 					<p className="text-xs text-muted-foreground">
 						Added {formatDate(question.created_at)}
@@ -376,6 +386,15 @@ export default async function QuestionDetailPage({
 					questionId={question.id}
 					examPaperId={examPaperId}
 					questions={paperQuestions}
+					currentQuestion={{
+						id: question.id,
+						text: question.text,
+						question_number: question.question_number,
+						origin: question.origin,
+						mark_scheme_id: question.mark_schemes[0]?.id ?? null,
+						mark_scheme_description:
+							question.mark_schemes[0]?.description ?? null,
+					}}
 				/>
 			)}
 		</div>

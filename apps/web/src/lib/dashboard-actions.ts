@@ -447,6 +447,8 @@ export type ExamPaperQuestion = {
 	origin: string
 	mark_scheme_count: number
 	mark_scheme_status: string | null
+	mark_scheme_id: string | null
+	mark_scheme_description: string | null
 	order: number
 	section_title: string
 	question_number: string | null
@@ -494,7 +496,11 @@ export async function getExamPaperDetail(
 										origin: true,
 										question_number: true,
 										mark_schemes: {
-											select: { id: true, link_status: true },
+											select: {
+												id: true,
+												link_status: true,
+												description: true,
+											},
 											take: 1,
 										},
 									},
@@ -520,6 +526,8 @@ export async function getExamPaperDetail(
 					question_number: esq.question.question_number,
 					mark_scheme_count: esq.question.mark_schemes.length,
 					mark_scheme_status: ms?.link_status ?? null,
+					mark_scheme_id: ms?.id ?? null,
+					mark_scheme_description: ms?.description ?? null,
 					order: esq.order,
 					section_title: section.title,
 				})
@@ -765,6 +773,232 @@ export async function deleteExamPaper(
 			error: String(err),
 		})
 		return { ok: false, error: "Failed to delete exam paper" }
+	}
+}
+
+// ─── Delete Question ──────────────────────────────────────────────────────────
+
+export type DeleteQuestionResult = { ok: true } | { ok: false; error: string }
+
+/**
+ * Fully deletes a question and all associated data in a transaction.
+ *
+ * Cascade order (child-first to avoid FK violations):
+ *  1. MarkSchemeTestRun → MarkScheme
+ *  2. ExemplarAnswer linked to question or its mark schemes
+ *  3. MarkScheme
+ *  4. QuestionBankItem
+ *  5. MarkingResult → ExtractedAnswer → Answer
+ *  6. ExamSectionQuestion
+ *  7. Question
+ */
+export async function deleteQuestion(
+	questionId: string,
+): Promise<DeleteQuestionResult> {
+	const session = await auth()
+	if (!session) return { ok: false, error: "Not authenticated" }
+
+	log.info(TAG, "deleteQuestion called", { userId: session.userId, questionId })
+
+	try {
+		await db.$transaction(async (tx) => {
+			const markSchemes = await tx.markScheme.findMany({
+				where: { question_id: questionId },
+				select: { id: true },
+			})
+			const markSchemeIds = markSchemes.map((ms) => ms.id)
+
+			const answers = await tx.answer.findMany({
+				where: { question_id: questionId },
+				select: { id: true },
+			})
+			const answerIds = answers.map((a) => a.id)
+
+			await tx.markSchemeTestRun.deleteMany({
+				where: { mark_scheme_id: { in: markSchemeIds } },
+			})
+
+			await tx.exemplarAnswer.deleteMany({
+				where: {
+					OR: [
+						{ mark_scheme_id: { in: markSchemeIds } },
+						{ question_id: questionId },
+					],
+				},
+			})
+
+			await tx.markScheme.deleteMany({
+				where: { question_id: questionId },
+			})
+
+			await tx.questionBankItem.deleteMany({
+				where: { question_id: questionId },
+			})
+
+			await tx.markingResult.deleteMany({
+				where: { answer_id: { in: answerIds } },
+			})
+
+			await tx.extractedAnswer.deleteMany({
+				where: {
+					OR: [{ answer_id: { in: answerIds } }, { question_id: questionId }],
+				},
+			})
+
+			await tx.answer.deleteMany({
+				where: { question_id: questionId },
+			})
+
+			await tx.examSectionQuestion.deleteMany({
+				where: { question_id: questionId },
+			})
+
+			await tx.question.delete({ where: { id: questionId } })
+		})
+
+		log.info(TAG, "Question deleted", { userId: session.userId, questionId })
+		return { ok: true }
+	} catch (err) {
+		log.error(TAG, "deleteQuestion failed", {
+			userId: session.userId,
+			questionId,
+			error: String(err),
+		})
+		return { ok: false, error: "Failed to delete question" }
+	}
+}
+
+// ─── Orphaned (Unlinked) Mark Schemes ─────────────────────────────────────────
+
+export type UnlinkedMarkScheme = {
+	markSchemeId: string
+	markSchemeDescription: string | null
+	pointsTotal: number
+	ghostQuestionId: string
+	ghostQuestionText: string
+	ghostQuestionNumber: string | null
+}
+
+export type GetUnlinkedMarkSchemesResult =
+	| { ok: true; items: UnlinkedMarkScheme[] }
+	| { ok: false; error: string }
+
+/**
+ * Returns questions in the paper whose mark scheme has link_status = "unlinked".
+ * These are "ghost" questions created by the ingestion pipeline that couldn't
+ * be matched to an existing question paper question.
+ */
+export async function getUnlinkedMarkSchemes(
+	examPaperId: string,
+): Promise<GetUnlinkedMarkSchemesResult> {
+	const session = await auth()
+	if (!session) return { ok: false, error: "Not authenticated" }
+
+	try {
+		const rows = await db.examSectionQuestion.findMany({
+			where: {
+				exam_section: { exam_paper_id: examPaperId },
+				question: {
+					mark_schemes: { some: { link_status: "unlinked" } },
+				},
+			},
+			select: {
+				question: {
+					select: {
+						id: true,
+						text: true,
+						question_number: true,
+						mark_schemes: {
+							where: { link_status: "unlinked" },
+							select: {
+								id: true,
+								description: true,
+								points_total: true,
+							},
+						},
+					},
+				},
+			},
+		})
+
+		const items: UnlinkedMarkScheme[] = []
+		for (const row of rows) {
+			for (const ms of row.question.mark_schemes) {
+				items.push({
+					markSchemeId: ms.id,
+					markSchemeDescription: ms.description,
+					pointsTotal: ms.points_total,
+					ghostQuestionId: row.question.id,
+					ghostQuestionText: row.question.text,
+					ghostQuestionNumber: row.question.question_number,
+				})
+			}
+		}
+
+		return { ok: true, items }
+	} catch (err) {
+		log.error(TAG, "getUnlinkedMarkSchemes failed", {
+			examPaperId,
+			error: String(err),
+		})
+		return { ok: false, error: "Failed to load unlinked mark schemes" }
+	}
+}
+
+export type LinkMarkSchemeToQuestionResult =
+	| { ok: true }
+	| { ok: false; error: string }
+
+/**
+ * Re-parents an unlinked mark scheme onto the chosen target question,
+ * then cleans up the ghost question that was holding it.
+ */
+export async function linkMarkSchemeToQuestion(
+	ghostQuestionId: string,
+	targetQuestionId: string,
+): Promise<LinkMarkSchemeToQuestionResult> {
+	const session = await auth()
+	if (!session) return { ok: false, error: "Not authenticated" }
+
+	if (ghostQuestionId === targetQuestionId) {
+		return { ok: false, error: "Ghost and target question cannot be the same" }
+	}
+
+	log.info(TAG, "linkMarkSchemeToQuestion called", {
+		userId: session.userId,
+		ghostQuestionId,
+		targetQuestionId,
+	})
+
+	try {
+		await db.$transaction(async (tx) => {
+			await tx.markScheme.updateMany({
+				where: { question_id: ghostQuestionId, link_status: "unlinked" },
+				data: { question_id: targetQuestionId, link_status: "linked" },
+			})
+
+			await tx.examSectionQuestion.deleteMany({
+				where: { question_id: ghostQuestionId },
+			})
+
+			await tx.question.delete({ where: { id: ghostQuestionId } })
+		})
+
+		log.info(TAG, "Mark scheme linked to question", {
+			userId: session.userId,
+			ghostQuestionId,
+			targetQuestionId,
+		})
+
+		return { ok: true }
+	} catch (err) {
+		log.error(TAG, "linkMarkSchemeToQuestion failed", {
+			userId: session.userId,
+			ghostQuestionId,
+			targetQuestionId,
+			error: String(err),
+		})
+		return { ok: false, error: "Failed to link mark scheme" }
 	}
 }
 
@@ -1064,15 +1298,25 @@ export type ConsolidateQuestionsResult =
 
 /**
  * Merges two duplicate questions into one:
- * 1. Moves all mark schemes from `discardId` onto `keepId`.
- * 2. Removes `discardId` from all exam section question lists.
- * 3. Deletes the `discardId` question.
+ * 1. Optionally updates the kept question's text (and regenerates its embedding).
+ * 2. Optionally deletes a specific mark scheme from the discarded question instead
+ *    of moving it (used when both questions have a mark scheme and the user picks
+ *    which to keep).
+ * 3. Moves remaining mark schemes from `discardId` onto `keepId`.
+ * 4. Removes `discardId` from all exam section question lists.
+ * 5. Deletes the `discardId` question.
  *
  * Runs in a transaction to avoid partial state.
  */
 export async function consolidateQuestions(
 	keepQuestionId: string,
 	discardQuestionId: string,
+	opts?: {
+		/** Override the kept question's text (e.g. user preferred the discard's wording) */
+		overrideText?: string
+		/** Mark scheme ID on the discard question to delete rather than move */
+		discardMarkSchemeId?: string
+	},
 ): Promise<ConsolidateQuestionsResult> {
 	const session = await auth()
 	if (!session) return { ok: false, error: "Not authenticated" }
@@ -1085,11 +1329,34 @@ export async function consolidateQuestions(
 		userId: session.userId,
 		keepQuestionId,
 		discardQuestionId,
+		hasOverrideText: !!opts?.overrideText,
+		discardMarkSchemeId: opts?.discardMarkSchemeId ?? null,
 	})
 
 	try {
 		await db.$transaction(async (tx) => {
-			// Move mark schemes
+			// Optionally update the kept question's text
+			if (opts?.overrideText) {
+				await tx.question.update({
+					where: { id: keepQuestionId },
+					data: { text: opts.overrideText },
+				})
+			}
+
+			// Optionally delete the chosen discard mark scheme (and its children)
+			if (opts?.discardMarkSchemeId) {
+				await tx.markSchemeTestRun.deleteMany({
+					where: { mark_scheme_id: opts.discardMarkSchemeId },
+				})
+				await tx.exemplarAnswer.deleteMany({
+					where: { mark_scheme_id: opts.discardMarkSchemeId },
+				})
+				await tx.markScheme.delete({
+					where: { id: opts.discardMarkSchemeId },
+				})
+			}
+
+			// Move remaining mark schemes from discard onto keep
 			await tx.markScheme.updateMany({
 				where: { question_id: discardQuestionId },
 				data: { question_id: keepQuestionId, link_status: "auto_linked" },
@@ -1105,6 +1372,34 @@ export async function consolidateQuestions(
 				where: { id: discardQuestionId },
 			})
 		})
+
+		// Regenerate embedding if text was overridden (outside transaction — best effort)
+		if (opts?.overrideText) {
+			try {
+				const gemini = new GoogleGenAI({ apiKey: Resource.GeminiApiKey.value })
+				const result = await gemini.models.embedContent({
+					model: "gemini-embedding-001",
+					contents: opts.overrideText,
+					config: {
+						outputDimensionality: EMBEDDING_DIMENSIONS,
+						taskType: "SEMANTIC_SIMILARITY",
+					},
+				})
+				const values = result.embeddings?.[0]?.values
+				if (values && values.length === EMBEDDING_DIMENSIONS) {
+					const vecStr = `[${values.join(",")}]`
+					await db.$executeRaw`
+						UPDATE questions SET embedding = (${vecStr}::text)::vector WHERE id = ${keepQuestionId}
+					`
+					log.info(TAG, "Embedding regenerated after merge", { keepQuestionId })
+				}
+			} catch (embErr) {
+				log.error(TAG, "Failed to regenerate embedding after merge", {
+					keepQuestionId,
+					error: String(embErr),
+				})
+			}
+		}
 
 		log.info(TAG, "Questions consolidated", {
 			userId: session.userId,

@@ -16,7 +16,7 @@ import { domain, hostedZoneId, isPermanentStage } from "./config"
  * to the Router's CloudFront distribution ID (SST Console or outputs).
  */
 // TODO: Set this after the first deploy of the development stage
-const DEV_ROUTER_DISTRIBUTION_ID = "REPLACE_AFTER_FIRST_DEV_DEPLOY"
+const DEV_ROUTER_DISTRIBUTION_ID = "E128W2HPX5L4SZ"
 
 export const router = isPermanentStage
 	? new sst.aws.Router("Router", {

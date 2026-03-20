@@ -1,14 +1,14 @@
-import { handle } from "hono/aws-lambda"
-import { Hono } from "hono"
+import { createPrismaClient } from "@mcp-gcse/db"
 import { issuer } from "@openauthjs/openauth"
 import { createClient } from "@openauthjs/openauth/client"
 import { GithubProvider } from "@openauthjs/openauth/provider/github"
 import { GoogleProvider } from "@openauthjs/openauth/provider/google"
 import { DynamoStorage } from "@openauthjs/openauth/storage/dynamo"
-import { subjects } from "./subjects"
-import { z } from "zod"
+import { Hono } from "hono"
+import { handle } from "hono/aws-lambda"
 import { Resource } from "sst"
-import { createPrismaClient } from "@mcp-gcse/db"
+import { z } from "zod"
+import { subjects } from "./subjects"
 
 const db = createPrismaClient(Resource.NeonPostgres.databaseUrl)
 
@@ -161,7 +161,7 @@ app.post("/register", async (c) => {
 
 const client = createClient({
 	clientID: client_id,
-	issuer: `https://auth.${Resource.App.stage}.supalink.co`,
+	issuer: Resource.AuthUrl.url,
 })
 
 // OAuth 2.0 Token Introspection endpoint (RFC 7662)
@@ -224,7 +224,7 @@ app.post("/introspect", async (c) => {
 // standard discovery flow. Wrapping the issuer app in a parent Hono instance
 // lets us intercept that route and add the missing field, since Hono executes
 // handlers in registration order and our route is added first.
-const issuerUrl = `https://auth.${Resource.App.stage}.supalink.co`
+const issuerUrl = Resource.AuthUrl.url
 const wrappedApp = new Hono()
 wrappedApp.get("/.well-known/oauth-authorization-server", (c) => {
 	return c.json({
@@ -273,11 +273,14 @@ async function fetchGithubUser(accessToken: string): Promise<UserProfile> {
 }
 
 async function fetchGoogleUser(accessToken: string): Promise<UserProfile> {
-	const response = await fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
-		headers: {
-			Authorization: `Bearer ${accessToken}`,
+	const response = await fetch(
+		"https://www.googleapis.com/oauth2/v2/userinfo",
+		{
+			headers: {
+				Authorization: `Bearer ${accessToken}`,
+			},
 		},
-	})
+	)
 
 	if (!response.ok) {
 		throw new Error("Failed to fetch Google profile")

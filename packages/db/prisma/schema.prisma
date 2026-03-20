@@ -142,6 +142,8 @@ model Question {
   multiple_choice_options     Json                         @default("[]")
   embedding                   Unsupported("vector(1536)")?
   source_pdf_ingestion_job_id String?
+  // Canonical question number extracted from PDF e.g. "1a", "2bii", "3"
+  question_number             String?
 
   created_by               User                  @relation(fields: [created_by_id], references: [id])
   question_parts           QuestionPart[]

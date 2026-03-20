@@ -74,6 +74,10 @@ declare module "sst" {
       "type": "sst.aws.Queue"
       "url": string
     }
+    "Router": {
+      "type": "sst.aws.Router"
+      "url": string
+    }
     "ScansBucket": {
       "name": string
       "type": "sst.aws.Bucket"

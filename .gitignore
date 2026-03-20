@@ -12,3 +12,4 @@ build
 dist
 
 packages/db/src/generated/
+.open-next

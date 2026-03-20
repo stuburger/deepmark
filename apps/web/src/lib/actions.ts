@@ -2,9 +2,14 @@
 
 import { headers } from "next/headers"
 import { redirect } from "next/navigation"
-import { client } from "./auth"
+import { clearTokens, client } from "./auth"
 
-export async function login() {
+export async function logout() {
+	await clearTokens()
+	redirect("/login")
+}
+
+async function authorizeWith(provider: "github" | "google") {
 	const headersList = await headers()
 	const host = headersList.get("host")
 
@@ -16,9 +21,15 @@ export async function login() {
 	const origin = `${protocol}://${host}`
 	const redirectURI = `${origin}/api/callback`
 
-	const { url } = await client.authorize(redirectURI, "code", {
-		provider: "github",
-	})
+	const { url } = await client.authorize(redirectURI, "code", { provider })
 
 	redirect(url)
+}
+
+export async function login() {
+	await authorizeWith("github")
+}
+
+export async function loginWithGoogle() {
+	await authorizeWith("google")
 }

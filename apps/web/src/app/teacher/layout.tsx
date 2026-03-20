@@ -8,6 +8,7 @@ import {
 	SidebarSeparator,
 	SidebarTrigger,
 } from "@/components/ui/sidebar"
+import { logout } from "@/lib/actions"
 import { auth } from "@/lib/auth"
 import { GraduationCap } from "lucide-react"
 import Link from "next/link"
@@ -45,12 +46,14 @@ export default async function TeacherLayout({
 					>
 						Switch to admin
 					</Link>
-					<Link
-						href="/api/logout"
-						className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-					>
-						Logout
-					</Link>
+					<form action={logout}>
+						<button
+							type="submit"
+							className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+						>
+							Logout
+						</button>
+					</form>
 				</SidebarFooter>
 			</Sidebar>
 			<SidebarInset>

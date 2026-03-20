@@ -9,6 +9,7 @@ import {
 	CardHeader,
 	CardTitle,
 } from "@/components/ui/card"
+import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { Separator } from "@/components/ui/separator"
 import { Spinner } from "@/components/ui/spinner"
 import {
@@ -19,15 +20,34 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import type { ExamPaperDetail } from "@/lib/dashboard-actions"
+import type { ExamPaperDetail, SimilarPair } from "@/lib/dashboard-actions"
+import {
+	deleteExamPaper,
+	getSimilarQuestionsForPaper,
+} from "@/lib/dashboard-actions"
 import { getActiveIngestionJobsForExamPaper } from "@/lib/pdf-ingestion-actions"
-import { BookOpen, Clock, FileText, Globe, Lock, Upload } from "lucide-react"
+import {
+	AlertCircle,
+	AlertTriangle,
+	ArrowUpDown,
+	BookOpen,
+	CheckCircle2,
+	ChevronDown,
+	ChevronUp,
+	Clock,
+	FileText,
+	Globe,
+	Lock,
+	Trash2,
+	Upload,
+	XCircle,
+} from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import type { ReactNode } from "react"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { EditableTitle } from "./editable-title"
+import { PdfDocumentsPanel } from "./pdf-preview-dialog"
 import { UploadPdfDrawer } from "./upload-pdf-drawer"
 
 type IngestionJob = {
@@ -40,17 +60,73 @@ type IngestionJob = {
 const TERMINAL = new Set(["ocr_complete", "failed", "cancelled"])
 const POLL_MS = 3000
 
-function linkStatusBadge(status: string | null) {
+type SortKey = "number" | "marks" | "similarity"
+type SortDir = "asc" | "desc"
+
+/**
+ * Natural-sort comparison for question numbers like "1a", "2bii", "10".
+ * Numbers within the string are compared numerically; letters lexicographically.
+ */
+function naturalCompare(a: string | null, b: string | null): number {
+	if (a === null && b === null) return 0
+	if (a === null) return 1
+	if (b === null) return -1
+	const re = /(\d+)|(\D+)/g
+	const partsA = [...a.matchAll(re)].map((m) => m[0])
+	const partsB = [...b.matchAll(re)].map((m) => m[0])
+	for (let i = 0; i < Math.max(partsA.length, partsB.length); i++) {
+		const pa = partsA[i] ?? ""
+		const pb = partsB[i] ?? ""
+		const na = Number(pa)
+		const nb = Number(pb)
+		if (!isNaN(na) && !isNaN(nb)) {
+			if (na !== nb) return na - nb
+		} else {
+			if (pa < pb) return -1
+			if (pa > pb) return 1
+		}
+	}
+	return 0
+}
+
+const DOC_TYPE_LABELS: Record<string, string> = {
+	mark_scheme: "Mark scheme",
+	question_paper: "Question paper",
+	exemplar: "Exemplar",
+	student_paper: "Student paper",
+}
+
+function docTypeLabel(type: string): string {
+	return DOC_TYPE_LABELS[type] ?? type
+}
+
+function jobStatusLabel(status: string): string {
+	switch (status) {
+		case "pending":
+			return "Queued"
+		case "processing":
+			return "Reading PDF"
+		case "extracting":
+			return "Extracting data"
+		case "extracted":
+			return "Finalising"
+		case "ocr_complete":
+			return "Complete"
+		case "failed":
+			return "Failed"
+		case "cancelled":
+			return "Cancelled"
+		default:
+			return status
+	}
+}
+
+function schemeBadge(status: string | null) {
 	if (!status) return <Badge variant="outline">No scheme</Badge>
 	switch (status) {
 		case "linked":
-			return <Badge variant="secondary">Linked</Badge>
 		case "auto_linked":
-			return (
-				<Badge variant="outline" className="border-amber-300 text-amber-700">
-					Auto-linked
-				</Badge>
-			)
+			return <Badge variant="secondary">Has scheme</Badge>
 		case "unlinked":
 			return <Badge variant="destructive">Unlinked</Badge>
 		default:
@@ -93,19 +169,31 @@ export function ExamPaperPageShell({
 	togglePublicForm,
 }: {
 	paper: ExamPaperDetail
-	/** Rendered server-side and passed as a slot so the server action stays on the server. */
 	togglePublicForm: ReactNode
 }) {
 	const router = useRouter()
-	const [tab, setTab] = useState("questions")
 
-	// Drawer state — shared by "Upload PDF" button and "View progress" banner
 	const [drawerOpen, setDrawerOpen] = useState(false)
 	const [trackingJob, setTrackingJob] = useState<IngestionJob | null>(null)
 
-	// Job polling
 	const [jobs, setJobs] = useState<IngestionJob[]>([])
-	const prevActiveCount = useRef(0)
+	const prevJobStatuses = useRef<Record<string, string>>({})
+
+	// Similarity / duplicate detection
+	const [similarPairs, setSimilarPairs] = useState<SimilarPair[]>([])
+	const [duplicateBannerDismissed, setDuplicateBannerDismissed] =
+		useState(false)
+
+	// Delete
+	const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+	const [deleting, setDeleting] = useState(false)
+	const [deleteError, setDeleteError] = useState<string | null>(null)
+
+	// Sort state
+	const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({
+		key: "number",
+		dir: "asc",
+	})
 
 	const fetchJobs = useCallback(async () => {
 		const r = await getActiveIngestionJobsForExamPaper(paper.id)
@@ -121,7 +209,6 @@ export function ExamPaperPageShell({
 		return () => clearInterval(id)
 	}, [fetchJobs])
 
-	// Keep the tracking job state in sync with the latest polled status
 	useEffect(() => {
 		if (!trackingJob) return
 		const updated = jobs.find((j) => j.id === trackingJob.id)
@@ -130,14 +217,49 @@ export function ExamPaperPageShell({
 		}
 	}, [jobs, trackingJob])
 
-	// When all active jobs finish, refresh server data
 	useEffect(() => {
-		const activeCount = jobs.filter((j) => !TERMINAL.has(j.status)).length
-		if (prevActiveCount.current > 0 && activeCount === 0) {
-			router.refresh()
+		let shouldRefresh = false
+		for (const job of jobs) {
+			const prev = prevJobStatuses.current[job.id]
+			// Refresh as soon as any job completes or fails — don't wait for all
+			if (
+				prev !== undefined &&
+				prev !== job.status &&
+				TERMINAL.has(job.status)
+			) {
+				shouldRefresh = true
+			}
+			prevJobStatuses.current[job.id] = job.status
 		}
-		prevActiveCount.current = activeCount
+		if (shouldRefresh) router.refresh()
 	}, [jobs, router])
+
+	// Load similarity pairs once on mount (lazy, non-blocking)
+	useEffect(() => {
+		getSimilarQuestionsForPaper(paper.id).then((r) => {
+			if (r.ok) setSimilarPairs(r.pairs)
+		})
+	}, [paper.id])
+
+	function toggleSort(key: SortKey) {
+		setSort((prev) =>
+			prev.key === key
+				? { key, dir: prev.dir === "asc" ? "desc" : "asc" }
+				: { key, dir: "asc" },
+		)
+	}
+
+	async function handleDelete() {
+		setDeleting(true)
+		setDeleteError(null)
+		const result = await deleteExamPaper(paper.id)
+		setDeleting(false)
+		if (!result.ok) {
+			setDeleteError(result.error)
+			return
+		}
+		router.push("/teacher/exam-papers")
+	}
 
 	function openForUpload() {
 		setTrackingJob(null)
@@ -149,15 +271,45 @@ export function ExamPaperPageShell({
 		setDrawerOpen(true)
 	}
 
-	const activeMarkSchemeJob = jobs.find(
-		(j) => j.document_type === "mark_scheme" && !TERMINAL.has(j.status),
+	const activeJobs = jobs.filter((j) => !TERMINAL.has(j.status))
+	const recentTerminalJobs = jobs.filter((j) => TERMINAL.has(j.status))
+
+	// Build a set of question IDs that have at least one similar pair
+	const duplicateIds = new Set(
+		similarPairs.flatMap((p) => [p.questionId, p.similarToId]),
 	)
-	const questionsWithScheme = paper.questions.filter(
-		(q) => q.mark_scheme_count > 0,
-	)
-	const questionsWithoutScheme = paper.questions.filter(
-		(q) => q.mark_scheme_count === 0,
-	)
+
+	// Sort questions client-side
+	const sortedQuestions = [...paper.questions].sort((a, b) => {
+		let cmp = 0
+		if (sort.key === "number") {
+			cmp = naturalCompare(a.question_number, b.question_number)
+			if (cmp === 0) cmp = a.order - b.order
+		} else if (sort.key === "marks") {
+			const pa = a.points ?? -1
+			const pb = b.points ?? -1
+			cmp = pa - pb
+		} else if (sort.key === "similarity") {
+			// Duplicates first (group them), then by question number
+			const aDup = duplicateIds.has(a.id) ? 0 : 1
+			const bDup = duplicateIds.has(b.id) ? 0 : 1
+			cmp = aDup - bDup
+			if (cmp === 0) {
+				// Within duplicates, group actual pairs together
+				const aPairId =
+					similarPairs.find(
+						(p) => p.questionId === a.id || p.similarToId === a.id,
+					)?.questionId ?? ""
+				const bPairId =
+					similarPairs.find(
+						(p) => p.questionId === b.id || p.similarToId === b.id,
+					)?.questionId ?? ""
+				cmp = aPairId.localeCompare(bPairId)
+			}
+			if (cmp === 0) cmp = naturalCompare(a.question_number, b.question_number)
+		}
+		return sort.dir === "asc" ? cmp : -cmp
+	})
 
 	return (
 		<>
@@ -194,6 +346,15 @@ export function ExamPaperPageShell({
 							<Upload className="h-3.5 w-3.5 mr-1.5" />
 							Upload PDF
 						</Button>
+						<Button
+							size="sm"
+							variant="ghost"
+							className="text-muted-foreground hover:text-destructive"
+							onClick={() => setDeleteDialogOpen(true)}
+						>
+							<Trash2 className="h-3.5 w-3.5" />
+							<span className="sr-only">Delete paper</span>
+						</Button>
 					</div>
 				</div>
 			</div>
@@ -229,181 +390,217 @@ export function ExamPaperPageShell({
 				</Card>
 			</div>
 
-			{/* Active-job banner */}
-			{jobs.filter((j) => !TERMINAL.has(j.status)).length > 0 && (
-				<div className="flex flex-wrap items-center gap-3 rounded-lg border bg-muted/30 px-3 py-2.5 text-sm">
-					<Spinner className="h-4 w-4 shrink-0" />
-					<span className="text-muted-foreground">
-						{activeMarkSchemeJob
-							? "Mark scheme PDF is processing."
-							: "A PDF is processing."}
-					</span>
-					<Button
-						variant="link"
-						className="h-auto p-0 text-sm"
-						onClick={() => {
-							const job =
-								activeMarkSchemeJob ?? jobs.find((j) => !TERMINAL.has(j.status))
-							if (job) openForTracking(job)
-						}}
-					>
-						View progress
-					</Button>
+			{/* Per-job progress banners */}
+			{(activeJobs.length > 0 || recentTerminalJobs.length > 0) && (
+				<div className="space-y-2">
+					{[...activeJobs, ...recentTerminalJobs].map((job) => {
+						const isActive = !TERMINAL.has(job.status)
+						const isFailed = job.status === "failed"
+						const isCancelled = job.status === "cancelled"
+						const isComplete = job.status === "ocr_complete"
+						return (
+							<div
+								key={job.id}
+								className={`flex items-center gap-3 rounded-lg border px-3 py-2.5 text-sm ${
+									isFailed
+										? "border-destructive/40 bg-destructive/5"
+										: isComplete
+											? "border-green-500/30 bg-green-500/5"
+											: isCancelled
+												? "bg-muted/30"
+												: "bg-muted/30"
+								}`}
+							>
+								{isActive && <Spinner className="h-4 w-4 shrink-0" />}
+								{isFailed && (
+									<AlertCircle className="h-4 w-4 shrink-0 text-destructive" />
+								)}
+								{isComplete && (
+									<CheckCircle2 className="h-4 w-4 shrink-0 text-green-500" />
+								)}
+								{isCancelled && (
+									<XCircle className="h-4 w-4 shrink-0 text-muted-foreground" />
+								)}
+								<span
+									className={`font-medium ${isFailed ? "text-destructive" : "text-foreground"}`}
+								>
+									{docTypeLabel(job.document_type)}
+								</span>
+								<span className="text-muted-foreground">
+									{jobStatusLabel(job.status)}
+									{isFailed && job.error && ` — ${job.error}`}
+								</span>
+								<Button
+									variant="link"
+									className="ml-auto h-auto p-0 text-sm"
+									onClick={() => openForTracking(job)}
+								>
+									{isFailed ? "Retry" : isComplete ? "View" : "View progress"}
+								</Button>
+							</div>
+						)
+					})}
 				</div>
 			)}
 
-			{/* Tabs */}
-			<Tabs value={tab} onValueChange={setTab}>
-				<TabsList>
-					<TabsTrigger value="questions">
-						Questions ({paper.questions.length})
-					</TabsTrigger>
-					<TabsTrigger value="mark-schemes" className="gap-1.5">
-						<span>
-							Mark schemes ({questionsWithScheme.length}/
-							{paper.questions.length})
-						</span>
-						{activeMarkSchemeJob && (
-							<Badge
-								variant="outline"
-								className="border-amber-400/80 bg-amber-500/10 text-amber-800 dark:text-amber-200"
-							>
-								Processing
-							</Badge>
-						)}
-					</TabsTrigger>
-				</TabsList>
+			{/* PDF documents panel */}
+			<PdfDocumentsPanel examPaperId={paper.id} />
 
-				<TabsContent value="questions" className="mt-4">
-					<Card>
-						<CardHeader>
-							<CardTitle>Questions</CardTitle>
-							<CardDescription>
-								{paper.section_count} section
-								{paper.section_count !== 1 ? "s" : ""} ·{" "}
-								{paper.questions.length} question
-								{paper.questions.length !== 1 ? "s" : ""}
-							</CardDescription>
-						</CardHeader>
-						<CardContent>
-							{paper.questions.length === 0 ? (
-								<div className="py-8 text-center text-sm text-muted-foreground">
-									No questions yet. Upload a question paper or mark scheme PDF
-									to populate this paper.
-								</div>
-							) : (
-								<Table>
-									<TableHeader>
-										<TableRow>
-											<TableHead className="w-8">#</TableHead>
-											<TableHead>Section</TableHead>
-											<TableHead>Question</TableHead>
-											<TableHead>Origin</TableHead>
-											<TableHead className="text-center">Marks</TableHead>
-											<TableHead>Mark scheme</TableHead>
-										</TableRow>
-									</TableHeader>
-									<TableBody>
-										{paper.questions.map((q) => (
-											<TableRow key={q.id}>
-												<TableCell className="text-muted-foreground">
-													{q.order}
-												</TableCell>
-												<TableCell className="text-muted-foreground text-xs">
-													{q.section_title}
-												</TableCell>
-												<TableCell className="max-w-xs">
-													<p className="truncate text-sm" title={q.text}>
-														{q.text}
-													</p>
-												</TableCell>
-												<TableCell>
-													<Badge variant={originBadgeVariant(q.origin)}>
-														{originLabel(q.origin)}
-													</Badge>
-												</TableCell>
-												<TableCell className="text-center">
-													{q.points ?? "—"}
-												</TableCell>
-												<TableCell>
-													{linkStatusBadge(q.mark_scheme_status)}
-												</TableCell>
-											</TableRow>
-										))}
-									</TableBody>
-								</Table>
-							)}
-						</CardContent>
-					</Card>
-				</TabsContent>
+			{/* Duplicate warning banner */}
+			{similarPairs.length > 0 && !duplicateBannerDismissed && (
+				<div className="flex items-center gap-3 rounded-lg border border-amber-400/40 bg-amber-500/5 px-3 py-2.5 text-sm">
+					<AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+					<span className="flex-1 text-amber-800 dark:text-amber-200">
+						{similarPairs.length} potential duplicate question
+						{similarPairs.length !== 1 ? "s" : ""} detected — rows marked with a
+						dot may need review.{" "}
+						<button
+							type="button"
+							className="underline underline-offset-2"
+							onClick={() => setSort({ key: "similarity", dir: "asc" })}
+						>
+							Sort by similarity
+						</button>{" "}
+						to group them.
+					</span>
+					<button
+						type="button"
+						className="shrink-0 text-xs text-amber-600 hover:text-amber-900 dark:text-amber-400"
+						onClick={() => setDuplicateBannerDismissed(true)}
+					>
+						Dismiss
+					</button>
+				</div>
+			)}
 
-				<TabsContent value="mark-schemes" className="mt-4">
-					<Card>
-						<CardHeader>
-							<CardTitle>Mark scheme coverage</CardTitle>
-							<CardDescription>
-								{questionsWithScheme.length} of {paper.questions.length}{" "}
-								questions have a mark scheme.
-								{questionsWithoutScheme.length > 0 && (
-									<span className="ml-1 text-amber-600 dark:text-amber-400">
-										{questionsWithoutScheme.length} missing.
-									</span>
-								)}
-								{activeMarkSchemeJob && (
-									<>
-										{" "}
+			{/* Questions table */}
+			<Card>
+				<CardHeader>
+					<CardTitle>Questions</CardTitle>
+					<CardDescription>
+						{paper.section_count} section
+						{paper.section_count !== 1 ? "s" : ""} · {paper.questions.length}{" "}
+						question
+						{paper.questions.length !== 1 ? "s" : ""} · click a row to view the
+						full question and mark scheme
+					</CardDescription>
+				</CardHeader>
+				<CardContent>
+					{paper.questions.length === 0 ? (
+						<div className="py-8 text-center text-sm text-muted-foreground">
+							No questions yet. Upload a question paper or mark scheme PDF to
+							populate this paper.
+						</div>
+					) : (
+						<Table>
+							<TableHeader>
+								<TableRow>
+									<TableHead className="w-16">
 										<button
 											type="button"
-											className="underline underline-offset-2 text-amber-700 dark:text-amber-300"
-											onClick={() => openForTracking(activeMarkSchemeJob)}
+											className="flex items-center gap-1 text-xs font-medium hover:text-foreground"
+											onClick={() => toggleSort("number")}
 										>
-											Processing now — tap to view progress.
+											#
+											{sort.key === "number" ? (
+												sort.dir === "asc" ? (
+													<ChevronUp className="h-3 w-3" />
+												) : (
+													<ChevronDown className="h-3 w-3" />
+												)
+											) : (
+												<ArrowUpDown className="h-3 w-3 opacity-40" />
+											)}
 										</button>
-									</>
-								)}
-							</CardDescription>
-						</CardHeader>
-						<CardContent>
-							{paper.questions.length === 0 ? (
-								<p className="py-6 text-center text-sm text-muted-foreground">
-									No questions yet.
-								</p>
-							) : (
-								<Table>
-									<TableHeader>
-										<TableRow>
-											<TableHead>#</TableHead>
-											<TableHead>Question</TableHead>
-											<TableHead className="text-center">Marks</TableHead>
-											<TableHead>Status</TableHead>
+									</TableHead>
+									<TableHead>Section</TableHead>
+									<TableHead>Question</TableHead>
+									<TableHead>Source</TableHead>
+									<TableHead>
+										<button
+											type="button"
+											className="flex items-center gap-1 text-xs font-medium hover:text-foreground"
+											onClick={() => toggleSort("marks")}
+										>
+											Marks
+											{sort.key === "marks" ? (
+												sort.dir === "asc" ? (
+													<ChevronUp className="h-3 w-3" />
+												) : (
+													<ChevronDown className="h-3 w-3" />
+												)
+											) : (
+												<ArrowUpDown className="h-3 w-3 opacity-40" />
+											)}
+										</button>
+									</TableHead>
+									<TableHead>Mark scheme</TableHead>
+									<TableHead className="w-8">
+										<button
+											type="button"
+											className="flex items-center gap-1 text-xs font-medium hover:text-foreground"
+											onClick={() => toggleSort("similarity")}
+											title="Sort by similarity to group potential duplicates"
+										>
+											<ArrowUpDown
+												className={`h-3 w-3 ${sort.key === "similarity" ? "" : "opacity-40"}`}
+											/>
+										</button>
+									</TableHead>
+								</TableRow>
+							</TableHeader>
+							<TableBody>
+								{sortedQuestions.map((q) => {
+									const isDuplicate = duplicateIds.has(q.id)
+									return (
+										<TableRow
+											key={q.id}
+											className="cursor-pointer hover:bg-muted/50"
+										>
+											<TableCell className="text-muted-foreground">
+												<div className="flex items-center gap-1.5">
+													{isDuplicate && (
+														<span
+															className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500"
+															title="Potential duplicate"
+														/>
+													)}
+													<Link
+														href={`/teacher/exam-papers/${paper.id}/questions/${q.id}`}
+														className="hover:underline underline-offset-4"
+													>
+														{q.question_number ?? q.order}
+													</Link>
+												</div>
+											</TableCell>
+											<TableCell className="text-muted-foreground text-xs">
+												{q.section_title}
+											</TableCell>
+											<TableCell className="max-w-xs">
+												<Link
+													href={`/teacher/exam-papers/${paper.id}/questions/${q.id}`}
+													className="hover:underline underline-offset-4"
+													title={q.text}
+												>
+													<p className="truncate text-sm">{q.text}</p>
+												</Link>
+											</TableCell>
+											<TableCell>
+												<Badge variant={originBadgeVariant(q.origin)}>
+													{originLabel(q.origin)}
+												</Badge>
+											</TableCell>
+											<TableCell>{q.points ?? "—"}</TableCell>
+											<TableCell>{schemeBadge(q.mark_scheme_status)}</TableCell>
+											<TableCell />
 										</TableRow>
-									</TableHeader>
-									<TableBody>
-										{paper.questions.map((q) => (
-											<TableRow key={q.id}>
-												<TableCell className="text-muted-foreground">
-													{q.order}
-												</TableCell>
-												<TableCell className="max-w-xs">
-													<p className="truncate text-sm" title={q.text}>
-														{q.text}
-													</p>
-												</TableCell>
-												<TableCell className="text-center">
-													{q.points ?? "—"}
-												</TableCell>
-												<TableCell>
-													{linkStatusBadge(q.mark_scheme_status)}
-												</TableCell>
-											</TableRow>
-										))}
-									</TableBody>
-								</Table>
-							)}
-						</CardContent>
-					</Card>
-				</TabsContent>
-			</Tabs>
+									)
+								})}
+							</TableBody>
+						</Table>
+					)}
+				</CardContent>
+			</Card>
 
 			<Separator />
 
@@ -417,7 +614,6 @@ export function ExamPaperPageShell({
 				to populate questions and mark schemes.
 			</div>
 
-			{/* Single drawer — handles both fresh uploads and tracking existing jobs */}
 			<UploadPdfDrawer
 				examPaperId={paper.id}
 				open={drawerOpen}
@@ -428,6 +624,20 @@ export function ExamPaperPageShell({
 					router.refresh()
 				}}
 			/>
+
+			<ConfirmDialog
+				open={deleteDialogOpen}
+				onOpenChange={(open) => {
+					if (!deleting) setDeleteDialogOpen(open)
+				}}
+				title="Delete exam paper?"
+				description={`This will permanently delete "${paper.title}" along with all its questions, mark schemes, and uploaded PDFs. This cannot be undone.`}
+				confirmLabel={deleting ? "Deleting…" : "Delete paper"}
+				loading={deleting}
+				onConfirm={handleDelete}
+			/>
+
+			{deleteError && <p className="text-sm text-destructive">{deleteError}</p>}
 		</>
 	)
 }

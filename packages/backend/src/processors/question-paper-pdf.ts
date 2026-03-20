@@ -41,6 +41,26 @@ const QUESTION_PAPER_SCHEMA = {
 					},
 					total_marks: { type: Type.INTEGER },
 					question_number: { type: Type.STRING },
+					options: {
+						type: Type.ARRAY,
+						nullable: true,
+						description:
+							"For multiple choice questions: the answer options. Only include when question_type is multiple_choice.",
+						items: {
+							type: Type.OBJECT,
+							properties: {
+								option_label: {
+									type: Type.STRING,
+									description: "The option label, e.g. A, B, C, D",
+								},
+								option_text: {
+									type: Type.STRING,
+									description: "The full text of this answer option",
+								},
+							},
+							required: ["option_label", "option_text"],
+						},
+					},
 				},
 				required: ["question_text", "total_marks"],
 			},
@@ -92,6 +112,24 @@ async function getPdfBase64(bucket: string, key: string): Promise<string> {
 
 function embeddingToVectorStr(vec: number[]): string {
 	return `[${vec.join(",")}]`
+}
+
+/**
+ * Normalises a raw question number string to a compact canonical form.
+ * Kept in sync with mark-scheme-pdf.ts normalizeQuestionNumber.
+ *
+ * Examples:
+ *   "Question 1(a)(ii)" → "1aii"
+ *   "Q3b"               → "3b"
+ *   "2.b"               → "2b"
+ */
+function normalizeQuestionNumber(raw: string): string {
+	return raw
+		.replace(/^(question|q)\s*/i, "")
+		.replace(/[()[\]{} ]/g, "")
+		.replace(/\.(?=[a-z])/gi, "")
+		.toLowerCase()
+		.trim()
 }
 
 export async function handler(
@@ -209,7 +247,19 @@ export async function handler(
 									},
 								},
 								{
-									text: "Extract all questions from this exam paper. For each question provide: question_text (the full question text), question_type (written or multiple_choice), total_marks (marks available), and question_number if visible. Do not include mark scheme or answers.",
+									text: `Extract all questions from this exam paper. Do not include mark scheme content or answers.
+
+IMPORTANT — Multiple Choice Questions (MCQ):
+Extract EACH numbered MCQ as a SEPARATE question entry — do NOT create a single entry for a whole section. For each MCQ:
+- question_text: the full question text (stem)
+- question_type: "multiple_choice"
+- question_number: the question number as a string (e.g. "1", "2")
+- total_marks: 1 (unless stated otherwise)
+- options: array of { option_label, option_text } for each answer option (A, B, C, D)
+
+GENERAL RULES:
+- Clean up all extracted text: ensure proper word spacing, correct punctuation, and proper line breaks. Fix any OCR artefacts such as run-together words or missing spaces.
+- For written questions provide: question_text (full text including sub-parts), question_type ("written"), total_marks, question_number if visible.`,
 								},
 							],
 						},
@@ -256,6 +306,7 @@ export async function handler(
 					question_type?: string
 					total_marks: number
 					question_number?: string
+					options?: Array<{ option_label: string; option_text: string }>
 				}>
 			}
 
@@ -299,10 +350,14 @@ export async function handler(
 				}
 
 				const questionText = q.question_text
+				const canonicalNumber = q.question_number
+					? normalizeQuestionNumber(q.question_number)
+					: null
 				logger.info(TAG, "Creating question", {
 					jobId,
 					index: i + 1,
 					total: questionCount,
+					question_number: canonicalNumber,
 					marks: q.total_marks,
 					type: q.question_type ?? "written",
 				})
@@ -320,9 +375,13 @@ export async function handler(
 							q.question_type === "multiple_choice"
 								? "multiple_choice"
 								: "written",
-						multiple_choice_options: [],
+						multiple_choice_options:
+							q.question_type === "multiple_choice" && q.options?.length
+								? q.options
+								: [],
 						source_pdf_ingestion_job_id: jobId,
 						origin: "question_paper",
+						question_number: canonicalNumber,
 					},
 				})
 

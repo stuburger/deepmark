@@ -1,0 +1,102 @@
+---
+description: How to mark student answers — always use the shared MarkerOrchestrator, never duplicate marking logic
+globs: packages/backend/src/**/*.ts,apps/web/src/lib/eval-actions.ts
+alwaysApply: false
+---
+
+# Marking Engine
+
+All student answer grading MUST use the `MarkerOrchestrator` from `@mcp-gcse/shared`. Never write raw LLM calls for marking.
+
+## The orchestrator chain (always in this order)
+
+```ts
+import {
+  DeterministicMarker,
+  Grader,
+  LevelOfResponseMarker,
+  LlmMarker,
+  MarkerOrchestrator,
+  parseMarkingRulesFromPrisma,
+  parseMarkPointsFromPrisma,
+  type QuestionWithMarkScheme,
+} from "@mcp-gcse/shared"
+
+const orchestrator = new MarkerOrchestrator([
+  new DeterministicMarker(),       // MCQ — no LLM, pure comparison
+  new LevelOfResponseMarker(grader), // LoR — AQA-style level descriptors
+  new LlmMarker(grader),           // written / point_based fallback
+])
+
+const grade = await orchestrator.mark(questionWithMarkScheme, studentAnswer)
+```
+
+## Building `QuestionWithMarkScheme` from Prisma
+
+```ts
+const markPoints = parseMarkPointsFromPrisma(markScheme.mark_points)
+const markingRules = parseMarkingRulesFromPrisma(markScheme.marking_rules)
+
+const q: QuestionWithMarkScheme = {
+  id: question.id,
+  questionType: question.question_type === "multiple_choice" ? "multiple_choice" : "written",
+  questionText: question.text,
+  topic: question.topic,
+  rubric: markScheme.description,
+  guidance: markScheme.guidance,
+  totalPoints: markScheme.points_total,
+  markPoints,
+  markingMethod: markScheme.marking_method as "deterministic" | "point_based" | "level_of_response",
+  correctOptionLabels: markScheme.correct_option_labels.length > 0
+    ? markScheme.correct_option_labels : undefined,
+  markingRules,
+}
+```
+
+## Creating the Grader (pluggable LLM)
+
+The backend uses `defaultChatModel()` from `packages/backend/src/lib/google-generative-ai.ts`.
+The web app creates its own model via `@ai-sdk/google`:
+
+```ts
+// backend
+import { defaultChatModel } from "@/lib/google-generative-ai"
+const grader = new Grader(defaultChatModel(), { systemPrompt: "..." })
+
+// web server action
+import { createGoogleGenerativeAI } from "@ai-sdk/google"
+const gemini = createGoogleGenerativeAI({ apiKey: Resource.GeminiApiKey.value })
+const grader = new Grader(gemini("gemini-2.5-flash"), { systemPrompt: "..." })
+```
+
+## MCQ is always deterministic — no LLM
+
+`DeterministicMarker.canMark()` returns `true` when `questionType === "multiple_choice"` and `correctOptionLabels` is non-empty. It never calls the LLM — it just compares the student's selected letter(s) against the correct option labels. The orchestrator picks it first.
+
+## ❌ Never do this
+
+```ts
+// DO NOT write raw Gemini/OpenAI calls for marking
+const result = await gemini.models.generateContent({ ... }) // ❌
+
+// DO NOT re-implement mark point logic
+if (studentAnswer.includes(markPoint.description)) { ... } // ❌
+```
+
+## Fetching from Prisma — required fields
+
+Always select these fields when loading a mark scheme for grading:
+
+```ts
+mark_schemes: {
+  select: {
+    description: true,
+    guidance: true,
+    points_total: true,
+    marking_method: true,
+    mark_points: true,       // parsed by parseMarkPointsFromPrisma
+    marking_rules: true,     // parsed by parseMarkingRulesFromPrisma
+    correct_option_labels: true, // required for DeterministicMarker
+  }
+}
+```

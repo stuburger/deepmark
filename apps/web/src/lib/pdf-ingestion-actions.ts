@@ -517,6 +517,47 @@ export async function getPdfIngestionJobDetail(
 	}
 }
 
+export type PdfDocument = {
+	id: string
+	document_type: string
+	processed_at: Date | null
+}
+
+export type GetPdfDocumentsForPaperResult =
+	| { ok: true; documents: PdfDocument[] }
+	| { ok: false; error: string }
+
+/**
+ * Returns all successfully completed ingestion jobs for an exam paper.
+ * Used to populate the PDF documents panel on the exam paper detail page.
+ */
+export async function getPdfDocumentsForPaper(
+	examPaperId: string,
+): Promise<GetPdfDocumentsForPaperResult> {
+	const session = await auth()
+	if (!session) return { ok: false, error: "Not authenticated" }
+	const jobs = await db.pdfIngestionJob.findMany({
+		where: {
+			exam_paper_id: examPaperId,
+			status: "ocr_complete",
+		},
+		orderBy: { processed_at: "desc" },
+		select: {
+			id: true,
+			document_type: true,
+			processed_at: true,
+		},
+	})
+	return {
+		ok: true,
+		documents: jobs.map((j) => ({
+			id: j.id,
+			document_type: j.document_type,
+			processed_at: j.processed_at,
+		})),
+	}
+}
+
 export type GetPdfDownloadUrlResult =
 	| { ok: true; url: string }
 	| { ok: false; error: string }
@@ -578,11 +619,11 @@ export async function retriggerPdfIngestionJob(
 		where: { id: jobId, uploaded_by: session.userId },
 	})
 	if (!job) return { ok: false, error: "Job not found" }
-	const terminal = ["failed", "ocr_complete"]
+	const terminal = ["failed", "ocr_complete", "cancelled"]
 	if (!terminal.includes(job.status)) {
 		return {
 			ok: false,
-			error: "Job can only be retriggered when failed or completed",
+			error: "Job can only be retriggered when failed, cancelled, or completed",
 		}
 	}
 

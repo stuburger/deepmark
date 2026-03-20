@@ -12,7 +12,7 @@ import { createScanUpload } from "@/lib/scan-actions"
 import { cn } from "@/lib/utils"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
-import { useCallback, useRef, useState } from "react"
+import { Suspense, useCallback, useRef, useState } from "react"
 
 const ACCEPT = "image/jpeg,image/png,image/webp,application/pdf"
 
@@ -50,7 +50,7 @@ async function pdfToJpegBlobs(file: File): Promise<Blob[]> {
 	return blobs
 }
 
-export default function ScanUploadPage() {
+function ScanUploadContent() {
 	const router = useRouter()
 	const searchParams = useSearchParams()
 	const examPaperId = searchParams.get("examPaperId")
@@ -220,5 +220,13 @@ export default function ScanUploadPage() {
 				</Link>
 			</div>
 		</main>
+	)
+}
+
+export default function ScanUploadPage() {
+	return (
+		<Suspense>
+			<ScanUploadContent />
+		</Suspense>
 	)
 }

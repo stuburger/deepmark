@@ -65,6 +65,26 @@ const MARK_SCHEME_SCHEMA = {
 					guidance: { type: Type.STRING },
 					question_number: { type: Type.STRING },
 					correct_option: { type: Type.STRING },
+					options: {
+						type: Type.ARRAY,
+						nullable: true,
+						description:
+							"For multiple choice questions: the answer options (A, B, C, D). Only include when question_type is multiple_choice.",
+						items: {
+							type: Type.OBJECT,
+							properties: {
+								option_label: {
+									type: Type.STRING,
+									description: "The option label, e.g. A, B, C, D",
+								},
+								option_text: {
+									type: Type.STRING,
+									description: "The full text of this answer option",
+								},
+							},
+							required: ["option_label", "option_text"],
+						},
+					},
 					marking_method: {
 						type: Type.STRING,
 						nullable: true,
@@ -161,23 +181,86 @@ function embeddingToVectorStr(vec: number[]): string {
 	return `[${vec.join(",")}]`
 }
 
+/**
+ * Normalises a raw question number string to a compact canonical form
+ * suitable for exact-match lookups.
+ *
+ * Examples:
+ *   "Question 1(a)(ii)" → "1aii"
+ *   "Q3b"               → "3b"
+ *   "2.b"               → "2b"
+ *   "1 a"               → "1a"
+ */
+export function normalizeQuestionNumber(raw: string): string {
+	return raw
+		.replace(/^(question|q)\s*/i, "") // strip leading Q / Question
+		.replace(/[()[\]{} ]/g, "") // remove brackets and spaces
+		.replace(/\.(?=[a-z])/gi, "") // remove dot before letter (2.b → 2b)
+		.toLowerCase()
+		.trim()
+}
+
+/**
+ * Finds a matching question in the given exam paper using two strategies:
+ *
+ * 1. Exact question-number match (scoped to the paper) — most reliable.
+ * 2. Embedding cosine similarity (scoped to the paper, threshold < 0.2).
+ *
+ * Falls back to exam_board scope only when no examPaperId is provided
+ * (standalone uploads not linked to a paper).
+ */
 async function findMatchingQuestionId(
+	examPaperId: string | null,
 	examBoard: string,
+	questionNumber: string | null,
 	embeddingVec: number[],
 ): Promise<string | null> {
+	// Strategy 1: exact question number match within the paper
+	if (examPaperId && questionNumber) {
+		const rows = await db.$queryRaw<{ id: string }[]>`
+			SELECT q.id FROM questions q
+			JOIN exam_section_questions esq ON esq.question_id = q.id
+			JOIN exam_sections es ON es.id = esq.exam_section_id
+			WHERE es.exam_paper_id = ${examPaperId}
+			AND q.question_number = ${questionNumber}
+			LIMIT 1
+		`
+		if (rows[0]) {
+			return rows[0].id
+		}
+	}
+
+	// Strategy 2: embedding similarity scoped to the paper (or exam_board fallback)
 	const vecStr = embeddingToVectorStr(embeddingVec)
-	const rows = await db.$queryRaw<{ id: string }[]>`
-		SELECT q.id FROM questions q
-		JOIN pdf_ingestion_jobs pij ON q.source_pdf_ingestion_job_id = pij.id
-		WHERE pij.exam_board = ${examBoard}
-		AND q.embedding IS NOT NULL
-		ORDER BY q.embedding <=> (${vecStr}::text)::vector
-		LIMIT 1
-	`
+
+	let rows: { id: string }[]
+	if (examPaperId) {
+		rows = await db.$queryRaw<{ id: string }[]>`
+			SELECT q.id FROM questions q
+			JOIN exam_section_questions esq ON esq.question_id = q.id
+			JOIN exam_sections es ON es.id = esq.exam_section_id
+			WHERE es.exam_paper_id = ${examPaperId}
+			AND q.embedding IS NOT NULL
+			ORDER BY q.embedding <=> (${vecStr}::text)::vector
+			LIMIT 1
+		`
+	} else {
+		rows = await db.$queryRaw<{ id: string }[]>`
+			SELECT q.id FROM questions q
+			JOIN pdf_ingestion_jobs pij ON q.source_pdf_ingestion_job_id = pij.id
+			WHERE pij.exam_board = ${examBoard}
+			AND q.embedding IS NOT NULL
+			ORDER BY q.embedding <=> (${vecStr}::text)::vector
+			LIMIT 1
+		`
+	}
+
 	const row = rows[0]
 	if (!row) return null
+
 	const withDistance = await db.$queryRaw<{ id: string; dist: number }[]>`
-		SELECT q.id, (q.embedding <=> (${vecStr}::text)::vector) as dist FROM questions q
+		SELECT q.id, (q.embedding <=> (${vecStr}::text)::vector) as dist
+		FROM questions q
 		WHERE q.id = ${row.id}
 	`
 	const d = withDistance[0]?.dist
@@ -294,7 +377,23 @@ export async function handler(
 									},
 								},
 								{
-									text: "Extract all questions and their mark scheme details from this document. For each question provide question_text, question_type (written or multiple_choice), total_marks, ao_breakdown if present, mark_points (array of { description, criteria, points }), acceptable_answers if listed, guidance, question_number and correct_option for MCQ. For each question, detect marking_method: use 'multiple_choice' for MCQ, 'level_of_response' if the mark scheme uses level descriptors with mark ranges (e.g. Level 1: 1-3 marks), or 'point_based' for individual mark point criteria. If level_of_response, extract marking_method='level_of_response', command_word if given, items_required if given, levels (array of { level (number), mark_range [min, max], descriptor (text), ao_requirements (optional string array) }), and caps if any (array of { condition, max_level or max_mark, reason }).",
+									text: `Extract all questions and their mark scheme details from this document.
+
+IMPORTANT — Multiple Choice Questions (MCQ):
+Mark schemes for MCQ sections often show a table or list like "1 C  2 A  3 D ...". You MUST extract EACH numbered MCQ as a SEPARATE question entry — do NOT create a single entry for the whole MCQ section. For each MCQ entry:
+- question_text: the actual question text if visible; if only a question number and correct option are shown (no question text in the mark scheme), set question_text to "Question [number]" as a placeholder
+- question_type: "multiple_choice"
+- question_number: the question number as a string (e.g. "1", "2", "15")
+- correct_option: the correct option label (e.g. "C", "A", "D")
+- total_marks: 1 (unless stated otherwise)
+- marking_method: "multiple_choice"
+- options: include the A/B/C/D options if the question text is visible in this document; omit if only the answer is shown
+
+GENERAL RULES:
+- Clean up all extracted text: ensure proper spacing between words, correct punctuation, and proper line breaks. Fix any OCR artefacts such as run-together words or missing spaces.
+- For each written question provide: question_text, question_type ("written"), total_marks, ao_breakdown if present, mark_points (array of { description, criteria, points }), acceptable_answers if listed, guidance, question_number.
+- Detect marking_method: "multiple_choice" for MCQ, "level_of_response" if the mark scheme uses level descriptors with mark ranges (e.g. Level 1: 1–3 marks), or "point_based" for individual mark point criteria.
+- If level_of_response: extract command_word if given, items_required if given, levels (array of { level, mark_range [min, max], descriptor, ao_requirements? }), and caps if any (array of { condition, max_level or max_mark, reason }).`,
 								},
 							],
 						},
@@ -352,6 +451,7 @@ export async function handler(
 					guidance?: string
 					question_number?: string
 					correct_option?: string
+					options?: Array<{ option_label: string; option_text: string }>
 					marking_method?: string
 					command_word?: string
 					items_required?: number
@@ -419,18 +519,33 @@ export async function handler(
 				}
 
 				const questionText = q.question_text
+				const canonicalNumber = q.question_number
+					? normalizeQuestionNumber(q.question_number)
+					: null
 				logger.info(TAG, "Processing question", {
 					jobId,
 					index: i + 1,
 					total: questionCount,
+					question_number: canonicalNumber,
 					marking_method: q.marking_method ?? "point_based",
 				})
 				const embeddingVec = await embedQuestionText(questionText)
-				const existingId = await findMatchingQuestionId(examBoard, embeddingVec)
+				const existingId = await findMatchingQuestionId(
+					job.exam_paper_id,
+					examBoard,
+					canonicalNumber,
+					embeddingVec,
+				)
+				const matchMethod =
+					existingId && canonicalNumber
+						? "question_number"
+						: existingId
+							? "embedding"
+							: "none"
 				logger.info(
 					TAG,
 					existingId
-						? "Matched existing question via embedding"
+						? `Matched existing question via ${matchMethod}`
 						: "No match — creating new question",
 					{ jobId, question_index: i + 1, existing_id: existingId },
 				)
@@ -480,7 +595,10 @@ export async function handler(
 									? "multiple_choice"
 									: "written",
 							multiple_choice_options:
-								q.question_type === "multiple_choice" ? [] : [],
+								q.question_type === "multiple_choice" && q.options?.length
+									? q.options
+									: [],
+							...(canonicalNumber ? { question_number: canonicalNumber } : {}),
 						},
 					})
 					await db.$executeRaw`
@@ -626,9 +744,13 @@ export async function handler(
 								q.question_type === "multiple_choice"
 									? "multiple_choice"
 									: "written",
-							multiple_choice_options: [],
+							multiple_choice_options:
+								q.question_type === "multiple_choice" && q.options?.length
+									? q.options
+									: [],
 							source_pdf_ingestion_job_id: jobId,
 							origin: "mark_scheme",
+							question_number: canonicalNumber,
 						},
 					})
 					await db.$executeRaw`

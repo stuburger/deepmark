@@ -1,10 +1,13 @@
 "use server"
 
+import { GoogleGenAI } from "@google/genai"
 import { createPrismaClient } from "@mcp-gcse/db"
 import type { Subject } from "@mcp-gcse/db"
 import { Resource } from "sst"
 import { auth } from "./auth"
 import { log } from "./logger"
+
+const EMBEDDING_DIMENSIONS = 1536
 
 const TAG = "dashboard-actions"
 const db = createPrismaClient(Resource.NeonPostgres.databaseUrl)
@@ -446,6 +449,7 @@ export type ExamPaperQuestion = {
 	mark_scheme_status: string | null
 	order: number
 	section_title: string
+	question_number: string | null
 }
 
 export type ExamPaperDetail = {
@@ -488,6 +492,7 @@ export async function getExamPaperDetail(
 										question_type: true,
 										points: true,
 										origin: true,
+										question_number: true,
 										mark_schemes: {
 											select: { id: true, link_status: true },
 											take: 1,
@@ -512,6 +517,7 @@ export async function getExamPaperDetail(
 					question_type: esq.question.question_type,
 					points: esq.question.points,
 					origin: esq.question.origin,
+					question_number: esq.question.question_number,
 					mark_scheme_count: esq.question.mark_schemes.length,
 					mark_scheme_status: ms?.link_status ?? null,
 					order: esq.order,
@@ -610,5 +616,510 @@ export async function listCatalogExamPapers(): Promise<ListCatalogExamPapersResu
 		}
 	} catch {
 		return { ok: false, error: "Failed to load catalog" }
+	}
+}
+
+// ─── Delete Exam Paper ────────────────────────────────────────────────────────
+
+export type DeleteExamPaperResult = { ok: true } | { ok: false; error: string }
+
+/**
+ * Fully deletes an exam paper and all associated data in a transaction.
+ *
+ * Cascade order (child-first to avoid FK violations):
+ *  1. MarkSchemeTestRun → MarkScheme → Question (from paper jobs)
+ *  2. ExemplarAnswer (from paper jobs)
+ *  3. QuestionBankItem for questions in this paper
+ *  4. ExtractedAnswer / MarkingResult / Answer for those questions
+ *  5. ExamSectionQuestion → ExamSection
+ *  6. ScanPage → ScanSubmission
+ *  7. PdfIngestionJob
+ *  8. ExamPaper
+ */
+export async function deleteExamPaper(
+	id: string,
+): Promise<DeleteExamPaperResult> {
+	const session = await auth()
+	if (!session) return { ok: false, error: "Not authenticated" }
+
+	log.info(TAG, "deleteExamPaper called", { userId: session.userId, id })
+
+	try {
+		await db.$transaction(
+			async (tx) => {
+				// ── Collect IDs we'll need ──────────────────────────────────────
+
+				const sections = await tx.examSection.findMany({
+					where: { exam_paper_id: id },
+					select: { id: true },
+				})
+				const sectionIds = sections.map((s) => s.id)
+
+				const sectionQuestions = await tx.examSectionQuestion.findMany({
+					where: { exam_section_id: { in: sectionIds } },
+					select: { question_id: true },
+				})
+				const questionIds = [
+					...new Set(sectionQuestions.map((sq) => sq.question_id)),
+				]
+
+				const markSchemes = await tx.markScheme.findMany({
+					where: { question_id: { in: questionIds } },
+					select: { id: true },
+				})
+				const markSchemeIds = markSchemes.map((ms) => ms.id)
+
+				const jobs = await tx.pdfIngestionJob.findMany({
+					where: { exam_paper_id: id },
+					select: { id: true },
+				})
+				const jobIds = jobs.map((j) => j.id)
+
+				const answers = await tx.answer.findMany({
+					where: { question_id: { in: questionIds } },
+					select: { id: true },
+				})
+				const answerIds = answers.map((a) => a.id)
+
+				const scans = await tx.scanSubmission.findMany({
+					where: { exam_paper_id: id },
+					select: { id: true },
+				})
+				const scanIds = scans.map((s) => s.id)
+
+				// ── Delete in dependency order ──────────────────────────────────
+
+				// Mark scheme test runs
+				await tx.markSchemeTestRun.deleteMany({
+					where: { mark_scheme_id: { in: markSchemeIds } },
+				})
+
+				// Exemplar answers linked to mark schemes or jobs
+				await tx.exemplarAnswer.deleteMany({
+					where: {
+						OR: [
+							{ mark_scheme_id: { in: markSchemeIds } },
+							{ pdf_ingestion_job_id: { in: jobIds } },
+						],
+					},
+				})
+
+				// Mark schemes
+				await tx.markScheme.deleteMany({
+					where: { question_id: { in: questionIds } },
+				})
+
+				// Question bank membership
+				await tx.questionBankItem.deleteMany({
+					where: { question_id: { in: questionIds } },
+				})
+
+				// Marking results and extracted answers for answers
+				await tx.markingResult.deleteMany({
+					where: { answer_id: { in: answerIds } },
+				})
+				await tx.extractedAnswer.deleteMany({
+					where: {
+						OR: [
+							{ answer_id: { in: answerIds } },
+							{ question_id: { in: questionIds } },
+						],
+					},
+				})
+				await tx.answer.deleteMany({
+					where: { question_id: { in: questionIds } },
+				})
+
+				// Exam section questions, then sections
+				await tx.examSectionQuestion.deleteMany({
+					where: { exam_section_id: { in: sectionIds } },
+				})
+				await tx.examSection.deleteMany({ where: { exam_paper_id: id } })
+
+				// Questions that originated from this paper's ingestion jobs
+				await tx.question.deleteMany({
+					where: { source_pdf_ingestion_job_id: { in: jobIds } },
+				})
+
+				// Scan pages and submissions
+				await tx.scanPage.deleteMany({
+					where: { scan_submission_id: { in: scanIds } },
+				})
+				await tx.scanSubmission.deleteMany({ where: { exam_paper_id: id } })
+
+				// PDF ingestion jobs
+				await tx.pdfIngestionJob.deleteMany({ where: { exam_paper_id: id } })
+
+				// Finally the paper itself
+				await tx.examPaper.delete({ where: { id } })
+			},
+			{ timeout: 30000 },
+		)
+
+		log.info(TAG, "Exam paper deleted", { userId: session.userId, id })
+		return { ok: true }
+	} catch (err) {
+		log.error(TAG, "deleteExamPaper failed", {
+			userId: session.userId,
+			id,
+			error: String(err),
+		})
+		return { ok: false, error: "Failed to delete exam paper" }
+	}
+}
+
+// ─── Question Detail ──────────────────────────────────────────────────────────
+
+export type QuestionMarkScheme = {
+	id: string
+	description: string | null
+	guidance: string | null
+	points_total: number
+	marking_method: string
+	mark_points: unknown
+	marking_rules: unknown
+	link_status: string
+	correct_option_labels: string[]
+}
+
+export type MultipleChoiceOption = {
+	option_label: string
+	option_text: string
+}
+
+export type QuestionDetail = {
+	id: string
+	text: string
+	question_type: string
+	origin: string
+	topic: string
+	subject: string
+	points: number | null
+	question_number: string | null
+	created_at: Date
+	source_pdf_ingestion_job_id: string | null
+	multiple_choice_options: MultipleChoiceOption[]
+	mark_schemes: QuestionMarkScheme[]
+}
+
+export type GetQuestionDetailResult =
+	| { ok: true; question: QuestionDetail }
+	| { ok: false; error: string }
+
+export async function getQuestionDetail(
+	questionId: string,
+): Promise<GetQuestionDetailResult> {
+	try {
+		const question = await db.question.findUnique({
+			where: { id: questionId },
+			select: {
+				id: true,
+				text: true,
+				question_type: true,
+				origin: true,
+				topic: true,
+				subject: true,
+				points: true,
+				created_at: true,
+				source_pdf_ingestion_job_id: true,
+				question_number: true,
+				multiple_choice_options: true,
+				mark_schemes: {
+					orderBy: { created_at: "asc" },
+					select: {
+						id: true,
+						description: true,
+						guidance: true,
+						points_total: true,
+						marking_method: true,
+						mark_points: true,
+						marking_rules: true,
+						link_status: true,
+						correct_option_labels: true,
+					},
+				},
+			},
+		})
+		if (!question) return { ok: false, error: "Question not found" }
+
+		const rawOptions = Array.isArray(question.multiple_choice_options)
+			? (question.multiple_choice_options as MultipleChoiceOption[])
+			: []
+
+		return {
+			ok: true,
+			question: {
+				id: question.id,
+				text: question.text,
+				question_type: question.question_type,
+				origin: question.origin,
+				topic: question.topic,
+				subject: question.subject,
+				points: question.points,
+				created_at: question.created_at,
+				source_pdf_ingestion_job_id: question.source_pdf_ingestion_job_id,
+				question_number: question.question_number,
+				multiple_choice_options: rawOptions,
+				mark_schemes: question.mark_schemes.map((ms) => ({
+					id: ms.id,
+					// Normalize the string "null" that Gemini sometimes writes into the description field
+					description:
+						ms.description === "null" || !ms.description
+							? null
+							: ms.description,
+					guidance: ms.guidance,
+					points_total: ms.points_total,
+					marking_method: ms.marking_method,
+					mark_points: ms.mark_points,
+					marking_rules: ms.marking_rules,
+					link_status: ms.link_status,
+					correct_option_labels: ms.correct_option_labels,
+				})),
+			},
+		}
+	} catch {
+		return { ok: false, error: "Failed to load question" }
+	}
+}
+
+export type UpdateQuestionInput = {
+	text?: string
+	points?: number | null
+	question_number?: string | null
+}
+
+export type UpdateQuestionResult =
+	| { ok: true; embeddingUpdated: boolean }
+	| { ok: false; error: string }
+
+/**
+ * Updates question text and/or marks. When text changes, regenerates the
+ * embedding via Gemini so semantic search and mark-scheme matching stay accurate.
+ */
+export async function updateQuestion(
+	questionId: string,
+	input: UpdateQuestionInput,
+): Promise<UpdateQuestionResult> {
+	const session = await auth()
+	if (!session) return { ok: false, error: "Not authenticated" }
+
+	const trimmedText = input.text?.trim()
+	if (trimmedText !== undefined && trimmedText === "") {
+		return { ok: false, error: "Question text cannot be empty" }
+	}
+
+	log.info(TAG, "updateQuestion called", {
+		userId: session.userId,
+		questionId,
+		hasText: trimmedText !== undefined,
+		hasPoints: input.points !== undefined,
+	})
+
+	try {
+		const existing = await db.question.findUnique({
+			where: { id: questionId },
+			select: { text: true },
+		})
+		if (!existing) return { ok: false, error: "Question not found" }
+
+		const textChanged =
+			trimmedText !== undefined && trimmedText !== existing.text
+
+		await db.question.update({
+			where: { id: questionId },
+			data: {
+				...(trimmedText !== undefined ? { text: trimmedText } : {}),
+				...(input.points !== undefined ? { points: input.points } : {}),
+				...(input.question_number !== undefined
+					? { question_number: input.question_number || null }
+					: {}),
+			},
+		})
+
+		let embeddingUpdated = false
+
+		if (textChanged && trimmedText) {
+			const gemini = new GoogleGenAI({ apiKey: Resource.GeminiApiKey.value })
+			const result = await gemini.models.embedContent({
+				model: "gemini-embedding-001",
+				contents: trimmedText,
+				config: {
+					outputDimensionality: EMBEDDING_DIMENSIONS,
+					taskType: "SEMANTIC_SIMILARITY",
+				},
+			})
+
+			const values = result.embeddings?.[0]?.values
+			if (values && values.length === EMBEDDING_DIMENSIONS) {
+				const vecStr = `[${values.join(",")}]`
+				await db.$executeRaw`
+					UPDATE questions SET embedding = (${vecStr}::text)::vector WHERE id = ${questionId}
+				`
+				embeddingUpdated = true
+				log.info(TAG, "Embedding regenerated", { questionId })
+			}
+		}
+
+		log.info(TAG, "Question updated", {
+			userId: session.userId,
+			questionId,
+			textChanged,
+			embeddingUpdated,
+		})
+
+		return { ok: true, embeddingUpdated }
+	} catch (err) {
+		log.error(TAG, "updateQuestion failed", {
+			userId: session.userId,
+			questionId,
+			error: String(err),
+		})
+		return { ok: false, error: "Failed to update question" }
+	}
+}
+
+// ─── Similarity + Duplicate Detection ────────────────────────────────────────
+
+export type SimilarPair = {
+	questionId: string
+	similarToId: string
+	distance: number
+}
+
+export type GetSimilarQuestionsForPaperResult =
+	| { ok: true; pairs: SimilarPair[] }
+	| { ok: false; error: string }
+
+/**
+ * For each question in the paper, finds the nearest neighbour within the same
+ * paper using vector cosine similarity. Returns pairs with distance < 0.15
+ * (tighter than the matching threshold to avoid false positives).
+ *
+ * Deduplicates symmetric pairs (A,B) == (B,A) so each pair appears once.
+ */
+export async function getSimilarQuestionsForPaper(
+	examPaperId: string,
+): Promise<GetSimilarQuestionsForPaperResult> {
+	const session = await auth()
+	if (!session) return { ok: false, error: "Not authenticated" }
+
+	try {
+		// Fetch all questions in the paper that have embeddings
+		const rows = await db.$queryRaw<{ id: string; embedding: string | null }[]>`
+			SELECT q.id, q.embedding::text AS embedding
+			FROM questions q
+			JOIN exam_section_questions esq ON esq.question_id = q.id
+			JOIN exam_sections es ON es.id = esq.exam_section_id
+			WHERE es.exam_paper_id = ${examPaperId}
+			AND q.embedding IS NOT NULL
+		`
+
+		if (rows.length < 2) return { ok: true, pairs: [] }
+
+		const seen = new Set<string>()
+		const pairs: SimilarPair[] = []
+
+		await Promise.all(
+			rows.map(async (row) => {
+				const nearRows = await db.$queryRaw<{ id: string; dist: number }[]>`
+					SELECT q.id, (q.embedding <=> (SELECT embedding FROM questions WHERE id = ${row.id})) AS dist
+					FROM questions q
+					JOIN exam_section_questions esq ON esq.question_id = q.id
+					JOIN exam_sections es ON es.id = esq.exam_section_id
+					WHERE es.exam_paper_id = ${examPaperId}
+					AND q.id != ${row.id}
+					AND q.embedding IS NOT NULL
+					ORDER BY dist ASC
+					LIMIT 1
+				`
+				const near = nearRows[0]
+				if (!near || Number(near.dist) >= 0.15) return
+
+				const key = [row.id, near.id].sort().join(":")
+				if (seen.has(key)) return
+				seen.add(key)
+				pairs.push({
+					questionId: row.id,
+					similarToId: near.id,
+					distance: Number(near.dist),
+				})
+			}),
+		)
+
+		return { ok: true, pairs }
+	} catch (err) {
+		log.error(TAG, "getSimilarQuestionsForPaper failed", {
+			examPaperId,
+			error: String(err),
+		})
+		return { ok: false, error: "Failed to compute similarity" }
+	}
+}
+
+// ─── Consolidate (merge) duplicate questions ──────────────────────────────────
+
+export type ConsolidateQuestionsResult =
+	| { ok: true }
+	| { ok: false; error: string }
+
+/**
+ * Merges two duplicate questions into one:
+ * 1. Moves all mark schemes from `discardId` onto `keepId`.
+ * 2. Removes `discardId` from all exam section question lists.
+ * 3. Deletes the `discardId` question.
+ *
+ * Runs in a transaction to avoid partial state.
+ */
+export async function consolidateQuestions(
+	keepQuestionId: string,
+	discardQuestionId: string,
+): Promise<ConsolidateQuestionsResult> {
+	const session = await auth()
+	if (!session) return { ok: false, error: "Not authenticated" }
+
+	if (keepQuestionId === discardQuestionId) {
+		return { ok: false, error: "Cannot consolidate a question with itself" }
+	}
+
+	log.info(TAG, "consolidateQuestions called", {
+		userId: session.userId,
+		keepQuestionId,
+		discardQuestionId,
+	})
+
+	try {
+		await db.$transaction(async (tx) => {
+			// Move mark schemes
+			await tx.markScheme.updateMany({
+				where: { question_id: discardQuestionId },
+				data: { question_id: keepQuestionId, link_status: "auto_linked" },
+			})
+
+			// Remove from exam sections
+			await tx.examSectionQuestion.deleteMany({
+				where: { question_id: discardQuestionId },
+			})
+
+			// Delete the duplicate question
+			await tx.question.delete({
+				where: { id: discardQuestionId },
+			})
+		})
+
+		log.info(TAG, "Questions consolidated", {
+			userId: session.userId,
+			keepQuestionId,
+			discardQuestionId,
+		})
+
+		return { ok: true }
+	} catch (err) {
+		log.error(TAG, "consolidateQuestions failed", {
+			userId: session.userId,
+			keepQuestionId,
+			discardQuestionId,
+			error: String(err),
+		})
+		return { ok: false, error: "Failed to consolidate questions" }
 	}
 }

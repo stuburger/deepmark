@@ -392,6 +392,33 @@ function TrackingView({
 				</div>
 			)}
 
+			{isCancelled && (
+				<div className="flex gap-2">
+					<Button
+						size="sm"
+						variant="outline"
+						className="flex-1"
+						disabled={retrying}
+						onClick={handleRetry}
+					>
+						{retrying ? (
+							<Spinner className="h-3.5 w-3.5 mr-1.5" />
+						) : (
+							<RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+						)}
+						Retry
+					</Button>
+					<Button
+						size="sm"
+						variant="ghost"
+						className="flex-1 text-muted-foreground"
+						onClick={onClose}
+					>
+						Dismiss
+					</Button>
+				</div>
+			)}
+
 			{isActive && (
 				<div className="flex justify-end">
 					<Button
@@ -438,7 +465,7 @@ function TrackingView({
 				</div>
 			)}
 
-			{(isComplete || isCancelled) && (
+			{isComplete && (
 				<Button variant="outline" className="w-full" onClick={onClose}>
 					Close
 				</Button>

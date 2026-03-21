@@ -1427,3 +1427,156 @@ export async function consolidateQuestions(
 		return { ok: false, error: "Failed to consolidate questions" }
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Manual mark scheme create / update
+// ---------------------------------------------------------------------------
+
+export type MarkSchemePointInput = {
+	description: string
+	points: number
+}
+
+export type MarkSchemeInput =
+	| {
+			marking_method: "point_based"
+			description: string
+			guidance?: string | null
+			mark_points: MarkSchemePointInput[]
+	  }
+	| {
+			marking_method: "deterministic"
+			description: string
+			guidance?: string | null
+			correct_option_labels: string[]
+	  }
+
+export type CreateMarkSchemeResult =
+	| { ok: true; id: string }
+	| { ok: false; error: string }
+
+export async function createMarkScheme(
+	questionId: string,
+	input: MarkSchemeInput,
+): Promise<CreateMarkSchemeResult> {
+	const session = await auth()
+	if (!session) return { ok: false, error: "Not authenticated" }
+
+	const description = input.description.trim()
+	if (!description) return { ok: false, error: "Description is required" }
+
+	if (
+		input.marking_method === "deterministic" &&
+		input.correct_option_labels.length === 0
+	) {
+		return { ok: false, error: "Select at least one correct answer" }
+	}
+
+	const isDeterministic = input.marking_method === "deterministic"
+	const pointsTotal = isDeterministic
+		? 1
+		: input.mark_points.reduce((sum, mp) => sum + mp.points, 0)
+	const markPoints = isDeterministic
+		? []
+		: input.mark_points.map((mp, i) => ({
+				point_number: i + 1,
+				description: mp.description,
+				points: mp.points,
+			}))
+	const correctOptionLabels = isDeterministic ? input.correct_option_labels : []
+
+	try {
+		const ms = await db.markScheme.create({
+			data: {
+				question_id: questionId,
+				description,
+				guidance: input.guidance?.trim() || null,
+				points_total: pointsTotal,
+				mark_points: markPoints,
+				marking_method: input.marking_method,
+				correct_option_labels: correctOptionLabels,
+				link_status: "linked",
+				created_by_id: session.userId,
+			},
+			select: { id: true },
+		})
+
+		log.info(TAG, "Mark scheme created manually", {
+			userId: session.userId,
+			questionId,
+			markSchemeId: ms.id,
+			markingMethod: input.marking_method,
+		})
+
+		return { ok: true, id: ms.id }
+	} catch (err) {
+		log.error(TAG, "createMarkScheme failed", {
+			userId: session.userId,
+			questionId,
+			error: String(err),
+		})
+		return { ok: false, error: "Failed to create mark scheme" }
+	}
+}
+
+export type UpdateMarkSchemeResult = { ok: true } | { ok: false; error: string }
+
+export async function updateMarkScheme(
+	markSchemeId: string,
+	input: MarkSchemeInput,
+): Promise<UpdateMarkSchemeResult> {
+	const session = await auth()
+	if (!session) return { ok: false, error: "Not authenticated" }
+
+	const description = input.description.trim()
+	if (!description) return { ok: false, error: "Description is required" }
+
+	if (
+		input.marking_method === "deterministic" &&
+		input.correct_option_labels.length === 0
+	) {
+		return { ok: false, error: "Select at least one correct answer" }
+	}
+
+	const isDeterministic = input.marking_method === "deterministic"
+	const pointsTotal = isDeterministic
+		? 1
+		: input.mark_points.reduce((sum, mp) => sum + mp.points, 0)
+	const markPoints = isDeterministic
+		? []
+		: input.mark_points.map((mp, i) => ({
+				point_number: i + 1,
+				description: mp.description,
+				points: mp.points,
+			}))
+
+	try {
+		await db.markScheme.update({
+			where: { id: markSchemeId },
+			data: {
+				description,
+				guidance: input.guidance?.trim() || null,
+				points_total: pointsTotal,
+				mark_points: markPoints,
+				...(isDeterministic
+					? { correct_option_labels: input.correct_option_labels }
+					: {}),
+			},
+		})
+
+		log.info(TAG, "Mark scheme updated manually", {
+			userId: session.userId,
+			markSchemeId,
+			markingMethod: input.marking_method,
+		})
+
+		return { ok: true }
+	} catch (err) {
+		log.error(TAG, "updateMarkScheme failed", {
+			userId: session.userId,
+			markSchemeId,
+			error: String(err),
+		})
+		return { ok: false, error: "Failed to update mark scheme" }
+	}
+}

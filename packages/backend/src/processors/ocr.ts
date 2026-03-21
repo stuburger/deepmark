@@ -3,12 +3,45 @@ import { runOcr } from "@/lib/gemini-ocr"
 import { logger } from "@/lib/logger"
 import { GetObjectCommand, S3Client } from "@aws-sdk/client-s3"
 import { SQSClient, SendMessageCommand } from "@aws-sdk/client-sqs"
+import { GoogleGenAI } from "@google/genai"
 import { ScanStatus } from "@mcp-gcse/db"
 import { Resource } from "sst"
 
 const TAG = "ocr"
 const s3 = new S3Client({})
 const sqs = new SQSClient({})
+
+async function detectStudentName(transcript: string): Promise<string | null> {
+	try {
+		const ai = new GoogleGenAI({ apiKey: Resource.GeminiApiKey.value })
+		const response = await ai.models.generateContent({
+			model: "gemini-2.0-flash",
+			contents: [
+				{
+					role: "user",
+					parts: [
+						{
+							text: `This is an OCR transcript of a student exam paper cover page.
+Extract only the student's full name as written. Return ONLY a JSON string containing the name (e.g. "Emily Clarke"), or the JSON value null if no name is found. Do not include any other text.
+
+Transcript:
+${transcript}`,
+						},
+					],
+				},
+			],
+			config: { responseMimeType: "application/json", temperature: 0 },
+		})
+		const text = response.text?.trim()
+		if (!text) return null
+		const parsed: unknown = JSON.parse(text)
+		if (typeof parsed === "string" && parsed.trim().length > 0)
+			return parsed.trim()
+		return null
+	} catch {
+		return null
+	}
+}
 
 interface S3Record {
 	s3: {
@@ -122,10 +155,36 @@ export async function handler(
 							scanSubmissionId,
 							page_count: allPages.length,
 						})
+
+						// Detect student name from page 1 transcript
+						const page1 = await db.scanPage.findFirst({
+							where: {
+								scan_submission_id: scanSubmissionId,
+								page_number: 1,
+							},
+							select: { ocr_result: true },
+						})
+						const page1Transcript = (
+							page1?.ocr_result as { transcript?: string } | null
+						)?.transcript
+						const detectedName = page1Transcript
+							? await detectStudentName(page1Transcript)
+							: null
+						if (detectedName) {
+							logger.info(TAG, "Detected student name", {
+								scanSubmissionId,
+								name: detectedName,
+							})
+						}
+
 						await db.scanSubmission.update({
 							where: { id: scanSubmissionId },
-							data: { status: ScanStatus.ocr_complete },
+							data: {
+								status: ScanStatus.ocr_complete,
+								detected_student_name: detectedName,
+							},
 						})
+
 						const submission = await db.scanSubmission.findUnique({
 							where: { id: scanSubmissionId },
 							select: { exam_paper_id: true },

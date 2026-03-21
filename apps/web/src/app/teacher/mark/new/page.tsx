@@ -18,6 +18,12 @@ import {
 	triggerOcr,
 } from "@/lib/mark-actions"
 import {
+	type StudentItem,
+	confirmStudentForSubmission,
+	createAndConfirmStudent,
+	listStudents,
+} from "@/lib/student-actions"
+import {
 	AlertCircle,
 	ArrowDown,
 	ArrowUp,
@@ -27,11 +33,18 @@ import {
 	Search,
 	Trash2,
 	Upload,
+	UserCheck,
+	UserPlus,
 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useCallback, useEffect, useRef, useState } from "react"
 
-type Step = "upload" | "processing-ocr" | "select-paper" | "processing-grade"
+type Step =
+	| "upload"
+	| "processing-ocr"
+	| "confirm-student"
+	| "select-paper"
+	| "processing-grade"
 
 type PageItem = {
 	key: string
@@ -154,6 +167,20 @@ export default function MarkNewPage() {
 	)
 	const [gradingError, setGradingError] = useState<string | null>(null)
 	const [pollStatus, setPollStatus] = useState<string | null>(null)
+
+	// Student confirmation state
+	const [detectedStudentName, setDetectedStudentName] = useState<string | null>(
+		null,
+	)
+	const [existingStudents, setExistingStudents] = useState<StudentItem[]>([])
+	const [studentSearch, setStudentSearch] = useState("")
+	const [selectedStudentId, setSelectedStudentId] = useState<string | null>(
+		null,
+	)
+	const [newStudentName, setNewStudentName] = useState("")
+	const [studentMode, setStudentMode] = useState<"select" | "create">("select")
+	const [studentError, setStudentError] = useState<string | null>(null)
+	const [confirmingStudent, setConfirmingStudent] = useState(false)
 
 	// Ensure job is created once
 	const jobIdRef = useRef<string | null>(null)
@@ -283,16 +310,17 @@ export default function MarkNewPage() {
 		if (!jobIdRef.current) return
 		const result = await getStudentPaperJob(jobIdRef.current)
 		if (!result.ok) return
-		const { status, detected_subject } = result.data
+		const { status, detected_subject, student_name } = result.data
 		setPollStatus(status)
 		if (status === "text_extracted") {
 			setDetectedSubject(detected_subject)
-			setStep("select-paper")
-			setLoadingPapers(true)
-			listCatalogExamPapers().then((r) => {
-				if (r.ok) setPapers(r.papers)
-				setLoadingPapers(false)
+			setDetectedStudentName(student_name)
+			setNewStudentName(student_name ?? "")
+			// Load existing students and papers in parallel
+			void listStudents().then((r) => {
+				if (r.ok) setExistingStudents(r.students)
 			})
+			setStep("confirm-student")
 		}
 		if (status === "failed") {
 			setOcrError(result.data.error ?? "OCR failed")
@@ -335,6 +363,42 @@ export default function MarkNewPage() {
 	const showingFiltered =
 		detectedSubject !== null && filteredPapers.length < allPapers.length
 
+	function proceedToPaperSelect() {
+		setStep("select-paper")
+		setLoadingPapers(true)
+		listCatalogExamPapers().then((r) => {
+			if (r.ok) setPapers(r.papers)
+			setLoadingPapers(false)
+		})
+	}
+
+	async function handleConfirmStudent() {
+		setStudentError(null)
+		setConfirmingStudent(true)
+		try {
+			if (studentMode === "create") {
+				if (!newStudentName.trim()) {
+					setStudentError("Please enter a student name")
+					return
+				}
+				// For PdfIngestionJob flow: just create the student record (linking happens in grade-scan.ts)
+				// If we have a scan submission ID in future, we'd call createAndConfirmStudent
+				const { createStudent } = await import("@/lib/student-actions")
+				const result = await createStudent(newStudentName.trim())
+				if (!result.ok) {
+					setStudentError(result.error)
+					return
+				}
+			} else if (studentMode === "select" && selectedStudentId) {
+				// Student already exists — nothing to do here for PdfIngestionJob flow
+				// grade-scan.ts will upsert by name match anyway
+			}
+			proceedToPaperSelect()
+		} finally {
+			setConfirmingStudent(false)
+		}
+	}
+
 	async function handleTriggerGrading() {
 		if (!jobIdRef.current || !selectedPaper) return
 		setGradingError(null)
@@ -366,6 +430,164 @@ export default function MarkNewPage() {
 		const interval = setInterval(pollGrading, 3000)
 		return () => clearInterval(interval)
 	}, [step, pollGrading])
+
+	// ─── Confirm student screen ───────────────────────────────────────────────
+
+	if (step === "confirm-student") {
+		const filteredStudents = existingStudents.filter((s) =>
+			s.name.toLowerCase().includes(studentSearch.toLowerCase()),
+		)
+
+		return (
+			<div className="flex flex-col min-h-[calc(100dvh-4rem)] max-w-lg mx-auto">
+				<div className="flex-1 px-4 pt-4 pb-32 space-y-5">
+					<div>
+						<h1 className="text-2xl font-semibold">Who is this paper for?</h1>
+						<p className="text-sm text-muted-foreground mt-1">
+							Match to an existing student or create a new record.
+						</p>
+					</div>
+
+					{/* Detected name chip */}
+					{detectedStudentName && (
+						<div className="flex items-center gap-2 rounded-xl border bg-card px-4 py-3">
+							<CheckCircle2 className="h-4 w-4 text-green-500 shrink-0" />
+							<div className="flex-1 min-w-0">
+								<p className="text-xs text-muted-foreground">
+									Detected on paper
+								</p>
+								<p className="text-sm font-medium">{detectedStudentName}</p>
+							</div>
+						</div>
+					)}
+
+					{/* Mode toggle */}
+					<div className="flex rounded-xl border overflow-hidden">
+						<button
+							type="button"
+							onClick={() => setStudentMode("select")}
+							className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-sm font-medium transition-colors ${
+								studentMode === "select"
+									? "bg-primary text-primary-foreground"
+									: "bg-background text-muted-foreground hover:bg-muted"
+							}`}
+						>
+							<UserCheck className="h-4 w-4" />
+							Existing student
+						</button>
+						<button
+							type="button"
+							onClick={() => setStudentMode("create")}
+							className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-sm font-medium transition-colors ${
+								studentMode === "create"
+									? "bg-primary text-primary-foreground"
+									: "bg-background text-muted-foreground hover:bg-muted"
+							}`}
+						>
+							<UserPlus className="h-4 w-4" />
+							New student
+						</button>
+					</div>
+
+					{studentMode === "select" && (
+						<div className="space-y-3">
+							<div className="relative">
+								<Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+								<Input
+									className="pl-9"
+									placeholder="Search students…"
+									value={studentSearch}
+									onChange={(e) => setStudentSearch(e.target.value)}
+									autoFocus
+								/>
+							</div>
+							{filteredStudents.length === 0 ? (
+								<p className="text-sm text-muted-foreground text-center py-4">
+									{existingStudents.length === 0
+										? "No students yet — create one above."
+										: "No students match your search."}
+								</p>
+							) : (
+								<div className="space-y-2 max-h-72 overflow-y-auto">
+									{filteredStudents.map((s) => (
+										<button
+											key={s.id}
+											type="button"
+											onClick={() => setSelectedStudentId(s.id)}
+											className={`w-full rounded-xl border p-3.5 text-left transition-colors ${
+												selectedStudentId === s.id
+													? "border-primary bg-primary/5"
+													: "bg-card active:bg-muted"
+											}`}
+										>
+											<div className="flex items-center justify-between gap-2">
+												<p className="text-sm font-medium">{s.name}</p>
+												{selectedStudentId === s.id && (
+													<CheckCircle2 className="h-4 w-4 shrink-0 text-primary" />
+												)}
+											</div>
+											{(s.class_name || s.year_group) && (
+												<p className="text-xs text-muted-foreground mt-0.5">
+													{[s.class_name, s.year_group]
+														.filter(Boolean)
+														.join(" · ")}
+												</p>
+											)}
+										</button>
+									))}
+								</div>
+							)}
+						</div>
+					)}
+
+					{studentMode === "create" && (
+						<div className="space-y-3">
+							<Input
+								placeholder="Student full name"
+								value={newStudentName}
+								onChange={(e) => setNewStudentName(e.target.value)}
+								autoFocus
+							/>
+						</div>
+					)}
+
+					{studentError && (
+						<p className="text-sm text-destructive">{studentError}</p>
+					)}
+				</div>
+
+				<div className="fixed bottom-0 left-0 right-0 border-t bg-background/95 backdrop-blur px-4 py-4 safe-area-inset-bottom">
+					<div className="max-w-lg mx-auto space-y-2">
+						<Button
+							className="w-full h-14 text-base rounded-xl"
+							disabled={
+								confirmingStudent ||
+								(studentMode === "select" && !selectedStudentId) ||
+								(studentMode === "create" && !newStudentName.trim())
+							}
+							onClick={handleConfirmStudent}
+						>
+							{confirmingStudent ? (
+								<>
+									<Spinner className="mr-2 h-4 w-4" />
+									Saving…
+								</>
+							) : (
+								"Continue"
+							)}
+						</Button>
+						<button
+							type="button"
+							onClick={proceedToPaperSelect}
+							className="w-full text-center text-sm text-muted-foreground py-1"
+						>
+							Skip for now
+						</button>
+					</div>
+				</div>
+			</div>
+		)
+	}
 
 	// ─── Processing screens ──────────────────────────────────────────────────
 

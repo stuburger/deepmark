@@ -65,13 +65,17 @@ function SubmissionRow({ sub }: { sub: SubmissionHistoryItem }) {
 			: null
 
 	return (
-		<TableRow>
+		<TableRow className="cursor-pointer hover:bg-muted/50">
 			<TableCell>
-				{sub.student_name ? (
-					<span className="font-medium">{sub.student_name}</span>
-				) : (
-					<span className="text-muted-foreground italic">Unknown student</span>
-				)}
+				<Link href={`/teacher/mark/${sub.id}`} className="block">
+					{sub.student_name ? (
+						<span className="font-medium">{sub.student_name}</span>
+					) : (
+						<span className="text-muted-foreground italic">
+							Unknown student
+						</span>
+					)}
+				</Link>
 			</TableCell>
 			<TableCell className="max-w-xs">
 				{sub.exam_paper_id ? (
@@ -108,14 +112,12 @@ function SubmissionRow({ sub }: { sub: SubmissionHistoryItem }) {
 				{formatDate(sub.created_at)}
 			</TableCell>
 			<TableCell>
-				{sub.status === "ocr_complete" && (
-					<Link
-						href={`/teacher/mark/${sub.id}`}
-						className="text-sm text-primary underline underline-offset-4 hover:no-underline"
-					>
-						View
-					</Link>
-				)}
+				<Link
+					href={`/teacher/mark/${sub.id}`}
+					className="text-sm text-primary underline underline-offset-4 hover:no-underline"
+				>
+					{sub.status === "ocr_complete" ? "View" : "Details"}
+				</Link>
 			</TableCell>
 		</TableRow>
 	)

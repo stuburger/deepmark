@@ -283,6 +283,11 @@ export async function triggerGrading(
 
 // ─── Poll job status ──────────────────────────────────────────────────────────
 
+export type ExtractedAnswer = {
+	question_number: string
+	answer_text: string
+}
+
 export type StudentPaperJobPayload = {
 	status: string
 	error: string | null
@@ -295,6 +300,7 @@ export type StudentPaperJobPayload = {
 	total_awarded: number
 	total_max: number
 	created_at: Date
+	extracted_answers: ExtractedAnswer[] | null
 }
 
 export type GetStudentPaperJobResult =
@@ -318,10 +324,17 @@ export async function getStudentPaperJob(
 	if (!job) return { ok: false, error: "Job not found" }
 
 	type PageEntry = { key: string; order: number; mime_type: string }
+	type RawExtracted = {
+		student_name?: string | null
+		answers?: ExtractedAnswer[]
+	}
+
 	const pages = (job.pages ?? []) as PageEntry[]
 	const rawResults = (job.grading_results ?? []) as GradingResult[]
 	const totalAwarded = rawResults.reduce((s, r) => s + r.awarded_score, 0)
 	const totalMax = rawResults.reduce((s, r) => s + r.max_score, 0)
+	const rawExtracted = job.extracted_answers_raw as RawExtracted | null
+	const extractedAnswers = rawExtracted?.answers ?? null
 
 	return {
 		ok: true,
@@ -337,6 +350,7 @@ export async function getStudentPaperJob(
 			total_awarded: totalAwarded,
 			total_max: totalMax,
 			created_at: job.created_at,
+			extracted_answers: extractedAnswers,
 		},
 	}
 }

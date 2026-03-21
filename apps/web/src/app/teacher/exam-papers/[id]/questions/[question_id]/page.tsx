@@ -15,11 +15,16 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table"
-import { getExamPaperDetail, getQuestionDetail } from "@/lib/dashboard-actions"
+import {
+	type MarkingRulesInput,
+	getExamPaperDetail,
+	getQuestionDetail,
+} from "@/lib/dashboard-actions"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { DeleteQuestionButton } from "./delete-question-button"
 import { EvalDialog } from "./eval-dialog"
+import { LorMarkSchemeEditForm } from "./lor-mark-scheme-edit-form"
 import { MarkSchemeEditForm } from "./mark-scheme-edit-form"
 import { QuestionEditForm } from "./question-edit-form"
 import { SimilarQuestionsSection } from "./similar-questions-section"
@@ -411,6 +416,13 @@ export default async function QuestionDetailPage({
 											initialDescription={ms.description ?? ""}
 											initialGuidance={ms.guidance ?? ""}
 											initialCorrectOptionLabels={ms.correct_option_labels}
+										/>
+									) : ms.marking_method === "level_of_response" ? (
+										<LorMarkSchemeEditForm
+											markSchemeId={ms.id}
+											initialDescription={ms.description ?? ""}
+											initialGuidance={ms.guidance ?? ""}
+											initialMarkingRules={rules as MarkingRulesInput | null}
 										/>
 									) : (
 										<MarkSchemeEditForm

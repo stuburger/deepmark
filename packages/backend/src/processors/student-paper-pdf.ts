@@ -49,6 +49,14 @@ type ExtractedAnswersRaw = {
 	answers: Array<{ question_number: string; answer_text: string }>
 }
 
+/**
+ * Normalise question numbers before comparison so that "Q1a", "1 a", "1A"
+ * all resolve to the same key "1a".
+ */
+function normaliseQNum(s: string): string {
+	return s.replace(/^q/i, "").replace(/\s+/g, "").toLowerCase()
+}
+
 export async function handler(
 	event: SqsEvent,
 ): Promise<{ batchItemFailures?: { itemIdentifier: string }[] }> {
@@ -186,8 +194,10 @@ export async function handler(
 				for (const esq of section.exam_section_questions) {
 					const q = esq.question
 					const ms = q.mark_schemes[0] ?? null
+					// Use the canonical question number from the PDF (e.g. "1a", "2bii")
+					// and fall back to sequential position only when none is stored.
 					questionList.push({
-						question_number: String(questionIndex),
+						question_number: q.question_number ?? String(questionIndex),
 						question_id: q.id,
 						question_text: q.text,
 						mark_scheme: ms,
@@ -205,20 +215,47 @@ export async function handler(
 			})
 
 			const extractedRaw = job.extracted_answers_raw as ExtractedAnswersRaw
+			const rawAnswers = extractedRaw.answers ?? []
 
+			// Build a normalised map for reliable lookup even when the OCR returns
+			// "Q1a" or "1 A" instead of the canonical "1a".
 			const answerMap = new Map<string, string>()
-			for (const a of extractedRaw.answers ?? []) {
-				answerMap.set(a.question_number, a.answer_text)
+			for (const a of rawAnswers) {
+				answerMap.set(normaliseQNum(a.question_number), a.answer_text)
+			}
+
+			// Position-based fallback: if the number of extracted answers exactly
+			// matches the number of questions and every normalised question_number
+			// lookup misses, map by index order instead.
+			const usePositionFallback =
+				rawAnswers.length === questionList.length &&
+				questionList.every(
+					(q) => !answerMap.has(normaliseQNum(q.question_number)),
+				)
+
+			if (usePositionFallback) {
+				logger.info(
+					TAG,
+					"Question numbers did not match — using position-based fallback",
+					{
+						jobId,
+						question_count: questionList.length,
+					},
+				)
 			}
 
 			logger.info(TAG, "Grading using pre-extracted answers", {
 				jobId,
 				answer_count: answerMap.size,
+				position_fallback: usePositionFallback,
 			})
 
 			const gradingResults: GradingResult[] = []
 
-			for (const qItem of questionList) {
+			for (let qi = 0; qi < questionList.length; qi++) {
+				const qItem = questionList[qi]
+				if (!qItem) continue
+
 				if (cancellation.isCancelled()) {
 					logger.info(TAG, "Job cancelled mid-grading — stopping loop", {
 						jobId,
@@ -227,7 +264,9 @@ export async function handler(
 					break
 				}
 
-				const studentAnswer = answerMap.get(qItem.question_number) ?? ""
+				const studentAnswer = usePositionFallback
+					? (rawAnswers[qi]?.answer_text ?? "")
+					: (answerMap.get(normaliseQNum(qItem.question_number)) ?? "")
 				const ms = qItem.mark_scheme
 
 				if (!ms) {

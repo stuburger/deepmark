@@ -665,8 +665,25 @@ export async function deleteExamPaper(
 					where: { exam_section_id: { in: sectionIds } },
 					select: { question_id: true },
 				})
+
+				const jobs = await tx.pdfIngestionJob.findMany({
+					where: { exam_paper_id: id },
+					select: { id: true },
+				})
+				const jobIds = jobs.map((j) => j.id)
+
+				// Also include questions that were created from this paper's ingestion
+				// jobs but may not be linked to any section yet (no FK guard for them).
+				const jobQuestions = await tx.question.findMany({
+					where: { source_pdf_ingestion_job_id: { in: jobIds } },
+					select: { id: true },
+				})
+
 				const questionIds = [
-					...new Set(sectionQuestions.map((sq) => sq.question_id)),
+					...new Set([
+						...sectionQuestions.map((sq) => sq.question_id),
+						...jobQuestions.map((q) => q.id),
+					]),
 				]
 
 				const markSchemes = await tx.markScheme.findMany({
@@ -674,12 +691,6 @@ export async function deleteExamPaper(
 					select: { id: true },
 				})
 				const markSchemeIds = markSchemes.map((ms) => ms.id)
-
-				const jobs = await tx.pdfIngestionJob.findMany({
-					where: { exam_paper_id: id },
-					select: { id: true },
-				})
-				const jobIds = jobs.map((j) => j.id)
 
 				const answers = await tx.answer.findMany({
 					where: { question_id: { in: questionIds } },

@@ -1,5 +1,5 @@
-import { tool } from "@/tools/shared/tool-utils"
 import { db } from "@/db"
+import { tool } from "@/tools/shared/tool-utils"
 import { GetScanSubmissionSchema } from "./schema"
 
 export const handler = tool(GetScanSubmissionSchema, async (args, extra) => {
@@ -7,7 +7,7 @@ export const handler = tool(GetScanSubmissionSchema, async (args, extra) => {
 	const userId = extra.authInfo.extra.userId
 
 	const submission = await db.scanSubmission.findFirstOrThrow({
-		where: { id: scan_submission_id, student_id: userId },
+		where: { id: scan_submission_id, uploaded_by_id: userId },
 		include: {
 			pages: { orderBy: { page_number: "asc" } },
 			exam_paper: { select: { title: true } },
@@ -22,9 +22,7 @@ export const handler = tool(GetScanSubmissionSchema, async (args, extra) => {
 	}))
 
 	const extractedCount = await db.extractedAnswer.count({
-		where: {
-			scan_page: { scan_submission_id },
-		},
+		where: { scan_submission_id },
 	})
 
 	return JSON.stringify(

@@ -74,8 +74,16 @@ declare module "sst" {
       "type": "sst.aws.Queue"
       "url": string
     }
+    "RegionRefinementQueue": {
+      "type": "sst.aws.Queue"
+      "url": string
+    }
     "Router": {
       "type": "sst.aws.Router"
+      "url": string
+    }
+    "ScanGradingQueue": {
+      "type": "sst.aws.Queue"
       "url": string
     }
     "ScansBucket": {

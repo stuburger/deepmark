@@ -1,8 +1,8 @@
+import { db } from "@/db"
+import { tool } from "@/tools/shared/tool-utils"
 import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3"
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner"
 import { Resource } from "sst"
-import { tool } from "@/tools/shared/tool-utils"
-import { db } from "@/db"
 import { CreateScanSubmissionSchema } from "./schema"
 
 const s3 = new S3Client({})
@@ -18,14 +18,19 @@ export const handler = tool(CreateScanSubmissionSchema, async (args, extra) => {
 
 	const submission = await db.scanSubmission.create({
 		data: {
-			student_id: userId,
+			uploaded_by_id: userId,
 			exam_paper_id,
 			page_count,
 			status: "pending",
 		},
 	})
 
-	const ext = mime_type === "image/png" ? "png" : mime_type === "image/webp" ? "webp" : "jpg"
+	const ext =
+		mime_type === "image/png"
+			? "png"
+			: mime_type === "image/webp"
+				? "webp"
+				: "jpg"
 	const presignedUrls: string[] = []
 
 	for (let i = 1; i <= page_count; i++) {

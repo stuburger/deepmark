@@ -1,23 +1,32 @@
 import { db } from "@/db"
 import { logger } from "@/lib/logger"
+import { SQSClient, SendMessageCommand } from "@aws-sdk/client-sqs"
 import { GoogleGenAI, Type } from "@google/genai"
 import { ScanStatus } from "@mcp-gcse/db"
 import { Resource } from "sst"
 
 const TAG = "extract-answers"
 const client = new GoogleGenAI({ apiKey: Resource.GeminiApiKey.value })
+const sqs = new SQSClient({})
+
+interface BoundingBox {
+	box_2d: number[]
+	label: string
+	feature_type: string
+}
+
+interface PageSegment {
+	page_number: number
+	segment_text: string
+	bounding_boxes: BoundingBox[]
+}
 
 interface ExtractionItem {
-	page_number: number
 	question_id: string
 	question_part_id: string | null
 	extracted_text: string
-	bounding_boxes: Array<{
-		box_2d: number[]
-		label: string
-		feature_type: string
-	}>
 	confidence?: number
+	page_segments: PageSegment[]
 }
 
 interface ExtractionResult {
@@ -32,30 +41,39 @@ const EXTRACTION_SCHEMA = {
 			items: {
 				type: Type.OBJECT,
 				properties: {
-					page_number: { type: Type.INTEGER },
 					question_id: { type: Type.STRING },
 					question_part_id: { type: Type.STRING, nullable: true },
+					// Full concatenated text across all pages — used for grading
 					extracted_text: { type: Type.STRING },
-					bounding_boxes: {
+					confidence: { type: Type.NUMBER },
+					page_segments: {
 						type: Type.ARRAY,
 						items: {
 							type: Type.OBJECT,
 							properties: {
-								box_2d: { type: Type.ARRAY, items: { type: Type.INTEGER } },
-								label: { type: Type.STRING },
-								feature_type: { type: Type.STRING },
+								page_number: { type: Type.INTEGER },
+								segment_text: { type: Type.STRING },
+								bounding_boxes: {
+									type: Type.ARRAY,
+									items: {
+										type: Type.OBJECT,
+										properties: {
+											box_2d: {
+												type: Type.ARRAY,
+												items: { type: Type.INTEGER },
+											},
+											label: { type: Type.STRING },
+											feature_type: { type: Type.STRING },
+										},
+										required: ["box_2d", "label", "feature_type"],
+									},
+								},
 							},
-							required: ["box_2d", "label", "feature_type"],
+							required: ["page_number", "segment_text", "bounding_boxes"],
 						},
 					},
-					confidence: { type: Type.NUMBER },
 				},
-				required: [
-					"page_number",
-					"question_id",
-					"extracted_text",
-					"bounding_boxes",
-				],
+				required: ["question_id", "extracted_text", "page_segments"],
 			},
 		},
 	},
@@ -175,7 +193,15 @@ ${pageContext}
 Exam paper structure (questions and optional parts with IDs):
 ${questionContext}
 
-For each distinct answer region in the OCR output, determine which question (and if applicable which question part) it belongs to. Use the page_number and question_id/question_part_id from the lists above. Extract the exact text for that region and include the bounding_boxes array for that region. Set confidence 0-1. Return only extractions you are confident about.`,
+For each distinct answer in the OCR output, determine which question (and if applicable which question part) it belongs to. Use the question_id/question_part_id from the lists above.
+
+IMPORTANT: If a student's answer spans multiple pages, group all segments under a single extraction item with multiple page_segments entries. Do not split a single answer into multiple extraction items.
+
+For each extraction item:
+- Set extracted_text to the full concatenated answer text across all pages
+- Set page_segments to the per-page breakdown, with the bounding_boxes from that page
+- Be explicit about which page each segment belongs to using the page_number field
+- Set confidence 0-1. Return only extractions you are confident about.`,
 							},
 						],
 					},
@@ -197,20 +223,15 @@ For each distinct answer region in the OCR output, determine which question (and
 				scan_submission_id,
 				extractions_count: result.extractions?.length ?? 0,
 			})
-			const pageByNumber = new Map(
-				submission.pages.map((p) => [p.page_number, p]),
-			)
 
 			for (const ext of result.extractions ?? []) {
-				const page = pageByNumber.get(ext.page_number)
-				if (!page) continue
 				await db.extractedAnswer.create({
 					data: {
-						scan_page_id: page.id,
+						scan_submission_id,
 						question_id: ext.question_id,
 						question_part_id: ext.question_part_id ?? null,
 						extracted_text: ext.extracted_text,
-						bounding_boxes: ext.bounding_boxes as unknown as object,
+						page_segments: ext.page_segments as unknown as object,
 						confidence: ext.confidence ?? null,
 					},
 				})
@@ -220,6 +241,25 @@ For each distinct answer region in the OCR output, determine which question (and
 			await db.scanSubmission.update({
 				where: { id: scan_submission_id },
 				data: { status: ScanStatus.extracted, processed_at: new Date() },
+			})
+
+			await Promise.all([
+				sqs.send(
+					new SendMessageCommand({
+						QueueUrl: Resource.ScanGradingQueue.url,
+						MessageBody: JSON.stringify({ scan_submission_id }),
+					}),
+				),
+				sqs.send(
+					new SendMessageCommand({
+						QueueUrl: Resource.RegionRefinementQueue.url,
+						MessageBody: JSON.stringify({ scan_submission_id }),
+					}),
+				),
+			])
+
+			logger.info(TAG, "Enqueued grading and region refinement", {
+				scan_submission_id,
 			})
 		} catch (err) {
 			logger.error(TAG, "Job failed with unhandled error", {

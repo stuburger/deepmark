@@ -79,10 +79,41 @@ ocrQueue.subscribe({
 	memory: "512 MB",
 })
 
+export const scanGradingQueue = new sst.aws.Queue("ScanGradingQueue", {
+	visibilityTimeout: "10 minutes",
+})
+
+export const regionRefinementQueue = new sst.aws.Queue(
+	"RegionRefinementQueue",
+	{
+		visibilityTimeout: "8 minutes",
+	},
+)
+
 extractionQueue.subscribe({
 	handler: "packages/backend/src/processors/extract-answers.handler",
-	link: [neonPostgres, geminiApiKey, openAiApiKey],
+	link: [
+		neonPostgres,
+		geminiApiKey,
+		openAiApiKey,
+		scanGradingQueue,
+		regionRefinementQueue,
+	],
 	timeout: "3 minutes",
+})
+
+scanGradingQueue.subscribe({
+	handler: "packages/backend/src/processors/grade-scan.handler",
+	link: [neonPostgres, geminiApiKey, openAiApiKey],
+	timeout: "8 minutes",
+	memory: "512 MB",
+})
+
+regionRefinementQueue.subscribe({
+	handler: "packages/backend/src/processors/refine-answer-regions.handler",
+	link: [neonPostgres, geminiApiKey, scansBucket],
+	timeout: "6 minutes",
+	memory: "512 MB",
 })
 
 markSchemePdfQueue.subscribe({

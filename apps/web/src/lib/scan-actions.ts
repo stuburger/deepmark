@@ -43,7 +43,7 @@ export async function createScanUpload(
 
 	const submission = await db.scanSubmission.create({
 		data: {
-			student_id: session.userId,
+			uploaded_by_id: session.userId,
 			exam_paper_id: examPaperId,
 			page_count: pages.length,
 			status: "pending",
@@ -117,7 +117,7 @@ export async function pollScanStatus(
 	}
 
 	const submission = await db.scanSubmission.findFirst({
-		where: { id: submissionId, student_id: session.userId },
+		where: { id: submissionId, uploaded_by_id: session.userId },
 		include: { pages: { orderBy: { page_number: "asc" } } },
 	})
 

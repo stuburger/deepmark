@@ -278,16 +278,9 @@ export default async function AdminOverviewPage() {
 								{data.recentScanSubmissions.map((scan) => (
 									<TableRow key={scan.id}>
 										<TableCell>
-											<div className="flex flex-col">
-												<span className="font-medium">
-													{scan.studentName ?? "Unknown"}
-												</span>
-												{scan.studentEmail && (
-													<span className="text-xs text-muted-foreground">
-														{scan.studentEmail}
-													</span>
-												)}
-											</div>
+											<span className="font-medium">
+												{scan.studentName ?? "Unknown"}
+											</span>
 										</TableCell>
 										<TableCell>
 											<ScanStatusBadge status={scan.status} />

@@ -43,7 +43,6 @@ export type UsersByRole = {
 export type RecentScanSubmission = {
 	id: string
 	studentName: string | null
-	studentEmail: string | null
 	status: string
 	pageCount: number
 	uploadedAt: Date
@@ -294,7 +293,7 @@ export async function getDashboardData(): Promise<DashboardData> {
 			take: 10,
 			orderBy: { uploaded_at: "desc" },
 			include: {
-				student: { select: { name: true, email: true } },
+				student: { select: { name: true } },
 			},
 		}),
 	])
@@ -326,8 +325,7 @@ export async function getDashboardData(): Promise<DashboardData> {
 		})),
 		recentScanSubmissions: recentScansRaw.map((s) => ({
 			id: s.id,
-			studentName: s.student.name,
-			studentEmail: s.student.email,
+			studentName: s.student?.name ?? null,
 			status: s.status,
 			pageCount: s.page_count,
 			uploadedAt: s.uploaded_at,

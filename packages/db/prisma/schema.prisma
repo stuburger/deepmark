@@ -66,6 +66,8 @@ enum ScanStatus {
   ocr_complete
   extracting
   extracted
+  grading
+  graded
   failed
   cancelled
 }
@@ -119,8 +121,8 @@ model User {
   created_exam_sections  ExamSection[]
   created_question_banks QuestionBank[]
 
-  student_answers    Answer[]          @relation("StudentAnswers")
-  scan_submissions   ScanSubmission[]  @relation("StudentScans")
+  students           Student[]         @relation("TeacherStudents")
+  scan_submissions   ScanSubmission[]  @relation("UploaderScans")
   pdf_ingestion_jobs PdfIngestionJob[] @relation("PdfIngestionJobUploader")
 
   @@map("users")
@@ -214,6 +216,22 @@ model MarkScheme {
   @@map("mark_schemes")
 }
 
+model Student {
+  id          String   @id @default(cuid())
+  name        String
+  class_name  String?
+  year_group  String?
+  teacher_id  String
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  teacher          User             @relation("TeacherStudents", fields: [teacher_id], references: [id])
+  scan_submissions ScanSubmission[] @relation("StudentScans")
+  answers          Answer[]         @relation("StudentAnswers")
+
+  @@map("students")
+}
+
 model Answer {
   id                 String        @id @default(cuid())
   question_id        String
@@ -227,7 +245,7 @@ model Answer {
   marking_status     MarkingStatus @default(pending)
   source             AnswerSource  @default(typed)
 
-  student          User             @relation("StudentAnswers", fields: [student_id], references: [id])
+  student          Student          @relation("StudentAnswers", fields: [student_id], references: [id])
   question         Question         @relation(fields: [question_id], references: [id])
   question_part    QuestionPart?    @relation(fields: [question_part_id], references: [id])
   marking_results  MarkingResult[]
@@ -317,20 +335,24 @@ model ExamSectionQuestion {
 }
 
 model ScanSubmission {
-  id            String     @id @default(cuid())
-  student_id    String
-  exam_paper_id String
-  status        ScanStatus @default(pending)
-  page_count    Int
-  uploaded_at   DateTime   @default(now())
-  processed_at  DateTime?
-  error_message String?
+  id                    String     @id @default(cuid())
+  student_id            String?
+  uploaded_by_id        String
+  exam_paper_id         String
+  status                ScanStatus @default(pending)
+  page_count            Int
+  uploaded_at           DateTime   @default(now())
+  processed_at          DateTime?
+  error_message         String?
+  detected_student_name String?
   // { source: "photo"|"scan", notes? }
-  metadata      Json?
+  metadata              Json?
 
-  student    User       @relation("StudentScans", fields: [student_id], references: [id])
-  exam_paper ExamPaper  @relation(fields: [exam_paper_id], references: [id])
-  pages      ScanPage[]
+  student           Student?          @relation("StudentScans", fields: [student_id], references: [id])
+  uploaded_by       User              @relation("UploaderScans", fields: [uploaded_by_id], references: [id])
+  exam_paper        ExamPaper         @relation(fields: [exam_paper_id], references: [id])
+  pages             ScanPage[]
+  extracted_answers ExtractedAnswer[]
 
   @@map("scan_submissions")
 }
@@ -349,31 +371,33 @@ model ScanPage {
   processed_at       DateTime?
   error_message      String?
 
-  scan_submission   ScanSubmission    @relation(fields: [scan_submission_id], references: [id])
-  extracted_answers ExtractedAnswer[]
+  scan_submission ScanSubmission @relation(fields: [scan_submission_id], references: [id])
 
   @@unique([scan_submission_id, page_number])
   @@map("scan_pages")
 }
 
 model ExtractedAnswer {
-  id               String   @id @default(cuid())
-  scan_page_id     String
-  question_id      String
-  question_part_id String?
-  extracted_text   String
-  // [{ box_2d: [y,x,y,x], label, feature_type }]
-  bounding_boxes   Json
-  confidence       Float?
-  // Null until teacher confirms
-  answer_id        String?  @unique
-  created_at       DateTime @default(now())
+  id                 String   @id @default(cuid())
+  scan_submission_id String
+  question_id        String
+  question_part_id   String?
+  extracted_text     String
+  // [{ page_number, scan_page_id, segment_text, bounding_boxes: [{ box_2d, label, feature_type }] }]
+  page_segments      Json
+  // [{ page_number, scan_page_id, answer_region: [yMin, xMin, yMax, xMax] }] — set by region refinement Lambda
+  answer_regions     Json?
+  confidence         Float?
+  // Null until grading Lambda creates the Answer
+  answer_id          String?  @unique
+  created_at         DateTime @default(now())
 
-  scan_page     ScanPage      @relation(fields: [scan_page_id], references: [id])
-  question      Question      @relation(fields: [question_id], references: [id])
-  question_part QuestionPart? @relation(fields: [question_part_id], references: [id])
-  answer        Answer?       @relation(fields: [answer_id], references: [id])
+  scan_submission ScanSubmission @relation(fields: [scan_submission_id], references: [id])
+  question        Question       @relation(fields: [question_id], references: [id])
+  question_part   QuestionPart?  @relation(fields: [question_part_id], references: [id])
+  answer          Answer?        @relation(fields: [answer_id], references: [id])
 
+  @@unique([scan_submission_id, question_id, question_part_id])
   @@map("extracted_answers")
 }
 

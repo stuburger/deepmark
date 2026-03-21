@@ -143,7 +143,8 @@ export function MergeQuestionsDialog({
 		}
 
 		onOpenChange(false)
-		router.push(`/teacher/exam-papers/${examPaperId}`)
+		const survivingId = keepId
+		router.push(`/teacher/exam-papers/${examPaperId}/questions/${survivingId}`)
 		router.refresh()
 	}
 

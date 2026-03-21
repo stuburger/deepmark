@@ -1,10 +1,17 @@
 import { buttonVariants } from "@/components/ui/button-variants"
-import { getStudentPaperResult } from "@/lib/mark-actions"
+import {
+	type ScanPageUrl,
+	getJobScanPageUrls,
+	getStudentPaperResult,
+} from "@/lib/mark-actions"
 import { AlertCircle, CheckCircle2, Circle, Loader2 } from "lucide-react"
+// Loader2 is used by StageIcon (active state)
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { ContinueMarkingClient } from "./continue-marking-client"
+import { MarkingJobPoller, ReScanButton } from "./polling-client"
 import { MarkingResultsClient } from "./results-client"
+import { ScanPageViewer } from "./scan-viewer"
 
 type Stage = {
 	key: string
@@ -90,26 +97,61 @@ function PipelineProgress({ status }: { status: string }) {
 	)
 }
 
+/** Two-column layout wrapper used for all non-results states. */
+function TwoColumnLayout({
+	scanPages,
+	children,
+}: {
+	scanPages: ScanPageUrl[]
+	children: React.ReactNode
+}) {
+	if (scanPages.length === 0) {
+		return <div className="max-w-2xl space-y-6">{children}</div>
+	}
+	return (
+		<div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:gap-8">
+			{/* Scan — sticky on large screens */}
+			<div className="lg:sticky lg:top-6 lg:w-80 xl:w-96 shrink-0">
+				<p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+					Student scan
+				</p>
+				<ScanPageViewer pages={scanPages} />
+			</div>
+
+			{/* Content */}
+			<div className="flex-1 min-w-0 space-y-6">{children}</div>
+		</div>
+	)
+}
+
 export default async function MarkResultPage({
 	params,
 }: {
 	params: Promise<{ jobId: string }>
 }) {
 	const { jobId } = await params
-	const result = await getStudentPaperResult(jobId)
+
+	// Fetch job data and scan URLs in parallel
+	const [result, scanResult] = await Promise.all([
+		getStudentPaperResult(jobId),
+		getJobScanPageUrls(jobId),
+	])
 
 	if (!result.ok) notFound()
 
 	const data = result.data
+	const scanPages = scanResult.ok ? scanResult.pages : []
 
 	if (data.status === "ocr_complete") {
-		return <MarkingResultsClient jobId={jobId} data={data} />
+		return (
+			<MarkingResultsClient jobId={jobId} data={data} scanPages={scanPages} />
+		)
 	}
 
 	// text_extracted: OCR done, paper not yet selected — let user continue
 	if (data.status === "text_extracted") {
 		return (
-			<div className="space-y-6 max-w-2xl">
+			<TwoColumnLayout scanPages={scanPages}>
 				<div>
 					<p className="text-sm text-muted-foreground mb-1">
 						<Link
@@ -131,14 +173,15 @@ export default async function MarkResultPage({
 					studentName={data.student_name}
 					detectedSubject={data.detected_subject}
 				/>
-			</div>
+				{data.pages_count > 0 && <ReScanButton jobId={jobId} />}
+			</TwoColumnLayout>
 		)
 	}
 
 	// failed state
 	if (data.status === "failed") {
 		return (
-			<div className="space-y-6 max-w-2xl">
+			<TwoColumnLayout scanPages={scanPages}>
 				<div>
 					<p className="text-sm text-muted-foreground mb-1">
 						<Link
@@ -192,7 +235,6 @@ export default async function MarkResultPage({
 				)}
 
 				<div className="flex flex-col items-start gap-2">
-					{/* If we have extracted answers but no paper selected, let them continue */}
 					{data.extracted_answers &&
 						data.extracted_answers.length > 0 &&
 						!data.exam_paper_id && (
@@ -208,15 +250,16 @@ export default async function MarkResultPage({
 							Start over — mark a new paper
 						</Link>
 					)}
+					{data.pages_count > 0 && <ReScanButton jobId={jobId} />}
 				</div>
-			</div>
+			</TwoColumnLayout>
 		)
 	}
 
 	// cancelled
 	if (data.status === "cancelled") {
 		return (
-			<div className="space-y-4 max-w-lg">
+			<TwoColumnLayout scanPages={scanPages}>
 				<p className="text-sm text-muted-foreground">
 					<Link
 						href="/teacher/mark"
@@ -232,23 +275,13 @@ export default async function MarkResultPage({
 				<Link href="/teacher/mark/new" className={buttonVariants()}>
 					Mark a new paper
 				</Link>
-			</div>
+			</TwoColumnLayout>
 		)
 	}
 
 	// All other in-progress states: pending, processing, extracting, extracted, grading
-	const STATUS_LABELS: Record<string, string> = {
-		pending: "Queued — waiting to start",
-		processing: "Reading pages…",
-		extracting: "Extracting text from scan…",
-		extracted: "Text extracted",
-		grading: "Marking answers against the mark scheme…",
-	}
-	const statusLabel =
-		STATUS_LABELS[data.status] ?? `Processing (${data.status})`
-
 	return (
-		<div className="space-y-6 max-w-2xl">
+		<TwoColumnLayout scanPages={scanPages}>
 			<div>
 				<p className="text-sm text-muted-foreground mb-1">
 					<Link
@@ -270,15 +303,7 @@ export default async function MarkResultPage({
 
 			<PipelineProgress status={data.status} />
 
-			<div className="flex items-center gap-3 rounded-xl border bg-card px-4 py-3">
-				<Loader2 className="h-5 w-5 text-primary animate-spin shrink-0" />
-				<div>
-					<p className="text-sm font-medium">{statusLabel}</p>
-					<p className="text-xs text-muted-foreground mt-0.5">
-						This page does not auto-refresh — reload to check progress.
-					</p>
-				</div>
-			</div>
+			<MarkingJobPoller jobId={jobId} initialStatus={data.status} />
 
 			{data.extracted_answers && data.extracted_answers.length > 0 && (
 				<div className="rounded-xl border bg-card">
@@ -307,12 +332,15 @@ export default async function MarkResultPage({
 				</div>
 			)}
 
-			<Link
-				href="/teacher/mark"
-				className={buttonVariants({ variant: "outline" })}
-			>
-				← Back to history
-			</Link>
-		</div>
+			<div className="flex items-center gap-3">
+				<Link
+					href="/teacher/mark"
+					className={buttonVariants({ variant: "outline" })}
+				>
+					← Back to history
+				</Link>
+				{data.pages_count > 0 && <ReScanButton jobId={jobId} />}
+			</div>
+		</TwoColumnLayout>
 	)
 }

@@ -228,6 +228,7 @@ model Student {
   teacher          User             @relation("TeacherStudents", fields: [teacher_id], references: [id])
   scan_submissions ScanSubmission[] @relation("StudentScans")
   answers          Answer[]         @relation("StudentAnswers")
+  pdf_ingestion_jobs PdfIngestionJob[] @relation("JobStudent")
 
   @@map("students")
 }
@@ -451,6 +452,7 @@ model PdfIngestionJob {
   detected_exam_paper_metadata Json?
   exam_paper_id                String?
   student_name                 String?
+  student_id                   String?
   // Multi-page support: [{ key: string, order: number, mime_type: string }]
   pages                        Json?
   detected_subject             Subject?
@@ -463,6 +465,7 @@ model PdfIngestionJob {
 
   uploader          User             @relation("PdfIngestionJobUploader", fields: [uploaded_by], references: [id])
   exam_paper        ExamPaper?       @relation(fields: [exam_paper_id], references: [id])
+  student           Student?         @relation("JobStudent", fields: [student_id], references: [id])
   exemplars         ExemplarAnswer[]
   created_questions Question[]       @relation("QuestionSource")
 

@@ -12,13 +12,27 @@ import { buttonVariants } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Progress } from "@/components/ui/progress"
+import { Textarea } from "@/components/ui/textarea"
 import {
+	type ScanPageUrl,
 	type StudentPaperResultPayload,
+	retriggerGrading,
+	updateExtractedAnswer,
 	updateStudentName,
 } from "@/lib/mark-actions"
-import { Check, ChevronDown, Pencil, PlusCircle, X } from "lucide-react"
+import {
+	Check,
+	ChevronDown,
+	Loader2,
+	Pencil,
+	PlusCircle,
+	RefreshCw,
+	X,
+} from "lucide-react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { useState } from "react"
+import { ScanPageViewer } from "./scan-viewer"
 
 function scoreBadgeVariant(
 	awarded: number,
@@ -105,20 +119,148 @@ function StudentNameEditor({
 	)
 }
 
+function AnswerEditor({
+	jobId,
+	questionNumber,
+	initialText,
+	onSaved,
+}: {
+	jobId: string
+	questionNumber: string
+	initialText: string
+	onSaved: (newText: string) => void
+}) {
+	const [editing, setEditing] = useState(false)
+	const [text, setText] = useState(initialText)
+	const [saving, setSaving] = useState(false)
+	const [error, setError] = useState<string | null>(null)
+
+	async function save() {
+		setSaving(true)
+		setError(null)
+		const result = await updateExtractedAnswer(jobId, questionNumber, text)
+		setSaving(false)
+		if (!result.ok) {
+			setError(result.error)
+			return
+		}
+		onSaved(text)
+		setEditing(false)
+	}
+
+	function cancel() {
+		setText(initialText)
+		setEditing(false)
+		setError(null)
+	}
+
+	if (!editing) {
+		return (
+			<div className="group relative">
+				<p className="text-sm whitespace-pre-wrap rounded-md bg-muted px-3 py-2 pr-8">
+					{text || (
+						<span className="italic text-muted-foreground">
+							No answer written
+						</span>
+					)}
+				</p>
+				<button
+					type="button"
+					onClick={() => setEditing(true)}
+					className="absolute top-1.5 right-1.5 rounded p-1 text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-foreground hover:bg-background transition-all"
+					aria-label="Edit answer"
+				>
+					<Pencil className="h-3 w-3" />
+				</button>
+			</div>
+		)
+	}
+
+	return (
+		<div className="space-y-2">
+			<Textarea
+				value={text}
+				onChange={(e) => setText(e.target.value)}
+				className="text-sm min-h-20 resize-y"
+				autoFocus
+			/>
+			{error && <p className="text-xs text-destructive">{error}</p>}
+			<div className="flex items-center gap-2">
+				<Button size="sm" disabled={saving} onClick={save}>
+					{saving && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
+					Save
+				</Button>
+				<Button size="sm" variant="ghost" onClick={cancel}>
+					Cancel
+				</Button>
+				<p className="text-xs text-muted-foreground ml-1">
+					Re-mark to update the score
+				</p>
+			</div>
+		</div>
+	)
+}
+
+function ReMarkButton({ jobId }: { jobId: string }) {
+	const router = useRouter()
+	const [loading, setLoading] = useState(false)
+	const [error, setError] = useState<string | null>(null)
+
+	async function handleRemark() {
+		setLoading(true)
+		setError(null)
+		const result = await retriggerGrading(jobId)
+		if (!result.ok) {
+			setError(result.error)
+			setLoading(false)
+			return
+		}
+		router.refresh()
+	}
+
+	return (
+		<div className="flex flex-col items-start gap-1">
+			<Button
+				variant="outline"
+				size="sm"
+				disabled={loading}
+				onClick={handleRemark}
+			>
+				{loading ? (
+					<Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" />
+				) : (
+					<RefreshCw className="h-3.5 w-3.5 mr-2" />
+				)}
+				Re-mark
+			</Button>
+			{error && <p className="text-xs text-destructive">{error}</p>}
+		</div>
+	)
+}
+
 export function MarkingResultsClient({
 	jobId,
 	data,
+	scanPages,
 }: {
 	jobId: string
 	data: StudentPaperResultPayload
+	scanPages: ScanPageUrl[]
 }) {
 	const scorePercent =
 		data.total_max > 0
 			? Math.round((data.total_awarded / data.total_max) * 100)
 			: 0
 
-	return (
-		<div className="max-w-3xl space-y-6">
+	const [answers, setAnswers] = useState<Record<string, string>>(
+		Object.fromEntries(
+			data.grading_results.map((r) => [r.question_id, r.student_answer]),
+		),
+	)
+
+	const gradingPanel = (
+		<div className="space-y-6">
+			{/* Header */}
 			<div className="flex items-start justify-between gap-4">
 				<div>
 					<p className="text-sm text-muted-foreground mb-1">
@@ -134,15 +276,19 @@ export function MarkingResultsClient({
 						{data.exam_paper_title}
 					</p>
 				</div>
-				<Link
-					href="/teacher/mark/new"
-					className={buttonVariants({ size: "sm" })}
-				>
-					<PlusCircle className="h-3.5 w-3.5 mr-1.5" />
-					Mark another
-				</Link>
+				<div className="flex items-center gap-2 shrink-0">
+					<ReMarkButton jobId={jobId} />
+					<Link
+						href="/teacher/mark/new"
+						className={buttonVariants({ size: "sm" })}
+					>
+						<PlusCircle className="h-3.5 w-3.5 mr-1.5" />
+						Mark another
+					</Link>
+				</div>
 			</div>
 
+			{/* Score summary */}
 			<Card>
 				<CardHeader>
 					<CardTitle className="flex items-center justify-between">
@@ -163,6 +309,7 @@ export function MarkingResultsClient({
 				</CardContent>
 			</Card>
 
+			{/* Question breakdown */}
 			<div>
 				<h2 className="text-lg font-semibold mb-3">Question breakdown</h2>
 				{data.grading_results.length === 0 ? (
@@ -206,13 +353,17 @@ export function MarkingResultsClient({
 											<p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">
 												Student answer
 											</p>
-											<p className="text-sm whitespace-pre-wrap rounded-md bg-muted px-3 py-2">
-												{r.student_answer || (
-													<span className="italic text-muted-foreground">
-														No answer written
-													</span>
-												)}
-											</p>
+											<AnswerEditor
+												jobId={jobId}
+												questionNumber={r.question_number}
+												initialText={answers[r.question_id] ?? ""}
+												onSaved={(newText) =>
+													setAnswers((prev) => ({
+														...prev,
+														[r.question_id]: newText,
+													}))
+												}
+											/>
 										</div>
 										<div>
 											<p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">
@@ -253,6 +404,25 @@ export function MarkingResultsClient({
 					</Accordion>
 				)}
 			</div>
+		</div>
+	)
+
+	if (scanPages.length === 0) {
+		return <div className="max-w-3xl">{gradingPanel}</div>
+	}
+
+	return (
+		<div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:gap-8">
+			{/* Scan — sticky on large screens */}
+			<div className="lg:sticky lg:top-6 lg:w-80 xl:w-96 shrink-0">
+				<p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+					Student scan
+				</p>
+				<ScanPageViewer pages={scanPages} />
+			</div>
+
+			{/* Grading results */}
+			<div className="flex-1 min-w-0">{gradingPanel}</div>
 		</div>
 	)
 }

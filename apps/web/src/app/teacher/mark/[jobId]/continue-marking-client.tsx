@@ -90,7 +90,7 @@ function ExtractedAnswersPanel({
 						<AccordionTrigger className="px-3 py-2.5 hover:no-underline text-sm">
 							<div className="flex items-center gap-3 flex-1 text-left mr-2">
 								<span className="shrink-0 font-mono text-xs text-muted-foreground min-w-10">
-									Q{a.question_number}
+									Q {a.question_number}
 								</span>
 								<p className="text-sm text-muted-foreground line-clamp-1 flex-1">
 									{a.answer_text || (

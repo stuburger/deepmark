@@ -7,25 +7,25 @@ todos:
     status: completed
   - id: p2a-schema
     content: "Phase 2a: Add student_id FK to PdfIngestionJob in schema.prisma and run migration"
-    status: pending
+    status: completed
   - id: p2b-action
     content: "Phase 2b: Add linkStudentToJob() server action to mark-actions.ts"
-    status: pending
+    status: completed
   - id: p2c-ui
     content: "Phase 2c: Fix handleConfirmStudent in new/page.tsx to actually persist student linkage"
-    status: pending
+    status: completed
   - id: p2d-answers
     content: "Phase 2d: Write Answer + MarkingResult rows after grading when student_id is set"
-    status: pending
+    status: completed
   - id: p3a-refresh
     content: "Phase 3a: Auto-refresh client poller on [jobId]/page.tsx for in-progress states"
-    status: pending
+    status: completed
   - id: p3b-edit
     content: "Phase 3b: Editable extracted answers (action + inline UI on dashboard)"
-    status: pending
+    status: completed
   - id: p3c-reocr
     content: "Phase 3c: retriggerOcr() action + Re-scan button on [jobId] page"
-    status: pending
+    status: completed
 isProject: false
 ---
 

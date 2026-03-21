@@ -32,16 +32,28 @@ interface SqsEvent {
 	Records: SqsRecord[]
 }
 
+type MarkPointResultEntry = {
+	pointNumber: number
+	awarded: boolean
+	reasoning: string
+	expectedCriteria?: string
+	studentCovered?: string
+}
+
 type GradingResult = {
 	question_id: string
-	question_text: string
 	question_number: string
+	question_text: string
 	student_answer: string
 	awarded_score: number
 	max_score: number
 	llm_reasoning: string
 	feedback_summary: string
 	level_awarded?: number
+	why_not_next_level?: string
+	cap_applied?: string
+	mark_points_results: MarkPointResultEntry[]
+	mark_scheme_id: string | null
 }
 
 type ExtractedAnswersRaw = {
@@ -277,13 +289,15 @@ export async function handler(
 					})
 					gradingResults.push({
 						question_id: qItem.question_id,
-						question_text: qItem.question_text,
 						question_number: qItem.question_number,
+						question_text: qItem.question_text,
 						student_answer: studentAnswer,
 						awarded_score: 0,
 						max_score: qItem.question_obj.points ?? 0,
 						llm_reasoning: "No mark scheme available for this question.",
 						feedback_summary: "No mark scheme available.",
+						mark_points_results: [],
+						mark_scheme_id: null,
 					})
 					continue
 				}
@@ -343,14 +357,19 @@ export async function handler(
 					})
 					gradingResults.push({
 						question_id: qItem.question_id,
-						question_text: qItem.question_text,
 						question_number: qItem.question_number,
+						question_text: qItem.question_text,
 						student_answer: studentAnswer,
 						awarded_score: grade.totalScore,
 						max_score: grade.maxPossibleScore,
 						llm_reasoning: grade.llmReasoning,
 						feedback_summary: grade.feedbackSummary,
 						level_awarded: grade.levelAwarded ?? undefined,
+						why_not_next_level: grade.whyNotNextLevel ?? undefined,
+						cap_applied: grade.capApplied ?? undefined,
+						mark_points_results:
+							grade.markPointsResults as MarkPointResultEntry[],
+						mark_scheme_id: ms.id,
 					})
 				} catch (err) {
 					logger.error(TAG, "Grading failed for question", {
@@ -361,13 +380,15 @@ export async function handler(
 					})
 					gradingResults.push({
 						question_id: qItem.question_id,
-						question_text: qItem.question_text,
 						question_number: qItem.question_number,
+						question_text: qItem.question_text,
 						student_answer: studentAnswer,
 						awarded_score: 0,
 						max_score: ms.points_total,
 						llm_reasoning: "Grading failed.",
 						feedback_summary: "Grading failed for this question.",
+						mark_points_results: [],
+						mark_scheme_id: ms.id,
 					})
 				}
 			}
@@ -402,6 +423,57 @@ export async function handler(
 					error: null,
 				},
 			})
+
+			// Persist normalised Answer + MarkingResult rows when a Student record
+			// is linked to this job. Failures here are non-fatal — the JSON blob
+			// already carries the results.
+			const linkedStudentId = job.student_id
+			if (linkedStudentId) {
+				try {
+					const markedAt = new Date()
+					for (const r of gradingResults) {
+						const answer = await db.answer.create({
+							data: {
+								question_id: r.question_id,
+								student_id: linkedStudentId,
+								student_answer: r.student_answer,
+								total_score: r.awarded_score,
+								max_possible_score: r.max_score,
+								marking_status: "completed",
+								source: "scanned",
+								marked_at: markedAt,
+							},
+						})
+						if (r.mark_scheme_id) {
+							await db.markingResult.create({
+								data: {
+									answer_id: answer.id,
+									mark_scheme_id: r.mark_scheme_id,
+									mark_points_results: r.mark_points_results,
+									total_score: r.awarded_score,
+									max_possible_score: r.max_score,
+									llm_reasoning: r.llm_reasoning,
+									feedback_summary: r.feedback_summary,
+									level_awarded: r.level_awarded ?? null,
+									why_not_next_level: r.why_not_next_level ?? null,
+									cap_applied: r.cap_applied ?? null,
+								},
+							})
+						}
+					}
+					logger.info(TAG, "Answer + MarkingResult rows written", {
+						jobId,
+						student_id: linkedStudentId,
+						count: gradingResults.length,
+					})
+				} catch (persistErr) {
+					logger.error(
+						TAG,
+						"Failed to persist Answer/MarkingResult rows — non-fatal",
+						{ jobId, error: String(persistErr) },
+					)
+				}
+			}
 		} catch (err) {
 			logger.error(TAG, "Grading job failed with unhandled error", {
 				jobId,

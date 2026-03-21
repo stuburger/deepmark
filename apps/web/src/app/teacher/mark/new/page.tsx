@@ -12,6 +12,7 @@ import {
 	addPageToJob,
 	createStudentPaperJob,
 	getStudentPaperJob,
+	linkStudentToJob,
 	removePageFromJob,
 	reorderPages,
 	triggerGrading,
@@ -19,8 +20,7 @@ import {
 } from "@/lib/mark-actions"
 import {
 	type StudentItem,
-	confirmStudentForSubmission,
-	createAndConfirmStudent,
+	createStudent,
 	listStudents,
 } from "@/lib/student-actions"
 import {
@@ -373,6 +373,7 @@ export default function MarkNewPage() {
 	}
 
 	async function handleConfirmStudent() {
+		if (!jobIdRef.current) return
 		setStudentError(null)
 		setConfirmingStudent(true)
 		try {
@@ -381,17 +382,28 @@ export default function MarkNewPage() {
 					setStudentError("Please enter a student name")
 					return
 				}
-				// For PdfIngestionJob flow: just create the student record (linking happens in grade-scan.ts)
-				// If we have a scan submission ID in future, we'd call createAndConfirmStudent
-				const { createStudent } = await import("@/lib/student-actions")
-				const result = await createStudent(newStudentName.trim())
-				if (!result.ok) {
-					setStudentError(result.error)
+				const createResult = await createStudent(newStudentName.trim())
+				if (!createResult.ok) {
+					setStudentError(createResult.error)
+					return
+				}
+				const linkResult = await linkStudentToJob(
+					jobIdRef.current,
+					createResult.student.id,
+				)
+				if (!linkResult.ok) {
+					setStudentError(linkResult.error)
 					return
 				}
 			} else if (studentMode === "select" && selectedStudentId) {
-				// Student already exists — nothing to do here for PdfIngestionJob flow
-				// grade-scan.ts will upsert by name match anyway
+				const linkResult = await linkStudentToJob(
+					jobIdRef.current,
+					selectedStudentId,
+				)
+				if (!linkResult.ok) {
+					setStudentError(linkResult.error)
+					return
+				}
 			}
 			proceedToPaperSelect()
 		} finally {

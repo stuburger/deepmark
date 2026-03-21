@@ -1,9 +1,13 @@
 "use server"
 
-import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3"
+import {
+	GetObjectCommand,
+	PutObjectCommand,
+	S3Client,
+} from "@aws-sdk/client-s3"
 import { SQSClient, SendMessageCommand } from "@aws-sdk/client-sqs"
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner"
-import { createPrismaClient } from "@mcp-gcse/db"
+import { Prisma, createPrismaClient } from "@mcp-gcse/db"
 import { Resource } from "sst"
 import { auth } from "./auth"
 import { log } from "./logger"
@@ -292,6 +296,7 @@ export type StudentPaperJobPayload = {
 	status: string
 	error: string | null
 	student_name: string | null
+	student_id: string | null
 	detected_subject: string | null
 	pages_count: number
 	grading_results: GradingResult[]
@@ -342,6 +347,7 @@ export async function getStudentPaperJob(
 			status: job.status,
 			error: job.error,
 			student_name: job.student_name,
+			student_id: job.student_id,
 			detected_subject: job.detected_subject,
 			pages_count: pages.length,
 			grading_results: rawResults,
@@ -379,6 +385,94 @@ export async function updateStudentName(
 	await db.pdfIngestionJob.update({
 		where: { id: jobId },
 		data: { student_name: name },
+	})
+	return { ok: true }
+}
+
+// ─── Scan page presigned URLs ─────────────────────────────────────────────────
+
+export type ScanPageUrl = {
+	order: number
+	url: string
+	mimeType: string
+}
+
+export type GetJobScanPageUrlsResult =
+	| { ok: true; pages: ScanPageUrl[] }
+	| { ok: false; error: string }
+
+/**
+ * Returns short-lived presigned GET URLs for every page uploaded to a job.
+ * Used to display the student's scan alongside grading results.
+ */
+export async function getJobScanPageUrls(
+	jobId: string,
+): Promise<GetJobScanPageUrlsResult> {
+	const session = await auth()
+	if (!session) return { ok: false, error: "Not authenticated" }
+
+	const job = await db.pdfIngestionJob.findFirst({
+		where: { id: jobId, uploaded_by: session.userId },
+		select: { pages: true, s3_bucket: true },
+	})
+	if (!job) return { ok: false, error: "Job not found" }
+
+	type PageEntry = { key: string; order: number; mime_type: string }
+	const pages = (job.pages ?? []) as PageEntry[]
+	if (pages.length === 0) return { ok: true, pages: [] }
+
+	const bucket = job.s3_bucket || bucketName
+
+	const resolved = await Promise.all(
+		pages
+			.slice()
+			.sort((a, b) => a.order - b.order)
+			.map(async (p) => {
+				const cmd = new GetObjectCommand({ Bucket: bucket, Key: p.key })
+				const url = await getSignedUrl(s3, cmd, { expiresIn: 3600 })
+				return { order: p.order, url, mimeType: p.mime_type }
+			}),
+	)
+
+	return { ok: true, pages: resolved }
+}
+
+// ─── Link student to job ──────────────────────────────────────────────────────
+
+export type LinkStudentToJobResult = { ok: true } | { ok: false; error: string }
+
+/**
+ * Associates a Student record with a PdfIngestionJob so that graded answers
+ * are subsequently written to the normalised Answer / MarkingResult tables.
+ * Also syncs student_name from the Student record.
+ */
+export async function linkStudentToJob(
+	jobId: string,
+	studentId: string,
+): Promise<LinkStudentToJobResult> {
+	const session = await auth()
+	if (!session) return { ok: false, error: "Not authenticated" }
+
+	const [job, student] = await Promise.all([
+		db.pdfIngestionJob.findFirst({
+			where: { id: jobId, uploaded_by: session.userId },
+		}),
+		db.student.findFirst({
+			where: { id: studentId, teacher_id: session.userId },
+		}),
+	])
+	if (!job) return { ok: false, error: "Job not found" }
+	if (!student) return { ok: false, error: "Student not found" }
+
+	await db.pdfIngestionJob.update({
+		where: { id: jobId },
+		data: { student_id: studentId, student_name: student.name },
+	})
+
+	log.info(TAG, "Student linked to job", {
+		userId: session.userId,
+		jobId,
+		studentId,
 	})
 	return { ok: true }
 }
@@ -428,6 +522,135 @@ export async function listMySubmissions(): Promise<ListMySubmissionsResult> {
 			}
 		}),
 	}
+}
+
+// ─── Update extracted answer ──────────────────────────────────────────────────
+
+export type UpdateExtractedAnswerResult =
+	| { ok: true }
+	| { ok: false; error: string }
+
+/**
+ * Edits a single answer in extracted_answers_raw by question number.
+ * The change is persisted so that a subsequent re-mark uses the corrected text.
+ */
+export async function updateExtractedAnswer(
+	jobId: string,
+	questionNumber: string,
+	newText: string,
+): Promise<UpdateExtractedAnswerResult> {
+	const session = await auth()
+	if (!session) return { ok: false, error: "Not authenticated" }
+
+	const job = await db.pdfIngestionJob.findFirst({
+		where: { id: jobId, uploaded_by: session.userId },
+	})
+	if (!job) return { ok: false, error: "Job not found" }
+	if (!job.extracted_answers_raw)
+		return { ok: false, error: "No extracted answers to edit" }
+
+	type RawExtracted = {
+		student_name?: string | null
+		answers: Array<{ question_number: string; answer_text: string }>
+	}
+	const raw = job.extracted_answers_raw as RawExtracted
+	const updated = {
+		...raw,
+		answers: raw.answers.map((a) =>
+			a.question_number === questionNumber ? { ...a, answer_text: newText } : a,
+		),
+	}
+
+	await db.pdfIngestionJob.update({
+		where: { id: jobId },
+		data: { extracted_answers_raw: updated },
+	})
+
+	return { ok: true }
+}
+
+// ─── Re-trigger grading (re-mark with existing paper) ─────────────────────────
+
+export type RetriggerGradingResult = { ok: true } | { ok: false; error: string }
+
+/**
+ * Re-queues a completed or failed job for grading using the already-selected
+ * exam paper. Clears previous grading results so the processor starts fresh.
+ */
+export async function retriggerGrading(
+	jobId: string,
+): Promise<RetriggerGradingResult> {
+	const session = await auth()
+	if (!session) return { ok: false, error: "Not authenticated" }
+
+	const job = await db.pdfIngestionJob.findFirst({
+		where: { id: jobId, uploaded_by: session.userId },
+	})
+	if (!job) return { ok: false, error: "Job not found" }
+	if (!job.exam_paper_id)
+		return { ok: false, error: "No exam paper selected — cannot re-mark" }
+	if (!job.extracted_answers_raw)
+		return { ok: false, error: "No extracted answers — run OCR first" }
+
+	await db.pdfIngestionJob.update({
+		where: { id: jobId },
+		data: { status: "pending", grading_results: [], error: null },
+	})
+
+	await sqs.send(
+		new SendMessageCommand({
+			QueueUrl: Resource.StudentPaperQueue.url,
+			MessageBody: JSON.stringify({ job_id: jobId }),
+		}),
+	)
+
+	log.info(TAG, "Re-grading triggered", { userId: session.userId, jobId })
+	return { ok: true }
+}
+
+// ─── Re-trigger OCR (re-scan) ─────────────────────────────────────────────────
+
+export type RetriggerOcrResult = { ok: true } | { ok: false; error: string }
+
+/**
+ * Resets the job back to OCR pending, clearing all extracted and graded data.
+ * The existing page uploads are kept so the OCR processor can re-read them.
+ */
+export async function retriggerOcr(jobId: string): Promise<RetriggerOcrResult> {
+	const session = await auth()
+	if (!session) return { ok: false, error: "Not authenticated" }
+
+	const job = await db.pdfIngestionJob.findFirst({
+		where: { id: jobId, uploaded_by: session.userId },
+	})
+	if (!job) return { ok: false, error: "Job not found" }
+
+	type PageEntry = { key: string; order: number; mime_type: string }
+	const pages = (job.pages ?? []) as PageEntry[]
+	if (pages.length === 0)
+		return { ok: false, error: "No pages uploaded — cannot re-scan" }
+
+	await db.pdfIngestionJob.update({
+		where: { id: jobId },
+		data: {
+			status: "pending",
+			extracted_answers_raw: Prisma.JsonNull,
+			grading_results: [],
+			student_name: null,
+			detected_subject: null,
+			error: null,
+		},
+	})
+
+	await sqs.send(
+		new SendMessageCommand({
+			QueueUrl: Resource.StudentPaperOcrQueue.url,
+			MessageBody: JSON.stringify({ job_id: jobId }),
+		}),
+	)
+
+	log.info(TAG, "Re-OCR triggered", { userId: session.userId, jobId })
+	return { ok: true }
 }
 
 // ─── Per-paper stats ──────────────────────────────────────────────────────────

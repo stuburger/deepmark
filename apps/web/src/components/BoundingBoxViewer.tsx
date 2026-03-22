@@ -159,6 +159,8 @@ type Props = {
 	className?: string
 	/** When false, transcript and observations are omitted (shown elsewhere, e.g. mark flow RHS). */
 	showAnalysisText?: boolean
+	/** Controls highlight visibility. Defaults to false when omitted. */
+	showHighlights?: boolean
 }
 
 export function BoundingBoxViewer({
@@ -166,12 +168,12 @@ export function BoundingBoxViewer({
 	analysis,
 	className,
 	showAnalysisText = true,
+	showHighlights = false,
 }: Props) {
 	const features = analysis.features ?? []
 	const [imageDims, setImageDims] = useState<{ w: number; h: number } | null>(
 		null,
 	)
-	const [showHighlights, setShowHighlights] = useState(true)
 
 	const handleImageLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
 		setImageDims({
@@ -237,39 +239,8 @@ export function BoundingBoxViewer({
 				)}
 			</div>
 
-			{/* Toolbar */}
-			{imageDims && (
-				<div className="flex items-center gap-2">
-					<button
-						type="button"
-						onClick={() => setShowHighlights((v) => !v)}
-						className={cn(
-							"inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm font-medium transition-colors",
-							showHighlights
-								? "bg-primary text-primary-foreground border-primary"
-								: "bg-background text-foreground border-input hover:bg-muted",
-						)}
-					>
-						<span
-							className="inline-block size-3 rounded-sm"
-							style={{
-								backgroundColor: showHighlights
-									? "currentColor"
-									: "rgb(59 130 246)",
-								opacity: showHighlights ? 0.7 : 0.4,
-							}}
-						/>
-						{showHighlights ? "Highlights on" : "Highlights off"}
-					</button>
-					<span className="text-xs text-muted-foreground">
-						{features.length} region{features.length !== 1 ? "s" : ""} · click
-						any highlight to inspect
-					</span>
-				</div>
-			)}
-
 			{showAnalysisText ? (
-				<HandwritingAnalysisPanel analysis={analysis} showHeading={false} />
+				<HandwritingAnalysisPanel analysis={analysis} />
 			) : null}
 
 			{/* Legend */}

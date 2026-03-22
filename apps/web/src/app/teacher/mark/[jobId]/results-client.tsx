@@ -1,5 +1,7 @@
 "use client"
 
+import { BoundingBoxViewer } from "@/components/BoundingBoxViewer"
+import { HandwritingAnalysisPanel } from "@/components/HandwritingAnalysisPanel"
 import {
 	Accordion,
 	AccordionContent,
@@ -12,6 +14,7 @@ import { buttonVariants } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Progress } from "@/components/ui/progress"
+import { Separator } from "@/components/ui/separator"
 import { Textarea } from "@/components/ui/textarea"
 import {
 	type ScanPageUrl,
@@ -20,10 +23,12 @@ import {
 	updateExtractedAnswer,
 	updateStudentName,
 } from "@/lib/mark-actions"
+import { cn } from "@/lib/utils"
 import {
 	Check,
 	ChevronDown,
 	Download,
+	Highlighter,
 	Loader2,
 	Pencil,
 	PlusCircle,
@@ -33,7 +38,6 @@ import {
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useState } from "react"
-import { MarkScanTwoColumn } from "./mark-scan-two-column"
 
 function scoreBadgeVariant(
 	awarded: number,
@@ -67,7 +71,7 @@ function StudentNameEditor({
 	if (!editing) {
 		return (
 			<div className="flex items-center gap-2">
-				<span className="text-lg font-semibold">
+				<span className="text-sm font-semibold">
 					{name || (
 						<span className="text-muted-foreground font-normal italic">
 							Unknown student
@@ -80,7 +84,7 @@ function StudentNameEditor({
 					className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
 					aria-label="Edit student name"
 				>
-					<Pencil className="h-3.5 w-3.5" />
+					<Pencil className="h-3 w-3" />
 				</button>
 			</div>
 		)
@@ -95,7 +99,7 @@ function StudentNameEditor({
 					if (e.key === "Enter") save()
 					if (e.key === "Escape") setEditing(false)
 				}}
-				className="h-8 w-48 text-sm"
+				className="h-7 w-40 text-sm"
 				placeholder="Student name"
 				autoFocus
 			/>
@@ -105,6 +109,7 @@ function StudentNameEditor({
 				disabled={saving}
 				onClick={save}
 				aria-label="Save"
+				className="h-7 w-7 p-0"
 			>
 				<Check className="h-3.5 w-3.5" />
 			</Button>
@@ -113,6 +118,7 @@ function StudentNameEditor({
 				variant="ghost"
 				onClick={() => setEditing(false)}
 				aria-label="Cancel"
+				className="h-7 w-7 p-0"
 			>
 				<X className="h-3.5 w-3.5" />
 			</Button>
@@ -408,6 +414,72 @@ function DownloadPdfButton({ data }: { data: StudentPaperResultPayload }) {
 	)
 }
 
+// ─── Scrollable scan column ────────────────────────────────────────────────────
+
+function ScrollableScanPages({
+	pages,
+	showHighlights,
+}: {
+	pages: ScanPageUrl[]
+	showHighlights: boolean
+}) {
+	if (pages.length === 0) return null
+
+	return (
+		<div className="flex flex-col gap-8 px-6 py-6">
+			{pages.map((page, i) => {
+				const isPdf = page.mimeType === "application/pdf"
+				const label =
+					pages.length > 1 ? `Page ${i + 1} of ${pages.length}` : null
+
+				return (
+					<div key={page.order} className="flex flex-col gap-2">
+						{label && (
+							<p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+								{label}
+							</p>
+						)}
+
+						{isPdf ? (
+							<div className="relative overflow-hidden rounded-xl border bg-muted/20">
+								<iframe
+									src={page.url}
+									title={`Page ${i + 1}`}
+									className="h-[80vh] w-full border-0"
+								/>
+							</div>
+						) : page.analysis ? (
+							<div className="space-y-2">
+								<div className="flex items-center gap-2">
+									<span className="text-xs text-muted-foreground">OCR</span>
+									<HandwritingAnalysisPanel analysis={page.analysis} />
+								</div>
+								<BoundingBoxViewer
+									imageUrl={page.url}
+									analysis={page.analysis}
+									showAnalysisText={false}
+									showHighlights={showHighlights}
+								/>
+							</div>
+						) : (
+							<div className="relative overflow-hidden rounded-xl border bg-muted/20">
+								{/* eslint-disable-next-line @next/next/no-img-element -- presigned S3 URL */}
+								<img
+									src={page.url}
+									alt={`Scan page ${i + 1}`}
+									className="block w-full rounded-xl"
+								/>
+							</div>
+						)}
+					</div>
+				)
+			})}
+		</div>
+	)
+}
+
+// ─── Main component ───────────────────────────────────────────────────────────
+
 export function MarkingResultsClient({
 	jobId,
 	data,
@@ -428,25 +500,89 @@ export function MarkingResultsClient({
 		),
 	)
 
-	const gradingPanel = (
-		<div className="space-y-6">
-			{/* Header */}
-			<div className="flex items-start justify-between gap-4">
-				<div>
-					<p className="text-sm text-muted-foreground mb-1">
+	const [showHighlights, setShowHighlights] = useState(true)
+
+	const hasScanPages = scanPages.length > 0
+
+	// ── No-scan fallback: single-column layout ─────────────────────────────────
+	if (!hasScanPages) {
+		return (
+			<div className="max-w-3xl space-y-6">
+				<div className="flex items-start justify-between gap-4">
+					<div>
+						<p className="text-sm text-muted-foreground mb-1">
+							<Link
+								href="/teacher/mark"
+								className="hover:underline underline-offset-4"
+							>
+								← Mark history
+							</Link>
+						</p>
+						<StudentNameEditor jobId={jobId} initialName={data.student_name} />
+						<p className="text-sm text-muted-foreground mt-0.5">
+							{data.exam_paper_title}
+						</p>
+					</div>
+					<div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+						<DownloadPdfButton data={data} />
+						<ReMarkButton jobId={jobId} />
 						<Link
-							href="/teacher/mark"
-							className="hover:underline underline-offset-4"
+							href="/teacher/mark/new"
+							className={buttonVariants({ size: "sm" })}
 						>
-							← Mark history
+							<PlusCircle className="h-3.5 w-3.5 mr-1.5" />
+							Mark another
 						</Link>
-					</p>
-					<StudentNameEditor jobId={jobId} initialName={data.student_name} />
-					<p className="text-sm text-muted-foreground mt-0.5">
-						{data.exam_paper_title}
-					</p>
+					</div>
 				</div>
-				<div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+				<GradingResults
+					jobId={jobId}
+					data={data}
+					answers={answers}
+					scorePercent={scorePercent}
+					onAnswerSaved={(id, text) =>
+						setAnswers((prev) => ({ ...prev, [id]: text }))
+					}
+				/>
+			</div>
+		)
+	}
+
+	// ── Full layout: toolbar + scan focal point + sidebar ─────────────────────
+	return (
+		<div className="-m-6 flex flex-col overflow-hidden h-dvh">
+			{/* Sticky toolbar */}
+			<div className="shrink-0 flex items-center gap-3 border-b bg-background px-4 py-2 flex-wrap">
+				<Link
+					href="/teacher/mark"
+					className="text-sm text-muted-foreground hover:text-foreground hover:underline underline-offset-4 shrink-0"
+				>
+					← Mark history
+				</Link>
+				<Separator orientation="vertical" className="h-4 shrink-0" />
+				<StudentNameEditor jobId={jobId} initialName={data.student_name} />
+				{data.exam_paper_title && (
+					<>
+						<Separator orientation="vertical" className="h-4 shrink-0" />
+						<p className="text-sm text-muted-foreground truncate max-w-xs">
+							{data.exam_paper_title}
+						</p>
+					</>
+				)}
+
+				<div className="ml-auto flex items-center gap-2 shrink-0">
+					<Button
+						variant="outline"
+						size="sm"
+						onClick={() => setShowHighlights((v) => !v)}
+						className={cn(
+							showHighlights &&
+								"bg-primary text-primary-foreground border-primary hover:bg-primary/90 hover:text-primary-foreground",
+						)}
+					>
+						<Highlighter className="h-3.5 w-3.5 mr-2" />
+						{showHighlights ? "Highlights on" : "Highlights off"}
+					</Button>
 					<DownloadPdfButton data={data} />
 					<ReMarkButton jobId={jobId} />
 					<Link
@@ -459,22 +595,68 @@ export function MarkingResultsClient({
 				</div>
 			</div>
 
+			{/* Two-panel body */}
+			<div className="flex flex-1 min-h-0">
+				{/* Left: scrollable scan pages */}
+				<div className="flex-1 overflow-y-auto bg-muted/20">
+					<ScrollableScanPages
+						pages={scanPages}
+						showHighlights={showHighlights}
+					/>
+				</div>
+
+				{/* Right: results sidebar */}
+				<div className="w-96 shrink-0 border-l overflow-y-auto">
+					<div className="p-4 space-y-5">
+						<GradingResults
+							jobId={jobId}
+							data={data}
+							answers={answers}
+							scorePercent={scorePercent}
+							onAnswerSaved={(id, text) =>
+								setAnswers((prev) => ({ ...prev, [id]: text }))
+							}
+						/>
+					</div>
+				</div>
+			</div>
+		</div>
+	)
+}
+
+// ─── Grading results panel (shared between layouts) ───────────────────────────
+
+function GradingResults({
+	jobId,
+	data,
+	answers,
+	scorePercent,
+	onAnswerSaved,
+}: {
+	jobId: string
+	data: StudentPaperResultPayload
+	answers: Record<string, string>
+	scorePercent: number
+	onAnswerSaved: (questionId: string, text: string) => void
+}) {
+	return (
+		<div className="space-y-5">
 			{/* Score summary */}
 			<Card>
-				<CardHeader>
-					<CardTitle className="flex items-center justify-between">
+				<CardHeader className="pb-3">
+					<CardTitle className="flex items-center justify-between text-base">
 						<span>Total score</span>
 						<Badge
 							variant={scoreBadgeVariant(data.total_awarded, data.total_max)}
-							className="text-base px-3 py-1"
+							className="text-sm px-2.5 py-0.5"
 						>
 							{data.total_awarded} / {data.total_max}
 						</Badge>
 					</CardTitle>
 				</CardHeader>
 				<CardContent>
-					<Progress value={scorePercent} className="h-3" />
-					<p className="mt-2 text-sm text-muted-foreground text-right">
+					<Progress value={scorePercent} className="h-2.5" />
+					<p className="mt-1.5 text-xs text-muted-foreground text-right">
 						{scorePercent}%
 					</p>
 				</CardContent>
@@ -482,7 +664,9 @@ export function MarkingResultsClient({
 
 			{/* Question breakdown */}
 			<div>
-				<h2 className="text-lg font-semibold mb-3">Question breakdown</h2>
+				<h2 className="text-sm font-semibold mb-3 uppercase tracking-wide text-muted-foreground">
+					Question breakdown
+				</h2>
 				{data.grading_results.length === 0 ? (
 					<p className="text-sm text-muted-foreground">
 						No questions were graded.
@@ -529,10 +713,7 @@ export function MarkingResultsClient({
 												questionNumber={r.question_number}
 												initialText={answers[r.question_id] ?? ""}
 												onSaved={(newText) =>
-													setAnswers((prev) => ({
-														...prev,
-														[r.question_id]: newText,
-													}))
+													onAnswerSaved(r.question_id, newText)
 												}
 											/>
 										</div>
@@ -576,11 +757,5 @@ export function MarkingResultsClient({
 				)}
 			</div>
 		</div>
-	)
-
-	return (
-		<MarkScanTwoColumn scanPages={scanPages} whenNoScanClassName="max-w-3xl">
-			{gradingPanel}
-		</MarkScanTwoColumn>
 	)
 }

@@ -1,4 +1,5 @@
 import { TeacherSidebarNav } from "@/components/teacher-sidebar-nav"
+import { ThemeToggle } from "@/components/theme-toggle"
 import {
 	Sidebar,
 	SidebarFooter,
@@ -39,6 +40,9 @@ export default async function TeacherLayout({
 				</SidebarHeader>
 				<TeacherSidebarNav />
 				<SidebarFooter>
+					<div className="flex justify-end">
+						<ThemeToggle className="text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground dark:hover:bg-sidebar-accent" />
+					</div>
 					<SidebarSeparator />
 					<Link
 						href="/admin/overview"
@@ -61,11 +65,12 @@ export default async function TeacherLayout({
 					<SidebarTrigger />
 					<Link
 						href="/teacher/mark"
-						className="flex items-center gap-2 font-semibold"
+						className="flex min-w-0 flex-1 items-center gap-2 font-semibold"
 					>
-						<GraduationCap className="h-5 w-5" />
-						<span>Teacher Space</span>
+						<GraduationCap className="h-5 w-5 shrink-0" />
+						<span className="truncate">Teacher Space</span>
 					</Link>
+					<ThemeToggle className="shrink-0" />
 				</header>
 				<main className="flex-1 overflow-auto p-6">{children}</main>
 			</SidebarInset>

@@ -5,7 +5,7 @@ import type { ScanPageUrl } from "@/lib/mark-actions"
 import { ChevronLeft, ChevronRight, FileText } from "lucide-react"
 import { useState } from "react"
 
-export function ScanPageViewer({
+export function ScanDocumentViewer({
 	pages,
 	className,
 	pageIndex: controlledPageIndex,

@@ -1,6 +1,9 @@
 "use client"
 
-import { BoundingBoxViewer } from "@/components/BoundingBoxViewer"
+import {
+	BoundingBoxViewer,
+	type GradingAnnotation,
+} from "@/components/BoundingBoxViewer"
 import { HandwritingAnalysisPanel } from "@/components/HandwritingAnalysisPanel"
 import {
 	Accordion,
@@ -17,6 +20,7 @@ import { Progress } from "@/components/ui/progress"
 import { Separator } from "@/components/ui/separator"
 import { Textarea } from "@/components/ui/textarea"
 import {
+	type GradingResult,
 	type ScanPageUrl,
 	type StudentPaperResultPayload,
 	retriggerGrading,
@@ -416,12 +420,34 @@ function DownloadPdfButton({ data }: { data: StudentPaperResultPayload }) {
 
 // ─── Scrollable scan column ────────────────────────────────────────────────────
 
+function annotationsForPage(
+	gradingResults: GradingResult[],
+	pageOrder: number,
+): GradingAnnotation[] {
+	return gradingResults.flatMap((r) => {
+		const region = r.answer_regions?.find((ar) => ar.page === pageOrder)
+		if (!region) return []
+		return [
+			{
+				questionNumber: r.question_number,
+				questionText: r.question_text,
+				feedbackSummary: r.feedback_summary,
+				awardedScore: r.awarded_score,
+				maxScore: r.max_score,
+				box: region.box,
+			},
+		]
+	})
+}
+
 function ScrollableScanPages({
 	pages,
 	showHighlights,
+	gradingResults,
 }: {
 	pages: ScanPageUrl[]
 	showHighlights: boolean
+	gradingResults: GradingResult[]
 }) {
 	if (pages.length === 0) return null
 
@@ -431,6 +457,7 @@ function ScrollableScanPages({
 				const isPdf = page.mimeType === "application/pdf"
 				const label =
 					pages.length > 1 ? `Page ${i + 1} of ${pages.length}` : null
+				const annotations = annotationsForPage(gradingResults, page.order)
 
 				return (
 					<div key={page.order} className="flex flex-col gap-2">
@@ -459,6 +486,9 @@ function ScrollableScanPages({
 									analysis={page.analysis}
 									showAnalysisText={false}
 									showHighlights={showHighlights}
+									gradingAnnotations={
+										annotations.length > 0 ? annotations : undefined
+									}
 								/>
 							</div>
 						) : (
@@ -602,6 +632,7 @@ export function MarkingResultsClient({
 					<ScrollableScanPages
 						pages={scanPages}
 						showHighlights={showHighlights}
+						gradingResults={data.grading_results}
 					/>
 				</div>
 
@@ -685,11 +716,11 @@ function GradingResults({
 									className="rounded-lg border px-4"
 								>
 									<AccordionTrigger className="hover:no-underline py-3">
-										<div className="flex items-center gap-3 flex-1 text-left mr-2">
-											<span className="shrink-0 text-xs font-mono text-muted-foreground w-4">
+										<div className="flex items-center gap-3 flex-1 text-left mr-2 min-w-0">
+											<span className="shrink-0 text-xs font-mono tabular-nums text-muted-foreground pr-1">
 												Q{r.question_number}
 											</span>
-											<p className="text-sm font-medium line-clamp-1 flex-1">
+											<p className="text-sm font-medium line-clamp-1 flex-1 min-w-0">
 												{r.question_text}
 											</p>
 											<Badge

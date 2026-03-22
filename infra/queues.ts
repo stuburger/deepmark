@@ -188,7 +188,7 @@ questionPaperQueue.subscribe({
 // select an exam paper first and then trigger studentPaperQueue separately.
 studentPaperOcrQueue.subscribe({
 	handler: "packages/backend/src/processors/student-paper-ocr.handler",
-	link: [neonPostgres, geminiApiKey, openAiApiKey, scansBucket],
+	link: [neonPostgres, geminiApiKey, openAiApiKey, scansBucket, studentPaperQueue],
 	timeout: "8 minutes",
 	memory: "1 GB",
 })

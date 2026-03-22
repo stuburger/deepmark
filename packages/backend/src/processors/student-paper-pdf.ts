@@ -5,7 +5,8 @@ import {
 } from "@/lib/cancellation"
 import { defaultChatModel } from "@/lib/google-generative-ai"
 import { logger } from "@/lib/logger"
-import { S3Client } from "@aws-sdk/client-s3"
+import { GetObjectCommand, S3Client } from "@aws-sdk/client-s3"
+import { GoogleGenAI, Type } from "@google/genai"
 import type { ScanStatus } from "@mcp-gcse/db"
 import {
 	DeterministicMarker,
@@ -18,12 +19,13 @@ import {
 	parseMarkingRulesFromPrisma,
 } from "@mcp-gcse/shared"
 import { Output, generateText } from "ai"
+import { Resource } from "sst"
 import { z } from "zod"
 
 const TAG = "student-paper-pdf"
 
-// S3 client kept for potential future use (e.g. fetching pages for re-OCR)
-const _s3 = new S3Client({})
+const s3 = new S3Client({})
+const geminiVision = new GoogleGenAI({ apiKey: Resource.GeminiApiKey.value })
 
 interface SqsRecord {
 	messageId: string
@@ -42,6 +44,13 @@ type MarkPointResultEntry = {
 	studentCovered?: string
 }
 
+type AnswerRegion = {
+	/** 1-indexed page order matching PdfIngestionJob.pages[].order */
+	page: number
+	/** [yMin, xMin, yMax, xMax] normalised 0–1000, same coordinate system as OCR features */
+	box: [number, number, number, number]
+}
+
 type GradingResult = {
 	question_id: string
 	question_number: string
@@ -56,6 +65,8 @@ type GradingResult = {
 	cap_applied?: string
 	mark_points_results: MarkPointResultEntry[]
 	mark_scheme_id: string | null
+	/** Spatial attribution — which region of each page contains this answer. */
+	answer_regions: AnswerRegion[]
 }
 
 type ExtractedAnswersRaw = {
@@ -152,6 +163,161 @@ Return the alignments array strictly matching the schema.`
 
 	return result
 }
+
+// ─── Answer region attribution ────────────────────────────────────────────────
+
+const REGION_SCHEMA = {
+	type: Type.OBJECT,
+	properties: {
+		regions: {
+			type: Type.ARRAY,
+			items: {
+				type: Type.OBJECT,
+				properties: {
+					question_id: { type: Type.STRING },
+					answer_region: {
+						type: Type.ARRAY,
+						items: { type: Type.INTEGER },
+					},
+					found: { type: Type.BOOLEAN },
+				},
+				required: ["question_id", "answer_region", "found"],
+			},
+		},
+	},
+	required: ["regions"],
+}
+
+type GeminiRegionResponse = {
+	regions: Array<{
+		question_id: string
+		answer_region: [number, number, number, number]
+		found: boolean
+	}>
+}
+
+type PageEntry = { key: string; order: number; mime_type: string }
+
+/**
+ * Calls Gemini Vision once per image page to identify where each written answer
+ * is located. Runs concurrently with the grading loop so it adds minimal latency.
+ *
+ * Returns a map of question_id → AnswerRegion[].
+ * On any per-page failure the page is skipped gracefully; grading is unaffected.
+ */
+async function attributeAnswerRegions(
+	questions: Array<{
+		question_id: string
+		question_number: string
+		question_text: string
+		is_mcq: boolean
+	}>,
+	pages: PageEntry[],
+	s3Bucket: string,
+	jobId: string,
+): Promise<Map<string, AnswerRegion[]>> {
+	const result = new Map<string, AnswerRegion[]>()
+
+	if (questions.length === 0) return result
+
+	const imagePages = pages.filter((p) => p.mime_type !== "application/pdf")
+	if (imagePages.length === 0) return result
+
+	const questionsText = questions
+		.map((q) => {
+			const hint = q.is_mcq
+				? " [MCQ — look for a circled, ticked option letter or standalone letter A/B/C/D/E/Etc]"
+				: ""
+			return `Q${q.question_number} (id: ${q.question_id})${hint}: ${q.question_text.slice(0, 150)}`
+		})
+		.join("\n")
+
+	for (const page of imagePages) {
+		let imageBase64: string
+		try {
+			const cmd = new GetObjectCommand({ Bucket: s3Bucket, Key: page.key })
+			const response = await s3.send(cmd)
+			const body = await response.Body?.transformToByteArray()
+			if (!body?.length) {
+				logger.warn(TAG, "Empty page image — skipping region attribution", {
+					jobId,
+					pageOrder: page.order,
+				})
+				continue
+			}
+			imageBase64 = Buffer.from(body).toString("base64")
+		} catch (err) {
+			logger.error(TAG, "Failed to fetch page image for region attribution", {
+				jobId,
+				pageOrder: page.order,
+				error: String(err),
+			})
+			continue
+		}
+
+		const mimeType = page.key.endsWith(".png") ? "image/png" : "image/jpeg"
+
+		try {
+			const response = await geminiVision.models.generateContent({
+				model: "gemini-2.5-flash",
+				contents: [
+					{
+						role: "user",
+						parts: [
+							{ inlineData: { data: imageBase64, mimeType } },
+							{
+								text: `You are examining a student's handwritten exam script page.
+
+For each question below, identify the region of the page where the student has written their answer. Draw a single bounding box that encompasses the ENTIRE answer for that question — including all written lines, corrections, and crossed-out text.
+
+If a question was not answered on this page, set found to false and use [0,0,0,0] for the answer_region.
+
+Questions:
+${questionsText}
+
+Return bounding box coordinates as [yMin, xMin, yMax, xMax] normalised 0–1000.`,
+							},
+						],
+					},
+				],
+				config: {
+					responseMimeType: "application/json",
+					responseSchema: REGION_SCHEMA,
+					temperature: 0.1,
+				},
+			})
+
+			const responseText = response.text
+			if (!responseText) continue
+
+			const geminiResult = JSON.parse(responseText) as GeminiRegionResponse
+			const found = (geminiResult.regions ?? []).filter((r) => r.found)
+
+			logger.info(TAG, "Region attribution complete for page", {
+				jobId,
+				pageOrder: page.order,
+				found: found.length,
+				total: geminiResult.regions?.length ?? 0,
+			})
+
+			for (const region of found) {
+				const existing = result.get(region.question_id) ?? []
+				existing.push({ page: page.order, box: region.answer_region })
+				result.set(region.question_id, existing)
+			}
+		} catch (err) {
+			logger.error(TAG, "Gemini Vision region attribution failed for page", {
+				jobId,
+				pageOrder: page.order,
+				error: String(err),
+			})
+		}
+	}
+
+	return result
+}
+
+// ─── SQS handler ─────────────────────────────────────────────────────────────
 
 export async function handler(
 	event: SqsEvent,
@@ -310,6 +476,21 @@ export async function handler(
 					.length,
 			})
 
+			// Kick off region attribution in parallel with grading — it reads the
+			// page images from S3 and asks Gemini Vision where each answer is written.
+			const jobPages = (job.pages ?? []) as PageEntry[]
+			const regionAttributionPromise = attributeAnswerRegions(
+				questionList.map((q) => ({
+					question_id: q.question_id,
+					question_number: q.question_number,
+					question_text: q.question_text,
+					is_mcq: q.question_obj.question_type === "multiple_choice",
+				})),
+				jobPages,
+				job.s3_bucket,
+				jobId,
+			)
+
 			const extractedRaw = job.extracted_answers_raw as ExtractedAnswersRaw
 			const rawAnswers = extractedRaw.answers ?? []
 
@@ -433,6 +614,7 @@ export async function handler(
 						feedback_summary: "No mark scheme available.",
 						mark_points_results: [],
 						mark_scheme_id: null,
+						answer_regions: [],
 					})
 					continue
 				}
@@ -505,6 +687,7 @@ export async function handler(
 						mark_points_results:
 							grade.markPointsResults as MarkPointResultEntry[],
 						mark_scheme_id: ms.id,
+						answer_regions: [],
 					})
 				} catch (err) {
 					logger.error(TAG, "Grading failed for question", {
@@ -527,6 +710,7 @@ export async function handler(
 						feedback_summary: gradingFailedNote,
 						mark_points_results: [],
 						mark_scheme_id: ms.id,
+						answer_regions: [],
 					})
 				}
 			}
@@ -534,6 +718,30 @@ export async function handler(
 			if (cancellation.isCancelled()) {
 				logger.info(TAG, "Job was cancelled — skipping completion", { jobId })
 				continue
+			}
+
+			// Merge answer regions (should mostly have resolved by now since grading
+			// takes longer than Gemini Vision calls). Failures degrade gracefully.
+			try {
+				const regionMap = await regionAttributionPromise
+				for (const r of gradingResults) {
+					r.answer_regions = regionMap.get(r.question_id) ?? []
+				}
+				logger.info(TAG, "Answer regions merged into grading results", {
+					jobId,
+					questions_with_regions: gradingResults.filter(
+						(r) => r.answer_regions.length > 0,
+					).length,
+				})
+			} catch (err) {
+				logger.error(
+					TAG,
+					"Region attribution failed — results saved without spatial data",
+					{ jobId, error: String(err) },
+				)
+				for (const r of gradingResults) {
+					r.answer_regions ??= []
+				}
 			}
 
 			const totalAwarded = gradingResults.reduce(

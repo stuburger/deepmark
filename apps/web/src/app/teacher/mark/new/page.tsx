@@ -182,6 +182,14 @@ export default function MarkNewPage() {
 	const [studentError, setStudentError] = useState<string | null>(null)
 	const [confirmingStudent, setConfirmingStudent] = useState(false)
 
+	// Fast-path: paper pre-selected before scanning
+	const [preSelectedPaper, setPreSelectedPaper] =
+		useState<CatalogExamPaper | null>(null)
+	const [showPaperPicker, setShowPaperPicker] = useState(false)
+	const [preSelectSearch, setPreSelectSearch] = useState("")
+	const [preSelectPapers, setPreSelectPapers] = useState<CatalogExamPaper[]>([])
+	const [loadingPreSelectPapers, setLoadingPreSelectPapers] = useState(false)
+
 	// Ensure job is created once
 	const jobIdRef = useRef<string | null>(null)
 
@@ -299,7 +307,7 @@ export default function MarkNewPage() {
 		if (!jobIdRef.current) return
 		setOcrError(null)
 		setStep("processing-ocr")
-		const result = await triggerOcr(jobIdRef.current)
+		const result = await triggerOcr(jobIdRef.current, preSelectedPaper?.id)
 		if (!result.ok) {
 			setOcrError(result.error)
 			setStep("upload")
@@ -405,7 +413,13 @@ export default function MarkNewPage() {
 					return
 				}
 			}
-			proceedToPaperSelect()
+			// Fast path: grading is already queued by the OCR handler.
+			// Skip paper selection and go straight to the grading spinner.
+			if (preSelectedPaper) {
+				setStep("processing-grade")
+			} else {
+				proceedToPaperSelect()
+			}
 		} finally {
 			setConfirmingStudent(false)
 		}
@@ -442,6 +456,21 @@ export default function MarkNewPage() {
 		const interval = setInterval(pollGrading, 3000)
 		return () => clearInterval(interval)
 	}, [step, pollGrading])
+
+	// Load exam papers the first time the pre-select picker is opened
+	useEffect(() => {
+		if (
+			!showPaperPicker ||
+			preSelectPapers.length > 0 ||
+			loadingPreSelectPapers
+		)
+			return
+		setLoadingPreSelectPapers(true)
+		listCatalogExamPapers().then((r) => {
+			if (r.ok) setPreSelectPapers(r.papers)
+			setLoadingPreSelectPapers(false)
+		})
+	}, [showPaperPicker, preSelectPapers.length, loadingPreSelectPapers])
 
 	// ─── Confirm student screen ───────────────────────────────────────────────
 
@@ -590,7 +619,11 @@ export default function MarkNewPage() {
 						</Button>
 						<button
 							type="button"
-							onClick={proceedToPaperSelect}
+							onClick={
+								preSelectedPaper
+									? () => setStep("processing-grade")
+									: proceedToPaperSelect
+							}
 							className="w-full text-center text-sm text-muted-foreground py-1"
 						>
 							Skip for now
@@ -630,9 +663,12 @@ export default function MarkNewPage() {
 					<p className="text-sm text-muted-foreground mt-1">
 						Grading each answer against the mark scheme. Usually 20–60 seconds.
 					</p>
-					{selectedPaper && (
+					{(selectedPaper ?? preSelectedPaper) && (
 						<p className="text-sm text-muted-foreground mt-1">
-							Paper: <span className="font-medium">{selectedPaper.title}</span>
+							Paper:{" "}
+							<span className="font-medium">
+								{(selectedPaper ?? preSelectedPaper)?.title}
+							</span>
 						</p>
 					)}
 				</div>
@@ -734,6 +770,110 @@ export default function MarkNewPage() {
 										/>
 									))}
 								</div>
+							</div>
+						)}
+
+						{/* Optional pre-select paper picker */}
+						{preSelectedPaper ? (
+							<div className="flex items-center gap-3 rounded-xl border bg-card px-4 py-3">
+								<CheckCircle2 className="h-4 w-4 text-primary shrink-0" />
+								<div className="flex-1 min-w-0">
+									<p className="text-xs text-muted-foreground">Exam paper</p>
+									<p className="text-sm font-medium truncate">
+										{preSelectedPaper.title}
+									</p>
+								</div>
+								<button
+									type="button"
+									onClick={() => setPreSelectedPaper(null)}
+									className="text-xs text-muted-foreground hover:text-foreground"
+									aria-label="Remove pre-selected paper"
+								>
+									Change
+								</button>
+							</div>
+						) : (
+							<div>
+								<button
+									type="button"
+									onClick={() => setShowPaperPicker((v) => !v)}
+									className="text-sm text-primary font-medium"
+								>
+									{showPaperPicker
+										? "Hide paper selector"
+										: "Know the paper? Select it now to speed up marking"}
+								</button>
+
+								{showPaperPicker && (
+									<div className="mt-3 space-y-2">
+										<div className="relative">
+											<Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+											<Input
+												className="pl-9"
+												placeholder="Search papers…"
+												value={preSelectSearch}
+												onChange={(e) => setPreSelectSearch(e.target.value)}
+												autoFocus
+											/>
+										</div>
+										{loadingPreSelectPapers ? (
+											<p className="py-3 text-center text-sm text-muted-foreground">
+												Loading papers…
+											</p>
+										) : (
+											<div className="max-h-72 overflow-y-auto space-y-1.5">
+												{preSelectPapers
+													.filter((p) => {
+														if (!preSelectSearch.trim()) return true
+														const q = preSelectSearch.toLowerCase()
+														return (
+															p.title.toLowerCase().includes(q) ||
+															p.subject.toLowerCase().includes(q) ||
+															(p.exam_board ?? "").toLowerCase().includes(q) ||
+															String(p.year).includes(q)
+														)
+													})
+													.map((paper) => (
+														<button
+															key={paper.id}
+															type="button"
+															disabled={!paper.has_mark_scheme}
+															onClick={() => {
+																setPreSelectedPaper(paper)
+																setShowPaperPicker(false)
+															}}
+															className="w-full rounded-xl border bg-card p-3 text-left transition-colors enabled:active:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+														>
+															<div className="flex items-start justify-between gap-2">
+																<p className="text-sm font-medium leading-tight">
+																	{paper.title}
+																</p>
+																{!paper.has_mark_scheme && (
+																	<span className="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400 shrink-0">
+																		<AlertCircle className="h-3.5 w-3.5" />
+																		No mark scheme
+																	</span>
+																)}
+															</div>
+															<div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+																<Badge
+																	variant={subjectColor(paper.subject)}
+																	className="text-xs"
+																>
+																	{capitalize(paper.subject)}
+																</Badge>
+																{paper.exam_board && (
+																	<span>{paper.exam_board}</span>
+																)}
+																<span>{paper.year}</span>
+																<span>{paper.total_marks} marks</span>
+															</div>
+														</button>
+													))}
+											</div>
+										)}
+									</div>
+								)}
 							</div>
 						)}
 

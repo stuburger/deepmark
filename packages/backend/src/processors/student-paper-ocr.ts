@@ -6,6 +6,7 @@ import {
 import { runOcr } from "@/lib/gemini-ocr"
 import { logger } from "@/lib/logger"
 import { GetObjectCommand, S3Client } from "@aws-sdk/client-s3"
+import { SQSClient, SendMessageCommand } from "@aws-sdk/client-sqs"
 import { GoogleGenAI, Type } from "@google/genai"
 import type { ScanStatus, Subject } from "@mcp-gcse/db"
 import { Resource } from "sst"
@@ -13,6 +14,7 @@ import { Resource } from "sst"
 const TAG = "student-paper-ocr"
 
 const s3 = new S3Client({})
+const sqs = new SQSClient({})
 
 interface SqsRecord {
 	messageId: string
@@ -253,6 +255,11 @@ Return:
 			const detectedSubject: Subject | null =
 				rawSubject && isValidSubject(rawSubject) ? rawSubject : null
 
+			// Both paths write text_extracted so the frontend polling works identically.
+			// Fast path additionally queues grading immediately so the teacher bypasses
+			// the select-paper wizard step.
+			const isFastPath = Boolean(job.exam_paper_id)
+
 			await db.pdfIngestionJob.update({
 				where: { id: jobId },
 				data: {
@@ -269,11 +276,25 @@ Return:
 				},
 			})
 
-			logger.info(TAG, "OCR job complete", {
-				jobId,
-				status: "text_extracted",
-				detected_subject: detectedSubject,
-			})
+			if (isFastPath) {
+				await sqs.send(
+					new SendMessageCommand({
+						QueueUrl: Resource.StudentPaperQueue.url,
+						MessageBody: JSON.stringify({ job_id: jobId }),
+					}),
+				)
+				logger.info(TAG, "OCR job complete — fast path, grading queued", {
+					jobId,
+					exam_paper_id: job.exam_paper_id,
+					detected_subject: detectedSubject,
+				})
+			} else {
+				logger.info(TAG, "OCR job complete", {
+					jobId,
+					status: "text_extracted",
+					detected_subject: detectedSubject,
+				})
+			}
 		} catch (err) {
 			logger.error(TAG, "OCR job failed", {
 				jobId,

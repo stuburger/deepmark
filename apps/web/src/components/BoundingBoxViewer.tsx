@@ -71,6 +71,85 @@ function colLabel(x: number) {
 	return "right"
 }
 
+// ─── Grading annotation types ─────────────────────────────────────────────────
+
+export type GradingAnnotation = {
+	questionNumber: string
+	questionText: string
+	feedbackSummary: string
+	awardedScore: number
+	maxScore: number
+	/** [yMin, xMin, yMax, xMax] normalised 0–1000 */
+	box: [number, number, number, number]
+}
+
+function annotationColor(awarded: number, max: number): string {
+	if (max === 0) return "rgb(156 163 175)"
+	const pct = awarded / max
+	if (pct >= 0.7) return "rgb(34 197 94)"
+	if (pct >= 0.4) return "rgb(234 179 8)"
+	return "rgb(239 68 68)"
+}
+
+// ─── Per-grading-annotation overlay ──────────────────────────────────────────
+
+function GradingAnnotationOverlay({
+	annotation,
+}: {
+	annotation: GradingAnnotation
+}) {
+	const [yMin, xMin, yMax, xMax] = annotation.box
+	if (yMax === 0 && xMax === 0) return null
+
+	const color = annotationColor(annotation.awardedScore, annotation.maxScore)
+	const pct =
+		annotation.maxScore > 0
+			? annotation.awardedScore / annotation.maxScore
+			: null
+	const scoreLabel = `${annotation.awardedScore}/${annotation.maxScore}`
+
+	return (
+		<Popover>
+			<PopoverTrigger
+				aria-label={`Q${annotation.questionNumber} answer region`}
+				style={{
+					position: "absolute",
+					left: `${xMin / 10}%`,
+					top: `${yMin / 10}%`,
+					width: `${(xMax - xMin) / 10}%`,
+					height: `${(yMax - yMin) / 10}%`,
+					background: "transparent",
+					border: "none",
+					padding: 0,
+					cursor: "pointer",
+				}}
+			/>
+			<PopoverContent side="right" sideOffset={8} className="w-80">
+				<PopoverHeader>
+					<div className="flex items-center justify-between gap-2">
+						<span className="text-xs font-mono text-muted-foreground">
+							Q{annotation.questionNumber}
+						</span>
+						<span
+							className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold text-white"
+							style={{ backgroundColor: color }}
+						>
+							{scoreLabel}
+							{pct !== null ? ` · ${Math.round(pct * 100)}%` : ""}
+						</span>
+					</div>
+					<PopoverTitle className="mt-1.5 text-sm line-clamp-2 font-normal text-foreground">
+						{annotation.questionText}
+					</PopoverTitle>
+				</PopoverHeader>
+				<PopoverDescription className="text-sm leading-relaxed">
+					{annotation.feedbackSummary}
+				</PopoverDescription>
+			</PopoverContent>
+		</Popover>
+	)
+}
+
 // ─── Per-feature popover ──────────────────────────────────────────────────────
 
 type FeatureProps = {
@@ -161,6 +240,11 @@ type Props = {
 	showAnalysisText?: boolean
 	/** Controls highlight visibility. Defaults to false when omitted. */
 	showHighlights?: boolean
+	/**
+	 * Grading annotations to overlay on the image — one per question answer region.
+	 * Each annotation draws a coloured band and a click-to-expand feedback popover.
+	 */
+	gradingAnnotations?: GradingAnnotation[]
 }
 
 export function BoundingBoxViewer({
@@ -169,6 +253,7 @@ export function BoundingBoxViewer({
 	className,
 	showAnalysisText = true,
 	showHighlights = false,
+	gradingAnnotations,
 }: Props) {
 	const features = analysis.features ?? []
 	const [imageDims, setImageDims] = useState<{ w: number; h: number } | null>(
@@ -188,6 +273,9 @@ export function BoundingBoxViewer({
 	const scaleX = (imageDims?.w ?? 1000) / 1000
 	const scaleY = (imageDims?.h ?? 1000) / 1000
 
+	const hasAnnotations =
+		gradingAnnotations !== undefined && gradingAnnotations.length > 0
+
 	return (
 		<div className={cn("space-y-4", className)}>
 			{/* Image + overlay container */}
@@ -202,8 +290,39 @@ export function BoundingBoxViewer({
 
 				{imageDims && (
 					<>
-						{/* Highlighter layer — mix-blend-multiply makes colours interact with
-						    the page beneath like a real highlighter pen rather than covering it */}
+						{/* Grading annotation bands — always shown when present.
+						    Rendered below the word-level highlights so they form a
+						    background wash rather than obscuring fine detail. */}
+						{hasAnnotations && (
+							<svg
+								viewBox={viewBox}
+								preserveAspectRatio="none"
+								className="absolute inset-0 h-full w-full"
+								style={{ pointerEvents: "none" }}
+							>
+								{gradingAnnotations.map((ann, i) => {
+									const [yMin, xMin, yMax, xMax] = ann.box
+									if (yMax === 0 && xMax === 0) return null
+									const color = annotationColor(ann.awardedScore, ann.maxScore)
+									return (
+										<rect
+											key={i}
+											x={xMin * scaleX}
+											y={yMin * scaleY}
+											width={(xMax - xMin) * scaleX}
+											height={(yMax - yMin) * scaleY}
+											fill={color}
+											fillOpacity={0.1}
+											stroke={color}
+											strokeWidth={2}
+											strokeOpacity={0.5}
+										/>
+									)
+								})}
+							</svg>
+						)}
+
+						{/* Word-level highlight layer */}
 						{showHighlights && (
 							<svg
 								viewBox={viewBox}
@@ -230,8 +349,13 @@ export function BoundingBoxViewer({
 							</svg>
 						)}
 
-						{/* Popover trigger layer — one transparent button per feature.
-						    Always present so popovers work regardless of highlight state. */}
+						{/* Grading annotation click targets (above SVG layers) */}
+						{hasAnnotations &&
+							gradingAnnotations.map((ann, i) => (
+								<GradingAnnotationOverlay key={i} annotation={ann} />
+							))}
+
+						{/* Word-level feature popovers */}
 						{features.map((f: HandwritingFeature, i: number) => (
 							<FeatureOverlay key={i} feature={f} index={i} />
 						))}

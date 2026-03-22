@@ -19,6 +19,13 @@ const s3 = new S3Client({})
 const sqs = new SQSClient({})
 const db = createPrismaClient(Resource.NeonPostgres.databaseUrl)
 
+export type AnswerRegion = {
+	/** 1-indexed page order matching the job's pages array */
+	page: number
+	/** [yMin, xMin, yMax, xMax] normalised 0–1000 */
+	box: [number, number, number, number]
+}
+
 export type GradingResult = {
 	question_id: string
 	question_text: string
@@ -29,6 +36,8 @@ export type GradingResult = {
 	llm_reasoning: string
 	feedback_summary: string
 	level_awarded?: number
+	/** Spatial regions on the scan where this answer was written. Empty for older jobs. */
+	answer_regions?: AnswerRegion[]
 }
 
 // ─── Create job ───────────────────────────────────────────────────────────────
@@ -196,9 +205,17 @@ export async function reorderPages(
 export type TriggerOcrResult = { ok: true } | { ok: false; error: string }
 
 /**
- * Enqueues the job for OCR text extraction. No exam paper needed yet.
+ * Enqueues the job for OCR text extraction.
+ *
+ * When `examPaperId` is provided (fast path), the exam paper is associated with
+ * the job before OCR starts. The OCR handler detects this and automatically
+ * enqueues grading once extraction completes, skipping the `text_extracted`
+ * pause and `select-paper` wizard step entirely.
  */
-export async function triggerOcr(jobId: string): Promise<TriggerOcrResult> {
+export async function triggerOcr(
+	jobId: string,
+	examPaperId?: string,
+): Promise<TriggerOcrResult> {
 	const session = await auth()
 	if (!session) return { ok: false, error: "Not authenticated" }
 
@@ -213,9 +230,26 @@ export async function triggerOcr(jobId: string): Promise<TriggerOcrResult> {
 		return { ok: false, error: "No pages uploaded yet" }
 	}
 
+	const jobUpdate: Parameters<typeof db.pdfIngestionJob.update>[0]["data"] = {
+		status: "pending",
+	}
+
+	if (examPaperId) {
+		const examPaper = await db.examPaper.findFirst({
+			where: { id: examPaperId, is_active: true },
+			select: { id: true, exam_board: true, subject: true, year: true },
+		})
+		if (!examPaper) return { ok: false, error: "Exam paper not found" }
+
+		jobUpdate.exam_paper_id = examPaperId
+		jobUpdate.exam_board = examPaper.exam_board ?? "Unknown"
+		jobUpdate.subject = examPaper.subject
+		jobUpdate.year = examPaper.year
+	}
+
 	await db.pdfIngestionJob.update({
 		where: { id: jobId },
-		data: { status: "pending" },
+		data: jobUpdate,
 	})
 
 	await sqs.send(
@@ -225,7 +259,7 @@ export async function triggerOcr(jobId: string): Promise<TriggerOcrResult> {
 		}),
 	)
 
-	log.info(TAG, "OCR triggered", { userId: session.userId, jobId })
+	log.info(TAG, "OCR triggered", { userId: session.userId, jobId, examPaperId })
 	return { ok: true }
 }
 

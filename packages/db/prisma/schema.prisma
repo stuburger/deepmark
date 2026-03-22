@@ -461,6 +461,8 @@ model PdfIngestionJob {
   // Per-page OCR analysis: [{ page: number, analysis: HandwritingAnalysis }]
   page_analyses                Json?
   grading_results              Json?
+  // Ordered append-only event log: [{ type, at, ...payload }]
+  job_events                   Json?
   error                        String?
   created_at                   DateTime        @default(now())
   processed_at                 DateTime?

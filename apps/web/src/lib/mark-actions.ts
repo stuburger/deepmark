@@ -7,7 +7,12 @@ import {
 } from "@aws-sdk/client-s3"
 import { SQSClient, SendMessageCommand } from "@aws-sdk/client-sqs"
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner"
-import { Prisma, createPrismaClient } from "@mcp-gcse/db"
+import {
+	type JobEvent,
+	Prisma,
+	createPrismaClient,
+	logEvent,
+} from "@mcp-gcse/db"
 import { Resource } from "sst"
 import { auth } from "./auth"
 import { log } from "./logger"
@@ -289,7 +294,13 @@ export async function triggerGrading(
 
 	const examPaper = await db.examPaper.findFirst({
 		where: { id: examPaperId, is_active: true },
-		select: { id: true, exam_board: true, subject: true, year: true },
+		select: {
+			id: true,
+			title: true,
+			exam_board: true,
+			subject: true,
+			year: true,
+		},
 	})
 	if (!examPaper) return { ok: false, error: "Exam paper not found" }
 
@@ -310,6 +321,12 @@ export async function triggerGrading(
 			MessageBody: JSON.stringify({ job_id: jobId }),
 		}),
 	)
+
+	void logEvent(db, jobId, {
+		type: "exam_paper_selected",
+		at: new Date().toISOString(),
+		title: examPaper.title,
+	})
 
 	log.info(TAG, "Grading triggered", {
 		userId: session.userId,
@@ -340,6 +357,7 @@ export type StudentPaperJobPayload = {
 	total_max: number
 	created_at: Date
 	extracted_answers: ExtractedAnswer[] | null
+	job_events: JobEvent[] | null
 }
 
 export type GetStudentPaperJobResult =
@@ -391,6 +409,7 @@ export async function getStudentPaperJob(
 			total_max: totalMax,
 			created_at: job.created_at,
 			extracted_answers: extractedAnswers,
+			job_events: (job.job_events as JobEvent[] | null) ?? null,
 		},
 	}
 }
@@ -517,6 +536,11 @@ export async function linkStudentToJob(
 		data: { student_id: studentId, student_name: student.name },
 	})
 
+	void logEvent(db, jobId, {
+		type: "student_linked",
+		at: new Date().toISOString(),
+		student_name: student.name,
+	})
 	log.info(TAG, "Student linked to job", {
 		userId: session.userId,
 		jobId,

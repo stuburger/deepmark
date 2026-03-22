@@ -7,7 +7,7 @@ import { defaultChatModel } from "@/lib/google-generative-ai"
 import { logger } from "@/lib/logger"
 import { GetObjectCommand, S3Client } from "@aws-sdk/client-s3"
 import { GoogleGenAI, Type } from "@google/genai"
-import type { ScanStatus } from "@mcp-gcse/db"
+import { type ScanStatus, logEvent } from "@mcp-gcse/db"
 import {
 	DeterministicMarker,
 	Grader,
@@ -475,10 +475,19 @@ export async function handler(
 				questions_without_scheme: questionList.filter((q) => !q.mark_scheme)
 					.length,
 			})
+			void logEvent(db, jobId, {
+				type: "grading_started",
+				at: new Date().toISOString(),
+				questions_total: questionList.length,
+			})
 
 			// Kick off region attribution in parallel with grading — it reads the
 			// page images from S3 and asks Gemini Vision where each answer is written.
 			const jobPages = (job.pages ?? []) as PageEntry[]
+			void logEvent(db, jobId, {
+				type: "region_attribution_started",
+				at: new Date().toISOString(),
+			})
 			const regionAttributionPromise = attributeAnswerRegions(
 				questionList.map((q) => ({
 					question_id: q.question_id,
@@ -670,6 +679,13 @@ export async function handler(
 							awarded: grade.totalScore,
 							max: grade.maxPossibleScore,
 						})
+						void logEvent(db, jobId, {
+							type: "question_graded",
+							at: new Date().toISOString(),
+							question_number: qItem.question_number,
+							awarded: grade.totalScore,
+							max: grade.maxPossibleScore,
+						})
 						gradingResults.push({
 							question_id: qItem.question_id,
 							question_number: qItem.question_number,
@@ -746,11 +762,17 @@ export async function handler(
 				for (const r of gradingResults) {
 					r.answer_regions = regionMap.get(r.question_id) ?? []
 				}
+				const questionsWithRegions = gradingResults.filter(
+					(r) => r.answer_regions.length > 0,
+				).length
 				logger.info(TAG, "Answer regions merged into grading results", {
 					jobId,
-					questions_with_regions: gradingResults.filter(
-						(r) => r.answer_regions.length > 0,
-					).length,
+					questions_with_regions: questionsWithRegions,
+				})
+				void logEvent(db, jobId, {
+					type: "region_attribution_complete",
+					at: new Date().toISOString(),
+					questions_located: questionsWithRegions,
 				})
 			} catch (err) {
 				logger.error(
@@ -787,6 +809,12 @@ export async function handler(
 					grading_results: gradingResults,
 					error: null,
 				},
+			})
+			void logEvent(db, jobId, {
+				type: "grading_complete",
+				at: new Date().toISOString(),
+				total_awarded: totalAwarded,
+				total_max: totalMax,
 			})
 
 			// Persist normalised Answer + MarkingResult rows when a Student record
@@ -850,6 +878,12 @@ export async function handler(
 					await db.pdfIngestionJob.update({
 						where: { id: jobId },
 						data: { status: "failed" as ScanStatus, error: message },
+					})
+					void logEvent(db, jobId, {
+						type: "job_failed",
+						at: new Date().toISOString(),
+						phase: "grading",
+						error: message,
 					})
 				} catch {
 					// ignore

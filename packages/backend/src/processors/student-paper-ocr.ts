@@ -8,7 +8,7 @@ import { logger } from "@/lib/logger"
 import { GetObjectCommand, S3Client } from "@aws-sdk/client-s3"
 import { SQSClient, SendMessageCommand } from "@aws-sdk/client-sqs"
 import { GoogleGenAI, Type } from "@google/genai"
-import type { ScanStatus, Subject } from "@mcp-gcse/db"
+import { type ScanStatus, type Subject, logEvent } from "@mcp-gcse/db"
 import { Resource } from "sst"
 
 const TAG = "student-paper-ocr"
@@ -127,6 +127,10 @@ export async function handler(
 					status: "processing" as ScanStatus,
 					error: null,
 				},
+			})
+			void logEvent(db, jobId, {
+				type: "ocr_started",
+				at: new Date().toISOString(),
 			})
 
 			const pages = (job.pages ?? []) as PageEntry[]
@@ -250,6 +254,12 @@ Return:
 				answers_extracted: answersExtracted,
 				pages_analysed: pageAnalyses.length,
 			})
+			void logEvent(db, jobId, {
+				type: "answers_extracted",
+				at: new Date().toISOString(),
+				count: answersExtracted,
+				student_name: parsed.student_name?.trim() || null,
+			})
 
 			const rawSubject = parsed.detected_subject?.trim().toLowerCase()
 			const detectedSubject: Subject | null =
@@ -274,6 +284,11 @@ Return:
 					processed_at: new Date(),
 					error: null,
 				},
+			})
+
+			void logEvent(db, jobId, {
+				type: "ocr_complete",
+				at: new Date().toISOString(),
 			})
 
 			if (isFastPath) {
@@ -306,6 +321,12 @@ Return:
 					await db.pdfIngestionJob.update({
 						where: { id: jobId },
 						data: { status: "failed" as ScanStatus, error: message },
+					})
+					void logEvent(db, jobId, {
+						type: "job_failed",
+						at: new Date().toISOString(),
+						phase: "ocr",
+						error: message,
 					})
 				} catch {
 					// ignore

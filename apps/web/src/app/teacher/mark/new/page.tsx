@@ -11,18 +11,10 @@ import {
 import {
 	addPageToJob,
 	createStudentPaperJob,
-	getStudentPaperJob,
-	linkStudentToJob,
 	removePageFromJob,
 	reorderPages,
-	triggerGrading,
 	triggerOcr,
 } from "@/lib/mark-actions"
-import {
-	type StudentItem,
-	createStudent,
-	listStudents,
-} from "@/lib/student-actions"
 import {
 	AlertCircle,
 	ArrowDown,
@@ -33,18 +25,9 @@ import {
 	Search,
 	Trash2,
 	Upload,
-	UserCheck,
-	UserPlus,
 } from "lucide-react"
 import { useRouter } from "next/navigation"
-import { useCallback, useEffect, useRef, useState } from "react"
-
-type Step =
-	| "upload"
-	| "processing-ocr"
-	| "confirm-student"
-	| "select-paper"
-	| "processing-grade"
+import { useEffect, useRef, useState } from "react"
 
 type PageItem = {
 	key: string
@@ -153,34 +136,8 @@ export default function MarkNewPage() {
 	const cameraInputRef = useRef<HTMLInputElement>(null)
 	const fileInputRef = useRef<HTMLInputElement>(null)
 
-	const [step, setStep] = useState<Step>("upload")
-	const [jobId, setJobId] = useState<string | null>(null)
 	const [pages, setPages] = useState<PageItem[]>([])
 	const [ocrError, setOcrError] = useState<string | null>(null)
-	const [detectedSubject, setDetectedSubject] = useState<string | null>(null)
-
-	const [papers, setPapers] = useState<CatalogExamPaper[]>([])
-	const [loadingPapers, setLoadingPapers] = useState(false)
-	const [search, setSearch] = useState("")
-	const [selectedPaper, setSelectedPaper] = useState<CatalogExamPaper | null>(
-		null,
-	)
-	const [gradingError, setGradingError] = useState<string | null>(null)
-	const [pollStatus, setPollStatus] = useState<string | null>(null)
-
-	// Student confirmation state
-	const [detectedStudentName, setDetectedStudentName] = useState<string | null>(
-		null,
-	)
-	const [existingStudents, setExistingStudents] = useState<StudentItem[]>([])
-	const [studentSearch, setStudentSearch] = useState("")
-	const [selectedStudentId, setSelectedStudentId] = useState<string | null>(
-		null,
-	)
-	const [newStudentName, setNewStudentName] = useState("")
-	const [studentMode, setStudentMode] = useState<"select" | "create">("select")
-	const [studentError, setStudentError] = useState<string | null>(null)
-	const [confirmingStudent, setConfirmingStudent] = useState(false)
 
 	// Fast-path: paper pre-selected before scanning
 	const [preSelectedPaper, setPreSelectedPaper] =
@@ -198,7 +155,6 @@ export default function MarkNewPage() {
 		const result = await createStudentPaperJob()
 		if (!result.ok) throw new Error(result.error)
 		jobIdRef.current = result.jobId
-		setJobId(result.jobId)
 		return result.jobId
 	}
 
@@ -306,156 +262,13 @@ export default function MarkNewPage() {
 	async function handleTriggerOcr() {
 		if (!jobIdRef.current) return
 		setOcrError(null)
-		setStep("processing-ocr")
 		const result = await triggerOcr(jobIdRef.current, preSelectedPaper?.id)
 		if (!result.ok) {
 			setOcrError(result.error)
-			setStep("upload")
+			return
 		}
+		router.push(`/teacher/mark/${jobIdRef.current}`)
 	}
-
-	const pollOcr = useCallback(async () => {
-		if (!jobIdRef.current) return
-		const result = await getStudentPaperJob(jobIdRef.current)
-		if (!result.ok) return
-		const { status, detected_subject, student_name } = result.data
-		setPollStatus(status)
-		if (status === "text_extracted") {
-			setDetectedSubject(detected_subject)
-			setDetectedStudentName(student_name)
-			setNewStudentName(student_name ?? "")
-			// Load existing students and papers in parallel
-			void listStudents().then((r) => {
-				if (r.ok) setExistingStudents(r.students)
-			})
-			setStep("confirm-student")
-		}
-		if (status === "failed") {
-			setOcrError(result.data.error ?? "OCR failed")
-			setStep("upload")
-		}
-	}, [])
-
-	useEffect(() => {
-		if (step !== "processing-ocr") return
-		const interval = setInterval(pollOcr, 3000)
-		return () => clearInterval(interval)
-	}, [step, pollOcr])
-
-	const filteredPapers = papers.filter((p) => {
-		const matchesSubject = detectedSubject
-			? p.subject === detectedSubject
-			: true
-		if (!search.trim()) return matchesSubject
-		const q = search.toLowerCase()
-		return (
-			matchesSubject &&
-			(p.title.toLowerCase().includes(q) ||
-				p.subject.toLowerCase().includes(q) ||
-				(p.exam_board ?? "").toLowerCase().includes(q) ||
-				String(p.year).includes(q))
-		)
-	})
-
-	const allPapers = papers.filter((p) => {
-		if (!search.trim()) return true
-		const q = search.toLowerCase()
-		return (
-			p.title.toLowerCase().includes(q) ||
-			p.subject.toLowerCase().includes(q) ||
-			(p.exam_board ?? "").toLowerCase().includes(q) ||
-			String(p.year).includes(q)
-		)
-	})
-
-	const showingFiltered =
-		detectedSubject !== null && filteredPapers.length < allPapers.length
-
-	function proceedToPaperSelect() {
-		setStep("select-paper")
-		setLoadingPapers(true)
-		listCatalogExamPapers().then((r) => {
-			if (r.ok) setPapers(r.papers)
-			setLoadingPapers(false)
-		})
-	}
-
-	async function handleConfirmStudent() {
-		if (!jobIdRef.current) return
-		setStudentError(null)
-		setConfirmingStudent(true)
-		try {
-			if (studentMode === "create") {
-				if (!newStudentName.trim()) {
-					setStudentError("Please enter a student name")
-					return
-				}
-				const createResult = await createStudent(newStudentName.trim())
-				if (!createResult.ok) {
-					setStudentError(createResult.error)
-					return
-				}
-				const linkResult = await linkStudentToJob(
-					jobIdRef.current,
-					createResult.student.id,
-				)
-				if (!linkResult.ok) {
-					setStudentError(linkResult.error)
-					return
-				}
-			} else if (studentMode === "select" && selectedStudentId) {
-				const linkResult = await linkStudentToJob(
-					jobIdRef.current,
-					selectedStudentId,
-				)
-				if (!linkResult.ok) {
-					setStudentError(linkResult.error)
-					return
-				}
-			}
-			// Fast path: grading is already queued by the OCR handler.
-			// Skip paper selection and go straight to the grading spinner.
-			if (preSelectedPaper) {
-				setStep("processing-grade")
-			} else {
-				proceedToPaperSelect()
-			}
-		} finally {
-			setConfirmingStudent(false)
-		}
-	}
-
-	async function handleTriggerGrading() {
-		if (!jobIdRef.current || !selectedPaper) return
-		setGradingError(null)
-		setStep("processing-grade")
-		const result = await triggerGrading(jobIdRef.current, selectedPaper.id)
-		if (!result.ok) {
-			setGradingError(result.error)
-			setStep("select-paper")
-		}
-	}
-
-	const pollGrading = useCallback(async () => {
-		if (!jobIdRef.current) return
-		const result = await getStudentPaperJob(jobIdRef.current)
-		if (!result.ok) return
-		const { status } = result.data
-		setPollStatus(status)
-		if (status === "ocr_complete") {
-			router.push(`/teacher/mark/${jobIdRef.current}`)
-		}
-		if (status === "failed") {
-			setGradingError(result.data.error ?? "Marking failed")
-			setStep("select-paper")
-		}
-	}, [router])
-
-	useEffect(() => {
-		if (step !== "processing-grade") return
-		const interval = setInterval(pollGrading, 3000)
-		return () => clearInterval(interval)
-	}, [step, pollGrading])
 
 	// Load exam papers the first time the pre-select picker is opened
 	useEffect(() => {
@@ -472,215 +285,6 @@ export default function MarkNewPage() {
 		})
 	}, [showPaperPicker, preSelectPapers.length, loadingPreSelectPapers])
 
-	// ─── Confirm student screen ───────────────────────────────────────────────
-
-	if (step === "confirm-student") {
-		const filteredStudents = existingStudents.filter((s) =>
-			s.name.toLowerCase().includes(studentSearch.toLowerCase()),
-		)
-
-		return (
-			<div className="flex flex-col min-h-[calc(100dvh-4rem)] max-w-lg mx-auto">
-				<div className="flex-1 px-4 pt-4 pb-32 space-y-5">
-					<div>
-						<h1 className="text-2xl font-semibold">Who is this paper for?</h1>
-						<p className="text-sm text-muted-foreground mt-1">
-							Match to an existing student or create a new record.
-						</p>
-					</div>
-
-					{/* Detected name chip */}
-					{detectedStudentName && (
-						<div className="flex items-center gap-2 rounded-xl border bg-card px-4 py-3">
-							<CheckCircle2 className="h-4 w-4 text-green-500 shrink-0" />
-							<div className="flex-1 min-w-0">
-								<p className="text-xs text-muted-foreground">
-									Detected on paper
-								</p>
-								<p className="text-sm font-medium">{detectedStudentName}</p>
-							</div>
-						</div>
-					)}
-
-					{/* Mode toggle */}
-					<div className="flex rounded-xl border overflow-hidden">
-						<button
-							type="button"
-							onClick={() => setStudentMode("select")}
-							className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-sm font-medium transition-colors ${
-								studentMode === "select"
-									? "bg-primary text-primary-foreground"
-									: "bg-background text-muted-foreground hover:bg-muted"
-							}`}
-						>
-							<UserCheck className="h-4 w-4" />
-							Existing student
-						</button>
-						<button
-							type="button"
-							onClick={() => setStudentMode("create")}
-							className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-sm font-medium transition-colors ${
-								studentMode === "create"
-									? "bg-primary text-primary-foreground"
-									: "bg-background text-muted-foreground hover:bg-muted"
-							}`}
-						>
-							<UserPlus className="h-4 w-4" />
-							New student
-						</button>
-					</div>
-
-					{studentMode === "select" && (
-						<div className="space-y-3">
-							<div className="relative">
-								<Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-								<Input
-									className="pl-9"
-									placeholder="Search students…"
-									value={studentSearch}
-									onChange={(e) => setStudentSearch(e.target.value)}
-									autoFocus
-								/>
-							</div>
-							{filteredStudents.length === 0 ? (
-								<p className="text-sm text-muted-foreground text-center py-4">
-									{existingStudents.length === 0
-										? "No students yet — create one above."
-										: "No students match your search."}
-								</p>
-							) : (
-								<div className="space-y-2 max-h-72 overflow-y-auto">
-									{filteredStudents.map((s) => (
-										<button
-											key={s.id}
-											type="button"
-											onClick={() => setSelectedStudentId(s.id)}
-											className={`w-full rounded-xl border p-3.5 text-left transition-colors ${
-												selectedStudentId === s.id
-													? "border-primary bg-primary/5"
-													: "bg-card active:bg-muted"
-											}`}
-										>
-											<div className="flex items-center justify-between gap-2">
-												<p className="text-sm font-medium">{s.name}</p>
-												{selectedStudentId === s.id && (
-													<CheckCircle2 className="h-4 w-4 shrink-0 text-primary" />
-												)}
-											</div>
-											{(s.class_name || s.year_group) && (
-												<p className="text-xs text-muted-foreground mt-0.5">
-													{[s.class_name, s.year_group]
-														.filter(Boolean)
-														.join(" · ")}
-												</p>
-											)}
-										</button>
-									))}
-								</div>
-							)}
-						</div>
-					)}
-
-					{studentMode === "create" && (
-						<div className="space-y-3">
-							<Input
-								placeholder="Student full name"
-								value={newStudentName}
-								onChange={(e) => setNewStudentName(e.target.value)}
-								autoFocus
-							/>
-						</div>
-					)}
-
-					{studentError && (
-						<p className="text-sm text-destructive">{studentError}</p>
-					)}
-				</div>
-
-				<div className="fixed bottom-0 left-0 right-0 border-t bg-background/95 backdrop-blur px-4 py-4 safe-area-inset-bottom">
-					<div className="max-w-lg mx-auto space-y-2">
-						<Button
-							className="w-full h-14 text-base rounded-xl"
-							disabled={
-								confirmingStudent ||
-								(studentMode === "select" && !selectedStudentId) ||
-								(studentMode === "create" && !newStudentName.trim())
-							}
-							onClick={handleConfirmStudent}
-						>
-							{confirmingStudent ? (
-								<>
-									<Spinner className="mr-2 h-4 w-4" />
-									Saving…
-								</>
-							) : (
-								"Continue"
-							)}
-						</Button>
-						<button
-							type="button"
-							onClick={
-								preSelectedPaper
-									? () => setStep("processing-grade")
-									: proceedToPaperSelect
-							}
-							className="w-full text-center text-sm text-muted-foreground py-1"
-						>
-							Skip for now
-						</button>
-					</div>
-				</div>
-			</div>
-		)
-	}
-
-	// ─── Processing screens ──────────────────────────────────────────────────
-
-	if (step === "processing-ocr") {
-		return (
-			<div className="flex flex-col items-center justify-center min-h-[60vh] px-6 text-center gap-5">
-				<Spinner className="h-12 w-12" />
-				<div>
-					<h2 className="text-xl font-semibold">Reading answer sheet…</h2>
-					<p className="text-sm text-muted-foreground mt-1">
-						Extracting answers from {pages.length} page
-						{pages.length !== 1 ? "s" : ""}. This takes around 15–30 seconds.
-					</p>
-				</div>
-				{pollStatus && (
-					<p className="text-xs text-muted-foreground">Status: {pollStatus}</p>
-				)}
-			</div>
-		)
-	}
-
-	if (step === "processing-grade") {
-		return (
-			<div className="flex flex-col items-center justify-center min-h-[60vh] px-6 text-center gap-5">
-				<Spinner className="h-12 w-12" />
-				<div>
-					<h2 className="text-xl font-semibold">Marking answers…</h2>
-					<p className="text-sm text-muted-foreground mt-1">
-						Grading each answer against the mark scheme. Usually 20–60 seconds.
-					</p>
-					{(selectedPaper ?? preSelectedPaper) && (
-						<p className="text-sm text-muted-foreground mt-1">
-							Paper:{" "}
-							<span className="font-medium">
-								{(selectedPaper ?? preSelectedPaper)?.title}
-							</span>
-						</p>
-					)}
-				</div>
-				{pollStatus && (
-					<p className="text-xs text-muted-foreground">Status: {pollStatus}</p>
-				)}
-			</div>
-		)
-	}
-
-	// ─── Main flow ───────────────────────────────────────────────────────────
-
 	return (
 		<div className="flex flex-col min-h-[calc(100dvh-4rem)] max-w-lg mx-auto">
 			{/* Content */}
@@ -689,344 +293,212 @@ export default function MarkNewPage() {
 				<div>
 					<h1 className="text-2xl font-semibold">Mark a paper</h1>
 					<p className="text-sm text-muted-foreground mt-1">
-						{step === "upload"
-							? "Photograph or upload each page of the student's answer sheet."
-							: "Select the exam paper to mark against."}
+						Photograph or upload each page of the student&apos;s answer sheet.
 					</p>
 				</div>
 
-				{step === "upload" && (
-					<>
-						{/* Upload buttons */}
-						<div className="grid grid-cols-2 gap-3">
-							<button
-								type="button"
-								onClick={() => cameraInputRef.current?.click()}
-								className="flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-input bg-card p-6 text-center active:bg-muted transition-colors"
-							>
-								<Camera className="h-8 w-8 text-muted-foreground" />
-								<span className="text-sm font-medium">Take photo</span>
-								<span className="text-xs text-muted-foreground">
-									Opens camera
-								</span>
-							</button>
-							<button
-								type="button"
-								onClick={() => fileInputRef.current?.click()}
-								className="flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-input bg-card p-6 text-center active:bg-muted transition-colors"
-							>
-								<Upload className="h-8 w-8 text-muted-foreground" />
-								<span className="text-sm font-medium">Upload file</span>
-								<span className="text-xs text-muted-foreground">
-									PDF or image
-								</span>
-							</button>
-						</div>
+				<>
+					{/* Upload buttons */}
+					<div className="grid grid-cols-2 gap-3">
+						<button
+							type="button"
+							onClick={() => cameraInputRef.current?.click()}
+							className="flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-input bg-card p-6 text-center active:bg-muted transition-colors"
+						>
+							<Camera className="h-8 w-8 text-muted-foreground" />
+							<span className="text-sm font-medium">Take photo</span>
+							<span className="text-xs text-muted-foreground">
+								Opens camera
+							</span>
+						</button>
+						<button
+							type="button"
+							onClick={() => fileInputRef.current?.click()}
+							className="flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-input bg-card p-6 text-center active:bg-muted transition-colors"
+						>
+							<Upload className="h-8 w-8 text-muted-foreground" />
+							<span className="text-sm font-medium">Upload file</span>
+							<span className="text-xs text-muted-foreground">
+								PDF or image
+							</span>
+						</button>
+					</div>
 
-						{/* Hidden inputs */}
-						<input
-							ref={cameraInputRef}
-							type="file"
-							accept="image/*"
-							capture="environment"
-							multiple
-							className="sr-only"
-							onChange={(e) => handleFiles(e.target.files)}
-						/>
-						<input
-							ref={fileInputRef}
-							type="file"
-							accept="image/*,application/pdf"
-							multiple
-							className="sr-only"
-							onChange={(e) => handleFiles(e.target.files)}
-						/>
+					{/* Hidden inputs */}
+					<input
+						ref={cameraInputRef}
+						type="file"
+						accept="image/*"
+						capture="environment"
+						multiple
+						className="sr-only"
+						onChange={(e) => handleFiles(e.target.files)}
+					/>
+					<input
+						ref={fileInputRef}
+						type="file"
+						accept="image/*,application/pdf"
+						multiple
+						className="sr-only"
+						onChange={(e) => handleFiles(e.target.files)}
+					/>
 
-						{/* Pages list */}
-						{pages.length > 0 && (
-							<div className="space-y-2">
-								<div className="flex items-center justify-between">
-									<p className="text-sm font-medium text-muted-foreground">
-										{pages.length} page{pages.length !== 1 ? "s" : ""} added
-									</p>
-									<button
-										type="button"
-										onClick={() => fileInputRef.current?.click()}
-										className="text-xs text-primary font-medium"
-									>
-										+ Add more
-									</button>
-								</div>
-								<div className="space-y-2">
-									{pages.map((page, index) => (
-										<PageThumbnail
-											key={page.order}
-											page={page}
-											index={index}
-											total={pages.length}
-											onMoveUp={() => movePage(index, "up")}
-											onMoveDown={() => movePage(index, "down")}
-											onRemove={() => handleRemovePage(index)}
-										/>
-									))}
-								</div>
-							</div>
-						)}
-
-						{/* Optional pre-select paper picker */}
-						{preSelectedPaper ? (
-							<div className="flex items-center gap-3 rounded-xl border bg-card px-4 py-3">
-								<CheckCircle2 className="h-4 w-4 text-primary shrink-0" />
-								<div className="flex-1 min-w-0">
-									<p className="text-xs text-muted-foreground">Exam paper</p>
-									<p className="text-sm font-medium truncate">
-										{preSelectedPaper.title}
-									</p>
-								</div>
+					{/* Pages list */}
+					{pages.length > 0 && (
+						<div className="space-y-2">
+							<div className="flex items-center justify-between">
+								<p className="text-sm font-medium text-muted-foreground">
+									{pages.length} page{pages.length !== 1 ? "s" : ""} added
+								</p>
 								<button
 									type="button"
-									onClick={() => setPreSelectedPaper(null)}
-									className="text-xs text-muted-foreground hover:text-foreground"
-									aria-label="Remove pre-selected paper"
-								>
-									Change
-								</button>
-							</div>
-						) : (
-							<div>
-								<button
-									type="button"
-									onClick={() => setShowPaperPicker((v) => !v)}
-									className="text-sm text-primary font-medium"
-								>
-									{showPaperPicker
-										? "Hide paper selector"
-										: "Know the paper? Select it now to speed up marking"}
-								</button>
-
-								{showPaperPicker && (
-									<div className="mt-3 space-y-2">
-										<div className="relative">
-											<Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-											<Input
-												className="pl-9"
-												placeholder="Search papers…"
-												value={preSelectSearch}
-												onChange={(e) => setPreSelectSearch(e.target.value)}
-												autoFocus
-											/>
-										</div>
-										{loadingPreSelectPapers ? (
-											<p className="py-3 text-center text-sm text-muted-foreground">
-												Loading papers…
-											</p>
-										) : (
-											<div className="max-h-72 overflow-y-auto space-y-1.5">
-												{preSelectPapers
-													.filter((p) => {
-														if (!preSelectSearch.trim()) return true
-														const q = preSelectSearch.toLowerCase()
-														return (
-															p.title.toLowerCase().includes(q) ||
-															p.subject.toLowerCase().includes(q) ||
-															(p.exam_board ?? "").toLowerCase().includes(q) ||
-															String(p.year).includes(q)
-														)
-													})
-													.map((paper) => (
-														<button
-															key={paper.id}
-															type="button"
-															disabled={!paper.has_mark_scheme}
-															onClick={() => {
-																setPreSelectedPaper(paper)
-																setShowPaperPicker(false)
-															}}
-															className="w-full rounded-xl border bg-card p-3 text-left transition-colors enabled:active:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
-														>
-															<div className="flex items-start justify-between gap-2">
-																<p className="text-sm font-medium leading-tight">
-																	{paper.title}
-																</p>
-																{!paper.has_mark_scheme && (
-																	<span className="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400 shrink-0">
-																		<AlertCircle className="h-3.5 w-3.5" />
-																		No mark scheme
-																	</span>
-																)}
-															</div>
-															<div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-																<Badge
-																	variant={subjectColor(paper.subject)}
-																	className="text-xs"
-																>
-																	{capitalize(paper.subject)}
-																</Badge>
-																{paper.exam_board && (
-																	<span>{paper.exam_board}</span>
-																)}
-																<span>{paper.year}</span>
-																<span>{paper.total_marks} marks</span>
-															</div>
-														</button>
-													))}
-											</div>
-										)}
-									</div>
-								)}
-							</div>
-						)}
-
-						{ocrError && <p className="text-sm text-destructive">{ocrError}</p>}
-					</>
-				)}
-
-				{step === "select-paper" && (
-					<>
-						{/* Detected subject chip */}
-						{detectedSubject && (
-							<div className="flex items-center gap-2 rounded-xl border bg-card px-4 py-3">
-								<CheckCircle2 className="h-4 w-4 text-green-500 shrink-0" />
-								<div className="flex-1 min-w-0">
-									<p className="text-xs text-muted-foreground">
-										Detected subject
-									</p>
-									<p className="text-sm font-medium capitalize">
-										{detectedSubject.replace("_", " ")}
-									</p>
-								</div>
-								<Badge variant={subjectColor(detectedSubject)}>
-									{capitalize(detectedSubject)}
-								</Badge>
-							</div>
-						)}
-
-						{/* Exam paper selector */}
-						<div className="space-y-3">
-							<div className="relative">
-								<Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-								<Input
-									className="pl-9"
-									placeholder="Search papers…"
-									value={search}
-									onChange={(e) => setSearch(e.target.value)}
-									autoFocus
-								/>
-							</div>
-
-							{showingFiltered && (
-								<button
-									type="button"
-									onClick={() => setDetectedSubject(null)}
+									onClick={() => fileInputRef.current?.click()}
 									className="text-xs text-primary font-medium"
 								>
-									Show all subjects
+									+ Add more
 								</button>
-							)}
+							</div>
+							<div className="space-y-2">
+								{pages.map((page, index) => (
+									<PageThumbnail
+										key={page.order}
+										page={page}
+										index={index}
+										total={pages.length}
+										onMoveUp={() => movePage(index, "up")}
+										onMoveDown={() => movePage(index, "down")}
+										onRemove={() => handleRemovePage(index)}
+									/>
+								))}
+							</div>
+						</div>
+					)}
 
-							{loadingPapers ? (
-								<p className="py-4 text-center text-sm text-muted-foreground">
-									Loading papers…
+					{/* Optional pre-select paper picker */}
+					{preSelectedPaper ? (
+						<div className="flex items-center gap-3 rounded-xl border bg-card px-4 py-3">
+							<CheckCircle2 className="h-4 w-4 text-primary shrink-0" />
+							<div className="flex-1 min-w-0">
+								<p className="text-xs text-muted-foreground">Exam paper</p>
+								<p className="text-sm font-medium truncate">
+									{preSelectedPaper.title}
 								</p>
-							) : filteredPapers.length === 0 ? (
-								<p className="py-4 text-center text-sm text-muted-foreground">
-									No papers found.{" "}
-									{showingFiltered && (
-										<button
-											type="button"
-											onClick={() => setDetectedSubject(null)}
-											className="text-primary font-medium"
-										>
-											Show all subjects?
-										</button>
-									)}
-								</p>
-							) : (
-								<div className="space-y-2">
-									{filteredPapers.map((paper) => {
-										const isSelected = selectedPaper?.id === paper.id
-										return (
-											<button
-												key={paper.id}
-												type="button"
-												disabled={!paper.has_mark_scheme}
-												onClick={() => setSelectedPaper(paper)}
-												className={`w-full rounded-xl border p-4 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
-													isSelected
-														? "border-primary bg-primary/5"
-														: "bg-card enabled:active:bg-muted"
-												}`}
-											>
-												<div className="flex items-start justify-between gap-2">
-													<p className="text-sm font-medium leading-tight">
-														{paper.title}
-													</p>
-													<div className="flex items-center gap-1 shrink-0">
-														{isSelected && (
-															<CheckCircle2 className="h-4 w-4 text-primary" />
-														)}
-														{!paper.has_mark_scheme && (
-															<span className="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
-																<AlertCircle className="h-3.5 w-3.5" />
-																No mark scheme
-															</span>
-														)}
-													</div>
-												</div>
-												<div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-													<Badge
-														variant={subjectColor(paper.subject)}
-														className="text-xs"
+							</div>
+							<button
+								type="button"
+								onClick={() => setPreSelectedPaper(null)}
+								className="text-xs text-muted-foreground hover:text-foreground"
+								aria-label="Remove pre-selected paper"
+							>
+								Change
+							</button>
+						</div>
+					) : (
+						<div>
+							<button
+								type="button"
+								onClick={() => setShowPaperPicker((v) => !v)}
+								className="text-sm text-primary font-medium"
+							>
+								{showPaperPicker
+									? "Hide paper selector"
+									: "Know the paper? Select it now to speed up marking"}
+							</button>
+
+							{showPaperPicker && (
+								<div className="mt-3 space-y-2">
+									<div className="relative">
+										<Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+										<Input
+											className="pl-9"
+											placeholder="Search papers…"
+											value={preSelectSearch}
+											onChange={(e) => setPreSelectSearch(e.target.value)}
+											autoFocus
+										/>
+									</div>
+									{loadingPreSelectPapers ? (
+										<p className="py-3 text-center text-sm text-muted-foreground">
+											Loading papers…
+										</p>
+									) : (
+										<div className="max-h-72 overflow-y-auto space-y-1.5">
+											{preSelectPapers
+												.filter((p) => {
+													if (!preSelectSearch.trim()) return true
+													const q = preSelectSearch.toLowerCase()
+													return (
+														p.title.toLowerCase().includes(q) ||
+														p.subject.toLowerCase().includes(q) ||
+														(p.exam_board ?? "").toLowerCase().includes(q) ||
+														String(p.year).includes(q)
+													)
+												})
+												.map((paper) => (
+													<button
+														key={paper.id}
+														type="button"
+														disabled={!paper.has_mark_scheme}
+														onClick={() => {
+															setPreSelectedPaper(paper)
+															setShowPaperPicker(false)
+														}}
+														className="w-full rounded-xl border bg-card p-3 text-left transition-colors enabled:active:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
 													>
-														{capitalize(paper.subject)}
-													</Badge>
-													{paper.exam_board && <span>{paper.exam_board}</span>}
-													<span>{paper.year}</span>
-													<span>{paper.total_marks} marks</span>
-												</div>
-											</button>
-										)
-									})}
+														<div className="flex items-start justify-between gap-2">
+															<p className="text-sm font-medium leading-tight">
+																{paper.title}
+															</p>
+															{!paper.has_mark_scheme && (
+																<span className="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400 shrink-0">
+																	<AlertCircle className="h-3.5 w-3.5" />
+																	No mark scheme
+																</span>
+															)}
+														</div>
+														<div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+															<Badge
+																variant={subjectColor(paper.subject)}
+																className="text-xs"
+															>
+																{capitalize(paper.subject)}
+															</Badge>
+															{paper.exam_board && (
+																<span>{paper.exam_board}</span>
+															)}
+															<span>{paper.year}</span>
+															<span>{paper.total_marks} marks</span>
+														</div>
+													</button>
+												))}
+										</div>
+									)}
 								</div>
 							)}
 						</div>
+					)}
 
-						{gradingError && (
-							<p className="text-sm text-destructive">{gradingError}</p>
-						)}
-					</>
-				)}
+					{ocrError && <p className="text-sm text-destructive">{ocrError}</p>}
+				</>
 			</div>
 
 			{/* Sticky bottom CTA */}
 			<div className="fixed bottom-0 left-0 right-0 border-t bg-background/95 backdrop-blur px-4 py-4 safe-area-inset-bottom">
 				<div className="max-w-lg mx-auto">
-					{step === "upload" && (
-						<Button
-							className="w-full h-14 text-base rounded-xl"
-							disabled={!readyToProcess}
-							onClick={handleTriggerOcr}
-						>
-							{isUploading ? (
-								<>
-									<Spinner className="mr-2 h-4 w-4" />
-									Uploading…
-								</>
-							) : (
-								"Extract answers"
-							)}
-						</Button>
-					)}
-
-					{step === "select-paper" && (
-						<Button
-							className="w-full h-14 text-base rounded-xl"
-							disabled={!selectedPaper}
-							onClick={handleTriggerGrading}
-						>
-							Mark this paper
-						</Button>
-					)}
+					<Button
+						className="w-full h-14 text-base rounded-xl"
+						disabled={!readyToProcess}
+						onClick={handleTriggerOcr}
+					>
+						{isUploading ? (
+							<>
+								<Spinner className="mr-2 h-4 w-4" />
+								Uploading…
+							</>
+						) : (
+							"Extract answers"
+						)}
+					</Button>
 				</div>
 			</div>
 		</div>

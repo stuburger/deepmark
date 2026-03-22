@@ -8,6 +8,7 @@ import { ContinueMarkingClient } from "./continue-marking-client"
 import { MarkScanTwoColumn } from "./mark-scan-two-column"
 import { MarkingJobPoller, ReScanButton } from "./polling-client"
 import { MarkingResultsClient } from "./results-client"
+import { TextExtractedFlowClient } from "./text-extracted-flow-client"
 
 type Stage = {
 	key: string
@@ -117,8 +118,21 @@ export default async function MarkResultPage({
 		)
 	}
 
-	// text_extracted: OCR done, paper not yet selected — let user continue
+	// text_extracted: OCR done — confirm student (if needed), then paper or fast-path grading
 	if (data.status === "text_extracted") {
+		const studentLinked = Boolean(data.student_id)
+		const examPaperPreselected = Boolean(data.exam_paper_id)
+		const title = !studentLinked
+			? "Review scan"
+			: examPaperPreselected
+				? "Processing"
+				: "Select exam paper"
+		const subtitle = !studentLinked
+			? "The scan was processed. Link this paper to a student to continue."
+			: examPaperPreselected
+				? "Your paper is being marked."
+				: "Pick the exam paper to mark this work against."
+
 		return (
 			<MarkScanTwoColumn scanPages={scanPages}>
 				<div>
@@ -130,16 +144,16 @@ export default async function MarkResultPage({
 							← Mark history
 						</Link>
 					</p>
-					<h1 className="text-2xl font-semibold">Select exam paper</h1>
-					<p className="text-sm text-muted-foreground mt-1">
-						The scan was processed. Pick the paper to mark it against.
-					</p>
+					<h1 className="text-2xl font-semibold">{title}</h1>
+					<p className="text-sm text-muted-foreground mt-1">{subtitle}</p>
 				</div>
 				<PipelineProgress status={data.status} />
-				<ContinueMarkingClient
+				<TextExtractedFlowClient
 					jobId={jobId}
+					studentLinked={studentLinked}
+					detectedStudentName={data.student_name}
+					examPaperPreselected={examPaperPreselected}
 					extractedAnswers={data.extracted_answers ?? []}
-					studentName={data.student_name}
 					detectedSubject={data.detected_subject}
 				/>
 				{data.pages_count > 0 && <ReScanButton jobId={jobId} />}

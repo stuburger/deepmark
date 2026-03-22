@@ -1,10 +1,15 @@
 "use client"
 
+import { ExamPaperPanel } from "@/components/ExamPaperPanel"
 import { Button } from "@/components/ui/button"
-import { getStudentPaperJob, retriggerOcr } from "@/lib/mark-actions"
+import {
+	type StudentPaperJobPayload,
+	getStudentPaperJob,
+	retriggerOcr,
+} from "@/lib/mark-actions"
 import { Loader2 } from "lucide-react"
 import { useRouter } from "next/navigation"
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useState } from "react"
 
 const POLLING_STATES = new Set(["pending", "processing", "grading"])
 
@@ -25,8 +30,6 @@ export function MarkingJobPoller({
 }) {
 	const router = useRouter()
 	const [status, setStatus] = useState(initialStatus)
-	const statusRef = useRef(status)
-	statusRef.current = status
 
 	useEffect(() => {
 		if (!POLLING_STATES.has(status)) return
@@ -35,7 +38,7 @@ export function MarkingJobPoller({
 			const result = await getStudentPaperJob(jobId)
 			if (!result.ok) return
 			const newStatus = result.data.status
-			if (newStatus !== statusRef.current) {
+			if (newStatus !== status) {
 				setStatus(newStatus)
 				router.refresh()
 			}
@@ -56,6 +59,62 @@ export function MarkingJobPoller({
 				</p>
 			</div>
 		</div>
+	)
+}
+
+/**
+ * Shown when the page loads while grading is already in progress.
+ * Polls every 2s for partial grading_results and renders them live.
+ * Calls router.refresh() when the job reaches a terminal state.
+ */
+export function LiveGradingPoller({
+	jobId,
+	initialData,
+}: {
+	jobId: string
+	initialData: StudentPaperJobPayload
+}) {
+	const router = useRouter()
+	const [data, setData] = useState(initialData)
+
+	useEffect(() => {
+		const terminal = new Set(["ocr_complete", "failed", "cancelled"])
+		if (terminal.has(data.status)) return
+
+		const interval = setInterval(async () => {
+			const result = await getStudentPaperJob(jobId)
+			if (!result.ok) return
+			const next = result.data
+			// Use functional update to compare against latest state without a ref
+			setData((prev) => {
+				if (
+					next.grading_results.length !== prev.grading_results.length ||
+					next.status !== prev.status
+				) {
+					return next
+				}
+				return prev
+			})
+			if (terminal.has(next.status)) {
+				clearInterval(interval)
+				router.refresh()
+			}
+		}, 2000)
+
+		return () => clearInterval(interval)
+	}, [jobId, router, data.status])
+
+	const isGrading = !["ocr_complete", "failed", "cancelled"].includes(
+		data.status,
+	)
+
+	return (
+		<ExamPaperPanel
+			gradingResults={data.grading_results}
+			extractedAnswers={data.extracted_answers ?? undefined}
+			isGrading={isGrading}
+			examPaperTitle={data.exam_paper_title}
+		/>
 	)
 }
 

@@ -1,21 +1,16 @@
 "use client"
 
-import {
-	Accordion,
-	AccordionContent,
-	AccordionItem,
-	AccordionTrigger,
-} from "@/components/ui/accordion"
+import { ExamPaperPanel } from "@/components/ExamPaperPanel"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Spinner } from "@/components/ui/spinner"
 import {
 	type CatalogExamPaper,
 	listCatalogExamPapers,
 } from "@/lib/dashboard-actions"
 import {
 	type ExtractedAnswer,
+	type GradingResult,
 	getStudentPaperJob,
 	triggerGrading,
 } from "@/lib/mark-actions"
@@ -48,75 +43,6 @@ function subjectBadgeVariant(subject: string) {
 	}
 }
 
-function ExtractedAnswersPanel({
-	answers,
-	studentName,
-	detectedSubject,
-}: {
-	answers: ExtractedAnswer[]
-	studentName: string | null
-	detectedSubject: string | null
-}) {
-	return (
-		<div className="rounded-xl border bg-card">
-			<div className="px-4 py-3 border-b flex items-center justify-between gap-2">
-				<div className="flex items-center gap-2">
-					<CheckCircle2 className="h-4 w-4 text-green-500 shrink-0" />
-					<span className="text-sm font-medium">Answers extracted</span>
-				</div>
-				<div className="flex items-center gap-2 flex-wrap justify-end">
-					{studentName && (
-						<Badge variant="outline" className="text-xs">
-							{studentName}
-						</Badge>
-					)}
-					{detectedSubject && (
-						<Badge
-							variant={subjectBadgeVariant(detectedSubject)}
-							className="text-xs capitalize"
-						>
-							{capitalize(detectedSubject.replace("_", " "))}
-						</Badge>
-					)}
-				</div>
-			</div>
-			<Accordion className="px-1">
-				{answers.map((a) => (
-					<AccordionItem
-						key={a.question_number}
-						value={a.question_number}
-						className="border-0 border-b last:border-b-0"
-					>
-						<AccordionTrigger className="px-3 py-2.5 hover:no-underline text-sm">
-							<div className="flex items-center gap-3 flex-1 text-left mr-2">
-								<span className="shrink-0 font-mono text-xs text-muted-foreground min-w-10">
-									Q {a.question_number}
-								</span>
-								<p className="text-sm text-muted-foreground line-clamp-1 flex-1">
-									{a.answer_text || (
-										<span className="italic">No answer written</span>
-									)}
-								</p>
-							</div>
-						</AccordionTrigger>
-						<AccordionContent className="px-3 pb-3">
-							{a.answer_text ? (
-								<p className="text-sm whitespace-pre-wrap rounded-md bg-muted px-3 py-2">
-									{a.answer_text}
-								</p>
-							) : (
-								<p className="text-sm italic text-muted-foreground px-3 py-2 rounded-md bg-muted">
-									No answer written
-								</p>
-							)}
-						</AccordionContent>
-					</AccordionItem>
-				))}
-			</Accordion>
-		</div>
-	)
-}
-
 export function ContinueMarkingClient({
 	jobId,
 	extractedAnswers,
@@ -139,6 +65,9 @@ export function ContinueMarkingClient({
 	const [grading, setGrading] = useState(false)
 	const [gradingError, setGradingError] = useState<string | null>(null)
 	const [pollStatus, setPollStatus] = useState<string | null>(null)
+	const [liveGradingResults, setLiveGradingResults] = useState<GradingResult[]>(
+		[],
+	)
 	const isGradingRef = useRef(false)
 
 	useEffect(() => {
@@ -183,8 +112,11 @@ export function ContinueMarkingClient({
 	const pollGrading = useCallback(async () => {
 		const result = await getStudentPaperJob(jobId)
 		if (!result.ok) return
-		const { status } = result.data
+		const { status, grading_results } = result.data
 		setPollStatus(status)
+		if (grading_results.length > liveGradingResults.length) {
+			setLiveGradingResults(grading_results)
+		}
 		if (status === "ocr_complete") {
 			router.push(`/teacher/mark/${jobId}`)
 		}
@@ -193,11 +125,11 @@ export function ContinueMarkingClient({
 			setGrading(false)
 			isGradingRef.current = false
 		}
-	}, [jobId, router])
+	}, [jobId, router, liveGradingResults.length])
 
 	useEffect(() => {
 		if (!grading) return
-		const interval = setInterval(pollGrading, 3000)
+		const interval = setInterval(pollGrading, 2000)
 		return () => clearInterval(interval)
 	}, [grading, pollGrading])
 
@@ -216,21 +148,24 @@ export function ContinueMarkingClient({
 
 	if (grading) {
 		return (
-			<div className="flex flex-col items-center justify-center min-h-[40vh] gap-5 text-center px-4">
-				<Loader2 className="h-10 w-10 text-primary animate-spin" />
-				<div>
-					<p className="text-lg font-semibold">Marking answers…</p>
-					{selectedPaper && (
-						<p className="text-sm text-muted-foreground mt-1">
-							{selectedPaper.title}
-						</p>
-					)}
-					{pollStatus && (
-						<p className="text-xs text-muted-foreground mt-1 tabular-nums">
-							Status: {pollStatus}
-						</p>
-					)}
+			<div className="max-w-2xl space-y-3">
+				<div className="flex items-center gap-2">
+					<Loader2 className="h-4 w-4 text-primary animate-spin shrink-0" />
+					<div>
+						<p className="text-sm font-semibold">Marking answers…</p>
+						{selectedPaper && (
+							<p className="text-xs text-muted-foreground">
+								{selectedPaper.title}
+							</p>
+						)}
+					</div>
 				</div>
+				<ExamPaperPanel
+					gradingResults={liveGradingResults}
+					extractedAnswers={extractedAnswers}
+					isGrading={pollStatus !== "ocr_complete"}
+					examPaperTitle={selectedPaper?.title}
+				/>
 				{gradingError && (
 					<p className="text-sm text-destructive">{gradingError}</p>
 				)}
@@ -248,11 +183,31 @@ export function ContinueMarkingClient({
 			</div>
 
 			{extractedAnswers.length > 0 && (
-				<ExtractedAnswersPanel
-					answers={extractedAnswers}
-					studentName={studentName}
-					detectedSubject={detectedSubject}
-				/>
+				<div>
+					<div className="flex items-center gap-2 mb-2">
+						<CheckCircle2 className="h-4 w-4 text-green-500 shrink-0" />
+						<span className="text-sm font-medium">Answers extracted</span>
+						<div className="flex items-center gap-1.5 ml-auto">
+							{studentName && (
+								<Badge variant="outline" className="text-xs">
+									{studentName}
+								</Badge>
+							)}
+							{detectedSubject && (
+								<Badge
+									variant={subjectBadgeVariant(detectedSubject)}
+									className="text-xs capitalize"
+								>
+									{capitalize(detectedSubject.replace("_", " "))}
+								</Badge>
+							)}
+						</div>
+					</div>
+					<ExamPaperPanel
+						gradingResults={[]}
+						extractedAnswers={extractedAnswers}
+					/>
+				</div>
 			)}
 
 			<div className="space-y-3">

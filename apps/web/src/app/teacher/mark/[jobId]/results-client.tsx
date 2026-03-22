@@ -5,12 +5,6 @@ import {
 	type GradingAnnotation,
 } from "@/components/BoundingBoxViewer"
 import { HandwritingAnalysisPanel } from "@/components/HandwritingAnalysisPanel"
-import {
-	Accordion,
-	AccordionContent,
-	AccordionItem,
-	AccordionTrigger,
-} from "@/components/ui/accordion"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { buttonVariants } from "@/components/ui/button"
@@ -32,11 +26,11 @@ import {
 	Check,
 	ChevronDown,
 	Download,
-	Highlighter,
 	Loader2,
 	Pencil,
 	PlusCircle,
 	RefreshCw,
+	ScanText,
 	X,
 } from "lucide-react"
 import Link from "next/link"
@@ -168,7 +162,7 @@ function AnswerEditor({
 	if (!editing) {
 		return (
 			<div className="group relative">
-				<p className="text-sm whitespace-pre-wrap rounded-md bg-muted px-3 py-2 pr-8">
+				<p className="font-handwriting text-base whitespace-pre-wrap rounded-md bg-muted px-3 py-2 pr-8">
 					{text || (
 						<span className="italic text-muted-foreground">
 							No answer written
@@ -192,7 +186,7 @@ function AnswerEditor({
 			<Textarea
 				value={text}
 				onChange={(e) => setText(e.target.value)}
-				className="text-sm min-h-20 resize-y"
+				className="font-handwriting text-base min-h-20 resize-y"
 				autoFocus
 			/>
 			{error && <p className="text-xs text-destructive">{error}</p>}
@@ -530,7 +524,7 @@ export function MarkingResultsClient({
 		),
 	)
 
-	const [showHighlights, setShowHighlights] = useState(true)
+	const [showHighlights, setShowHighlights] = useState(false)
 
 	const hasScanPages = scanPages.length > 0
 
@@ -610,8 +604,8 @@ export function MarkingResultsClient({
 								"bg-primary text-primary-foreground border-primary hover:bg-primary/90 hover:text-primary-foreground",
 						)}
 					>
-						<Highlighter className="h-3.5 w-3.5 mr-2" />
-						{showHighlights ? "Highlights on" : "Highlights off"}
+						<ScanText className="h-3.5 w-3.5 mr-2" />
+						OCR overlay
 					</Button>
 					<DownloadPdfButton data={data} />
 					<ReMarkButton jobId={jobId} />
@@ -655,6 +649,16 @@ export function MarkingResultsClient({
 	)
 }
 
+// ─── Score colour helpers ─────────────────────────────────────────────────────
+
+function resultScoreColor(awarded: number, max: number): string {
+	if (max === 0) return "bg-zinc-400"
+	const pct = awarded / max
+	if (pct >= 0.7) return "bg-green-500"
+	if (pct >= 0.4) return "bg-amber-500"
+	return "bg-red-500"
+}
+
 // ─── Grading results panel (shared between layouts) ───────────────────────────
 
 function GradingResults({
@@ -693,7 +697,7 @@ function GradingResults({
 				</CardContent>
 			</Card>
 
-			{/* Question breakdown */}
+			{/* Question breakdown — exam paper style */}
 			<div>
 				<h2 className="text-sm font-semibold mb-3 uppercase tracking-wide text-muted-foreground">
 					Question breakdown
@@ -703,40 +707,48 @@ function GradingResults({
 						No questions were graded.
 					</p>
 				) : (
-					<Accordion className="space-y-2">
-						{data.grading_results.map((r) => {
-							const qPercent =
-								r.max_score > 0
-									? Math.round((r.awarded_score / r.max_score) * 100)
-									: 0
-							return (
-								<AccordionItem
-									key={r.question_id}
-									value={r.question_id}
-									className="rounded-lg border px-4"
-								>
-									<AccordionTrigger className="hover:no-underline py-3">
-										<div className="flex items-center gap-3 flex-1 text-left mr-2 min-w-0">
-											<span className="shrink-0 text-xs font-mono tabular-nums text-muted-foreground pr-1">
-												Q{r.question_number}
-											</span>
-											<p className="text-sm font-medium line-clamp-1 flex-1 min-w-0">
-												{r.question_text}
-											</p>
-											<Badge
-												variant={scoreBadgeVariant(
-													r.awarded_score,
-													r.max_score,
+					<div className="rounded-xl border shadow-sm overflow-hidden">
+						<div className="bg-zinc-50 dark:bg-zinc-900 border-b px-5 py-3">
+							<span className="text-xs font-mono font-bold tracking-widest uppercase text-muted-foreground">
+								Student Answer Sheet
+							</span>
+						</div>
+						<div className="bg-white dark:bg-zinc-950 divide-y divide-zinc-100 dark:divide-zinc-800/60">
+							{data.grading_results.map((r) => {
+								const qPercent =
+									r.max_score > 0
+										? Math.round((r.awarded_score / r.max_score) * 100)
+										: 0
+								const color = resultScoreColor(r.awarded_score, r.max_score)
+								return (
+									<div key={r.question_id} className="px-5 py-4 space-y-3">
+										{/* Header row: Q number + question text + score */}
+										<div className="flex items-start justify-between gap-3">
+											<div className="space-y-0.5 flex-1 min-w-0">
+												<p className="font-mono text-xs font-bold tracking-widest uppercase text-zinc-400 dark:text-zinc-500">
+													Q {r.question_number}
+												</p>
+												{r.question_text && (
+													<p className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 leading-snug">
+														{r.question_text}
+													</p>
 												)}
-												className="shrink-0 tabular-nums"
-											>
-												{r.awarded_score}/{r.max_score}
-											</Badge>
+											</div>
+											<div className="flex items-center gap-2 shrink-0">
+												<span
+													className={cn(
+														"inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold text-white tabular-nums",
+														color,
+													)}
+												>
+													{r.awarded_score}/{r.max_score}
+												</span>
+											</div>
 										</div>
-									</AccordionTrigger>
-									<AccordionContent className="pb-4 space-y-3">
+
+										{/* Editable student answer */}
 										<div>
-											<p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">
+											<p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1.5">
 												Student answer
 											</p>
 											<AnswerEditor
@@ -748,43 +760,53 @@ function GradingResults({
 												}
 											/>
 										</div>
-										<div>
-											<p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">
-												Feedback
-											</p>
-											<p className="text-sm">{r.feedback_summary}</p>
+
+										{/* Feedback */}
+										{r.feedback_summary && (
+											<div>
+												<p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1.5">
+													Feedback
+												</p>
+												<p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed bg-zinc-50 dark:bg-zinc-900 rounded-md px-3 py-2">
+													{r.feedback_summary}
+												</p>
+											</div>
+										)}
+
+										{/* Score progress + extras */}
+										<div className="space-y-1.5">
+											<div className="flex items-center gap-2">
+												<Progress value={qPercent} className="h-1.5 flex-1" />
+												<span className="text-xs text-muted-foreground tabular-nums w-8 text-right">
+													{qPercent}%
+												</span>
+											</div>
+											{r.level_awarded !== undefined && (
+												<p className="text-xs text-muted-foreground">
+													Level awarded:{" "}
+													<span className="font-medium">{r.level_awarded}</span>
+												</p>
+											)}
 										</div>
+
+										{/* Collapsible examiner reasoning */}
 										{r.llm_reasoning &&
 											r.llm_reasoning !== r.feedback_summary && (
 												<details className="text-xs">
-													<summary className="cursor-pointer text-muted-foreground hover:text-foreground">
-														<span className="inline-flex items-center gap-1">
-															Examiner reasoning{" "}
-															<ChevronDown className="h-3 w-3" />
-														</span>
+													<summary className="cursor-pointer text-muted-foreground hover:text-foreground list-none flex items-center gap-1 w-fit">
+														Examiner reasoning{" "}
+														<ChevronDown className="h-3 w-3" />
 													</summary>
 													<p className="mt-2 text-muted-foreground whitespace-pre-wrap leading-relaxed pl-2 border-l">
 														{r.llm_reasoning}
 													</p>
 												</details>
 											)}
-										{r.level_awarded !== undefined && (
-											<p className="text-xs text-muted-foreground">
-												Level awarded:{" "}
-												<span className="font-medium">{r.level_awarded}</span>
-											</p>
-										)}
-										<div className="flex items-center gap-2">
-											<Progress value={qPercent} className="h-1.5 flex-1" />
-											<span className="text-xs text-muted-foreground tabular-nums">
-												{qPercent}%
-											</span>
-										</div>
-									</AccordionContent>
-								</AccordionItem>
-							)
-						})}
-					</Accordion>
+									</div>
+								)
+							})}
+						</div>
+					</div>
 				)}
 			</div>
 		</div>

@@ -355,10 +355,11 @@ export function BoundingBoxViewer({
 								<GradingAnnotationOverlay key={i} annotation={ann} />
 							))}
 
-						{/* Word-level feature popovers */}
-						{features.map((f: HandwritingFeature, i: number) => (
-							<FeatureOverlay key={i} feature={f} index={i} />
-						))}
+						{/* Word-level feature popovers — only interactive when overlay is on */}
+						{showHighlights &&
+							features.map((f: HandwritingFeature, i: number) => (
+								<FeatureOverlay key={i} feature={f} index={i} />
+							))}
 					</>
 				)}
 			</div>
@@ -367,21 +368,23 @@ export function BoundingBoxViewer({
 				<HandwritingAnalysisPanel analysis={analysis} />
 			) : null}
 
-			{/* Legend */}
-			<div className="rounded-lg border bg-card p-4">
-				<h3 className="mb-2 font-medium">Feature legend</h3>
-				<div className="flex flex-wrap gap-3 text-xs">
-					{Object.entries(FEATURE_META).map(([type, { color, label }]) => (
-						<span key={type} className="flex items-center gap-1.5">
-							<span
-								className="inline-block size-3 rounded-sm"
-								style={{ backgroundColor: color }}
-							/>
-							{label}
-						</span>
-					))}
+			{/* Legend — only shown when OCR overlay is active */}
+			{showHighlights && (
+				<div className="rounded-lg border bg-card p-4">
+					<h3 className="mb-2 font-medium">OCR feature legend</h3>
+					<div className="flex flex-wrap gap-3 text-xs">
+						{Object.entries(FEATURE_META).map(([type, { color, label }]) => (
+							<span key={type} className="flex items-center gap-1.5">
+								<span
+									className="inline-block size-3 rounded-sm"
+									style={{ backgroundColor: color }}
+								/>
+								{label}
+							</span>
+						))}
+					</div>
 				</div>
-			</div>
+			)}
 		</div>
 	)
 }

@@ -1,17 +1,13 @@
 import { buttonVariants } from "@/components/ui/button-variants"
-import {
-	type ScanPageUrl,
-	getJobScanPageUrls,
-	getStudentPaperResult,
-} from "@/lib/mark-actions"
+import { getJobScanPageUrls, getStudentPaperResult } from "@/lib/mark-actions"
 import { AlertCircle, CheckCircle2, Circle, Loader2 } from "lucide-react"
 // Loader2 is used by StageIcon (active state)
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { ContinueMarkingClient } from "./continue-marking-client"
+import { MarkScanTwoColumn } from "./mark-scan-two-column"
 import { MarkingJobPoller, ReScanButton } from "./polling-client"
 import { MarkingResultsClient } from "./results-client"
-import { ScanPageViewer } from "./scan-viewer"
 
 type Stage = {
 	key: string
@@ -97,33 +93,6 @@ function PipelineProgress({ status }: { status: string }) {
 	)
 }
 
-/** Two-column layout wrapper used for all non-results states. */
-function TwoColumnLayout({
-	scanPages,
-	children,
-}: {
-	scanPages: ScanPageUrl[]
-	children: React.ReactNode
-}) {
-	if (scanPages.length === 0) {
-		return <div className="max-w-2xl space-y-6">{children}</div>
-	}
-	return (
-		<div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:gap-8">
-			{/* Scan — sticky on large screens */}
-			<div className="lg:sticky lg:top-6 lg:w-80 xl:w-96 shrink-0">
-				<p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-					Student scan
-				</p>
-				<ScanPageViewer pages={scanPages} />
-			</div>
-
-			{/* Content */}
-			<div className="flex-1 min-w-0 space-y-6">{children}</div>
-		</div>
-	)
-}
-
 export default async function MarkResultPage({
 	params,
 }: {
@@ -151,7 +120,7 @@ export default async function MarkResultPage({
 	// text_extracted: OCR done, paper not yet selected — let user continue
 	if (data.status === "text_extracted") {
 		return (
-			<TwoColumnLayout scanPages={scanPages}>
+			<MarkScanTwoColumn scanPages={scanPages}>
 				<div>
 					<p className="text-sm text-muted-foreground mb-1">
 						<Link
@@ -174,14 +143,14 @@ export default async function MarkResultPage({
 					detectedSubject={data.detected_subject}
 				/>
 				{data.pages_count > 0 && <ReScanButton jobId={jobId} />}
-			</TwoColumnLayout>
+			</MarkScanTwoColumn>
 		)
 	}
 
 	// failed state
 	if (data.status === "failed") {
 		return (
-			<TwoColumnLayout scanPages={scanPages}>
+			<MarkScanTwoColumn scanPages={scanPages}>
 				<div>
 					<p className="text-sm text-muted-foreground mb-1">
 						<Link
@@ -252,14 +221,14 @@ export default async function MarkResultPage({
 					)}
 					{data.pages_count > 0 && <ReScanButton jobId={jobId} />}
 				</div>
-			</TwoColumnLayout>
+			</MarkScanTwoColumn>
 		)
 	}
 
 	// cancelled
 	if (data.status === "cancelled") {
 		return (
-			<TwoColumnLayout scanPages={scanPages}>
+			<MarkScanTwoColumn scanPages={scanPages}>
 				<p className="text-sm text-muted-foreground">
 					<Link
 						href="/teacher/mark"
@@ -275,13 +244,13 @@ export default async function MarkResultPage({
 				<Link href="/teacher/mark/new" className={buttonVariants()}>
 					Mark a new paper
 				</Link>
-			</TwoColumnLayout>
+			</MarkScanTwoColumn>
 		)
 	}
 
 	// All other in-progress states: pending, processing, extracting, extracted, grading
 	return (
-		<TwoColumnLayout scanPages={scanPages}>
+		<MarkScanTwoColumn scanPages={scanPages}>
 			<div>
 				<p className="text-sm text-muted-foreground mb-1">
 					<Link
@@ -341,6 +310,6 @@ export default async function MarkResultPage({
 				</Link>
 				{data.pages_count > 0 && <ReScanButton jobId={jobId} />}
 			</div>
-		</TwoColumnLayout>
+		</MarkScanTwoColumn>
 	)
 }

@@ -1,8 +1,6 @@
 "use client"
 
-import { useState } from "react"
-import type { HandwritingAnalysis, HandwritingFeature } from "@/lib/scan-actions"
-import { cn } from "@/lib/utils"
+import { HandwritingAnalysisPanel } from "@/components/HandwritingAnalysisPanel"
 import {
 	Popover,
 	PopoverContent,
@@ -11,6 +9,12 @@ import {
 	PopoverTitle,
 	PopoverTrigger,
 } from "@/components/ui/popover"
+import type {
+	HandwritingAnalysis,
+	HandwritingFeature,
+} from "@/lib/scan-actions"
+import { cn } from "@/lib/utils"
+import { useState } from "react"
 
 // ─── Colour map ───────────────────────────────────────────────────────────────
 
@@ -43,7 +47,11 @@ const FEATURE_META: Record<
 	},
 }
 
-const FALLBACK_META = { color: "rgb(156 163 175)", label: "Feature", note: undefined }
+const FALLBACK_META = {
+	color: "rgb(156 163 175)",
+	label: "Feature",
+	note: undefined,
+}
 
 function getMeta(featureType: string) {
 	return FEATURE_META[featureType] ?? FALLBACK_META
@@ -149,11 +157,20 @@ type Props = {
 	imageUrl: string
 	analysis: HandwritingAnalysis
 	className?: string
+	/** When false, transcript and observations are omitted (shown elsewhere, e.g. mark flow RHS). */
+	showAnalysisText?: boolean
 }
 
-export function BoundingBoxViewer({ imageUrl, analysis, className }: Props) {
+export function BoundingBoxViewer({
+	imageUrl,
+	analysis,
+	className,
+	showAnalysisText = true,
+}: Props) {
 	const features = analysis.features ?? []
-	const [imageDims, setImageDims] = useState<{ w: number; h: number } | null>(null)
+	const [imageDims, setImageDims] = useState<{ w: number; h: number } | null>(
+		null,
+	)
 	const [showHighlights, setShowHighlights] = useState(true)
 
 	const handleImageLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
@@ -163,7 +180,9 @@ export function BoundingBoxViewer({ imageUrl, analysis, className }: Props) {
 		})
 	}
 
-	const viewBox = imageDims ? `0 0 ${imageDims.w} ${imageDims.h}` : "0 0 1000 1000"
+	const viewBox = imageDims
+		? `0 0 ${imageDims.w} ${imageDims.h}`
+		: "0 0 1000 1000"
 	const scaleX = (imageDims?.w ?? 1000) / 1000
 	const scaleY = (imageDims?.h ?? 1000) / 1000
 
@@ -218,48 +237,40 @@ export function BoundingBoxViewer({ imageUrl, analysis, className }: Props) {
 				)}
 			</div>
 
-		{/* Toolbar */}
-		{imageDims && (
-			<div className="flex items-center gap-2">
-				<button
-					type="button"
-					onClick={() => setShowHighlights((v) => !v)}
-					className={cn(
-						"inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm font-medium transition-colors",
-						showHighlights
-							? "bg-primary text-primary-foreground border-primary"
-							: "bg-background text-foreground border-input hover:bg-muted",
-					)}
-				>
-					<span
-						className="inline-block size-3 rounded-sm"
-						style={{ backgroundColor: showHighlights ? "currentColor" : "rgb(59 130 246)", opacity: showHighlights ? 0.7 : 0.4 }}
-					/>
-					{showHighlights ? "Highlights on" : "Highlights off"}
-				</button>
-				<span className="text-xs text-muted-foreground">
-					{features.length} region{features.length !== 1 ? "s" : ""} · click any highlight to inspect
-				</span>
-			</div>
-		)}
+			{/* Toolbar */}
+			{imageDims && (
+				<div className="flex items-center gap-2">
+					<button
+						type="button"
+						onClick={() => setShowHighlights((v) => !v)}
+						className={cn(
+							"inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm font-medium transition-colors",
+							showHighlights
+								? "bg-primary text-primary-foreground border-primary"
+								: "bg-background text-foreground border-input hover:bg-muted",
+						)}
+					>
+						<span
+							className="inline-block size-3 rounded-sm"
+							style={{
+								backgroundColor: showHighlights
+									? "currentColor"
+									: "rgb(59 130 246)",
+								opacity: showHighlights ? 0.7 : 0.4,
+							}}
+						/>
+						{showHighlights ? "Highlights on" : "Highlights off"}
+					</button>
+					<span className="text-xs text-muted-foreground">
+						{features.length} region{features.length !== 1 ? "s" : ""} · click
+						any highlight to inspect
+					</span>
+				</div>
+			)}
 
-		{/* Transcript + observations */}
-		<div className="grid gap-4 md:grid-cols-2">
-				<div className="rounded-lg border bg-card p-4">
-					<h3 className="mb-2 font-medium">Transcript</h3>
-					<p className="whitespace-pre-wrap text-sm text-muted-foreground">
-						{analysis.transcript || "—"}
-					</p>
-				</div>
-				<div className="rounded-lg border bg-card p-4">
-					<h3 className="mb-2 font-medium">Observations</h3>
-					<ul className="list-inside list-disc text-sm text-muted-foreground">
-						{(analysis.observations ?? []).length > 0
-							? analysis.observations.map((o, i) => <li key={i}>{o}</li>)
-							: "—"}
-					</ul>
-				</div>
-			</div>
+			{showAnalysisText ? (
+				<HandwritingAnalysisPanel analysis={analysis} showHeading={false} />
+			) : null}
 
 			{/* Legend */}
 			<div className="rounded-lg border bg-card p-4">

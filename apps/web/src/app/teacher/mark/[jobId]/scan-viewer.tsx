@@ -8,11 +8,33 @@ import { useState } from "react"
 export function ScanPageViewer({
 	pages,
 	className,
+	pageIndex: controlledPageIndex,
+	onPageIndexChange,
+	analysisTextPlacement = "inline",
 }: {
 	pages: ScanPageUrl[]
 	className?: string
+	/** Controlled page index (0-based). When set, `onPageIndexChange` is required. */
+	pageIndex?: number
+	onPageIndexChange?: (index: number) => void
+	/** `external`: transcript/observations are not shown here; parent renders them. */
+	analysisTextPlacement?: "inline" | "external"
 }) {
-	const [current, setCurrent] = useState(0)
+	const [internalPageIndex, setInternalPageIndex] = useState(0)
+	const isControlled =
+		typeof controlledPageIndex === "number" &&
+		typeof onPageIndexChange === "function"
+	const current = isControlled ? controlledPageIndex : internalPageIndex
+
+	const goToPage = (nextIndex: number) => {
+		const last = pages.length - 1
+		const clamped = Math.min(Math.max(0, nextIndex), last)
+		if (isControlled) {
+			onPageIndexChange?.(clamped)
+		} else {
+			setInternalPageIndex(clamped)
+		}
+	}
 
 	if (pages.length === 0) {
 		return (
@@ -37,7 +59,7 @@ export function ScanPageViewer({
 					<button
 						type="button"
 						disabled={current === 0}
-						onClick={() => setCurrent((c) => c - 1)}
+						onClick={() => goToPage(current - 1)}
 						className="rounded p-1 text-muted-foreground hover:text-foreground disabled:opacity-30 transition-colors"
 						aria-label="Previous page"
 					>
@@ -49,7 +71,7 @@ export function ScanPageViewer({
 					<button
 						type="button"
 						disabled={current === total - 1}
-						onClick={() => setCurrent((c) => c + 1)}
+						onClick={() => goToPage(current + 1)}
 						className="rounded p-1 text-muted-foreground hover:text-foreground disabled:opacity-30 transition-colors"
 						aria-label="Next page"
 					>
@@ -71,7 +93,11 @@ export function ScanPageViewer({
 					/>
 				</div>
 			) : page.analysis ? (
-				<BoundingBoxViewer imageUrl={page.url} analysis={page.analysis} />
+				<BoundingBoxViewer
+					imageUrl={page.url}
+					analysis={page.analysis}
+					showAnalysisText={analysisTextPlacement === "inline"}
+				/>
 			) : (
 				<div className="relative overflow-hidden rounded-xl border bg-muted/20">
 					{/* eslint-disable-next-line @next/next/no-img-element -- presigned S3 URL; next/image requires known dimensions */}
@@ -90,7 +116,7 @@ export function ScanPageViewer({
 						<button
 							key={p.order}
 							type="button"
-							onClick={() => setCurrent(i)}
+							onClick={() => goToPage(i)}
 							className={`shrink-0 rounded border overflow-hidden transition-all ${
 								i === current
 									? "ring-2 ring-primary border-primary"

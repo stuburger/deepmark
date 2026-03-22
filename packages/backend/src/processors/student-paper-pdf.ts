@@ -132,12 +132,10 @@ Return the alignments array strictly matching the schema.`
 	try {
 		const { output } = await generateText({
 			model: defaultChatModel(),
-			prompt,
-			// @ts-expect-error todo
+			messages: [{ role: "user", content: prompt }],
 			output: Output.object({ schema: AlignmentSchema }),
 		})
-		
-		// @ts-expect-error todo
+
 		for (const alignment of output.alignments) {
 			result.set(alignment.question_id, alignment.answer_text)
 		}
@@ -515,6 +513,9 @@ export async function handler(
 						question_id: qItem.question_id,
 						error: String(err),
 					})
+					const gradingFailedNote = studentAnswer.trim()
+						? "This answer could not be automatically graded. Please review it manually against the mark scheme."
+						: "No answer was detected for this question. If you did write an answer, try re-scanning or edit the extracted answer and re-mark."
 					gradingResults.push({
 						question_id: qItem.question_id,
 						question_number: qItem.question_number,
@@ -522,8 +523,8 @@ export async function handler(
 						student_answer: studentAnswer,
 						awarded_score: 0,
 						max_score: ms.points_total,
-						llm_reasoning: "Grading failed.",
-						feedback_summary: "Grading failed for this question.",
+						llm_reasoning: `Automatic grading failed for this question (${qItem.question_number}). Manual review required.`,
+						feedback_summary: gradingFailedNote,
 						mark_points_results: [],
 						mark_scheme_id: ms.id,
 					})

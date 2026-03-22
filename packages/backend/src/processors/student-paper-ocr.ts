@@ -3,6 +3,7 @@ import {
 	type CancellationToken,
 	createCancellationToken,
 } from "@/lib/cancellation"
+import { runOcr } from "@/lib/gemini-ocr"
 import { logger } from "@/lib/logger"
 import { GetObjectCommand, S3Client } from "@aws-sdk/client-s3"
 import { GoogleGenAI, Type } from "@google/genai"
@@ -160,24 +161,34 @@ export async function handler(
 				continue
 			}
 
-			logger.info(TAG, "Calling Gemini to extract student answers", {
-				jobId,
-				page_count: pageData.length,
-			})
+			logger.info(
+				TAG,
+				"Calling Gemini to extract student answers + per-page OCR",
+				{
+					jobId,
+					page_count: pageData.length,
+				},
+			)
 
 			const inlineDataParts = pageData.map((p) => ({
 				inlineData: { data: p.data, mimeType: p.mimeType },
 			}))
 
-			const response = await gemini.models.generateContent({
-				model: "gemini-2.5-flash",
-				contents: [
-					{
-						role: "user",
-						parts: [
-							...inlineDataParts,
-							{
-								text: `This is a student's exam answer sheet (${pageData.length} page${pageData.length > 1 ? "s" : ""}).
+			// Fan out: answer extraction (all pages combined) + per-page runOcr in parallel.
+			// runOcr itself makes 2 parallel Gemini calls (transcript + bounding boxes).
+			// Cost note: a cheaper alternative is to call only the bounding-box schema per
+			// page (skipping the transcript call) — BoundingBoxViewer renders fine with an
+			// empty transcript and this saves 1 Gemini call per page.
+			const [response, ...ocrResults] = await Promise.all([
+				gemini.models.generateContent({
+					model: "gemini-2.5-flash",
+					contents: [
+						{
+							role: "user",
+							parts: [
+								...inlineDataParts,
+								{
+									text: `This is a student's exam answer sheet (${pageData.length} page${pageData.length > 1 ? "s" : ""}).
 
 1. Extract the student's name if visible on any page.
 2. Detect the subject (e.g. biology, chemistry, physics, mathematics, english, history, etc.) from any headers, logos, or question content.
@@ -187,16 +198,18 @@ Return:
 - student_name: the student's name (null if not found)
 - detected_subject: the detected subject as a lowercase single word (null if unclear)
 - answers: array of { question_number, answer_text } for every question found`,
-							},
-						],
+								},
+							],
+						},
+					],
+					config: {
+						responseMimeType: "application/json",
+						responseSchema: STUDENT_PAPER_SCHEMA,
+						temperature: 0.1,
 					},
-				],
-				config: {
-					responseMimeType: "application/json",
-					responseSchema: STUDENT_PAPER_SCHEMA,
-					temperature: 0.1,
-				},
-			})
+				}),
+				...pageData.map((p) => runOcr(p.data, p.mimeType)),
+			])
 
 			const responseText = response.text
 			if (!responseText) throw new Error("No response from Gemini")
@@ -218,6 +231,12 @@ Return:
 				answers: Array<{ question_number: string; answer_text: string }>
 			}
 
+			// Map each OCR result back to its page order number
+			const pageAnalyses = ocrResults.map((analysis, i) => ({
+				page: sortedPages[i]?.order ?? i + 1,
+				analysis,
+			}))
+
 			const answersExtracted = (parsed.answers ?? []).filter((a) =>
 				a.answer_text.trim(),
 			).length
@@ -227,6 +246,7 @@ Return:
 				student_name: parsed.student_name ?? null,
 				detected_subject: parsed.detected_subject ?? null,
 				answers_extracted: answersExtracted,
+				pages_analysed: pageAnalyses.length,
 			})
 
 			const rawSubject = parsed.detected_subject?.trim().toLowerCase()
@@ -243,6 +263,7 @@ Return:
 						student_name: parsed.student_name?.trim() || null,
 						answers: parsed.answers ?? [],
 					},
+					page_analyses: pageAnalyses,
 					processed_at: new Date(),
 					error: null,
 				},

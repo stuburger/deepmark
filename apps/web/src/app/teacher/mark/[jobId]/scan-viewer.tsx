@@ -1,5 +1,6 @@
 "use client"
 
+import { BoundingBoxViewer } from "@/components/BoundingBoxViewer"
 import type { ScanPageUrl } from "@/lib/mark-actions"
 import { ChevronLeft, ChevronRight, FileText } from "lucide-react"
 import { useState } from "react"
@@ -57,23 +58,30 @@ export function ScanPageViewer({
 				</div>
 			)}
 
-			{/* Page content */}
-			<div className="relative overflow-hidden rounded-xl border bg-muted/20">
-				{isPdf ? (
+			{/* Page content:
+			    - PDF: always <iframe>
+			    - Image with OCR analysis (new jobs): BoundingBoxViewer with highlights + transcript
+			    - Image without analysis (jobs processed before overlay was added): plain <img> */}
+			{isPdf ? (
+				<div className="relative overflow-hidden rounded-xl border bg-muted/20">
 					<iframe
 						src={page.url}
 						title={`Page ${current + 1}`}
 						className="h-150 w-full border-0"
 					/>
-				) : (
-					// eslint-disable-next-line @next/next/no-img-element -- presigned S3 URL; next/image requires known dimensions
+				</div>
+			) : page.analysis ? (
+				<BoundingBoxViewer imageUrl={page.url} analysis={page.analysis} />
+			) : (
+				<div className="relative overflow-hidden rounded-xl border bg-muted/20">
+					{/* eslint-disable-next-line @next/next/no-img-element -- presigned S3 URL; next/image requires known dimensions */}
 					<img
 						src={page.url}
 						alt={`Scan page ${current + 1}`}
 						className="block w-full rounded-xl"
 					/>
-				)}
-			</div>
+				</div>
+			)}
 
 			{/* Thumbnail strip for multi-page */}
 			{total > 1 && (

@@ -458,6 +458,8 @@ model PdfIngestionJob {
   detected_subject             Subject?
   // Raw OCR extraction before grading: { student_name?, answers: [{question_number, answer_text}] }
   extracted_answers_raw        Json?
+  // Per-page OCR analysis: [{ page: number, analysis: HandwritingAnalysis }]
+  page_analyses                Json?
   grading_results              Json?
   error                        String?
   created_at                   DateTime        @default(now())

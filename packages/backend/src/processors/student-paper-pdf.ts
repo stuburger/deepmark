@@ -17,6 +17,8 @@ import {
 	parseMarkPointsFromPrisma,
 	parseMarkingRulesFromPrisma,
 } from "@mcp-gcse/shared"
+import { Output, generateText } from "ai"
+import { z } from "zod"
 
 const TAG = "student-paper-pdf"
 
@@ -62,11 +64,95 @@ type ExtractedAnswersRaw = {
 }
 
 /**
- * Normalise question numbers before comparison so that "Q1a", "1 a", "1A"
- * all resolve to the same key "1a".
+ * Normalise question numbers for comparison.
+ * Strips a leading "Q"/"q", all whitespace, all dots, and lowercases — so
+ * "Q1a", "1 a", "1A", "0.1.1", "01.1", "0.01" all collapse to a comparable
+ * form before any lookup is attempted.
  */
 function normaliseQNum(s: string): string {
-	return s.replace(/^q/i, "").replace(/\s+/g, "").toLowerCase()
+	return s.replace(/^q/i, "").replace(/[\s.]/g, "").toLowerCase()
+}
+
+const AlignmentSchema = z.object({
+	alignments: z.array(
+		z.object({
+			question_id: z.string(),
+			answer_text: z.string(),
+		}),
+	),
+})
+
+/**
+ * LLM fallback: aligns OCR-extracted answers to exam questions when
+ * normalised string matching fails (e.g. OCR reads "0.1.2" for "01.2").
+ *
+ * Only called when at least one question has no normalised match AND
+ * there are unconsumed OCR answers — one LLM call covers the whole paper.
+ */
+async function alignAnswersWithLlm(
+	unmatchedQuestions: Array<{
+		question_id: string
+		question_number: string
+		question_text: string
+		question_type: string
+	}>,
+	allOcrAnswers: Array<{ question_number: string; answer_text: string }>,
+	jobId: string,
+): Promise<Map<string, string>> {
+	const result = new Map<string, string>()
+
+	const questionsText = unmatchedQuestions
+		.map(
+			(q) =>
+				`- id: ${q.question_id} | number: ${q.question_number} | type: ${q.question_type} | text: ${q.question_text.slice(0, 120)}`,
+		)
+		.join("\n")
+
+	const answersText = allOcrAnswers
+		.map(
+			(a) =>
+				`- ocr_number: ${a.question_number} | answer: ${a.answer_text || "(blank)"}`,
+		)
+		.join("\n")
+
+	const prompt = `You are aligning a student's OCR-extracted answers to the correct exam questions.
+The OCR may have misread question numbers (e.g. "0.1.2" instead of "01.2", "0.01" instead of "01.1").
+
+EXAM QUESTIONS THAT NEED ANSWERS (currently unmatched):
+${questionsText}
+
+ALL OCR-EXTRACTED ANSWERS (including already-matched ones for context):
+${answersText}
+
+For each unmatched exam question, identify the most likely student answer from the OCR outputs.
+Consider: question number similarity, answer content matching question type (A/B/C/D for MCQ, text for written).
+If a question genuinely has no student answer, use an empty string "".
+Return the alignments array strictly matching the schema.`
+
+	try {
+		const { output } = await generateText({
+			model: defaultChatModel(),
+			prompt,
+			// @ts-expect-error todo
+			output: Output.object({ schema: AlignmentSchema }),
+		})
+		
+		// @ts-expect-error todo
+		for (const alignment of output.alignments) {
+			result.set(alignment.question_id, alignment.answer_text)
+		}
+	} catch (err) {
+		logger.error(
+			TAG,
+			"LLM alignment failed — unmatched questions will receive empty answers",
+			{
+				jobId,
+				error: String(err),
+			},
+		)
+	}
+
+	return result
 }
 
 export async function handler(
@@ -229,37 +315,86 @@ export async function handler(
 			const extractedRaw = job.extracted_answers_raw as ExtractedAnswersRaw
 			const rawAnswers = extractedRaw.answers ?? []
 
-			// Build a normalised map for reliable lookup even when the OCR returns
-			// "Q1a" or "1 A" instead of the canonical "1a".
+			// ── Pass 1: Normalised map ──────────────────────────────────────────
+			// Strip Q-prefix, dots, whitespace, lowercase on both sides.
+			// Handles "Q1a"→"1a", "0.1.1"→"011", "01.1"→"011", etc.
 			const answerMap = new Map<string, string>()
 			for (const a of rawAnswers) {
 				answerMap.set(normaliseQNum(a.question_number), a.answer_text)
 			}
 
-			// Position-based fallback: if the number of extracted answers exactly
-			// matches the number of questions and every normalised question_number
-			// lookup misses, map by index order instead.
-			const usePositionFallback =
-				rawAnswers.length === questionList.length &&
-				questionList.every(
-					(q) => !answerMap.has(normaliseQNum(q.question_number)),
-				)
+			// Determine which questions are still unmatched after pass 1
+			const unmatchedQuestions = questionList.filter(
+				(q) => !answerMap.has(normaliseQNum(q.question_number)),
+			)
 
-			if (usePositionFallback) {
-				logger.info(
-					TAG,
-					"Question numbers did not match — using position-based fallback",
-					{
-						jobId,
-						question_count: questionList.length,
-					},
+			// Determine which OCR answers weren't consumed by any matched question
+			const matchedNormKeys = new Set(
+				questionList
+					.filter((q) => answerMap.has(normaliseQNum(q.question_number)))
+					.map((q) => normaliseQNum(q.question_number)),
+			)
+			const unusedOcrAnswers = rawAnswers.filter(
+				(a) => !matchedNormKeys.has(normaliseQNum(a.question_number)),
+			)
+
+			// ── Pass 2: Subset positional alignment ──────────────────────────────
+			// When unmatched question count equals unused OCR answer count, pair
+			// them by position. Both lists are already in paper order:
+			//   questionList  — built by iterating sections/questions in order
+			//   rawAnswers    — OCR extracts top-to-bottom (reading order)
+			// This handles "0.01"→"01.1", "0.2.1"→"02.1" etc. without any LLM.
+			const positionalAlignmentMap = new Map<string, string>()
+			if (
+				unmatchedQuestions.length > 0 &&
+				unusedOcrAnswers.length === unmatchedQuestions.length
+			) {
+				for (let i = 0; i < unmatchedQuestions.length; i++) {
+					const q = unmatchedQuestions[i]
+					const a = unusedOcrAnswers[i]
+					if (q && a) positionalAlignmentMap.set(q.question_id, a.answer_text)
+				}
+				logger.info(TAG, "Subset positional alignment applied", {
+					jobId,
+					aligned_count: positionalAlignmentMap.size,
+				})
+			}
+
+			// ── Pass 3: LLM alignment ────────────────────────────────────────────
+			// Only reached when counts differ (student skipped a question AND
+			// OCR garbled its number). One LLM call covers the whole residual.
+			let llmAlignmentMap = new Map<string, string>()
+			const stillUnmatched = unmatchedQuestions.filter(
+				(q) => !positionalAlignmentMap.has(q.question_id),
+			)
+			if (stillUnmatched.length > 0 && unusedOcrAnswers.length > 0) {
+				logger.info(TAG, "Triggering LLM alignment fallback", {
+					jobId,
+					unmatched_questions: stillUnmatched.length,
+					unused_ocr_answers: unusedOcrAnswers.length,
+				})
+				llmAlignmentMap = await alignAnswersWithLlm(
+					stillUnmatched.map((q) => ({
+						question_id: q.question_id,
+						question_number: q.question_number,
+						question_text: q.question_text,
+						question_type: q.question_obj.question_type,
+					})),
+					rawAnswers,
+					jobId,
 				)
+				logger.info(TAG, "LLM alignment complete", {
+					jobId,
+					aligned_count: llmAlignmentMap.size,
+				})
 			}
 
 			logger.info(TAG, "Grading using pre-extracted answers", {
 				jobId,
-				answer_count: answerMap.size,
-				position_fallback: usePositionFallback,
+				normalised_matched: answerMap.size - unmatchedQuestions.length,
+				positional_aligned: positionalAlignmentMap.size,
+				llm_aligned: llmAlignmentMap.size,
+				still_empty: stillUnmatched.length - llmAlignmentMap.size,
 			})
 
 			const gradingResults: GradingResult[] = []
@@ -276,9 +411,11 @@ export async function handler(
 					break
 				}
 
-				const studentAnswer = usePositionFallback
-					? (rawAnswers[qi]?.answer_text ?? "")
-					: (answerMap.get(normaliseQNum(qItem.question_number)) ?? "")
+				const studentAnswer =
+					answerMap.get(normaliseQNum(qItem.question_number)) ??
+					positionalAlignmentMap.get(qItem.question_id) ??
+					llmAlignmentMap.get(qItem.question_id) ??
+					""
 				const ms = qItem.mark_scheme
 
 				if (!ms) {

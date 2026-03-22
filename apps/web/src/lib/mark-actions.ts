@@ -391,10 +391,15 @@ export async function updateStudentName(
 
 // ─── Scan page presigned URLs ─────────────────────────────────────────────────
 
+import type { HandwritingAnalysis } from "@/lib/scan-actions"
+
 export type ScanPageUrl = {
 	order: number
 	url: string
 	mimeType: string
+	/** Per-page OCR analysis (transcript + bounding box features). Present for
+	 *  jobs processed after the OCR overlay was added; absent for older jobs. */
+	analysis?: HandwritingAnalysis
 }
 
 export type GetJobScanPageUrlsResult =
@@ -402,8 +407,8 @@ export type GetJobScanPageUrlsResult =
 	| { ok: false; error: string }
 
 /**
- * Returns short-lived presigned GET URLs for every page uploaded to a job.
- * Used to display the student's scan alongside grading results.
+ * Returns short-lived presigned GET URLs for every page uploaded to a job,
+ * merged with the stored per-page OCR analysis where available.
  */
 export async function getJobScanPageUrls(
 	jobId: string,
@@ -413,13 +418,17 @@ export async function getJobScanPageUrls(
 
 	const job = await db.pdfIngestionJob.findFirst({
 		where: { id: jobId, uploaded_by: session.userId },
-		select: { pages: true, s3_bucket: true },
+		select: { pages: true, s3_bucket: true, page_analyses: true },
 	})
 	if (!job) return { ok: false, error: "Job not found" }
 
 	type PageEntry = { key: string; order: number; mime_type: string }
 	const pages = (job.pages ?? []) as PageEntry[]
 	if (pages.length === 0) return { ok: true, pages: [] }
+
+	type PageAnalysisEntry = { page: number; analysis: HandwritingAnalysis }
+	const analyses = (job.page_analyses ?? []) as PageAnalysisEntry[]
+	const analysisByPage = new Map(analyses.map((a) => [a.page, a.analysis]))
 
 	const bucket = job.s3_bucket || bucketName
 
@@ -430,7 +439,12 @@ export async function getJobScanPageUrls(
 			.map(async (p) => {
 				const cmd = new GetObjectCommand({ Bucket: bucket, Key: p.key })
 				const url = await getSignedUrl(s3, cmd, { expiresIn: 3600 })
-				return { order: p.order, url, mimeType: p.mime_type }
+				return {
+					order: p.order,
+					url,
+					mimeType: p.mime_type,
+					analysis: analysisByPage.get(p.order),
+				}
 			}),
 	)
 

@@ -136,16 +136,16 @@ export async function alignAnswers(
 			.filter((normKey) => answerMap.has(normKey)),
 	)
 
-	const unusedOcrAnswers = rawAnswers.filter(
+	const unusedAnswers = rawAnswers.filter(
 		(a) => !matchedNormKeys.has(normaliseQNum(a.question_number)),
 	)
 
 	let llmAlignmentMap = new Map<string, string>()
-	if (unmatchedQuestions.length > 0 && unusedOcrAnswers.length > 0) {
+	if (unmatchedQuestions.length > 0 && unusedAnswers.length > 0) {
 		logger.info(TAG, "Triggering LLM alignment fallback", {
 			jobId,
 			unmatched_questions: unmatchedQuestions.length,
-			unused_ocr_answers: unusedOcrAnswers.length,
+			unused_ocr_answers: unusedAnswers.length,
 		})
 		llmAlignmentMap = await alignAnswersWithLlm({
 			unmatchedQuestions: unmatchedQuestions.map((q) => ({

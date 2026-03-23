@@ -1,6 +1,10 @@
 import { db } from "@/db"
 import { createCancellationToken } from "@/lib/cancellation"
-import { type PageMimeType, extractStudentPaper } from "@/lib/gemini-extract"
+import {
+	type PageMimeType,
+	type QuestionSeed,
+	extractStudentPaper,
+} from "@/lib/gemini-extract"
 import { logger } from "@/lib/logger"
 import { getFileBase64 } from "@/lib/s3"
 import {
@@ -46,6 +50,47 @@ function isValidSubject(s: string): s is Subject {
 	return (SUBJECT_VALUES as readonly string[]).includes(s)
 }
 
+/**
+ * Fetches the minimal question data needed for seeded extraction — just the
+ * id, canonical number, text, and type for each question on the paper.
+ * Does not load mark schemes or other heavyweight relations.
+ */
+async function loadQuestionSeeds(examPaperId: string): Promise<QuestionSeed[]> {
+	const sections = await db.examSection.findMany({
+		where: { exam_paper_id: examPaperId },
+		orderBy: { order: "asc" },
+		include: {
+			exam_section_questions: {
+				orderBy: { order: "asc" },
+				include: {
+					question: {
+						select: {
+							id: true,
+							question_number: true,
+							text: true,
+							question_type: true,
+						},
+					},
+				},
+			},
+		},
+	})
+
+	const seeds: QuestionSeed[] = []
+	for (const section of sections) {
+		for (const esq of section.exam_section_questions) {
+			seeds.push({
+				question_id: esq.question.id,
+				question_number:
+					esq.question.question_number ?? String(seeds.length + 1),
+				question_text: esq.question.text,
+				question_type: esq.question.question_type,
+			})
+		}
+	}
+	return seeds
+}
+
 export async function handler(
 	event: SqsEvent,
 ): Promise<{ batchItemFailures?: { itemIdentifier: string }[] }> {
@@ -79,7 +124,7 @@ export async function handler(
 					error: null,
 				},
 			})
-			
+
 			void logStudentPaperEvent(db, jobId, {
 				type: "ocr_started",
 				at: new Date().toISOString(),
@@ -92,20 +137,29 @@ export async function handler(
 				throw new Error("No pages found on job — cannot run OCR")
 			}
 
-			logger.info(TAG, "Loading pages from S3", {
+			logger.info(TAG, "Loading pages from S3 and question seeds", {
 				jobId,
 				page_count: pages.length,
+				exam_paper_id: job.exam_paper_id,
 			})
 
 			const sortedPages = [...pages].sort((a, b) => a.order - b.order)
 
-			// Fetch all pages in parallel
-			const pageData = await Promise.all(
-				sortedPages.map(async (page) => ({
-					data: await getFileBase64(bucket, page.key),
-					mimeType: page.mime_type as PageMimeType,
-				})),
-			)
+			// Load pages from S3 and question seeds concurrently
+			const [pageData, questionSeeds] = await Promise.all([
+				Promise.all(
+					sortedPages.map(async (page) => ({
+						data: await getFileBase64(bucket, page.key),
+						mimeType: page.mime_type as PageMimeType,
+					})),
+				),
+				loadQuestionSeeds(job.exam_paper_id),
+			])
+
+			logger.info(TAG, "Question seeds loaded", {
+				jobId,
+				seed_count: questionSeeds.length,
+			})
 
 			if (cancellation.isCancelled()) {
 				logger.info(TAG, "Job cancelled before Gemini call — skipping", {
@@ -120,7 +174,7 @@ export async function handler(
 				{ jobId, page_count: pageData.length },
 			)
 
-			const extraction = await extractStudentPaper(pageData)
+			const extraction = await extractStudentPaper(pageData, questionSeeds)
 
 			if (cancellation.isCancelled()) {
 				logger.info(
@@ -146,6 +200,7 @@ export async function handler(
 				student_name: extraction.studentName,
 				detected_subject: extraction.detectedSubject,
 				answers_extracted: answersExtracted,
+				answers_total: extraction.answers.length,
 				pages_analysed: pageAnalyses.length,
 			})
 			void logStudentPaperEvent(db, jobId, {

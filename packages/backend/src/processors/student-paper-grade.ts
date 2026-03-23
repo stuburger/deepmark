@@ -1,5 +1,4 @@
 import { db } from "@/db"
-import { alignAnswers } from "@/lib/answer-alignment"
 import {
 	type CancellationToken,
 	createCancellationToken,
@@ -39,7 +38,7 @@ const EXAMINER_SYSTEM_PROMPT =
 
 type ExtractedAnswersRaw = {
 	student_name?: string | null
-	answers: Array<{ question_number: string; answer_text: string }>
+	answers: Array<{ question_id: string; answer_text: string }>
 }
 
 type GradedJob = Awaited<
@@ -55,7 +54,7 @@ export async function handler(
 	const grader = new Grader(defaultChatModel(), {
 		systemPrompt: EXAMINER_SYSTEM_PROMPT,
 	})
-	
+
 	const orchestrator = new MarkerOrchestrator([
 		new DeterministicMarker(),
 		new LevelOfResponseMarker(grader),
@@ -128,16 +127,15 @@ async function gradeJob({
 
 	const regionAttribution = beginRegionAttribution({ questionList, job, jobId })
 
-	const { answerMap, llmAlignmentMap } = await alignAnswers({
-		questionList,
-		rawAnswers: extractRawAnswers(job),
-		jobId,
-	})
+	const answerMap = new Map(
+		extractRawAnswers(job).map((a) => [a.question_id, a.answer_text]),
+	)
+
+	logger.info(TAG, "Answer map built", { jobId, answer_count: answerMap.size })
 
 	const gradingResults = await gradeAllQuestions({
 		questionList,
 		answerMap,
-		llmAlignmentMap,
 		examPaper,
 		orchestrator,
 		jobId,
@@ -217,7 +215,7 @@ async function markJobAsProcessing(jobId: string): Promise<void> {
 
 function extractRawAnswers(
 	job: Pick<GradedJob, "extracted_answers_raw">,
-): Array<{ question_number: string; answer_text: string }> {
+): Array<{ question_id: string; answer_text: string }> {
 	const raw = job.extracted_answers_raw as ExtractedAnswersRaw
 	return raw.answers ?? []
 }

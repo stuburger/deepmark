@@ -1,6 +1,11 @@
 "use client"
 
 import { buttonVariants } from "@/components/ui/button-variants"
+import {
+	ResizableHandle,
+	ResizablePanel,
+	ResizablePanelGroup,
+} from "@/components/ui/resizable"
 import { Separator } from "@/components/ui/separator"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import type { ScanPageUrl, StudentPaperJobPayload } from "@/lib/mark-actions"
@@ -9,6 +14,7 @@ import { PlusCircle, ScanText } from "lucide-react"
 import Link from "next/link"
 import { useState } from "react"
 import { DigitalTabContent } from "./digital-tab-content"
+import { JobTimeline } from "./job-timeline"
 import { AnnotatedScanColumn } from "./phases/results/annotated-scan-column"
 import { DownloadPdfButton } from "./phases/results/download-pdf-button"
 import { ReMarkButton } from "./phases/results/re-mark-button"
@@ -25,6 +31,52 @@ function defaultTabForPhase(phase: MarkingPhase): string {
 		default:
 			return "scan"
 	}
+}
+
+function ScanDigitalTabs({
+	jobId,
+	data,
+	scanPages,
+	phase,
+	showHighlights,
+}: {
+	jobId: string
+	data: StudentPaperJobPayload
+	scanPages: ScanPageUrl[]
+	phase: MarkingPhase
+	showHighlights: boolean
+}) {
+	return (
+		<Tabs
+			defaultValue={defaultTabForPhase(phase)}
+			className="h-full flex flex-col overflow-hidden gap-0"
+		>
+			<TabsList
+				variant="line"
+				className="shrink-0 w-full justify-start rounded-none border-b px-4 h-9 gap-4"
+			>
+				<TabsTrigger value="scan">Scan</TabsTrigger>
+				<TabsTrigger value="digital">Digital</TabsTrigger>
+			</TabsList>
+
+			<TabsContent
+				value="scan"
+				className="flex-1 overflow-y-auto bg-muted/20 m-0 p-0"
+			>
+				<AnnotatedScanColumn
+					pages={scanPages}
+					showHighlights={showHighlights}
+					gradingResults={data.grading_results}
+				/>
+			</TabsContent>
+
+			<TabsContent value="digital" className="flex-1 overflow-y-auto m-0">
+				<div className="p-4 space-y-5 max-w-2xl">
+					<DigitalTabContent jobId={jobId} data={data} phase={phase} />
+				</div>
+			</TabsContent>
+		</Tabs>
+	)
 }
 
 export function UnifiedMarkingLayout({
@@ -98,36 +150,40 @@ export function UnifiedMarkingLayout({
 				</div>
 			</div>
 
-			{/* Tab bar + scrollable content */}
-			<Tabs
-				defaultValue={defaultTabForPhase(phase)}
-				className="flex-1 flex flex-col min-h-0 overflow-hidden gap-0"
+			{/* Mobile: full-width tabs only */}
+			<div className="flex-1 min-h-0 flex flex-col md:hidden">
+				<ScanDigitalTabs
+					jobId={jobId}
+					data={data}
+					scanPages={scanPages}
+					phase={phase}
+					showHighlights={showHighlights}
+				/>
+			</div>
+
+			{/* Desktop: resizable split — tabs (2/3) + sidebar (1/3) */}
+			<ResizablePanelGroup
+				orientation="horizontal"
+				className="flex-1 min-h-0 hidden md:flex"
 			>
-				<TabsList
-					variant="line"
-					className="shrink-0 w-full justify-start rounded-none border-b px-4 h-9 gap-4"
-				>
-					<TabsTrigger value="scan">Scan</TabsTrigger>
-					<TabsTrigger value="digital">Digital</TabsTrigger>
-				</TabsList>
-
-				<TabsContent
-					value="scan"
-					className="flex-1 overflow-y-auto bg-muted/20 m-0 p-0"
-				>
-					<AnnotatedScanColumn
-						pages={scanPages}
+				<ResizablePanel defaultSize={66} minSize={40}>
+					<ScanDigitalTabs
+						jobId={jobId}
+						data={data}
+						scanPages={scanPages}
+						phase={phase}
 						showHighlights={showHighlights}
-						gradingResults={data.grading_results}
 					/>
-				</TabsContent>
+				</ResizablePanel>
 
-				<TabsContent value="digital" className="flex-1 overflow-y-auto m-0">
-					<div className="p-4 space-y-5 max-w-2xl">
-						<DigitalTabContent jobId={jobId} data={data} phase={phase} />
+				<ResizableHandle withHandle />
+
+				<ResizablePanel defaultSize={34} minSize={20}>
+					<div className="h-full overflow-y-auto border-l p-4 space-y-4">
+						<JobTimeline data={data} />
 					</div>
-				</TabsContent>
-			</Tabs>
+				</ResizablePanel>
+			</ResizablePanelGroup>
 		</div>
 	)
 }

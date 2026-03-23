@@ -290,88 +290,13 @@ export default function MarkNewPage() {
 				<div>
 					<h1 className="text-2xl font-semibold">Mark a paper</h1>
 					<p className="text-sm text-muted-foreground mt-1">
-						Photograph or upload each page of the student&apos;s answer sheet.
+						Select the exam paper, then photograph or upload each page of the
+						student&apos;s answer sheet.
 					</p>
 				</div>
 
 				<>
-					{/* Upload buttons */}
-					<div className="grid grid-cols-2 gap-3">
-						<button
-							type="button"
-							onClick={() => cameraInputRef.current?.click()}
-							className="flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-input bg-card p-6 text-center active:bg-muted transition-colors"
-						>
-							<Camera className="h-8 w-8 text-muted-foreground" />
-							<span className="text-sm font-medium">Take photo</span>
-							<span className="text-xs text-muted-foreground">
-								Opens camera
-							</span>
-						</button>
-						<button
-							type="button"
-							onClick={() => fileInputRef.current?.click()}
-							className="flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-input bg-card p-6 text-center active:bg-muted transition-colors"
-						>
-							<Upload className="h-8 w-8 text-muted-foreground" />
-							<span className="text-sm font-medium">Upload file</span>
-							<span className="text-xs text-muted-foreground">
-								PDF or image
-							</span>
-						</button>
-					</div>
-
-					{/* Hidden inputs */}
-					<input
-						ref={cameraInputRef}
-						type="file"
-						accept="image/*"
-						capture="environment"
-						multiple
-						className="sr-only"
-						onChange={(e) => handleFiles(e.target.files)}
-					/>
-					<input
-						ref={fileInputRef}
-						type="file"
-						accept="image/*,application/pdf"
-						multiple
-						className="sr-only"
-						onChange={(e) => handleFiles(e.target.files)}
-					/>
-
-					{/* Pages list */}
-					{pages.length > 0 && (
-						<div className="space-y-2">
-							<div className="flex items-center justify-between">
-								<p className="text-sm font-medium text-muted-foreground">
-									{pages.length} page{pages.length !== 1 ? "s" : ""} added
-								</p>
-								<button
-									type="button"
-									onClick={() => fileInputRef.current?.click()}
-									className="text-xs text-primary font-medium"
-								>
-									+ Add more
-								</button>
-							</div>
-							<div className="space-y-2">
-								{pages.map((page, index) => (
-									<PageThumbnail
-										key={page.order}
-										page={page}
-										index={index}
-										total={pages.length}
-										onMoveUp={() => movePage(index, "up")}
-										onMoveDown={() => movePage(index, "down")}
-										onRemove={() => handleRemovePage(index)}
-									/>
-								))}
-							</div>
-						</div>
-					)}
-
-					{/* Exam paper — required */}
+					{/* Step 1 — Exam paper selection */}
 					{preSelectedPaper ? (
 						<div className="flex items-center gap-3 rounded-xl border bg-card px-4 py-3">
 							<CheckCircle2 className="h-4 w-4 text-primary shrink-0" />
@@ -392,12 +317,12 @@ export default function MarkNewPage() {
 						</div>
 					) : (
 						<div className="space-y-2">
-							<p className="text-sm font-medium">Select exam paper</p>
+							<p className="text-sm font-medium">Step 1 — Select exam paper</p>
 							<div className="relative">
 								<Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
 								<Input
 									className="pl-9"
-									placeholder="Search papers…"
+									placeholder="Search by title, subject, board or year…"
 									value={preSelectSearch}
 									onChange={(e) => setPreSelectSearch(e.target.value)}
 								/>
@@ -424,7 +349,10 @@ export default function MarkNewPage() {
 												key={paper.id}
 												type="button"
 												disabled={!paper.has_mark_scheme}
-												onClick={() => setPreSelectedPaper(paper)}
+												onClick={() => {
+													setPreSelectedPaper(paper)
+													setOcrError(null)
+												}}
 												className="w-full rounded-xl border bg-card p-3 text-left transition-colors enabled:active:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
 											>
 												<div className="flex items-start justify-between gap-2">
@@ -455,6 +383,86 @@ export default function MarkNewPage() {
 							)}
 						</div>
 					)}
+
+					{/* Step 2 — Upload pages (only accessible after paper is selected) */}
+					{preSelectedPaper && (
+						<>
+							<div className="grid grid-cols-2 gap-3">
+								<button
+									type="button"
+									onClick={() => cameraInputRef.current?.click()}
+									className="flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-input bg-card p-6 text-center active:bg-muted transition-colors"
+								>
+									<Camera className="h-8 w-8 text-muted-foreground" />
+									<span className="text-sm font-medium">Take photo</span>
+									<span className="text-xs text-muted-foreground">
+										Opens camera
+									</span>
+								</button>
+								<button
+									type="button"
+									onClick={() => fileInputRef.current?.click()}
+									className="flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-input bg-card p-6 text-center active:bg-muted transition-colors"
+								>
+									<Upload className="h-8 w-8 text-muted-foreground" />
+									<span className="text-sm font-medium">Upload file</span>
+									<span className="text-xs text-muted-foreground">
+										PDF or image
+									</span>
+								</button>
+							</div>
+
+							{/* Pages list */}
+							{pages.length > 0 && (
+								<div className="space-y-2">
+									<div className="flex items-center justify-between">
+										<p className="text-sm font-medium text-muted-foreground">
+											{pages.length} page{pages.length !== 1 ? "s" : ""} added
+										</p>
+										<button
+											type="button"
+											onClick={() => fileInputRef.current?.click()}
+											className="text-xs text-primary font-medium"
+										>
+											+ Add more
+										</button>
+									</div>
+									<div className="space-y-2">
+										{pages.map((page, index) => (
+											<PageThumbnail
+												key={page.order}
+												page={page}
+												index={index}
+												total={pages.length}
+												onMoveUp={() => movePage(index, "up")}
+												onMoveDown={() => movePage(index, "down")}
+												onRemove={() => handleRemovePage(index)}
+											/>
+										))}
+									</div>
+								</div>
+							)}
+						</>
+					)}
+
+					{/* Hidden inputs */}
+					<input
+						ref={cameraInputRef}
+						type="file"
+						accept="image/*"
+						capture="environment"
+						multiple
+						className="sr-only"
+						onChange={(e) => handleFiles(e.target.files)}
+					/>
+					<input
+						ref={fileInputRef}
+						type="file"
+						accept="image/*,application/pdf"
+						multiple
+						className="sr-only"
+						onChange={(e) => handleFiles(e.target.files)}
+					/>
 
 					{ocrError && <p className="text-sm text-destructive">{ocrError}</p>}
 				</>

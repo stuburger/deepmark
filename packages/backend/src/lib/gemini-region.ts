@@ -58,7 +58,8 @@ export type AttributeAnswerRegionsArgs = {
 
 /**
  * Calls Gemini Vision once per image page to identify where each written answer
- * is located. Runs concurrently with the grading loop so it adds minimal latency.
+ * is located. All pages are processed in parallel so wall-clock time is bounded
+ * by the slowest single page rather than the sum of all pages.
  *
  * Returns a map of question_id → AnswerRegion[].
  * On any per-page failure the page is skipped gracefully; grading is unaffected.
@@ -87,31 +88,32 @@ export async function attributeAnswerRegions({
 		})
 		.join("\n")
 
-	for (const page of imagePages) {
-		let imageBase64: string
-		try {
-			imageBase64 = await getFileBase64(s3Bucket, page.key)
-		} catch (err) {
-			logger.error(TAG, "Failed to fetch page image for region attribution", {
-				jobId,
-				pageOrder: page.order,
-				error: String(err),
-			})
-			continue
-		}
+	await Promise.all(
+		imagePages.map(async (page) => {
+			let imageBase64: string
+			try {
+				imageBase64 = await getFileBase64(s3Bucket, page.key)
+			} catch (err) {
+				logger.error(TAG, "Failed to fetch page image for region attribution", {
+					jobId,
+					pageOrder: page.order,
+					error: String(err),
+				})
+				return
+			}
 
-		const mimeType = page.key.endsWith(".png") ? "image/png" : "image/jpeg"
+			const mimeType = page.key.endsWith(".png") ? "image/png" : "image/jpeg"
 
-		try {
-			const response = await gemini.models.generateContent({
-				model: "gemini-2.5-flash",
-				contents: [
-					{
-						role: "user",
-						parts: [
-							{ inlineData: { data: imageBase64, mimeType } },
-							{
-								text: `You are examining a student's handwritten exam script page.
+			try {
+				const response = await gemini.models.generateContent({
+					model: "gemini-2.5-flash",
+					contents: [
+						{
+							role: "user",
+							parts: [
+								{ inlineData: { data: imageBase64, mimeType } },
+								{
+									text: `You are examining a student's handwritten exam script page.
 
 For each question below, identify the region of the page where the student has written their answer. Draw a single bounding box that encompasses the ENTIRE answer for that question — including all written lines, corrections, and crossed-out text.
 
@@ -121,43 +123,45 @@ Questions:
 ${questionsText}
 
 Return bounding box coordinates as [yMin, xMin, yMax, xMax] normalised 0–1000.`,
-							},
-						],
+								},
+							],
+						},
+					],
+					config: {
+						responseMimeType: "application/json",
+						responseSchema: REGION_SCHEMA,
+						temperature: 0.1,
 					},
-				],
-				config: {
-					responseMimeType: "application/json",
-					responseSchema: REGION_SCHEMA,
-					temperature: 0.1,
-				},
-			})
+				})
 
-			const responseText = response.text
-			if (!responseText) continue
+				const responseText = response.text
+				if (!responseText) return
 
-			const geminiResult = JSON.parse(responseText) as GeminiRegionResponse
-			const found = (geminiResult.regions ?? []).filter((r) => r.found)
+				const geminiResult = JSON.parse(responseText) as GeminiRegionResponse
+				const found = (geminiResult.regions ?? []).filter((r) => r.found)
 
-			logger.info(TAG, "Region attribution complete for page", {
-				jobId,
-				pageOrder: page.order,
-				found: found.length,
-				total: geminiResult.regions?.length ?? 0,
-			})
+				logger.info(TAG, "Region attribution complete for page", {
+					jobId,
+					pageOrder: page.order,
+					found: found.length,
+					total: geminiResult.regions?.length ?? 0,
+				})
 
-			for (const region of found) {
-				const existing = result.get(region.question_id) ?? []
-				existing.push({ page: page.order, box: region.answer_region })
-				result.set(region.question_id, existing)
+				// JS is single-threaded: Map mutations between await points are safe.
+				for (const region of found) {
+					const existing = result.get(region.question_id) ?? []
+					existing.push({ page: page.order, box: region.answer_region })
+					result.set(region.question_id, existing)
+				}
+			} catch (err) {
+				logger.error(TAG, "Gemini Vision region attribution failed for page", {
+					jobId,
+					pageOrder: page.order,
+					error: String(err),
+				})
 			}
-		} catch (err) {
-			logger.error(TAG, "Gemini Vision region attribution failed for page", {
-				jobId,
-				pageOrder: page.order,
-				error: String(err),
-			})
-		}
-	}
+		}),
+	)
 
 	return result
 }

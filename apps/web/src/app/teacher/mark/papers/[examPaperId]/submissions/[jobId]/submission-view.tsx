@@ -9,7 +9,8 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import type { ScanPageUrl, StudentPaperJobPayload } from "@/lib/mark-actions"
 import { Loader2 } from "lucide-react"
-import { useCallback, useState } from "react"
+import { useRouter } from "next/navigation"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { CancelledPanel } from "../../../../[jobId]/phases/cancelled"
 import { FailedPanel } from "../../../../[jobId]/phases/failed"
 import { AnnotatedScanColumn } from "../../../../[jobId]/phases/results/annotated-scan-column"
@@ -166,6 +167,7 @@ export function SubmissionView({
 	scanPages: ScanPageUrl[]
 	initialPhase: MarkingPhase
 }) {
+	const router = useRouter()
 	const [data, setData] = useState(initialData)
 	const [showOcr, setShowOcr] = useState(false)
 	const [showRegions, setShowRegions] = useState(true)
@@ -182,6 +184,21 @@ export function SubmissionView({
 	const handleResult = useCallback((fresh: StudentPaperJobPayload) => {
 		setData(fresh)
 	}, [])
+
+	// When OCR completes and the phase moves from scan_processing →
+	// marking_in_progress, the server has just written page_analyses to the DB.
+	// Calling router.refresh() re-runs the server component so scanPages comes
+	// back with page.analysis populated — no manual refresh needed by the teacher.
+	const prevPhaseRef = useRef(initialPhase)
+	useEffect(() => {
+		if (
+			prevPhaseRef.current === "scan_processing" &&
+			phase === "marking_in_progress"
+		) {
+			router.refresh()
+		}
+		prevPhaseRef.current = phase
+	}, [phase, router])
 
 	useJobPoller({
 		jobId,

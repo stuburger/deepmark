@@ -75,7 +75,7 @@ export function LorMarkSchemeEditForm({
 			? String(initialMarkingRules.items_required)
 			: "",
 	)
-	const [levels, setLevels] = useState<LevelRow>(() => {
+	const [levels, setLevels] = useState<LevelRow[]>(() => {
 		const initialLevels = initialMarkingRules?.levels ?? []
 		if (initialLevels.length > 0) {
 			return initialLevels.map((level) => ({

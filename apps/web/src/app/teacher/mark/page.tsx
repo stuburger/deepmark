@@ -58,7 +58,16 @@ function statusBadgeVariant(
 	}
 }
 
+function submissionHref(sub: SubmissionHistoryItem): string {
+	if (sub.exam_paper_id) {
+		return `/teacher/mark/papers/${sub.exam_paper_id}/submissions/${sub.id}`
+	}
+	// Fallback: old route will redirect to new URL once exam_paper_id is known
+	return `/teacher/mark/${sub.id}`
+}
+
 function SubmissionRow({ sub }: { sub: SubmissionHistoryItem }) {
+	const href = submissionHref(sub)
 	const scorePercent =
 		sub.total_max > 0
 			? Math.round((sub.total_awarded / sub.total_max) * 100)
@@ -67,7 +76,7 @@ function SubmissionRow({ sub }: { sub: SubmissionHistoryItem }) {
 	return (
 		<TableRow className="cursor-pointer hover:bg-muted/50">
 			<TableCell>
-				<Link href={`/teacher/mark/${sub.id}`} className="block">
+				<Link href={href} className="block">
 					{sub.student_name ? (
 						<span className="font-medium">{sub.student_name}</span>
 					) : (
@@ -113,7 +122,7 @@ function SubmissionRow({ sub }: { sub: SubmissionHistoryItem }) {
 			</TableCell>
 			<TableCell>
 				<Link
-					href={`/teacher/mark/${sub.id}`}
+					href={href}
 					className="text-sm text-primary underline underline-offset-4 hover:no-underline"
 				>
 					{sub.status === "ocr_complete" ? "View" : "Details"}

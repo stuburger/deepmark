@@ -43,7 +43,7 @@ export interface MarkingRulesCap {
  */
 export interface MarkingRules {
 	command_word?: string
-	items_required?: number
+	items_required?: number | null
 	levels: MarkingRulesLevel[]
 	caps?: MarkingRulesCap[]
 }
@@ -131,7 +131,7 @@ const markingRulesCapSchema = z.object({
 
 const markingRulesPrismaSchema = z.object({
 	command_word: z.string().optional(),
-	items_required: z.number().optional(),
+	items_required: z.number().nullish(),
 	levels: z.array(markingRulesLevelSchema),
 	caps: z.array(markingRulesCapSchema).optional(),
 })

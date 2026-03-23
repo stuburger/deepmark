@@ -15,6 +15,7 @@ const shellClass = "rounded-xl border shadow-sm overflow-hidden"
 type BookletRowsProps = {
 	gradingResults: GradingResult[]
 	extractedAnswers?: ExtractedAnswer[]
+	activeQuestionNumber?: string | null
 	/** When false, omit the “No results yet” row (e.g. live marking before first result). */
 	showEmptyPlaceholder?: boolean
 }
@@ -22,6 +23,7 @@ type BookletRowsProps = {
 function BookletAnswerRows({
 	gradingResults,
 	extractedAnswers,
+	activeQuestionNumber,
 	showEmptyPlaceholder = true,
 }: BookletRowsProps) {
 	const graded = gradingResults.length
@@ -35,7 +37,11 @@ function BookletAnswerRows({
 						<ExtractedAnswerRow key={a.question_number} answer={a} />
 					))
 				: gradingResults.map((r) => (
-						<GradedAnswerRow key={r.question_id} result={r} />
+						<GradedAnswerRow
+							key={r.question_id}
+							result={r}
+							isActive={activeQuestionNumber === r.question_number}
+						/>
 					))}
 
 			{showEmptyPlaceholder && !showExtractedFallback && graded === 0 && (
@@ -100,9 +106,11 @@ export function LiveMarkingExamPaperPanel({
 	gradingResults,
 	extractedAnswers,
 	totalExpected,
+	activeQuestionNumber,
 }: {
 	gradingResults: GradingResult[]
 	extractedAnswers?: ExtractedAnswer[]
+	activeQuestionNumber?: string | null
 	/** When set, header shows “Marking… n / total”. */
 	totalExpected?: number
 }) {
@@ -156,11 +164,23 @@ function ExtractedAnswerRow({ answer: a }: { answer: ExtractedAnswer }) {
 	)
 }
 
-function GradedAnswerRow({ result: r }: { result: GradingResult }) {
+function GradedAnswerRow({
+	result: r,
+	isActive = false,
+}: {
+	result: GradingResult
+	isActive?: boolean
+}) {
 	const color = scoreColor(r.awarded_score, r.max_score)
 
 	return (
-		<div className="px-5 py-4 space-y-2 animate-in fade-in slide-in-from-bottom-1 duration-300">
+		<div
+			id={`question-${r.question_number}`}
+			className={cn(
+				"px-5 py-4 space-y-2 animate-in fade-in slide-in-from-bottom-1 duration-300 transition-colors",
+				isActive && "bg-primary/5 shadow-[inset_3px_0_0_hsl(var(--primary))]",
+			)}
+		>
 			{/* Question number + text + score badge */}
 			<div className="flex items-start justify-between gap-3">
 				<div className="space-y-0.5 flex-1 min-w-0">

@@ -168,7 +168,7 @@ export default async function ExamPaperStatsPage({
 											</TableCell>
 											<TableCell>
 												<Link
-													href={`/teacher/mark/${sub.id}`}
+													href={`/teacher/mark/papers/${examPaperId}/submissions/${sub.id}`}
 													className="text-sm text-primary underline underline-offset-4 hover:no-underline"
 												>
 													View

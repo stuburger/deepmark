@@ -95,58 +95,34 @@ function annotationColor(awarded: number, max: number): string {
 
 function GradingAnnotationOverlay({
 	annotation,
+	onAnnotationClick,
 }: {
 	annotation: GradingAnnotation
+	onAnnotationClick?: (questionNumber: string) => void
 }) {
 	const [yMin, xMin, yMax, xMax] = annotation.box
 	if (yMax === 0 && xMax === 0) return null
 
 	const color = annotationColor(annotation.awardedScore, annotation.maxScore)
-	const pct =
-		annotation.maxScore > 0
-			? annotation.awardedScore / annotation.maxScore
-			: null
-	const scoreLabel = `${annotation.awardedScore}/${annotation.maxScore}`
 
 	return (
-		<Popover>
-			<PopoverTrigger
-				aria-label={`Q${annotation.questionNumber} answer region`}
-				style={{
-					position: "absolute",
-					left: `${xMin / 10}%`,
-					top: `${yMin / 10}%`,
-					width: `${(xMax - xMin) / 10}%`,
-					height: `${(yMax - yMin) / 10}%`,
-					background: "transparent",
-					border: "none",
-					padding: 0,
-					cursor: "pointer",
-				}}
-			/>
-			<PopoverContent side="right" sideOffset={8} className="w-80">
-				<PopoverHeader>
-					<div className="flex items-center justify-between gap-2">
-						<span className="text-xs font-mono text-muted-foreground">
-							Q{annotation.questionNumber}
-						</span>
-						<span
-							className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold text-white"
-							style={{ backgroundColor: color }}
-						>
-							{scoreLabel}
-							{pct !== null ? ` · ${Math.round(pct * 100)}%` : ""}
-						</span>
-					</div>
-					<PopoverTitle className="mt-1.5 text-sm line-clamp-2 font-normal text-foreground">
-						{annotation.questionText}
-					</PopoverTitle>
-				</PopoverHeader>
-				<PopoverDescription className="text-sm leading-relaxed">
-					{annotation.feedbackSummary}
-				</PopoverDescription>
-			</PopoverContent>
-		</Popover>
+		<button
+			type="button"
+			aria-label={`Q${annotation.questionNumber}: jump to answer`}
+			onClick={() => onAnnotationClick?.(annotation.questionNumber)}
+			className="rounded-sm transition-opacity hover:opacity-70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
+			style={{
+				position: "absolute",
+				left: `${xMin / 10}%`,
+				top: `${yMin / 10}%`,
+				width: `${(xMax - xMin) / 10}%`,
+				height: `${(yMax - yMin) / 10}%`,
+				background: "transparent",
+				boxShadow: `inset 0 0 0 2px ${color}`,
+				padding: 0,
+				cursor: "pointer",
+			}}
+		/>
 	)
 }
 
@@ -245,6 +221,11 @@ type Props = {
 	 * Each annotation draws a coloured band and a click-to-expand feedback popover.
 	 */
 	gradingAnnotations?: GradingAnnotation[]
+	/**
+	 * Called when a grading annotation region is clicked, with the question number.
+	 * Use this to synchronise the right-panel scroll position with the scan view.
+	 */
+	onAnnotationClick?: (questionNumber: string) => void
 }
 
 export function BoundingBoxViewer({
@@ -254,6 +235,7 @@ export function BoundingBoxViewer({
 	showAnalysisText = true,
 	showHighlights = false,
 	gradingAnnotations,
+	onAnnotationClick,
 }: Props) {
 	const features = analysis.features ?? []
 	const [imageDims, setImageDims] = useState<{ w: number; h: number } | null>(
@@ -352,7 +334,11 @@ export function BoundingBoxViewer({
 						{/* Grading annotation click targets (above SVG layers) */}
 						{hasAnnotations &&
 							gradingAnnotations.map((ann, i) => (
-								<GradingAnnotationOverlay key={i} annotation={ann} />
+								<GradingAnnotationOverlay
+									key={i}
+									annotation={ann}
+									onAnnotationClick={onAnnotationClick}
+								/>
 							))}
 
 						{/* Word-level feature popovers — only interactive when overlay is on */}

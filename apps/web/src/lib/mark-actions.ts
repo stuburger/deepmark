@@ -419,6 +419,62 @@ export const getStudentPaperResult = getStudentPaperJob
 
 export type StudentPaperResultPayload = StudentPaperJobPayload
 
+/**
+ * Fetches a student paper job while validating it belongs to the given exam paper.
+ * Used by the new /papers/[examPaperId]/submissions/[jobId] route to provide
+ * a security invariant that the job is from the expected paper context.
+ */
+export async function getStudentPaperJobForPaper(
+	examPaperId: string,
+	jobId: string,
+): Promise<GetStudentPaperJobResult> {
+	const session = await auth()
+	if (!session) return { ok: false, error: "Not authenticated" }
+
+	const job = await db.studentPaperJob.findFirst({
+		where: {
+			id: jobId,
+			exam_paper_id: examPaperId,
+			uploaded_by: session.userId,
+		},
+		include: { exam_paper: { select: { id: true, title: true } } },
+	})
+	if (!job) return { ok: false, error: "Job not found" }
+
+	type PageEntry = { key: string; order: number; mime_type: string }
+	type RawExtracted = {
+		student_name?: string | null
+		answers?: ExtractedAnswer[]
+	}
+
+	const pages = (job.pages ?? []) as PageEntry[]
+	const rawResults = (job.grading_results ?? []) as GradingResult[]
+	const totalAwarded = rawResults.reduce((s, r) => s + r.awarded_score, 0)
+	const totalMax = rawResults.reduce((s, r) => s + r.max_score, 0)
+	const rawExtracted = job.extracted_answers_raw as RawExtracted | null
+	const extractedAnswers = rawExtracted?.answers ?? null
+
+	return {
+		ok: true,
+		data: {
+			status: job.status,
+			error: job.error,
+			student_name: job.student_name,
+			student_id: job.student_id,
+			detected_subject: job.detected_subject,
+			pages_count: pages.length,
+			grading_results: rawResults,
+			exam_paper_title: job.exam_paper?.title ?? null,
+			exam_paper_id: job.exam_paper_id,
+			total_awarded: totalAwarded,
+			total_max: totalMax,
+			created_at: job.created_at,
+			extracted_answers: extractedAnswers,
+			job_events: (job.job_events as JobEvent[] | null) ?? null,
+		},
+	}
+}
+
 // ─── Update student name ──────────────────────────────────────────────────────
 
 export type UpdateStudentNameResult =

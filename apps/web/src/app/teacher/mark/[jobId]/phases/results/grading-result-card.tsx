@@ -18,11 +18,13 @@ export function GradingResultCard({
 	jobId,
 	result,
 	currentAnswer,
+	isActive = false,
 	onAnswerSaved,
 }: {
 	jobId: string
 	result: GradingResult
 	currentAnswer: string
+	isActive?: boolean
 	onAnswerSaved: (questionId: string, text: string) => void
 }) {
 	const r = result
@@ -31,7 +33,13 @@ export function GradingResultCard({
 	const color = scoreColor(r.awarded_score, r.max_score)
 
 	return (
-		<div className="px-5 py-4 space-y-3">
+		<div
+			id={`question-${r.question_number}`}
+			className={cn(
+				"px-5 py-4 space-y-3 transition-colors duration-300",
+				isActive && "bg-primary/5 shadow-[inset_3px_0_0_hsl(var(--primary))]",
+			)}
+		>
 			{/* Header row */}
 			<div className="flex items-start justify-between gap-3">
 				<div className="space-y-0.5 flex-1 min-w-0">

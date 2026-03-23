@@ -4,7 +4,6 @@ import {
 	BoundingBoxViewer,
 	type GradingAnnotation,
 } from "@/components/BoundingBoxViewer"
-import { HandwritingAnalysisPanel } from "@/components/HandwritingAnalysisPanel"
 import type { GradingResult, ScanPageUrl } from "@/lib/mark-actions"
 
 function annotationsForPage(
@@ -28,17 +27,24 @@ function annotationsForPage(
 }
 
 /**
- * Renders all scan pages vertically with optional grading bounding-box overlays.
- * Used in the left column of the completed results view.
+ * Renders all scan pages vertically with optional overlays.
+ * showHighlights: toggles OCR bounding box overlays (words, corrections, etc.)
+ * showRegions: toggles grading answer-region overlays (score badges on scan)
  */
 export function AnnotatedScanColumn({
 	pages,
 	showHighlights,
+	showRegions = true,
 	gradingResults,
+	onAnnotationClick,
 }: {
 	pages: ScanPageUrl[]
 	showHighlights: boolean
+	/** When false, grading annotation boxes are hidden even if data is present. */
+	showRegions?: boolean
 	gradingResults: GradingResult[]
+	/** Called when a grading annotation region is clicked, with the question number. */
+	onAnnotationClick?: (questionNumber: string) => void
 }) {
 	if (pages.length === 0) return null
 
@@ -67,21 +73,18 @@ export function AnnotatedScanColumn({
 								/>
 							</div>
 						) : page.analysis ? (
-							<div className="space-y-2">
-								<div className="flex items-center gap-2">
-									<span className="text-xs text-muted-foreground">OCR</span>
-									<HandwritingAnalysisPanel analysis={page.analysis} />
-								</div>
-								<BoundingBoxViewer
-									imageUrl={page.url}
-									analysis={page.analysis}
-									showAnalysisText={false}
-									showHighlights={showHighlights}
-									gradingAnnotations={
-										annotations.length > 0 ? annotations : undefined
-									}
-								/>
-							</div>
+							<BoundingBoxViewer
+								imageUrl={page.url}
+								analysis={page.analysis}
+								showAnalysisText={false}
+								showHighlights={showHighlights}
+								gradingAnnotations={
+									showRegions && annotations.length > 0
+										? annotations
+										: undefined
+								}
+								onAnnotationClick={onAnnotationClick}
+							/>
 						) : (
 							<div className="relative overflow-hidden rounded-xl border bg-muted/20">
 								{/* eslint-disable-next-line @next/next/no-img-element -- presigned S3 URL */}

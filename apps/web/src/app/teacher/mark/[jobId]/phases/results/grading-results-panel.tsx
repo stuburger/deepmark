@@ -28,11 +28,13 @@ export function GradingResultsPanel({
 	jobId,
 	data,
 	answers,
+	activeQuestionNumber,
 	onAnswerSaved,
 }: {
 	jobId: string
 	data: StudentPaperResultPayload
 	answers: Record<string, string>
+	activeQuestionNumber: string | null
 	onAnswerSaved: (questionId: string, text: string) => void
 }) {
 	const scorePercent =
@@ -86,6 +88,7 @@ export function GradingResultsPanel({
 									jobId={jobId}
 									result={r}
 									currentAnswer={answers[r.question_id] ?? ""}
+									isActive={activeQuestionNumber === r.question_number}
 									onAnswerSaved={onAnswerSaved}
 								/>
 							))}

@@ -1,7 +1,5 @@
-import { getJobScanPageUrls, getStudentPaperResult } from "@/lib/mark-actions"
-import { notFound } from "next/navigation"
-import { derivePhase } from "./shared/phase"
-import { UnifiedMarkingLayout } from "./unified-marking-layout"
+import { getStudentPaperResult } from "@/lib/mark-actions"
+import { notFound, redirect } from "next/navigation"
 
 export default async function MarkResultPage({
 	params,
@@ -10,23 +8,10 @@ export default async function MarkResultPage({
 }) {
 	const { jobId } = await params
 
-	const [result, scanResult] = await Promise.all([
-		getStudentPaperResult(jobId),
-		getJobScanPageUrls(jobId),
-	])
-
+	const result = await getStudentPaperResult(jobId)
 	if (!result.ok) notFound()
 
-	const data = result.data
-	const scanPages = scanResult.ok ? scanResult.pages : []
-	const phase = derivePhase(data)
-
-	return (
-		<UnifiedMarkingLayout
-			jobId={jobId}
-			data={data}
-			scanPages={scanPages}
-			phase={phase}
-		/>
+	redirect(
+		`/teacher/mark/papers/${result.data.exam_paper_id}/submissions/${jobId}`,
 	)
 }

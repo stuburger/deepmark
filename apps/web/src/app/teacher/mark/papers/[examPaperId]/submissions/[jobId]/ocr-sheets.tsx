@@ -9,10 +9,10 @@ import {
 } from "@/components/ui/sheet"
 import type { ScanPageUrl } from "@/lib/mark-actions"
 import { FileText, StickyNote } from "lucide-react"
-import type { ReactNode } from "react"
+import type { ReactElement, ReactNode } from "react"
 
 type SheetButtonProps = {
-	trigger: ReactNode
+	trigger: ReactElement
 	title: string
 	children: ReactNode
 }
@@ -20,7 +20,7 @@ type SheetButtonProps = {
 function OcrSheet({ trigger, title, children }: SheetButtonProps) {
 	return (
 		<Sheet>
-			<SheetTrigger asChild>{trigger}</SheetTrigger>
+			<SheetTrigger render={trigger} />
 			<SheetContent side="right" className="w-full sm:max-w-md flex flex-col">
 				<SheetHeader>
 					<SheetTitle>{title}</SheetTitle>
@@ -37,7 +37,7 @@ export function TranscriptSheet({
 	trigger,
 	scanPages,
 }: {
-	trigger: ReactNode
+	trigger: ReactElement
 	scanPages: ScanPageUrl[]
 }) {
 	const pagesWithAnalysis = scanPages.filter((p) => p.analysis)
@@ -76,7 +76,7 @@ export function ObservationsSheet({
 	trigger,
 	scanPages,
 }: {
-	trigger: ReactNode
+	trigger: ReactElement
 	scanPages: ScanPageUrl[]
 }) {
 	const pagesWithAnalysis = scanPages.filter((p) => p.analysis)

@@ -69,9 +69,7 @@ function GroupToggle({
 	if (disabled && disabledReason) {
 		return (
 			<Tooltip>
-				<TooltipTrigger asChild>
-					<span>{btn}</span>
-				</TooltipTrigger>
+				<TooltipTrigger render={<span>{btn}</span>} />
 				<TooltipContent side="bottom" sideOffset={6}>
 					{disabledReason}
 				</TooltipContent>
@@ -117,9 +115,7 @@ function GroupSheet({
 	if (disabled && disabledReason) {
 		return (
 			<Tooltip>
-				<TooltipTrigger asChild>
-					<span>{trigger}</span>
-				</TooltipTrigger>
+				<TooltipTrigger render={<span>{trigger}</span>} />
 				<TooltipContent side="bottom" sideOffset={6}>
 					{disabledReason}
 				</TooltipContent>
@@ -274,18 +270,20 @@ export function SubmissionToolbar({
 						/>
 					) : (
 						<Tooltip>
-							<TooltipTrigger asChild>
-								<span>
-									<button
-										type="button"
-										disabled
-										className={transcriptTriggerClass}
-									>
-										<FileText className="h-3.5 w-3.5" />
-										<span className="hidden sm:inline">Transcript</span>
-									</button>
-								</span>
-							</TooltipTrigger>
+							<TooltipTrigger
+								render={
+									<span>
+										<button
+											type="button"
+											disabled
+											className={transcriptTriggerClass}
+										>
+											<FileText className="h-3.5 w-3.5" />
+											<span className="hidden sm:inline">Transcript</span>
+										</button>
+									</span>
+								}
+							/>
 							<TooltipContent side="bottom" sideOffset={6}>
 								{ocrDisabledReason}
 							</TooltipContent>
@@ -304,18 +302,20 @@ export function SubmissionToolbar({
 						/>
 					) : (
 						<Tooltip>
-							<TooltipTrigger asChild>
-								<span>
-									<button
-										type="button"
-										disabled
-										className={observationsTriggerClass}
-									>
-										<StickyNote className="h-3.5 w-3.5" />
-										<span className="hidden sm:inline">Observations</span>
-									</button>
-								</span>
-							</TooltipTrigger>
+							<TooltipTrigger
+								render={
+									<span>
+										<button
+											type="button"
+											disabled
+											className={observationsTriggerClass}
+										>
+											<StickyNote className="h-3.5 w-3.5" />
+											<span className="hidden sm:inline">Observations</span>
+										</button>
+									</span>
+								}
+							/>
 							<TooltipContent side="bottom" sideOffset={6}>
 								{ocrDisabledReason}
 							</TooltipContent>

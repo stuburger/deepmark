@@ -1,0 +1,116 @@
+import { type HandwritingAnalysis, runOcr } from "@/lib/gemini-ocr"
+import { GoogleGenAI, Type } from "@google/genai"
+import { Resource } from "sst"
+
+export type PageMimeType =
+	| "application/pdf"
+	| "image/jpeg"
+	| "image/png"
+	| "image/webp"
+	| "image/heic"
+
+export type PageData = {
+	/** base64-encoded file content */
+	data: string
+	mimeType: PageMimeType
+}
+
+export type StudentPaperExtraction = {
+	studentName: string | null
+	detectedSubject: string | null
+	answers: Array<{ question_number: string; answer_text: string }>
+	/** Per-page OCR results in the same order as the input pageData array. */
+	ocrResults: HandwritingAnalysis[]
+}
+
+const STUDENT_PAPER_SCHEMA = {
+	type: Type.OBJECT,
+	properties: {
+		student_name: { type: Type.STRING, nullable: true },
+		detected_subject: { type: Type.STRING, nullable: true },
+		answers: {
+			type: Type.ARRAY,
+			items: {
+				type: Type.OBJECT,
+				properties: {
+					question_number: { type: Type.STRING },
+					answer_text: { type: Type.STRING },
+				},
+				required: ["question_number", "answer_text"],
+			},
+		},
+	},
+	required: ["answers"],
+}
+
+/**
+ * Calls Gemini to extract the student's name, detected subject, and answers
+ * from one or more base64-encoded exam pages.
+ *
+ * Per-page OCR (transcript + bounding boxes via runOcr) runs concurrently
+ * with the extraction call so no latency is added.
+ *
+ * Throws if Gemini returns an empty response.
+ */
+export async function extractStudentPaper(
+	pageData: PageData[],
+): Promise<StudentPaperExtraction> {
+	const gemini = new GoogleGenAI({ apiKey: Resource.GeminiApiKey.value })
+
+	const inlineDataParts = pageData.map((p) => ({
+		inlineData: { data: p.data, mimeType: p.mimeType },
+	}))
+
+	// Fan out: answer extraction (all pages combined) + per-page runOcr in parallel.
+	// runOcr itself makes 2 parallel Gemini calls (transcript + bounding boxes).
+	// Cost note: a cheaper alternative is to call only the bounding-box schema per
+	// page (skipping the transcript call) — BoundingBoxViewer renders fine with an
+	// empty transcript and this saves 1 Gemini call per page.
+	const [response, ...ocrResults] = await Promise.all([
+		gemini.models.generateContent({
+			model: "gemini-2.5-flash",
+			contents: [
+				{
+					role: "user",
+					parts: [
+						...inlineDataParts,
+						{
+							text: `This is a student's exam answer sheet (${pageData.length} page${pageData.length > 1 ? "s" : ""}).
+
+1. Extract the student's name if visible on any page.
+2. Detect the subject (e.g. biology, chemistry, physics, mathematics, english, history, etc.) from any headers, logos, or question content.
+3. Extract every answer the student has written, matched to its question number. Include all question numbers you can identify. Use an empty string if a question has no visible answer.
+
+Return:
+- student_name: the student's name (null if not found)
+- detected_subject: the detected subject as a lowercase single word (null if unclear)
+- answers: array of { question_number, answer_text } for every question found`,
+						},
+					],
+				},
+			],
+			config: {
+				responseMimeType: "application/json",
+				responseSchema: STUDENT_PAPER_SCHEMA,
+				temperature: 0.1,
+			},
+		}),
+		...pageData.map((p) => runOcr(p.data, p.mimeType)),
+	])
+
+	const responseText = response.text
+	if (!responseText) throw new Error("No response from Gemini")
+
+	const parsed = JSON.parse(responseText) as {
+		student_name?: string | null
+		detected_subject?: string | null
+		answers: Array<{ question_number: string; answer_text: string }>
+	}
+
+	return {
+		studentName: parsed.student_name ?? null,
+		detectedSubject: parsed.detected_subject ?? null,
+		answers: parsed.answers ?? [],
+		ocrResults,
+	}
+}

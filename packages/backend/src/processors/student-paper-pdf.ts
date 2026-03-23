@@ -97,8 +97,9 @@ const AlignmentSchema = z.object({
  * LLM fallback: aligns OCR-extracted answers to exam questions when
  * normalised string matching fails (e.g. OCR reads "0.1.2" for "01.2").
  *
- * Only called when at least one question has no normalised match AND
- * there are unconsumed OCR answers — one LLM call covers the whole paper.
+ * Called when at least one question has no normalised match and there are
+ * unconsumed OCR answers — one LLM call aligns all such questions (no
+ * positional zip; order of pages in the scan does not need to match exam order).
  */
 async function alignAnswersWithLlm(
 	unmatchedQuestions: Array<{
@@ -128,6 +129,7 @@ async function alignAnswersWithLlm(
 
 	const prompt = `You are aligning a student's OCR-extracted answers to the correct exam questions.
 The OCR may have misread question numbers (e.g. "0.1.2" instead of "01.2", "0.01" instead of "01.1").
+Scan pages may have been photographed or uploaded out of order — do not assume the list order of OCR answers matches exam question order.
 
 EXAM QUESTIONS THAT NEED ANSWERS (currently unmatched):
 ${questionsText}
@@ -328,6 +330,7 @@ export async function handler(
 		systemPrompt:
 			"You are an expert GCSE examiner. Mark the student's answer against the provided mark scheme. Return valid JSON matching the schema. Ignore spelling and grammar; focus on understanding and correct concepts. Be consistent and conservative: only award marks when there is clear evidence.",
 	})
+
 	const orchestrator = new MarkerOrchestrator([
 		new DeterministicMarker(),
 		new LevelOfResponseMarker(grader),
@@ -519,50 +522,27 @@ export async function handler(
 			// Determine which OCR answers weren't consumed by any matched question
 			const matchedNormKeys = new Set(
 				questionList
-					.filter((q) => answerMap.has(normaliseQNum(q.question_number)))
-					.map((q) => normaliseQNum(q.question_number)),
+					.map((q) => normaliseQNum(q.question_number))
+					.filter((q) => answerMap.has(normaliseQNum(q.question_number))),
 			)
+			
 			const unusedOcrAnswers = rawAnswers.filter(
 				(a) => !matchedNormKeys.has(normaliseQNum(a.question_number)),
 			)
 
-			// ── Pass 2: Subset positional alignment ──────────────────────────────
-			// When unmatched question count equals unused OCR answer count, pair
-			// them by position. Both lists are already in paper order:
-			//   questionList  — built by iterating sections/questions in order
-			//   rawAnswers    — OCR extracts top-to-bottom (reading order)
-			// This handles "0.01"→"01.1", "0.2.1"→"02.1" etc. without any LLM.
-			const positionalAlignmentMap = new Map<string, string>()
-			if (
-				unmatchedQuestions.length > 0 &&
-				unusedOcrAnswers.length === unmatchedQuestions.length
-			) {
-				for (let i = 0; i < unmatchedQuestions.length; i++) {
-					const q = unmatchedQuestions[i]
-					const a = unusedOcrAnswers[i]
-					if (q && a) positionalAlignmentMap.set(q.question_id, a.answer_text)
-				}
-				logger.info(TAG, "Subset positional alignment applied", {
-					jobId,
-					aligned_count: positionalAlignmentMap.size,
-				})
-			}
-
-			// ── Pass 3: LLM alignment ────────────────────────────────────────────
-			// Only reached when counts differ (student skipped a question AND
-			// OCR garbled its number). One LLM call covers the whole residual.
+			// ── LLM alignment (after normalised match) ───────────────────────────
+			// Pairs unmatched questions to OCR blobs by number similarity and
+			// content — avoids fragile index-based pairing when scan page order
+			// differs from exam order.
 			let llmAlignmentMap = new Map<string, string>()
-			const stillUnmatched = unmatchedQuestions.filter(
-				(q) => !positionalAlignmentMap.has(q.question_id),
-			)
-			if (stillUnmatched.length > 0 && unusedOcrAnswers.length > 0) {
+			if (unmatchedQuestions.length > 0 && unusedOcrAnswers.length > 0) {
 				logger.info(TAG, "Triggering LLM alignment fallback", {
 					jobId,
-					unmatched_questions: stillUnmatched.length,
+					unmatched_questions: unmatchedQuestions.length,
 					unused_ocr_answers: unusedOcrAnswers.length,
 				})
 				llmAlignmentMap = await alignAnswersWithLlm(
-					stillUnmatched.map((q) => ({
+					unmatchedQuestions.map((q) => ({
 						question_id: q.question_id,
 						question_number: q.question_number,
 						question_text: q.question_text,
@@ -577,12 +557,17 @@ export async function handler(
 				})
 			}
 
+			const stillEmptyUnmatched = unmatchedQuestions.filter((q) => {
+				const t = llmAlignmentMap.get(q.question_id)
+				if (t === undefined) return true
+				return t.trim() === ""
+			}).length
+
 			logger.info(TAG, "Grading using pre-extracted answers", {
 				jobId,
 				normalised_matched: answerMap.size - unmatchedQuestions.length,
-				positional_aligned: positionalAlignmentMap.size,
 				llm_aligned: llmAlignmentMap.size,
-				still_empty: stillUnmatched.length - llmAlignmentMap.size,
+				still_empty: stillEmptyUnmatched,
 			})
 
 			const gradingResults: GradingResult[] = []
@@ -601,7 +586,6 @@ export async function handler(
 
 				const studentAnswer =
 					answerMap.get(normaliseQNum(qItem.question_number)) ??
-					positionalAlignmentMap.get(qItem.question_id) ??
 					llmAlignmentMap.get(qItem.question_id) ??
 					""
 				const ms = qItem.mark_scheme

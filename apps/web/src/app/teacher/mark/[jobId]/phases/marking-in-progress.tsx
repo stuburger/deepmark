@@ -1,6 +1,9 @@
 "use client"
 
-import { ExamPaperPanel } from "@/components/ExamPaperPanel"
+import {
+	ExamPaperPanel,
+	LiveMarkingExamPaperPanel,
+} from "@/components/ExamPaperPanel"
 import type { GradingResult, StudentPaperJobPayload } from "@/lib/mark-actions"
 import { useRouter } from "next/navigation"
 import { useCallback, useState } from "react"
@@ -40,7 +43,6 @@ export function MarkingInProgressPanel({
 			}
 		},
 		// gradingResults.length intentional — only re-create when count changes
-		// eslint-disable-next-line react-hooks/exhaustive-deps
 		[gradingResults.length, status, router],
 	)
 
@@ -53,11 +55,15 @@ export function MarkingInProgressPanel({
 
 	const isGrading = !TERMINAL_STATUSES.has(status)
 
-	return (
+	return isGrading ? (
+		<LiveMarkingExamPaperPanel
+			gradingResults={gradingResults}
+			extractedAnswers={initialData.extracted_answers ?? undefined}
+		/>
+	) : (
 		<ExamPaperPanel
 			gradingResults={gradingResults}
 			extractedAnswers={initialData.extracted_answers ?? undefined}
-			isGrading={isGrading}
 			examPaperTitle={initialData.exam_paper_title}
 		/>
 	)

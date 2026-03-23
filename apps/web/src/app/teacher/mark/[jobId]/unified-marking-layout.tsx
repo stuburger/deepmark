@@ -18,7 +18,6 @@ import { ReScanButton } from "./shared/re-scan-button"
 
 function defaultTabForPhase(phase: MarkingPhase): string {
 	switch (phase) {
-		case "paper_setup":
 		case "completed":
 		case "failed":
 		case "cancelled":
@@ -93,9 +92,9 @@ export function UnifiedMarkingLayout({
 					)}
 
 					{data.pages_count > 0 &&
-						(phase === "scan_processing" ||
-							phase === "paper_setup" ||
-							phase === "failed") && <ReScanButton jobId={jobId} />}
+						(phase === "scan_processing" || phase === "failed") && (
+							<ReScanButton jobId={jobId} />
+						)}
 				</div>
 			</div>
 

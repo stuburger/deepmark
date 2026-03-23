@@ -1,7 +1,7 @@
 import { auth, authUrlLink } from "./auth"
 import { geminiApiKey, openAiApiKey } from "./config"
 import { neonPostgres } from "./database"
-import { exemplarQueue, markSchemePdfQueue, ocrQueue } from "./queues"
+import { exemplarQueue, markSchemePdfQueue } from "./queues"
 import { scansBucket } from "./storage"
 
 const api = new sst.aws.ApiGatewayV2("ApiGateway")
@@ -17,7 +17,6 @@ api.route("$default", {
 		geminiApiKey,
 		openAiApiKey,
 		scansBucket,
-		ocrQueue,
 		markSchemePdfQueue,
 		exemplarQueue,
 		api,

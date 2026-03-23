@@ -1,8 +1,7 @@
 import type { StudentPaperJobPayload } from "@/lib/mark-actions"
 
 export type MarkingPhase =
-	| "scan_processing" // pending / processing without exam_paper_id
-	| "paper_setup" // text_extracted — link student, pick paper
+	| "scan_processing" // pending / processing / text_extracted (grading queued)
 	| "marking_in_progress" // processing with exam_paper_id, grading
 	| "completed" // ocr_complete
 	| "failed"
@@ -10,7 +9,6 @@ export type MarkingPhase =
 
 export function derivePhase(data: StudentPaperJobPayload): MarkingPhase {
 	if (data.status === "ocr_complete") return "completed"
-	if (data.status === "text_extracted") return "paper_setup"
 	if (data.status === "failed") return "failed"
 	if (data.status === "cancelled") return "cancelled"
 	if (

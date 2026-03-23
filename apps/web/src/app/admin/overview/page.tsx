@@ -6,14 +6,6 @@ import {
 	CardHeader,
 	CardTitle,
 } from "@/components/ui/card"
-import {
-	Table,
-	TableBody,
-	TableCell,
-	TableHead,
-	TableHeader,
-	TableRow,
-} from "@/components/ui/table"
 import { getDashboardData } from "@/lib/dashboard-actions"
 import {
 	BookOpen,
@@ -22,57 +14,11 @@ import {
 	FileText,
 	Library,
 	Link2Off,
-	ScanLine,
 	Users,
 	XCircle,
 } from "lucide-react"
 import { MarkingStatusChart } from "./_components/marking-status-chart"
 import { QuestionsBySubjectChart } from "./_components/questions-by-subject-chart"
-
-function formatDate(date: Date) {
-	return new Intl.DateTimeFormat("en-GB", {
-		day: "2-digit",
-		month: "short",
-		year: "numeric",
-		hour: "2-digit",
-		minute: "2-digit",
-	}).format(new Date(date))
-}
-
-function ScanStatusBadge({ status }: { status: string }) {
-	const variants: Record<string, { label: string; className: string }> = {
-		pending: {
-			label: "Pending",
-			className: "bg-yellow-500/10 text-yellow-700 border-yellow-200",
-		},
-		processing: {
-			label: "Processing",
-			className: "bg-blue-500/10 text-blue-700 border-blue-200",
-		},
-		ocr_complete: {
-			label: "OCR Complete",
-			className: "bg-green-500/10 text-green-700 border-green-200",
-		},
-		extracting: {
-			label: "Extracting",
-			className: "bg-blue-500/10 text-blue-700 border-blue-200",
-		},
-		extracted: {
-			label: "Extracted",
-			className: "bg-green-500/10 text-green-700 border-green-200",
-		},
-		failed: {
-			label: "Failed",
-			className: "bg-red-500/10 text-red-700 border-red-200",
-		},
-	}
-	const config = variants[status] ?? { label: status, className: "" }
-	return (
-		<Badge variant="outline" className={config.className}>
-			{config.label}
-		</Badge>
-	)
-}
 
 export default async function AdminOverviewPage() {
 	const data = await getDashboardData()
@@ -115,10 +61,10 @@ export default async function AdminOverviewPage() {
 			color: "text-yellow-500",
 		},
 		{
-			title: "Scan Submissions",
-			value: stats.totalScanSubmissions,
-			description: `${stats.pendingScanSubmissions} pending processing`,
-			icon: ScanLine,
+			title: "Student paper jobs",
+			value: stats.totalStudentPaperJobs,
+			description: `${stats.activeStudentPaperJobs} in progress (not yet finished)`,
+			icon: FileText,
 			color: "text-pink-500",
 		},
 		{
@@ -137,7 +83,7 @@ export default async function AdminOverviewPage() {
 					Admin Overview
 				</h1>
 				<p className="text-sm text-muted-foreground">
-					Overview of exam data, marking activity, and scan submissions.
+					Overview of exam data, marking activity, and student paper uploads.
 				</p>
 			</div>
 
@@ -249,64 +195,6 @@ export default async function AdminOverviewPage() {
 					</CardContent>
 				</Card>
 			</div>
-
-			<Card>
-				<CardHeader>
-					<CardTitle>Recent Scan Submissions</CardTitle>
-					<CardDescription>
-						The 10 most recent handwritten paper uploads
-					</CardDescription>
-				</CardHeader>
-				<CardContent>
-					{data.recentScanSubmissions.length === 0 ? (
-						<p className="py-4 text-center text-sm text-muted-foreground">
-							No scan submissions yet
-						</p>
-					) : (
-						<Table>
-							<TableHeader>
-								<TableRow>
-									<TableHead>Student</TableHead>
-									<TableHead>Status</TableHead>
-									<TableHead>Pages</TableHead>
-									<TableHead>Uploaded</TableHead>
-									<TableHead>Processed</TableHead>
-									<TableHead>View</TableHead>
-								</TableRow>
-							</TableHeader>
-							<TableBody>
-								{data.recentScanSubmissions.map((scan) => (
-									<TableRow key={scan.id}>
-										<TableCell>
-											<span className="font-medium">
-												{scan.studentName ?? "Unknown"}
-											</span>
-										</TableCell>
-										<TableCell>
-											<ScanStatusBadge status={scan.status} />
-										</TableCell>
-										<TableCell>{scan.pageCount}</TableCell>
-										<TableCell className="text-xs text-muted-foreground">
-											{formatDate(scan.uploadedAt)}
-										</TableCell>
-										<TableCell className="text-xs text-muted-foreground">
-											{scan.processedAt ? formatDate(scan.processedAt) : "—"}
-										</TableCell>
-										<TableCell>
-											<a
-												href={`/scan/${scan.id}`}
-												className="text-xs text-primary underline-offset-4 hover:underline"
-											>
-												View
-											</a>
-										</TableCell>
-									</TableRow>
-								))}
-							</TableBody>
-						</Table>
-					)}
-				</CardContent>
-			</Card>
 		</div>
 	)
 }

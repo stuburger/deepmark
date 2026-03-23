@@ -10,18 +10,54 @@ function scoreColor(awarded: number, max: number): string {
 	return "bg-red-500"
 }
 
+const shellClass = "rounded-xl border shadow-sm overflow-hidden"
+
+type BookletRowsProps = {
+	gradingResults: GradingResult[]
+	extractedAnswers?: ExtractedAnswer[]
+	/** When false, omit the “No results yet” row (e.g. live marking before first result). */
+	showEmptyPlaceholder?: boolean
+}
+
+function BookletAnswerRows({
+	gradingResults,
+	extractedAnswers,
+	showEmptyPlaceholder = true,
+}: BookletRowsProps) {
+	const graded = gradingResults.length
+	const showExtractedFallback =
+		graded === 0 && (extractedAnswers?.length ?? 0) > 0
+
+	return (
+		<div className="bg-white dark:bg-zinc-950 divide-y divide-zinc-100 dark:divide-zinc-800/60">
+			{showExtractedFallback
+				? extractedAnswers!.map((a) => (
+						<ExtractedAnswerRow key={a.question_number} answer={a} />
+					))
+				: gradingResults.map((r) => (
+						<GradedAnswerRow key={r.question_id} result={r} />
+					))}
+
+			{showEmptyPlaceholder && !showExtractedFallback && graded === 0 && (
+				<div className="px-5 py-6 text-sm text-center italic text-muted-foreground">
+					No results yet.
+				</div>
+			)}
+		</div>
+	)
+}
+
+/**
+ * Renders graded (or pre-grade extracted) answers in a fixed “answer booklet” layout.
+ * For live streaming while the pipeline runs, use {@link LiveMarkingExamPaperPanel}.
+ */
 export function ExamPaperPanel({
 	gradingResults,
 	extractedAnswers,
-	isGrading = false,
-	totalExpected,
 	examPaperTitle,
 }: {
 	gradingResults: GradingResult[]
 	extractedAnswers?: ExtractedAnswer[]
-	isGrading?: boolean
-	/** Total questions expected — used for the progress indicator during grading. */
-	totalExpected?: number
 	examPaperTitle?: string | null
 }) {
 	const graded = gradingResults.length
@@ -30,29 +66,13 @@ export function ExamPaperPanel({
 	const overallPct =
 		totalMax > 0 ? Math.round((totalAwarded / totalMax) * 100) : 0
 
-	// Fall back to showing extracted answers when no grading has happened yet
-	const showExtractedFallback =
-		graded === 0 && (extractedAnswers?.length ?? 0) > 0
-
 	return (
-		<div className="rounded-xl border shadow-sm overflow-hidden">
-			{/* Booklet header */}
+		<div className={shellClass}>
 			<div className="bg-zinc-50 dark:bg-zinc-900 border-b px-5 py-3 flex items-center justify-between gap-3 min-h-11">
-				<div className="flex items-center gap-2 min-w-0">
-					{isGrading && (
-						<Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground shrink-0" />
-					)}
-					<span className="text-xs font-mono font-bold tracking-widest uppercase text-muted-foreground truncate">
-						{isGrading
-							? totalExpected
-								? `Marking… ${graded} / ${totalExpected}`
-								: graded > 0
-									? `Marking… ${graded} marked`
-									: "Marking in progress…"
-							: (examPaperTitle ?? "Student Answer Sheet")}
-					</span>
-				</div>
-				{!isGrading && graded > 0 && (
+				<span className="text-xs font-mono font-bold tracking-widest uppercase text-muted-foreground truncate">
+					{examPaperTitle ?? "Student Answer Sheet"}
+				</span>
+				{graded > 0 && (
 					<span
 						className={cn(
 							"inline-flex shrink-0 items-center rounded-full px-2.5 py-0.5 text-xs font-semibold text-white",
@@ -64,29 +84,54 @@ export function ExamPaperPanel({
 				)}
 			</div>
 
-			{/* Answer rows */}
-			<div className="bg-white dark:bg-zinc-950 divide-y divide-zinc-100 dark:divide-zinc-800/60">
-				{showExtractedFallback
-					? extractedAnswers!.map((a) => (
-							<ExtractedAnswerRow key={a.question_number} answer={a} />
-						))
-					: gradingResults.map((r) => (
-							<GradedAnswerRow key={r.question_id} result={r} />
-						))}
+			<BookletAnswerRows
+				gradingResults={gradingResults}
+				extractedAnswers={extractedAnswers}
+			/>
+		</div>
+	)
+}
 
-				{/* Live marking tail indicator */}
-				{isGrading && (
-					<div className="px-5 py-3.5 flex items-center gap-2 text-xs text-muted-foreground">
-						<Loader2 className="h-3 w-3 animate-spin shrink-0" />
-						<span>Marking next question…</span>
-					</div>
-				)}
+/**
+ * Booklet UI while marking is in progress: progress in the header, results stream in,
+ * and a “next question” tail until the job finishes.
+ */
+export function LiveMarkingExamPaperPanel({
+	gradingResults,
+	extractedAnswers,
+	totalExpected,
+}: {
+	gradingResults: GradingResult[]
+	extractedAnswers?: ExtractedAnswer[]
+	/** When set, header shows “Marking… n / total”. */
+	totalExpected?: number
+}) {
+	const graded = gradingResults.length
 
-				{!showExtractedFallback && graded === 0 && !isGrading && (
-					<div className="px-5 py-6 text-sm text-center italic text-muted-foreground">
-						No results yet.
-					</div>
-				)}
+	const headerLabel = totalExpected
+		? `Marking… ${graded} / ${totalExpected}`
+		: graded > 0
+			? `Marking… ${graded} marked`
+			: "Marking in progress…"
+
+	return (
+		<div className={shellClass}>
+			<div className="bg-zinc-50 dark:bg-zinc-900 border-b px-5 py-3 flex items-center gap-2 min-w-0 min-h-11">
+				<Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground shrink-0" />
+				<span className="text-xs font-mono font-bold tracking-widest uppercase text-muted-foreground truncate">
+					{headerLabel}
+				</span>
+			</div>
+
+			<BookletAnswerRows
+				gradingResults={gradingResults}
+				extractedAnswers={extractedAnswers}
+				showEmptyPlaceholder={false}
+			/>
+
+			<div className="px-5 py-3.5 flex items-center gap-2 text-xs text-muted-foreground border-t border-zinc-100 dark:border-zinc-800/60 bg-white dark:bg-zinc-950">
+				<Loader2 className="h-3 w-3 animate-spin shrink-0" />
+				<span>Marking next question…</span>
 			</div>
 		</div>
 	)

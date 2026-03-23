@@ -5,7 +5,7 @@ import type {
 	GradedAnswerOnPage,
 	GradedPage,
 	HandwritingFeature,
-} from "@/lib/scan-actions"
+} from "@/lib/handwriting-types"
 import { cn } from "@/lib/utils"
 import { useState } from "react"
 import { MarkingFeedbackThread } from "./MarkingFeedbackThread"

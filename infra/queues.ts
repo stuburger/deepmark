@@ -2,14 +2,6 @@ import { geminiApiKey, openAiApiKey } from "./config"
 import { neonPostgres } from "./database"
 import { scansBucket } from "./storage"
 
-export const ocrQueue = new sst.aws.Queue("OcrQueue", {
-	visibilityTimeout: "5 minutes",
-})
-
-export const extractionQueue = new sst.aws.Queue("ExtractionQueue", {
-	visibilityTimeout: "4 minutes",
-})
-
 export const markSchemePdfQueue = new sst.aws.Queue("MarkSchemePdfQueue", {
 	visibilityTimeout: "10 minutes",
 })
@@ -35,12 +27,6 @@ export const studentPaperQueue = new sst.aws.Queue("StudentPaperQueue", {
 scansBucket.notify({
 	notifications: [
 		{
-			name: "OcrTrigger",
-			queue: ocrQueue,
-			events: ["s3:ObjectCreated:*"],
-			filterPrefix: "scans/",
-		},
-		{
 			name: "MarkSchemePdfTrigger",
 			queue: markSchemePdfQueue,
 			events: ["s3:ObjectCreated:*"],
@@ -61,81 +47,8 @@ scansBucket.notify({
 			filterPrefix: "pdfs/question-papers/",
 			filterSuffix: ".pdf",
 		},
-		// StudentPaperTrigger intentionally removed — student paper OCR and grading
-		// are manually queued by server actions, not auto-triggered on S3 upload.
+		// Student paper OCR and grading are manually queued by server actions.
 	],
-})
-
-// Triggered automatically: S3 fires a message whenever an image is uploaded to scans/<submissionId>/<page>.
-// Handler: runs Gemini OCR on the page image and stores the transcript + bounding-box features on the
-// ScanPage row. Once every page in the submission is OCR'd, it detects the student name from page 1
-// and pushes { scan_submission_id } to extractionQueue to kick off answer extraction.
-ocrQueue.subscribe({
-	handler: "packages/backend/src/processors/ocr.handler",
-	link: [
-		neonPostgres,
-		geminiApiKey,
-		openAiApiKey,
-		scansBucket,
-		extractionQueue,
-	],
-	timeout: "4 minutes",
-	memory: "512 MB",
-})
-
-export const scanGradingQueue = new sst.aws.Queue("ScanGradingQueue", {
-	visibilityTimeout: "10 minutes",
-})
-
-export const regionRefinementQueue = new sst.aws.Queue(
-	"RegionRefinementQueue",
-	{
-		visibilityTimeout: "8 minutes",
-	},
-)
-
-// Triggered by: ocrQueue handler once all pages for a submission are OCR'd.
-// Message shape: { scan_submission_id }
-// Handler: sends all OCR transcripts + bounding-box features (across every page) to Gemini along with the
-// exam paper's question structure. Gemini maps each piece of handwriting to the correct question (and
-// question part), producing ExtractedAnswer rows with per-page bounding boxes. Once done it pushes
-// { scan_submission_id } to BOTH scanGradingQueue (to grade the answers) and regionRefinementQueue
-// (to sharpen the answer bounding boxes) in parallel.
-extractionQueue.subscribe({
-	handler: "packages/backend/src/processors/extract-answers.handler",
-	link: [
-		neonPostgres,
-		geminiApiKey,
-		openAiApiKey,
-		scanGradingQueue,
-		regionRefinementQueue,
-	],
-	timeout: "3 minutes",
-})
-
-// Triggered by: extractionQueue handler after ExtractedAnswer rows have been saved.
-// Message shape: { scan_submission_id }
-// Handler: loads all ExtractedAnswers and the exam paper's mark schemes, then runs the MarkerOrchestrator
-// (Deterministic → LevelOfResponse → LLM) to grade each answer. Upserts a Student record using the
-// name detected during OCR, writes Answer + MarkingResult rows, and marks the submission as "graded".
-scanGradingQueue.subscribe({
-	handler: "packages/backend/src/processors/grade-scan.handler",
-	link: [neonPostgres, geminiApiKey, openAiApiKey],
-	timeout: "8 minutes",
-	memory: "512 MB",
-})
-
-// Triggered by: extractionQueue handler (runs in parallel with scanGradingQueue).
-// Message shape: { scan_submission_id }
-// Handler: for each page that contains extracted answers, fetches the raw scan image from S3 and asks
-// Gemini Vision to draw a precise bounding box around the entire handwritten answer region for each
-// question. Saves the coordinates back onto each ExtractedAnswer row as answer_regions. These regions
-// are consumed by the scan viewer UI to highlight exactly where each answer appears on the page.
-regionRefinementQueue.subscribe({
-	handler: "packages/backend/src/processors/refine-answer-regions.handler",
-	link: [neonPostgres, geminiApiKey, scansBucket],
-	timeout: "6 minutes",
-	memory: "512 MB",
 })
 
 // Triggered automatically: S3 fires a message when a PDF is uploaded to pdfs/mark-schemes/.
@@ -188,7 +101,13 @@ questionPaperQueue.subscribe({
 // select an exam paper first and then trigger studentPaperQueue separately.
 studentPaperOcrQueue.subscribe({
 	handler: "packages/backend/src/processors/student-paper-ocr.handler",
-	link: [neonPostgres, geminiApiKey, openAiApiKey, scansBucket, studentPaperQueue],
+	link: [
+		neonPostgres,
+		geminiApiKey,
+		openAiApiKey,
+		scansBucket,
+		studentPaperQueue,
+	],
 	timeout: "8 minutes",
 	memory: "1 GB",
 })

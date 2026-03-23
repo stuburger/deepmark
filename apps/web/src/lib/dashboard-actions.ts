@@ -20,8 +20,8 @@ export type DashboardStats = {
 	pendingAnswers: number
 	completedAnswers: number
 	failedAnswers: number
-	totalScanSubmissions: number
-	pendingScanSubmissions: number
+	totalStudentPaperJobs: number
+	activeStudentPaperJobs: number
 	markSchemesNeedingReview: number
 }
 
@@ -40,22 +40,11 @@ export type UsersByRole = {
 	count: number
 }
 
-export type RecentScanSubmission = {
-	id: string
-	studentName: string | null
-	status: string
-	pageCount: number
-	uploadedAt: Date
-	processedAt: Date | null
-	errorMessage: string | null
-}
-
 export type DashboardData = {
 	stats: DashboardStats
 	markingStatusBreakdown: MarkingStatusBreakdown[]
 	questionsBySubject: QuestionsBySubject[]
 	usersByRole: UsersByRole[]
-	recentScanSubmissions: RecentScanSubmission[]
 }
 
 export type QuestionListItem = {
@@ -122,7 +111,7 @@ export type ExamPaperListItem = {
 	created_at: Date
 	_count: {
 		sections: number
-		scan_submissions: number
+		pdf_ingestion_jobs: number
 	}
 }
 
@@ -154,7 +143,7 @@ export async function listExamPapers(options?: {
 				_count: {
 					select: {
 						sections: true,
-						scan_submissions: true,
+						pdf_ingestion_jobs: true,
 					},
 				},
 			},
@@ -266,13 +255,12 @@ export async function getDashboardData(): Promise<DashboardData> {
 		pendingAnswers,
 		completedAnswers,
 		failedAnswers,
-		totalScanSubmissions,
-		pendingScanSubmissions,
+		totalStudentPaperJobs,
+		activeStudentPaperJobs,
 		markSchemesNeedingReview,
 		answersByStatus,
 		questionsBySubjectRaw,
 		usersByRoleRaw,
-		recentScansRaw,
 	] = await Promise.all([
 		db.user.count(),
 		db.question.count(),
@@ -281,21 +269,23 @@ export async function getDashboardData(): Promise<DashboardData> {
 		db.answer.count({ where: { marking_status: "pending" } }),
 		db.answer.count({ where: { marking_status: "completed" } }),
 		db.answer.count({ where: { marking_status: "failed" } }),
-		db.scanSubmission.count(),
-		db.scanSubmission.count({ where: { status: "pending" } }),
+		db.pdfIngestionJob.count({
+			where: { document_type: "student_paper" },
+		}),
+		db.pdfIngestionJob.count({
+			where: {
+				document_type: "student_paper",
+				status: {
+					notIn: ["ocr_complete", "failed", "cancelled"],
+				},
+			},
+		}),
 		db.markScheme.count({
 			where: { link_status: { in: ["unlinked", "auto_linked"] } },
 		}),
 		db.answer.groupBy({ by: ["marking_status"], _count: { id: true } }),
 		db.question.groupBy({ by: ["subject"], _count: { id: true } }),
 		db.user.groupBy({ by: ["role"], _count: { id: true } }),
-		db.scanSubmission.findMany({
-			take: 10,
-			orderBy: { uploaded_at: "desc" },
-			include: {
-				student: { select: { name: true } },
-			},
-		}),
 	])
 
 	return {
@@ -307,8 +297,8 @@ export async function getDashboardData(): Promise<DashboardData> {
 			pendingAnswers,
 			completedAnswers,
 			failedAnswers,
-			totalScanSubmissions,
-			pendingScanSubmissions,
+			totalStudentPaperJobs,
+			activeStudentPaperJobs,
 			markSchemesNeedingReview,
 		},
 		markingStatusBreakdown: answersByStatus.map((row) => ({
@@ -322,15 +312,6 @@ export async function getDashboardData(): Promise<DashboardData> {
 		usersByRole: usersByRoleRaw.map((row) => ({
 			role: row.role,
 			count: row._count.id,
-		})),
-		recentScanSubmissions: recentScansRaw.map((s) => ({
-			id: s.id,
-			studentName: s.student?.name ?? null,
-			status: s.status,
-			pageCount: s.page_count,
-			uploadedAt: s.uploaded_at,
-			processedAt: s.processed_at,
-			errorMessage: s.error_message,
 		})),
 	}
 }
@@ -636,11 +617,10 @@ export type DeleteExamPaperResult = { ok: true } | { ok: false; error: string }
  *  1. MarkSchemeTestRun → MarkScheme → Question (from paper jobs)
  *  2. ExemplarAnswer (from paper jobs)
  *  3. QuestionBankItem for questions in this paper
- *  4. ExtractedAnswer / MarkingResult / Answer for those questions
+ *  4. MarkingResult / Answer for those questions
  *  5. ExamSectionQuestion → ExamSection
- *  6. ScanPage → ScanSubmission
- *  7. PdfIngestionJob
- *  8. ExamPaper
+ *  6. PdfIngestionJob
+ *  7. ExamPaper
  */
 export async function deleteExamPaper(
 	id: string,
@@ -698,12 +678,6 @@ export async function deleteExamPaper(
 				})
 				const answerIds = answers.map((a) => a.id)
 
-				const scans = await tx.scanSubmission.findMany({
-					where: { exam_paper_id: id },
-					select: { id: true },
-				})
-				const scanIds = scans.map((s) => s.id)
-
 				// ── Delete in dependency order ──────────────────────────────────
 
 				// Mark scheme test runs
@@ -735,14 +709,6 @@ export async function deleteExamPaper(
 				await tx.markingResult.deleteMany({
 					where: { answer_id: { in: answerIds } },
 				})
-				await tx.extractedAnswer.deleteMany({
-					where: {
-						OR: [
-							{ answer_id: { in: answerIds } },
-							{ question_id: { in: questionIds } },
-						],
-					},
-				})
 				await tx.answer.deleteMany({
 					where: { question_id: { in: questionIds } },
 				})
@@ -757,12 +723,6 @@ export async function deleteExamPaper(
 				await tx.question.deleteMany({
 					where: { source_pdf_ingestion_job_id: { in: jobIds } },
 				})
-
-				// Scan pages and submissions
-				await tx.scanPage.deleteMany({
-					where: { scan_submission_id: { in: scanIds } },
-				})
-				await tx.scanSubmission.deleteMany({ where: { exam_paper_id: id } })
 
 				// PDF ingestion jobs
 				await tx.pdfIngestionJob.deleteMany({ where: { exam_paper_id: id } })
@@ -797,7 +757,7 @@ export type DeleteQuestionResult = { ok: true } | { ok: false; error: string }
  *  2. ExemplarAnswer linked to question or its mark schemes
  *  3. MarkScheme
  *  4. QuestionBankItem
- *  5. MarkingResult → ExtractedAnswer → Answer
+ *  5. MarkingResult → Answer
  *  6. ExamSectionQuestion
  *  7. Question
  */
@@ -846,12 +806,6 @@ export async function deleteQuestion(
 
 			await tx.markingResult.deleteMany({
 				where: { answer_id: { in: answerIds } },
-			})
-
-			await tx.extractedAnswer.deleteMany({
-				where: {
-					OR: [{ answer_id: { in: answerIds } }, { question_id: questionId }],
-				},
 			})
 
 			await tx.answer.deleteMany({

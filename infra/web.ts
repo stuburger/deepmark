@@ -3,9 +3,7 @@ import { domain, geminiApiKey, webUrl } from "./config"
 import { neonPostgres } from "./database"
 import {
 	exemplarQueue,
-	extractionQueue,
 	markSchemePdfQueue,
-	ocrQueue,
 	questionPaperQueue,
 	studentPaperOcrQueue,
 	studentPaperQueue,
@@ -19,8 +17,6 @@ export const web = new sst.aws.Nextjs("Web", {
 		auth,
 		neonPostgres,
 		scansBucket,
-		ocrQueue,
-		extractionQueue,
 		exemplarQueue,
 		markSchemePdfQueue,
 		questionPaperQueue,

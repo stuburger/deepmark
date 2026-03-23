@@ -1,54 +1,46 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import {
-	createQuestionHandler,
-	CreateQuestionSchema,
-	debugToolHandler,
-	DebugToolSchema,
-	listQuestionsHandler,
-	ListQuestionsSchema,
-	getQuestionByIdHandler,
-	GetQuestionByIdSchema,
-	updateQuestionByIdHandler,
-	UpdateQuestionByIdSchema,
-	createMarkSchemeHandler,
-	CreateMarkSchemeSchema,
-	updateMarkSchemeHandler,
-	UpdateMarkSchemeSchema,
-	testAndRefineMarkSchemeHandler,
-	TestAndRefineMarkSchemeSchema,
-	createTestDatasetHandler,
-	CreateTestDatasetSchema,
-	answerQuestionHandler,
+	AddQuestionToExamPaperSchema,
+	AnalyzeHandwritingSchema,
 	AnswerQuestionSchema,
-	evaluateAnswerHandler,
-	EvaluateAnswerSchema,
-	markAnswerHandler,
-	MarkAnswerSchema,
-	getMarkResultByAnswerIdHandler,
-	GetMarkResultByAnswerIdSchema,
-	createExamPaperHandler,
 	CreateExamPaperSchema,
-	listExamPapersHandler,
+	CreateMarkSchemeSchema,
+	CreateQuestionSchema,
+	CreateTestDatasetSchema,
+	DebugToolSchema,
+	EvaluateAnswerSchema,
+	GetExamPaperByIdSchema,
+	GetMarkResultByAnswerIdSchema,
+	GetQuestionByIdSchema,
 	ListExamPapersSchema,
+	ListQuestionsSchema,
+	MarkAnswerSchema,
+	RetriggerPdfIngestionJobSchema,
+	TestAndRefineMarkSchemeSchema,
+	UpdateExamPaperSchema,
+	UpdateMarkSchemeSchema,
+	UpdateQuestionByIdSchema,
+	addQuestionToExamPaperHandler,
+	analyzeHandwritingHandler,
+	answerQuestionHandler,
+	createExamPaperHandler,
+	createMarkSchemeHandler,
+	createQuestionHandler,
+	createTestDatasetHandler,
+	debugToolHandler,
+	evaluateAnswerHandler,
 	// // Phase 1: Core Exam Paper Management
 	getExamPaperByIdHandler,
-	GetExamPaperByIdSchema,
-	updateExamPaperHandler,
-	UpdateExamPaperSchema,
-	addQuestionToExamPaperHandler,
-	AddQuestionToExamPaperSchema,
-	analyzeHandwritingHandler,
-	AnalyzeHandwritingSchema,
-	createScanSubmissionHandler,
-	CreateScanSubmissionSchema,
-	getScanSubmissionHandler,
-	GetScanSubmissionSchema,
-	reviewExtractedAnswersHandler,
-	ReviewExtractedAnswersSchema,
-	confirmScanAnswersHandler,
-	ConfirmScanAnswersSchema,
+	getMarkResultByAnswerIdHandler,
+	getQuestionByIdHandler,
+	listExamPapersHandler,
+	listQuestionsHandler,
+	markAnswerHandler,
 	retriggerPdfIngestionJobHandler,
-	RetriggerPdfIngestionJobSchema,
+	testAndRefineMarkSchemeHandler,
+	updateExamPaperHandler,
+	updateMarkSchemeHandler,
+	updateQuestionByIdHandler,
 	// // Phase 2: Question Management
 	// listQuestionsByExamPaperHandler,
 	// ListQuestionsByExamPaperSchema,
@@ -358,50 +350,6 @@ server.registerTool(
 		inputSchema: AnalyzeHandwritingSchema,
 	},
 	analyzeHandwritingHandler,
-)
-
-server.registerTool(
-	"create-scan-submission",
-	{
-		title: "Create Scan Submission",
-		description:
-			"Create a new scan submission for an exam session. Returns presigned S3 PUT URLs for each page. Upload each page image with PUT to the corresponding URL.",
-		inputSchema: CreateScanSubmissionSchema,
-	},
-	createScanSubmissionHandler,
-)
-
-server.registerTool(
-	"get-scan-submission",
-	{
-		title: "Get Scan Submission",
-		description:
-			"Get the status of a scan submission: per-page OCR status and extracted answer count.",
-		inputSchema: GetScanSubmissionSchema,
-	},
-	getScanSubmissionHandler,
-)
-
-server.registerTool(
-	"review-extracted-answers",
-	{
-		title: "Review Extracted Answers",
-		description:
-			"Return all extracted answers for a scan submission with bounding boxes and question details for human review before confirming.",
-		inputSchema: ReviewExtractedAnswersSchema,
-	},
-	reviewExtractedAnswersHandler,
-)
-
-server.registerTool(
-	"confirm-scan-answers",
-	{
-		title: "Confirm Scan Answers",
-		description:
-			"Create Answer records from extracted answers and run the marking pipeline. Optionally provide corrections to override extracted text.",
-		inputSchema: ConfirmScanAnswersSchema,
-	},
-	confirmScanAnswersHandler,
 )
 
 server.registerTool(

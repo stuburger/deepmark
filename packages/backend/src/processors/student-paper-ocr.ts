@@ -113,6 +113,12 @@ export async function handler(
 				continue
 			}
 
+			if (!job.exam_paper_id) {
+				throw new Error(
+					"exam_paper_id is required on student paper jobs — select an exam paper before starting OCR",
+				)
+			}
+
 			if (job.status === "cancelled") {
 				logger.info(TAG, "Job was cancelled — skipping", { jobId })
 				continue
@@ -265,11 +271,6 @@ Return:
 			const detectedSubject: Subject | null =
 				rawSubject && isValidSubject(rawSubject) ? rawSubject : null
 
-			// Both paths write text_extracted so the frontend polling works identically.
-			// Fast path additionally queues grading immediately so the teacher bypasses
-			// the select-paper wizard step.
-			const isFastPath = Boolean(job.exam_paper_id)
-
 			await db.pdfIngestionJob.update({
 				where: { id: jobId },
 				data: {
@@ -291,25 +292,18 @@ Return:
 				at: new Date().toISOString(),
 			})
 
-			if (isFastPath) {
-				await sqs.send(
-					new SendMessageCommand({
-						QueueUrl: Resource.StudentPaperQueue.url,
-						MessageBody: JSON.stringify({ job_id: jobId }),
-					}),
-				)
-				logger.info(TAG, "OCR job complete — fast path, grading queued", {
-					jobId,
-					exam_paper_id: job.exam_paper_id,
-					detected_subject: detectedSubject,
-				})
-			} else {
-				logger.info(TAG, "OCR job complete", {
-					jobId,
-					status: "text_extracted",
-					detected_subject: detectedSubject,
-				})
-			}
+			await sqs.send(
+				new SendMessageCommand({
+					QueueUrl: Resource.StudentPaperQueue.url,
+					MessageBody: JSON.stringify({ job_id: jobId }),
+				}),
+			)
+
+			logger.info(TAG, "OCR job complete — grading queued", {
+				jobId,
+				exam_paper_id: job.exam_paper_id,
+				detected_subject: detectedSubject,
+			})
 		} catch (err) {
 			logger.error(TAG, "OCR job failed", {
 				jobId,

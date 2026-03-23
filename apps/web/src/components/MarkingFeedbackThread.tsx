@@ -1,6 +1,6 @@
 "use client"
 
-import type { MarkPointResult } from "@/lib/scan-actions"
+import type { MarkPointResult } from "@/lib/handwriting-types"
 import { cn } from "@/lib/utils"
 import { ChevronDown, ChevronUp } from "lucide-react"
 

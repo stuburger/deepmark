@@ -12,7 +12,7 @@ import {
 import type {
 	HandwritingAnalysis,
 	HandwritingFeature,
-} from "@/lib/scan-actions"
+} from "@/lib/handwriting-types"
 import { cn } from "@/lib/utils"
 import { useState } from "react"
 

@@ -210,16 +210,12 @@ export async function reorderPages(
 export type TriggerOcrResult = { ok: true } | { ok: false; error: string }
 
 /**
- * Enqueues the job for OCR text extraction.
- *
- * When `examPaperId` is provided (fast path), the exam paper is associated with
- * the job before OCR starts. The OCR handler detects this and automatically
- * enqueues grading once extraction completes, skipping the `text_extracted`
- * pause and `select-paper` wizard step entirely.
+ * Associates the exam paper with the job and enqueues it for OCR extraction.
+ * Once OCR completes, grading is automatically queued.
  */
 export async function triggerOcr(
 	jobId: string,
-	examPaperId?: string,
+	examPaperId: string,
 ): Promise<TriggerOcrResult> {
 	const session = await auth()
 	if (!session) return { ok: false, error: "Not authenticated" }
@@ -235,26 +231,21 @@ export async function triggerOcr(
 		return { ok: false, error: "No pages uploaded yet" }
 	}
 
-	const jobUpdate: Parameters<typeof db.pdfIngestionJob.update>[0]["data"] = {
-		status: "pending",
-	}
-
-	if (examPaperId) {
-		const examPaper = await db.examPaper.findFirst({
-			where: { id: examPaperId, is_active: true },
-			select: { id: true, exam_board: true, subject: true, year: true },
-		})
-		if (!examPaper) return { ok: false, error: "Exam paper not found" }
-
-		jobUpdate.exam_paper_id = examPaperId
-		jobUpdate.exam_board = examPaper.exam_board ?? "Unknown"
-		jobUpdate.subject = examPaper.subject
-		jobUpdate.year = examPaper.year
-	}
+	const examPaper = await db.examPaper.findFirst({
+		where: { id: examPaperId, is_active: true },
+		select: { id: true, exam_board: true, subject: true, year: true },
+	})
+	if (!examPaper) return { ok: false, error: "Exam paper not found" }
 
 	await db.pdfIngestionJob.update({
 		where: { id: jobId },
-		data: jobUpdate,
+		data: {
+			status: "pending",
+			exam_paper_id: examPaperId,
+			exam_board: examPaper.exam_board ?? "Unknown",
+			subject: examPaper.subject,
+			year: examPaper.year,
+		},
 	})
 
 	await sqs.send(
@@ -444,7 +435,7 @@ export async function updateStudentName(
 
 // ─── Scan page presigned URLs ─────────────────────────────────────────────────
 
-import type { HandwritingAnalysis } from "@/lib/scan-actions"
+import type { HandwritingAnalysis } from "@/lib/handwriting-types"
 
 export type ScanPageUrl = {
 	order: number

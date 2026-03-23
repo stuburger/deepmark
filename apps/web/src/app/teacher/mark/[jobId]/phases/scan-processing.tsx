@@ -36,7 +36,12 @@ export function ScanProcessingPanel({
 		[initialStatus, router],
 	)
 
-	const POLLING_STATUSES = new Set(["pending", "processing", "grading"])
+	const POLLING_STATUSES = new Set([
+		"pending",
+		"processing",
+		"text_extracted",
+		"grading",
+	])
 
 	useJobPoller({
 		jobId,

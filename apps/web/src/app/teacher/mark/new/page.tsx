@@ -139,10 +139,8 @@ export default function MarkNewPage() {
 	const [pages, setPages] = useState<PageItem[]>([])
 	const [ocrError, setOcrError] = useState<string | null>(null)
 
-	// Fast-path: paper pre-selected before scanning
 	const [preSelectedPaper, setPreSelectedPaper] =
 		useState<CatalogExamPaper | null>(null)
-	const [showPaperPicker, setShowPaperPicker] = useState(false)
 	const [preSelectSearch, setPreSelectSearch] = useState("")
 	const [preSelectPapers, setPreSelectPapers] = useState<CatalogExamPaper[]>([])
 	const [loadingPreSelectPapers, setLoadingPreSelectPapers] = useState(false)
@@ -257,12 +255,13 @@ export default function MarkNewPage() {
 
 	const isUploading = pages.some((p) => p.uploading)
 	const hasErrors = pages.some((p) => p.error)
-	const readyToProcess = pages.length > 0 && !isUploading && !hasErrors
+	const readyToProcess =
+		pages.length > 0 && !isUploading && !hasErrors && preSelectedPaper !== null
 
 	async function handleTriggerOcr() {
-		if (!jobIdRef.current) return
+		if (!jobIdRef.current || !preSelectedPaper) return
 		setOcrError(null)
-		const result = await triggerOcr(jobIdRef.current, preSelectedPaper?.id)
+		const result = await triggerOcr(jobIdRef.current, preSelectedPaper.id)
 		if (!result.ok) {
 			setOcrError(result.error)
 			return
@@ -270,20 +269,14 @@ export default function MarkNewPage() {
 		router.push(`/teacher/mark/${jobIdRef.current}`)
 	}
 
-	// Load exam papers the first time the pre-select picker is opened
 	useEffect(() => {
-		if (
-			!showPaperPicker ||
-			preSelectPapers.length > 0 ||
-			loadingPreSelectPapers
-		)
-			return
+		if (preSelectPapers.length > 0 || loadingPreSelectPapers) return
 		setLoadingPreSelectPapers(true)
 		listCatalogExamPapers().then((r) => {
 			if (r.ok) setPreSelectPapers(r.papers)
 			setLoadingPreSelectPapers(false)
 		})
-	}, [showPaperPicker, preSelectPapers.length, loadingPreSelectPapers])
+	}, [preSelectPapers.length, loadingPreSelectPapers])
 
 	return (
 		<div className="flex flex-col min-h-[calc(100dvh-4rem)] max-w-lg mx-auto">
@@ -374,7 +367,7 @@ export default function MarkNewPage() {
 						</div>
 					)}
 
-					{/* Optional pre-select paper picker */}
+					{/* Exam paper — required */}
 					{preSelectedPaper ? (
 						<div className="flex items-center gap-3 rounded-xl border bg-card px-4 py-3">
 							<CheckCircle2 className="h-4 w-4 text-primary shrink-0" />
@@ -388,91 +381,72 @@ export default function MarkNewPage() {
 								type="button"
 								onClick={() => setPreSelectedPaper(null)}
 								className="text-xs text-muted-foreground hover:text-foreground"
-								aria-label="Remove pre-selected paper"
+								aria-label="Change exam paper"
 							>
 								Change
 							</button>
 						</div>
 					) : (
-						<div>
-							<button
-								type="button"
-								onClick={() => setShowPaperPicker((v) => !v)}
-								className="text-sm text-primary font-medium"
-							>
-								{showPaperPicker
-									? "Hide paper selector"
-									: "Know the paper? Select it now to speed up marking"}
-							</button>
-
-							{showPaperPicker && (
-								<div className="mt-3 space-y-2">
-									<div className="relative">
-										<Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-										<Input
-											className="pl-9"
-											placeholder="Search papers…"
-											value={preSelectSearch}
-											onChange={(e) => setPreSelectSearch(e.target.value)}
-											autoFocus
-										/>
-									</div>
-									{loadingPreSelectPapers ? (
-										<p className="py-3 text-center text-sm text-muted-foreground">
-											Loading papers…
-										</p>
-									) : (
-										<div className="max-h-72 overflow-y-auto space-y-1.5">
-											{preSelectPapers
-												.filter((p) => {
-													if (!preSelectSearch.trim()) return true
-													const q = preSelectSearch.toLowerCase()
-													return (
-														p.title.toLowerCase().includes(q) ||
-														p.subject.toLowerCase().includes(q) ||
-														(p.exam_board ?? "").toLowerCase().includes(q) ||
-														String(p.year).includes(q)
-													)
-												})
-												.map((paper) => (
-													<button
-														key={paper.id}
-														type="button"
-														disabled={!paper.has_mark_scheme}
-														onClick={() => {
-															setPreSelectedPaper(paper)
-															setShowPaperPicker(false)
-														}}
-														className="w-full rounded-xl border bg-card p-3 text-left transition-colors enabled:active:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+						<div className="space-y-2">
+							<p className="text-sm font-medium">Select exam paper</p>
+							<div className="relative">
+								<Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+								<Input
+									className="pl-9"
+									placeholder="Search papers…"
+									value={preSelectSearch}
+									onChange={(e) => setPreSelectSearch(e.target.value)}
+								/>
+							</div>
+							{loadingPreSelectPapers ? (
+								<p className="py-3 text-center text-sm text-muted-foreground">
+									Loading papers…
+								</p>
+							) : (
+								<div className="max-h-72 overflow-y-auto space-y-1.5">
+									{preSelectPapers
+										.filter((p) => {
+											if (!preSelectSearch.trim()) return true
+											const q = preSelectSearch.toLowerCase()
+											return (
+												p.title.toLowerCase().includes(q) ||
+												p.subject.toLowerCase().includes(q) ||
+												(p.exam_board ?? "").toLowerCase().includes(q) ||
+												String(p.year).includes(q)
+											)
+										})
+										.map((paper) => (
+											<button
+												key={paper.id}
+												type="button"
+												disabled={!paper.has_mark_scheme}
+												onClick={() => setPreSelectedPaper(paper)}
+												className="w-full rounded-xl border bg-card p-3 text-left transition-colors enabled:active:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+											>
+												<div className="flex items-start justify-between gap-2">
+													<p className="text-sm font-medium leading-tight">
+														{paper.title}
+													</p>
+													{!paper.has_mark_scheme && (
+														<span className="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400 shrink-0">
+															<AlertCircle className="h-3.5 w-3.5" />
+															No mark scheme
+														</span>
+													)}
+												</div>
+												<div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+													<Badge
+														variant={subjectColor(paper.subject)}
+														className="text-xs"
 													>
-														<div className="flex items-start justify-between gap-2">
-															<p className="text-sm font-medium leading-tight">
-																{paper.title}
-															</p>
-															{!paper.has_mark_scheme && (
-																<span className="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400 shrink-0">
-																	<AlertCircle className="h-3.5 w-3.5" />
-																	No mark scheme
-																</span>
-															)}
-														</div>
-														<div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-															<Badge
-																variant={subjectColor(paper.subject)}
-																className="text-xs"
-															>
-																{capitalize(paper.subject)}
-															</Badge>
-															{paper.exam_board && (
-																<span>{paper.exam_board}</span>
-															)}
-															<span>{paper.year}</span>
-															<span>{paper.total_marks} marks</span>
-														</div>
-													</button>
-												))}
-										</div>
-									)}
+														{capitalize(paper.subject)}
+													</Badge>
+													{paper.exam_board && <span>{paper.exam_board}</span>}
+													<span>{paper.year}</span>
+													<span>{paper.total_marks} marks</span>
+												</div>
+											</button>
+										))}
 								</div>
 							)}
 						</div>

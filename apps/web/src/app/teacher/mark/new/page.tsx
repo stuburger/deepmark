@@ -148,9 +148,9 @@ export default function MarkNewPage() {
 	// Ensure job is created once
 	const jobIdRef = useRef<string | null>(null)
 
-	async function ensureJob(): Promise<string> {
+	async function ensureJob(examPaperId: string): Promise<string> {
 		if (jobIdRef.current) return jobIdRef.current
-		const result = await createStudentPaperJob()
+		const result = await createStudentPaperJob(examPaperId)
 		if (!result.ok) throw new Error(result.error)
 		jobIdRef.current = result.jobId
 		return result.jobId
@@ -158,7 +158,11 @@ export default function MarkNewPage() {
 
 	async function handleFiles(files: FileList | null) {
 		if (!files || files.length === 0) return
-		const jid = await ensureJob()
+		if (!preSelectedPaper) {
+			setOcrError("Please select an exam paper before uploading pages.")
+			return
+		}
+		const jid = await ensureJob(preSelectedPaper.id)
 
 		const newItems: PageItem[] = []
 		const startOrder = pages.length + 1
@@ -261,7 +265,7 @@ export default function MarkNewPage() {
 	async function handleTriggerOcr() {
 		if (!jobIdRef.current || !preSelectedPaper) return
 		setOcrError(null)
-		const result = await triggerOcr(jobIdRef.current, preSelectedPaper.id)
+		const result = await triggerOcr(jobIdRef.current)
 		if (!result.ok) {
 			setOcrError(result.error)
 			return

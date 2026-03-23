@@ -81,7 +81,6 @@ enum PdfDocumentType {
   mark_scheme
   exemplar
   question_paper
-  student_paper
 }
 
 enum QuestionOrigin {
@@ -121,8 +120,9 @@ model User {
   created_exam_sections  ExamSection[]
   created_question_banks QuestionBank[]
 
-  students           Student[]         @relation("TeacherStudents")
-  pdf_ingestion_jobs PdfIngestionJob[] @relation("PdfIngestionJobUploader")
+  students            Student[]          @relation("TeacherStudents")
+  pdf_ingestion_jobs  PdfIngestionJob[]  @relation("PdfIngestionJobUploader")
+  student_paper_jobs  StudentPaperJob[]  @relation("StudentPaperJobUploader")
 
   @@map("users")
 }
@@ -222,9 +222,9 @@ model Student {
   created_at  DateTime @default(now())
   updated_at  DateTime @updatedAt
 
-  teacher          User             @relation("TeacherStudents", fields: [teacher_id], references: [id])
-  answers          Answer[]         @relation("StudentAnswers")
-  pdf_ingestion_jobs PdfIngestionJob[] @relation("JobStudent")
+  teacher            User              @relation("TeacherStudents", fields: [teacher_id], references: [id])
+  answers            Answer[]          @relation("StudentAnswers")
+  student_paper_jobs StudentPaperJob[] @relation("StudentPaperJobStudent")
 
   @@map("students")
 }
@@ -288,9 +288,10 @@ model ExamPaper {
   // { difficulty_level?, tier?, season? }
   metadata         Json?
 
-  created_by       User             @relation(fields: [created_by_id], references: [id])
-  sections         ExamSection[]
+  created_by         User              @relation(fields: [created_by_id], references: [id])
+  sections           ExamSection[]
   pdf_ingestion_jobs PdfIngestionJob[]
+  student_paper_jobs StudentPaperJob[]
 
   @@map("exam_papers")
 }
@@ -378,16 +379,8 @@ model PdfIngestionJob {
   run_adversarial_loop         Boolean         @default(false)
   detected_exam_paper_metadata Json?
   exam_paper_id                String?
-  student_name                 String?
-  student_id                   String?
   // Multi-page support: [{ key: string, order: number, mime_type: string }]
   pages                        Json?
-  detected_subject             Subject?
-  // Raw OCR extraction before grading: { student_name?, answers: [{question_number, answer_text}] }
-  extracted_answers_raw        Json?
-  // Per-page OCR analysis: [{ page: number, analysis: HandwritingAnalysis }]
-  page_analyses                Json?
-  grading_results              Json?
   // Ordered append-only event log: [{ type, at, ...payload }]
   job_events                   Json?
   error                        String?
@@ -396,11 +389,45 @@ model PdfIngestionJob {
 
   uploader          User             @relation("PdfIngestionJobUploader", fields: [uploaded_by], references: [id])
   exam_paper        ExamPaper?       @relation(fields: [exam_paper_id], references: [id])
-  student           Student?         @relation("JobStudent", fields: [student_id], references: [id])
   exemplars         ExemplarAnswer[]
   created_questions Question[]       @relation("QuestionSource")
 
   @@map("pdf_ingestion_jobs")
+}
+
+model StudentPaperJob {
+  id            String     @id @default(cuid())
+  s3_key        String
+  s3_bucket     String
+  status        ScanStatus @default(pending)
+  uploaded_by   String
+  exam_board    String
+  exam_paper_id String
+  subject       Subject?
+  year          Int?
+  paper_reference String?
+  attempt_count Int        @default(0)
+  student_name  String?
+  student_id    String?
+  // Multi-page support: [{ key: string, order: number, mime_type: string }]
+  pages         Json?
+  detected_subject Subject?
+  // Raw OCR extraction before grading: { student_name?, answers: [{question_number, answer_text}] }
+  extracted_answers_raw Json?
+  // Per-page OCR analysis: [{ page: number, analysis: HandwritingAnalysis }]
+  page_analyses Json?
+  grading_results Json?
+  // Ordered append-only event log: [{ type, at, ...payload }]
+  job_events    Json?
+  error         String?
+  created_at    DateTime   @default(now())
+  processed_at  DateTime?
+
+  uploader   User      @relation("StudentPaperJobUploader", fields: [uploaded_by], references: [id])
+  exam_paper ExamPaper @relation(fields: [exam_paper_id], references: [id])
+  student    Student?  @relation("StudentPaperJobStudent", fields: [student_id], references: [id])
+
+  @@map("student_paper_jobs")
 }
 
 model ExemplarAnswer {

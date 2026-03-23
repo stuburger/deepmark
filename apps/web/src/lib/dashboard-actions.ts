@@ -269,12 +269,9 @@ export async function getDashboardData(): Promise<DashboardData> {
 		db.answer.count({ where: { marking_status: "pending" } }),
 		db.answer.count({ where: { marking_status: "completed" } }),
 		db.answer.count({ where: { marking_status: "failed" } }),
-		db.pdfIngestionJob.count({
-			where: { document_type: "student_paper" },
-		}),
-		db.pdfIngestionJob.count({
+		db.studentPaperJob.count(),
+		db.studentPaperJob.count({
 			where: {
-				document_type: "student_paper",
 				status: {
 					notIn: ["ocr_complete", "failed", "cancelled"],
 				},

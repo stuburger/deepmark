@@ -38,7 +38,7 @@ export type JobEvent =
 // ─── Helper ───────────────────────────────────────────────────────────────────
 
 /**
- * Atomically appends one event to the job_events JSONB array.
+ * Atomically appends one event to the job_events JSONB array on pdf_ingestion_jobs.
  * Uses Postgres || operator — no read-modify-write race.
  * Non-fatal: swallows all errors so the main pipeline is never affected.
  */
@@ -51,6 +51,28 @@ export async function logEvent(
 		const payload = JSON.stringify([event])
 		await db.$executeRaw(Prisma.sql`
       UPDATE "pdf_ingestion_jobs"
+      SET job_events = COALESCE(job_events, '[]'::jsonb) || ${payload}::jsonb
+      WHERE id = ${jobId}
+    `)
+	} catch {
+		// Event loss is acceptable — pipeline correctness must not depend on this.
+	}
+}
+
+/**
+ * Atomically appends one event to the job_events JSONB array on student_paper_jobs.
+ * Uses Postgres || operator — no read-modify-write race.
+ * Non-fatal: swallows all errors so the main pipeline is never affected.
+ */
+export async function logStudentPaperEvent(
+	db: PrismaClient,
+	jobId: string,
+	event: JobEvent,
+): Promise<void> {
+	try {
+		const payload = JSON.stringify([event])
+		await db.$executeRaw(Prisma.sql`
+      UPDATE "student_paper_jobs"
       SET job_events = COALESCE(job_events, '[]'::jsonb) || ${payload}::jsonb
       WHERE id = ${jobId}
     `)

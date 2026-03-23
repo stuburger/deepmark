@@ -94,13 +94,13 @@ questionPaperQueue.subscribe({
 })
 
 // Triggered manually: a server action pushes { job_id } after a teacher finalises a student paper upload.
+// exam_paper_id must be set on the job before this queue is triggered.
 // Handler: loads all page files for the job from S3, then fans out to Gemini in parallel —
 // one call across all pages to extract the student name + every answer keyed by question number,
 // plus a per-page runOcr call for transcripts and bounding boxes. Saves the raw extracted answers
-// and page-level OCR analyses back onto the PdfIngestionJob. Does NOT grade — the teacher must
-// select an exam paper first and then trigger studentPaperQueue separately.
+// and page-level OCR analyses back onto the PdfIngestionJob, then automatically enqueues studentPaperQueue.
 studentPaperOcrQueue.subscribe({
-	handler: "packages/backend/src/processors/student-paper-ocr.handler",
+	handler: "packages/backend/src/processors/student-paper-extract.handler",
 	link: [
 		neonPostgres,
 		geminiApiKey,
@@ -112,8 +112,7 @@ studentPaperOcrQueue.subscribe({
 	memory: "1 GB",
 })
 
-// Triggered manually: a server action pushes { job_id } after a teacher selects an exam paper for a
-// student paper that has already been OCR'd (studentPaperOcrQueue must have run first).
+// Triggered automatically by student-paper-extract once OCR completes (exam_paper_id always required).
 // Handler: loads the exam paper's questions and mark schemes, then aligns the OCR-extracted answers
 // to the correct questions using three passes — (1) normalised string match on question number,
 // (2) positional match when counts agree, (3) LLM fallback for OCR misreads. Grades each aligned
@@ -121,7 +120,7 @@ studentPaperOcrQueue.subscribe({
 // results as a JSON blob on the job. If a Student record is linked to the job, also writes
 // normalised Answer + MarkingResult rows to the database.
 studentPaperQueue.subscribe({
-	handler: "packages/backend/src/processors/student-paper-pdf.handler",
+	handler: "packages/backend/src/processors/student-paper-grade.handler",
 	link: [neonPostgres, geminiApiKey, openAiApiKey, scansBucket],
 	timeout: "8 minutes",
 	memory: "1 GB",

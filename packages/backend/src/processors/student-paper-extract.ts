@@ -8,10 +8,14 @@ import { logger } from "@/lib/logger"
 import { GetObjectCommand, S3Client } from "@aws-sdk/client-s3"
 import { SQSClient, SendMessageCommand } from "@aws-sdk/client-sqs"
 import { GoogleGenAI, Type } from "@google/genai"
-import { type ScanStatus, type Subject, logEvent } from "@mcp-gcse/db"
+import {
+	type ScanStatus,
+	type Subject,
+	logStudentPaperEvent,
+} from "@mcp-gcse/db"
 import { Resource } from "sst"
 
-const TAG = "student-paper-ocr"
+const TAG = "student-paper-extract"
 
 const s3 = new S3Client({})
 const sqs = new SQSClient({})
@@ -101,23 +105,9 @@ export async function handler(
 
 			logger.info(TAG, "OCR job received", { jobId, messageId })
 
-			const job = await db.pdfIngestionJob.findUniqueOrThrow({
+			const job = await db.studentPaperJob.findUniqueOrThrow({
 				where: { id: jobId },
 			})
-
-			if (job.document_type !== "student_paper") {
-				logger.warn(TAG, "Job is not student_paper — skipping", {
-					jobId,
-					document_type: job.document_type,
-				})
-				continue
-			}
-
-			if (!job.exam_paper_id) {
-				throw new Error(
-					"exam_paper_id is required on student paper jobs — select an exam paper before starting OCR",
-				)
-			}
 
 			if (job.status === "cancelled") {
 				logger.info(TAG, "Job was cancelled — skipping", { jobId })
@@ -126,7 +116,7 @@ export async function handler(
 
 			cancellation = createCancellationToken(jobId)
 
-			await db.pdfIngestionJob.update({
+			await db.studentPaperJob.update({
 				where: { id: jobId },
 				data: {
 					attempt_count: { increment: 1 },
@@ -134,7 +124,7 @@ export async function handler(
 					error: null,
 				},
 			})
-			void logEvent(db, jobId, {
+			void logStudentPaperEvent(db, jobId, {
 				type: "ocr_started",
 				at: new Date().toISOString(),
 			})
@@ -260,7 +250,7 @@ Return:
 				answers_extracted: answersExtracted,
 				pages_analysed: pageAnalyses.length,
 			})
-			void logEvent(db, jobId, {
+			void logStudentPaperEvent(db, jobId, {
 				type: "answers_extracted",
 				at: new Date().toISOString(),
 				count: answersExtracted,
@@ -271,7 +261,7 @@ Return:
 			const detectedSubject: Subject | null =
 				rawSubject && isValidSubject(rawSubject) ? rawSubject : null
 
-			await db.pdfIngestionJob.update({
+			await db.studentPaperJob.update({
 				where: { id: jobId },
 				data: {
 					status: "text_extracted" as ScanStatus,
@@ -287,7 +277,7 @@ Return:
 				},
 			})
 
-			void logEvent(db, jobId, {
+			void logStudentPaperEvent(db, jobId, {
 				type: "ocr_complete",
 				at: new Date().toISOString(),
 			})
@@ -312,11 +302,11 @@ Return:
 			const message = err instanceof Error ? err.message : String(err)
 			if (jobId) {
 				try {
-					await db.pdfIngestionJob.update({
+					await db.studentPaperJob.update({
 						where: { id: jobId },
 						data: { status: "failed" as ScanStatus, error: message },
 					})
-					void logEvent(db, jobId, {
+					void logStudentPaperEvent(db, jobId, {
 						type: "job_failed",
 						at: new Date().toISOString(),
 						phase: "ocr",

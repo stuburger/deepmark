@@ -11,7 +11,7 @@ import {
 	type JobEvent,
 	Prisma,
 	createPrismaClient,
-	logEvent,
+	logStudentPaperEvent,
 } from "@mcp-gcse/db"
 import { Resource } from "sst"
 import { auth } from "./auth"
@@ -52,23 +52,36 @@ export type CreateStudentPaperJobResult =
 	| { ok: false; error: string }
 
 /**
- * Creates a new student paper job without requiring an exam paper upfront.
+ * Creates a new student paper job. An exam paper must be selected before creation.
  * Pages are added separately via addPageToJob.
  */
-export async function createStudentPaperJob(): Promise<CreateStudentPaperJobResult> {
+export async function createStudentPaperJob(
+	examPaperId: string,
+): Promise<CreateStudentPaperJobResult> {
 	const session = await auth()
 	if (!session) return { ok: false, error: "Not authenticated" }
 
-	log.info(TAG, "createStudentPaperJob called", { userId: session.userId })
+	const examPaper = await db.examPaper.findFirst({
+		where: { id: examPaperId, is_active: true },
+		select: { id: true, exam_board: true, subject: true, year: true },
+	})
+	if (!examPaper) return { ok: false, error: "Exam paper not found" }
 
-	const job = await db.pdfIngestionJob.create({
+	log.info(TAG, "createStudentPaperJob called", {
+		userId: session.userId,
+		examPaperId,
+	})
+
+	const job = await db.studentPaperJob.create({
 		data: {
-			document_type: "student_paper",
 			s3_key: "",
 			s3_bucket: bucketName,
 			status: "pending",
 			uploaded_by: session.userId,
-			exam_board: "Unknown",
+			exam_paper_id: examPaperId,
+			exam_board: examPaper.exam_board ?? "Unknown",
+			subject: examPaper.subject,
+			year: examPaper.year,
 			pages: [],
 		},
 	})
@@ -98,7 +111,7 @@ export async function addPageToJob(
 	const session = await auth()
 	if (!session) return { ok: false, error: "Not authenticated" }
 
-	const job = await db.pdfIngestionJob.findFirst({
+	const job = await db.studentPaperJob.findFirst({
 		where: { id: jobId, uploaded_by: session.userId },
 	})
 	if (!job) return { ok: false, error: "Job not found" }
@@ -122,7 +135,7 @@ export async function addPageToJob(
 		{ key, order, mime_type: mimeType },
 	].sort((a, b) => a.order - b.order)
 
-	await db.pdfIngestionJob.update({
+	await db.studentPaperJob.update({
 		where: { id: jobId },
 		data: { pages: updatedPages, s3_key: key },
 	})
@@ -149,7 +162,7 @@ export async function removePageFromJob(
 	const session = await auth()
 	if (!session) return { ok: false, error: "Not authenticated" }
 
-	const job = await db.pdfIngestionJob.findFirst({
+	const job = await db.studentPaperJob.findFirst({
 		where: { id: jobId, uploaded_by: session.userId },
 	})
 	if (!job) return { ok: false, error: "Job not found" }
@@ -158,7 +171,7 @@ export async function removePageFromJob(
 	const existingPages = (job.pages ?? []) as PageEntry[]
 	const updatedPages = existingPages.filter((p) => p.order !== order)
 
-	await db.pdfIngestionJob.update({
+	await db.studentPaperJob.update({
 		where: { id: jobId },
 		data: { pages: updatedPages },
 	})
@@ -180,7 +193,7 @@ export async function reorderPages(
 	const session = await auth()
 	if (!session) return { ok: false, error: "Not authenticated" }
 
-	const job = await db.pdfIngestionJob.findFirst({
+	const job = await db.studentPaperJob.findFirst({
 		where: { id: jobId, uploaded_by: session.userId },
 	})
 	if (!job) return { ok: false, error: "Job not found" }
@@ -197,7 +210,7 @@ export async function reorderPages(
 		})
 		.filter((p): p is PageEntry => p !== null)
 
-	await db.pdfIngestionJob.update({
+	await db.studentPaperJob.update({
 		where: { id: jobId },
 		data: { pages: reordered },
 	})
@@ -210,17 +223,14 @@ export async function reorderPages(
 export type TriggerOcrResult = { ok: true } | { ok: false; error: string }
 
 /**
- * Associates the exam paper with the job and enqueues it for OCR extraction.
+ * Enqueues the job for OCR extraction using the exam paper set at creation time.
  * Once OCR completes, grading is automatically queued.
  */
-export async function triggerOcr(
-	jobId: string,
-	examPaperId: string,
-): Promise<TriggerOcrResult> {
+export async function triggerOcr(jobId: string): Promise<TriggerOcrResult> {
 	const session = await auth()
 	if (!session) return { ok: false, error: "Not authenticated" }
 
-	const job = await db.pdfIngestionJob.findFirst({
+	const job = await db.studentPaperJob.findFirst({
 		where: { id: jobId, uploaded_by: session.userId },
 	})
 	if (!job) return { ok: false, error: "Job not found" }
@@ -232,16 +242,15 @@ export async function triggerOcr(
 	}
 
 	const examPaper = await db.examPaper.findFirst({
-		where: { id: examPaperId, is_active: true },
+		where: { id: job.exam_paper_id, is_active: true },
 		select: { id: true, exam_board: true, subject: true, year: true },
 	})
 	if (!examPaper) return { ok: false, error: "Exam paper not found" }
 
-	await db.pdfIngestionJob.update({
+	await db.studentPaperJob.update({
 		where: { id: jobId },
 		data: {
 			status: "pending",
-			exam_paper_id: examPaperId,
 			exam_board: examPaper.exam_board ?? "Unknown",
 			subject: examPaper.subject,
 			year: examPaper.year,
@@ -255,7 +264,11 @@ export async function triggerOcr(
 		}),
 	)
 
-	log.info(TAG, "OCR triggered", { userId: session.userId, jobId, examPaperId })
+	log.info(TAG, "OCR triggered", {
+		userId: session.userId,
+		jobId,
+		examPaperId: job.exam_paper_id,
+	})
 	return { ok: true }
 }
 
@@ -274,7 +287,7 @@ export async function triggerGrading(
 	const session = await auth()
 	if (!session) return { ok: false, error: "Not authenticated" }
 
-	const job = await db.pdfIngestionJob.findFirst({
+	const job = await db.studentPaperJob.findFirst({
 		where: { id: jobId, uploaded_by: session.userId },
 	})
 	if (!job) return { ok: false, error: "Job not found" }
@@ -295,7 +308,7 @@ export async function triggerGrading(
 	})
 	if (!examPaper) return { ok: false, error: "Exam paper not found" }
 
-	await db.pdfIngestionJob.update({
+	await db.studentPaperJob.update({
 		where: { id: jobId },
 		data: {
 			exam_paper_id: examPaperId,
@@ -313,7 +326,7 @@ export async function triggerGrading(
 		}),
 	)
 
-	void logEvent(db, jobId, {
+	void logStudentPaperEvent(db, jobId, {
 		type: "exam_paper_selected",
 		at: new Date().toISOString(),
 		title: examPaper.title,
@@ -343,7 +356,7 @@ export type StudentPaperJobPayload = {
 	pages_count: number
 	grading_results: GradingResult[]
 	exam_paper_title: string | null
-	exam_paper_id: string | null
+	exam_paper_id: string
 	total_awarded: number
 	total_max: number
 	created_at: Date
@@ -361,12 +374,8 @@ export async function getStudentPaperJob(
 	const session = await auth()
 	if (!session) return { ok: false, error: "Not authenticated" }
 
-	const job = await db.pdfIngestionJob.findFirst({
-		where: {
-			id: jobId,
-			uploaded_by: session.userId,
-			document_type: "student_paper",
-		},
+	const job = await db.studentPaperJob.findFirst({
+		where: { id: jobId, uploaded_by: session.userId },
 		include: { exam_paper: { select: { id: true, title: true } } },
 	})
 	if (!job) return { ok: false, error: "Job not found" }
@@ -422,11 +431,11 @@ export async function updateStudentName(
 ): Promise<UpdateStudentNameResult> {
 	const session = await auth()
 	if (!session) return { ok: false, error: "Not authenticated" }
-	const job = await db.pdfIngestionJob.findFirst({
+	const job = await db.studentPaperJob.findFirst({
 		where: { id: jobId, uploaded_by: session.userId },
 	})
 	if (!job) return { ok: false, error: "Job not found" }
-	await db.pdfIngestionJob.update({
+	await db.studentPaperJob.update({
 		where: { id: jobId },
 		data: { student_name: name },
 	})
@@ -460,7 +469,7 @@ export async function getJobScanPageUrls(
 	const session = await auth()
 	if (!session) return { ok: false, error: "Not authenticated" }
 
-	const job = await db.pdfIngestionJob.findFirst({
+	const job = await db.studentPaperJob.findFirst({
 		where: { id: jobId, uploaded_by: session.userId },
 		select: { pages: true, s3_bucket: true, page_analyses: true },
 	})
@@ -500,7 +509,7 @@ export async function getJobScanPageUrls(
 export type LinkStudentToJobResult = { ok: true } | { ok: false; error: string }
 
 /**
- * Associates a Student record with a PdfIngestionJob so that graded answers
+ * Associates a Student record with a StudentPaperJob so that graded answers
  * are subsequently written to the normalised Answer / MarkingResult tables.
  * Also syncs student_name from the Student record.
  */
@@ -512,7 +521,7 @@ export async function linkStudentToJob(
 	if (!session) return { ok: false, error: "Not authenticated" }
 
 	const [job, student] = await Promise.all([
-		db.pdfIngestionJob.findFirst({
+		db.studentPaperJob.findFirst({
 			where: { id: jobId, uploaded_by: session.userId },
 		}),
 		db.student.findFirst({
@@ -522,12 +531,12 @@ export async function linkStudentToJob(
 	if (!job) return { ok: false, error: "Job not found" }
 	if (!student) return { ok: false, error: "Student not found" }
 
-	await db.pdfIngestionJob.update({
+	await db.studentPaperJob.update({
 		where: { id: jobId },
 		data: { student_id: studentId, student_name: student.name },
 	})
 
-	void logEvent(db, jobId, {
+	void logStudentPaperEvent(db, jobId, {
 		type: "student_linked",
 		at: new Date().toISOString(),
 		student_name: student.name,
@@ -562,8 +571,8 @@ export async function listMySubmissions(): Promise<ListMySubmissionsResult> {
 	const session = await auth()
 	if (!session) return { ok: false, error: "Not authenticated" }
 
-	const jobs = await db.pdfIngestionJob.findMany({
-		where: { uploaded_by: session.userId, document_type: "student_paper" },
+	const jobs = await db.studentPaperJob.findMany({
+		where: { uploaded_by: session.userId },
 		orderBy: { created_at: "desc" },
 		include: { exam_paper: { select: { id: true, title: true } } },
 	})
@@ -605,7 +614,7 @@ export async function updateExtractedAnswer(
 	const session = await auth()
 	if (!session) return { ok: false, error: "Not authenticated" }
 
-	const job = await db.pdfIngestionJob.findFirst({
+	const job = await db.studentPaperJob.findFirst({
 		where: { id: jobId, uploaded_by: session.userId },
 	})
 	if (!job) return { ok: false, error: "Job not found" }
@@ -624,7 +633,7 @@ export async function updateExtractedAnswer(
 		),
 	}
 
-	await db.pdfIngestionJob.update({
+	await db.studentPaperJob.update({
 		where: { id: jobId },
 		data: { extracted_answers_raw: updated },
 	})
@@ -646,16 +655,14 @@ export async function retriggerGrading(
 	const session = await auth()
 	if (!session) return { ok: false, error: "Not authenticated" }
 
-	const job = await db.pdfIngestionJob.findFirst({
+	const job = await db.studentPaperJob.findFirst({
 		where: { id: jobId, uploaded_by: session.userId },
 	})
 	if (!job) return { ok: false, error: "Job not found" }
-	if (!job.exam_paper_id)
-		return { ok: false, error: "No exam paper selected — cannot re-mark" }
 	if (!job.extracted_answers_raw)
 		return { ok: false, error: "No extracted answers — run OCR first" }
 
-	await db.pdfIngestionJob.update({
+	await db.studentPaperJob.update({
 		where: { id: jobId },
 		data: { status: "pending", grading_results: [], error: null },
 	})
@@ -683,7 +690,7 @@ export async function retriggerOcr(jobId: string): Promise<RetriggerOcrResult> {
 	const session = await auth()
 	if (!session) return { ok: false, error: "Not authenticated" }
 
-	const job = await db.pdfIngestionJob.findFirst({
+	const job = await db.studentPaperJob.findFirst({
 		where: { id: jobId, uploaded_by: session.userId },
 	})
 	if (!job) return { ok: false, error: "Job not found" }
@@ -693,7 +700,7 @@ export async function retriggerOcr(jobId: string): Promise<RetriggerOcrResult> {
 	if (pages.length === 0)
 		return { ok: false, error: "No pages uploaded — cannot re-scan" }
 
-	await db.pdfIngestionJob.update({
+	await db.studentPaperJob.update({
 		where: { id: jobId },
 		data: {
 			status: "pending",
@@ -746,10 +753,9 @@ export async function getExamPaperStats(
 	const session = await auth()
 	if (!session) return { ok: false, error: "Not authenticated" }
 
-	const jobs = await db.pdfIngestionJob.findMany({
+	const jobs = await db.studentPaperJob.findMany({
 		where: {
 			uploaded_by: session.userId,
-			document_type: "student_paper",
 			exam_paper_id: examPaperId,
 			status: "ocr_complete",
 		},

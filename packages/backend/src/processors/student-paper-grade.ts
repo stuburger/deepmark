@@ -22,7 +22,7 @@ import { Output, generateText } from "ai"
 import { Resource } from "sst"
 import { z } from "zod"
 
-const TAG = "student-paper-pdf"
+const TAG = "student-paper-grade"
 
 const s3 = new S3Client({})
 const geminiVision = new GoogleGenAI({ apiKey: Resource.GeminiApiKey.value })
@@ -774,7 +774,6 @@ export async function handler(
 					error: null,
 				},
 			})
-			
 			void logStudentPaperEvent(db, jobId, {
 				type: "grading_complete",
 				at: new Date().toISOString(),

@@ -5,7 +5,7 @@ import {
 } from "@/lib/cancellation"
 import { runOcr } from "@/lib/gemini-ocr"
 import { logger } from "@/lib/logger"
-import { GetObjectCommand, S3Client } from "@aws-sdk/client-s3"
+import { getFileBase64 } from "@/lib/s3"
 import { SQSClient, SendMessageCommand } from "@aws-sdk/client-sqs"
 import { GoogleGenAI, Type } from "@google/genai"
 import {
@@ -17,7 +17,6 @@ import { Resource } from "sst"
 
 const TAG = "student-paper-extract"
 
-const s3 = new S3Client({})
 const sqs = new SQSClient({})
 
 interface SqsRecord {
@@ -73,14 +72,6 @@ const SUBJECT_VALUES = [
 
 function isValidSubject(s: string): s is Subject {
 	return (SUBJECT_VALUES as readonly string[]).includes(s)
-}
-
-async function getFileBase64(bucket: string, key: string): Promise<string> {
-	const cmd = new GetObjectCommand({ Bucket: bucket, Key: key })
-	const response = await s3.send(cmd)
-	const body = await response.Body?.transformToByteArray()
-	if (!body?.length) throw new Error(`Empty S3 object: ${key}`)
-	return Buffer.from(body).toString("base64")
 }
 
 export async function handler(

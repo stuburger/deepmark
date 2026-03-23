@@ -5,7 +5,7 @@ import {
 } from "@/lib/cancellation"
 import { defaultChatModel } from "@/lib/google-generative-ai"
 import { logger } from "@/lib/logger"
-import { GetObjectCommand, S3Client } from "@aws-sdk/client-s3"
+import { getFileBase64 } from "@/lib/s3"
 import { GoogleGenAI, Type } from "@google/genai"
 import { type ScanStatus, logStudentPaperEvent } from "@mcp-gcse/db"
 import {
@@ -24,7 +24,6 @@ import { z } from "zod"
 
 const TAG = "student-paper-grade"
 
-const s3 = new S3Client({})
 const geminiVision = new GoogleGenAI({ apiKey: Resource.GeminiApiKey.value })
 
 interface SqsRecord {
@@ -237,17 +236,7 @@ async function attributeAnswerRegions(
 	for (const page of imagePages) {
 		let imageBase64: string
 		try {
-			const cmd = new GetObjectCommand({ Bucket: s3Bucket, Key: page.key })
-			const response = await s3.send(cmd)
-			const body = await response.Body?.transformToByteArray()
-			if (!body?.length) {
-				logger.warn(TAG, "Empty page image — skipping region attribution", {
-					jobId,
-					pageOrder: page.order,
-				})
-				continue
-			}
-			imageBase64 = Buffer.from(body).toString("base64")
+			imageBase64 = await getFileBase64(s3Bucket, page.key)
 		} catch (err) {
 			logger.error(TAG, "Failed to fetch page image for region attribution", {
 				jobId,

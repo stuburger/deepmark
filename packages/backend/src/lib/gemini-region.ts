@@ -44,6 +44,18 @@ const REGION_SCHEMA = {
 
 const TAG = "gemini-region"
 
+export type AttributeAnswerRegionsArgs = {
+	questions: Array<{
+		question_id: string
+		question_number: string
+		question_text: string
+		is_mcq: boolean
+	}>
+	pages: PageEntry[]
+	s3Bucket: string
+	jobId: string
+}
+
 /**
  * Calls Gemini Vision once per image page to identify where each written answer
  * is located. Runs concurrently with the grading loop so it adds minimal latency.
@@ -51,17 +63,12 @@ const TAG = "gemini-region"
  * Returns a map of question_id → AnswerRegion[].
  * On any per-page failure the page is skipped gracefully; grading is unaffected.
  */
-export async function attributeAnswerRegions(
-	questions: Array<{
-		question_id: string
-		question_number: string
-		question_text: string
-		is_mcq: boolean
-	}>,
-	pages: PageEntry[],
-	s3Bucket: string,
-	jobId: string,
-): Promise<Map<string, AnswerRegion[]>> {
+export async function attributeAnswerRegions({
+	questions,
+	pages,
+	s3Bucket,
+	jobId,
+}: AttributeAnswerRegionsArgs): Promise<Map<string, AnswerRegion[]>> {
 	const result = new Map<string, AnswerRegion[]>()
 
 	if (questions.length === 0) return result

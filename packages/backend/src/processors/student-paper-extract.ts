@@ -1,11 +1,8 @@
 import { db } from "@/db"
-import {
-	type CancellationToken,
-	createCancellationToken,
-} from "@/lib/cancellation"
 import { runOcr } from "@/lib/gemini-ocr"
 import { logger } from "@/lib/logger"
 import { getFileBase64 } from "@/lib/s3"
+import { type SqsEvent, processSqsJob } from "@/lib/sqs-job-runner"
 import { SQSClient, SendMessageCommand } from "@aws-sdk/client-sqs"
 import { GoogleGenAI, Type } from "@google/genai"
 import {
@@ -18,15 +15,6 @@ import { Resource } from "sst"
 const TAG = "student-paper-extract"
 
 const sqs = new SQSClient({})
-
-interface SqsRecord {
-	messageId: string
-	body: string
-}
-
-interface SqsEvent {
-	Records: SqsRecord[]
-}
 
 type PageEntry = {
 	key: string
@@ -81,107 +69,100 @@ export async function handler(
 	const gemini = new GoogleGenAI({ apiKey: Resource.GeminiApiKey.value })
 
 	for (const record of event.Records) {
-		const messageId = record.messageId
-		let jobId: string | undefined
-		let cancellation: CancellationToken | undefined
-
-		try {
-			const body = JSON.parse(record.body) as { job_id: string }
-			jobId = body.job_id
-
-			if (!jobId) {
-				logger.warn(TAG, "Message missing job_id", { messageId })
-				continue
-			}
-
-			logger.info(TAG, "OCR job received", { jobId, messageId })
-
-			const job = await db.studentPaperJob.findUniqueOrThrow({
-				where: { id: jobId },
-			})
-
-			if (job.status === "cancelled") {
-				logger.info(TAG, "Job was cancelled — skipping", { jobId })
-				continue
-			}
-
-			cancellation = createCancellationToken(jobId)
-
-			await db.studentPaperJob.update({
-				where: { id: jobId },
-				data: {
-					attempt_count: { increment: 1 },
-					status: "processing" as ScanStatus,
-					error: null,
-				},
-			})
-			void logStudentPaperEvent(db, jobId, {
-				type: "ocr_started",
-				at: new Date().toISOString(),
-			})
-
-			const pages = (job.pages ?? []) as PageEntry[]
-			const bucket = job.s3_bucket
-
-			if (pages.length === 0) {
-				throw new Error("No pages found on job — cannot run OCR")
-			}
-
-			logger.info(TAG, "Loading pages from S3", {
-				jobId,
-				page_count: pages.length,
-			})
-
-			const sortedPages = [...pages].sort((a, b) => a.order - b.order)
-
-			// Fetch all pages in parallel
-			const pageData = await Promise.all(
-				sortedPages.map(async (page) => ({
-					data: await getFileBase64(bucket, page.key),
-					mimeType: page.mime_type as
-						| "application/pdf"
-						| "image/jpeg"
-						| "image/png"
-						| "image/webp"
-						| "image/heic",
-				})),
-			)
-
-			if (cancellation.isCancelled()) {
-				logger.info(TAG, "Job cancelled before Gemini call — skipping", {
+		const { failed } = await processSqsJob(
+			record,
+			TAG,
+			"ocr",
+			async (jobId, cancellation) => {
+				logger.info(TAG, "OCR job received", {
 					jobId,
+					messageId: record.messageId,
 				})
-				continue
-			}
 
-			logger.info(
-				TAG,
-				"Calling Gemini to extract student answers + per-page OCR",
-				{
+				const job = await db.studentPaperJob.findUniqueOrThrow({
+					where: { id: jobId },
+				})
+
+				if (job.status === "cancelled") {
+					logger.info(TAG, "Job was cancelled — skipping", { jobId })
+					return
+				}
+
+				await db.studentPaperJob.update({
+					where: { id: jobId },
+					data: {
+						attempt_count: { increment: 1 },
+						status: "processing" as ScanStatus,
+						error: null,
+					},
+				})
+				void logStudentPaperEvent(db, jobId, {
+					type: "ocr_started",
+					at: new Date().toISOString(),
+				})
+
+				const pages = (job.pages ?? []) as PageEntry[]
+				const bucket = job.s3_bucket
+
+				if (pages.length === 0) {
+					throw new Error("No pages found on job — cannot run OCR")
+				}
+
+				logger.info(TAG, "Loading pages from S3", {
 					jobId,
-					page_count: pageData.length,
-				},
-			)
+					page_count: pages.length,
+				})
 
-			const inlineDataParts = pageData.map((p) => ({
-				inlineData: { data: p.data, mimeType: p.mimeType },
-			}))
+				const sortedPages = [...pages].sort((a, b) => a.order - b.order)
 
-			// Fan out: answer extraction (all pages combined) + per-page runOcr in parallel.
-			// runOcr itself makes 2 parallel Gemini calls (transcript + bounding boxes).
-			// Cost note: a cheaper alternative is to call only the bounding-box schema per
-			// page (skipping the transcript call) — BoundingBoxViewer renders fine with an
-			// empty transcript and this saves 1 Gemini call per page.
-			const [response, ...ocrResults] = await Promise.all([
-				gemini.models.generateContent({
-					model: "gemini-2.5-flash",
-					contents: [
-						{
-							role: "user",
-							parts: [
-								...inlineDataParts,
-								{
-									text: `This is a student's exam answer sheet (${pageData.length} page${pageData.length > 1 ? "s" : ""}).
+				// Fetch all pages in parallel
+				const pageData = await Promise.all(
+					sortedPages.map(async (page) => ({
+						data: await getFileBase64(bucket, page.key),
+						mimeType: page.mime_type as
+							| "application/pdf"
+							| "image/jpeg"
+							| "image/png"
+							| "image/webp"
+							| "image/heic",
+					})),
+				)
+
+				if (cancellation.isCancelled()) {
+					logger.info(TAG, "Job cancelled before Gemini call — skipping", {
+						jobId,
+					})
+					return
+				}
+
+				logger.info(
+					TAG,
+					"Calling Gemini to extract student answers + per-page OCR",
+					{
+						jobId,
+						page_count: pageData.length,
+					},
+				)
+
+				const inlineDataParts = pageData.map((p) => ({
+					inlineData: { data: p.data, mimeType: p.mimeType },
+				}))
+
+				// Fan out: answer extraction (all pages combined) + per-page runOcr in parallel.
+				// runOcr itself makes 2 parallel Gemini calls (transcript + bounding boxes).
+				// Cost note: a cheaper alternative is to call only the bounding-box schema per
+				// page (skipping the transcript call) — BoundingBoxViewer renders fine with an
+				// empty transcript and this saves 1 Gemini call per page.
+				const [response, ...ocrResults] = await Promise.all([
+					gemini.models.generateContent({
+						model: "gemini-2.5-flash",
+						contents: [
+							{
+								role: "user",
+								parts: [
+									...inlineDataParts,
+									{
+										text: `This is a student's exam answer sheet (${pageData.length} page${pageData.length > 1 ? "s" : ""}).
 
 1. Extract the student's name if visible on any page.
 2. Detect the subject (e.g. biology, chemistry, physics, mathematics, english, history, etc.) from any headers, logos, or question content.
@@ -191,126 +172,102 @@ Return:
 - student_name: the student's name (null if not found)
 - detected_subject: the detected subject as a lowercase single word (null if unclear)
 - answers: array of { question_number, answer_text } for every question found`,
-								},
-							],
+									},
+								],
+							},
+						],
+						config: {
+							responseMimeType: "application/json",
+							responseSchema: STUDENT_PAPER_SCHEMA,
+							temperature: 0.1,
 						},
-					],
-					config: {
-						responseMimeType: "application/json",
-						responseSchema: STUDENT_PAPER_SCHEMA,
-						temperature: 0.1,
-					},
-				}),
-				...pageData.map((p) => runOcr(p.data, p.mimeType)),
-			])
+					}),
+					...pageData.map((p) => runOcr(p.data, p.mimeType)),
+				])
 
-			const responseText = response.text
-			if (!responseText) throw new Error("No response from Gemini")
+				const responseText = response.text
+				if (!responseText) throw new Error("No response from Gemini")
 
-			if (cancellation.isCancelled()) {
-				logger.info(
-					TAG,
-					"Job cancelled after Gemini call — skipping DB write",
-					{
-						jobId,
-					},
-				)
-				continue
-			}
-
-			const parsed = JSON.parse(responseText) as {
-				student_name?: string | null
-				detected_subject?: string | null
-				answers: Array<{ question_number: string; answer_text: string }>
-			}
-
-			// Map each OCR result back to its page order number
-			const pageAnalyses = ocrResults.map((analysis, i) => ({
-				page: sortedPages[i]?.order ?? i + 1,
-				analysis,
-			}))
-
-			const answersExtracted = (parsed.answers ?? []).filter((a) =>
-				a.answer_text.trim(),
-			).length
-
-			logger.info(TAG, "Gemini OCR complete", {
-				jobId,
-				student_name: parsed.student_name ?? null,
-				detected_subject: parsed.detected_subject ?? null,
-				answers_extracted: answersExtracted,
-				pages_analysed: pageAnalyses.length,
-			})
-			void logStudentPaperEvent(db, jobId, {
-				type: "answers_extracted",
-				at: new Date().toISOString(),
-				count: answersExtracted,
-				student_name: parsed.student_name?.trim() || null,
-			})
-
-			const rawSubject = parsed.detected_subject?.trim().toLowerCase()
-			const detectedSubject: Subject | null =
-				rawSubject && isValidSubject(rawSubject) ? rawSubject : null
-
-			await db.studentPaperJob.update({
-				where: { id: jobId },
-				data: {
-					status: "text_extracted" as ScanStatus,
-					student_name: parsed.student_name?.trim() || null,
-					detected_subject: detectedSubject,
-					extracted_answers_raw: {
-						student_name: parsed.student_name?.trim() || null,
-						answers: parsed.answers ?? [],
-					},
-					page_analyses: pageAnalyses,
-					processed_at: new Date(),
-					error: null,
-				},
-			})
-
-			void logStudentPaperEvent(db, jobId, {
-				type: "ocr_complete",
-				at: new Date().toISOString(),
-			})
-
-			await sqs.send(
-				new SendMessageCommand({
-					QueueUrl: Resource.StudentPaperQueue.url,
-					MessageBody: JSON.stringify({ job_id: jobId }),
-				}),
-			)
-
-			logger.info(TAG, "OCR job complete — grading queued", {
-				jobId,
-				exam_paper_id: job.exam_paper_id,
-				detected_subject: detectedSubject,
-			})
-		} catch (err) {
-			logger.error(TAG, "OCR job failed", {
-				jobId,
-				error: String(err),
-			})
-			const message = err instanceof Error ? err.message : String(err)
-			if (jobId) {
-				try {
-					await db.studentPaperJob.update({
-						where: { id: jobId },
-						data: { status: "failed" as ScanStatus, error: message },
-					})
-					void logStudentPaperEvent(db, jobId, {
-						type: "job_failed",
-						at: new Date().toISOString(),
-						phase: "ocr",
-						error: message,
-					})
-				} catch {
-					// ignore
+				if (cancellation.isCancelled()) {
+					logger.info(
+						TAG,
+						"Job cancelled after Gemini call — skipping DB write",
+						{ jobId },
+					)
+					return
 				}
-			}
-			failures.push({ itemIdentifier: messageId })
-		} finally {
-			cancellation?.stop()
-		}
+
+				const parsed = JSON.parse(responseText) as {
+					student_name?: string | null
+					detected_subject?: string | null
+					answers: Array<{ question_number: string; answer_text: string }>
+				}
+
+				// Map each OCR result back to its page order number
+				const pageAnalyses = ocrResults.map((analysis, i) => ({
+					page: sortedPages[i]?.order ?? i + 1,
+					analysis,
+				}))
+
+				const answersExtracted = (parsed.answers ?? []).filter((a) =>
+					a.answer_text.trim(),
+				).length
+
+				logger.info(TAG, "Gemini OCR complete", {
+					jobId,
+					student_name: parsed.student_name ?? null,
+					detected_subject: parsed.detected_subject ?? null,
+					answers_extracted: answersExtracted,
+					pages_analysed: pageAnalyses.length,
+				})
+				void logStudentPaperEvent(db, jobId, {
+					type: "answers_extracted",
+					at: new Date().toISOString(),
+					count: answersExtracted,
+					student_name: parsed.student_name?.trim() || null,
+				})
+
+				const rawSubject = parsed.detected_subject?.trim().toLowerCase()
+				const detectedSubject: Subject | null =
+					rawSubject && isValidSubject(rawSubject) ? rawSubject : null
+
+				await db.studentPaperJob.update({
+					where: { id: jobId },
+					data: {
+						status: "text_extracted" as ScanStatus,
+						student_name: parsed.student_name?.trim() || null,
+						detected_subject: detectedSubject,
+						extracted_answers_raw: {
+							student_name: parsed.student_name?.trim() || null,
+							answers: parsed.answers ?? [],
+						},
+						page_analyses: pageAnalyses,
+						processed_at: new Date(),
+						error: null,
+					},
+				})
+
+				void logStudentPaperEvent(db, jobId, {
+					type: "ocr_complete",
+					at: new Date().toISOString(),
+				})
+
+				await sqs.send(
+					new SendMessageCommand({
+						QueueUrl: Resource.StudentPaperQueue.url,
+						MessageBody: JSON.stringify({ job_id: jobId }),
+					}),
+				)
+
+				logger.info(TAG, "OCR job complete — grading queued", {
+					jobId,
+					exam_paper_id: job.exam_paper_id,
+					detected_subject: detectedSubject,
+				})
+			},
+		)
+
+		if (failed) failures.push({ itemIdentifier: record.messageId })
 	}
 
 	return failures.length > 0 ? { batchItemFailures: failures } : {}

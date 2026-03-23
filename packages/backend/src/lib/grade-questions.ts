@@ -1,6 +1,5 @@
 import { db } from "@/db"
 import type { CancellationToken } from "@/lib/cancellation"
-import type { AnswerRegion } from "@/lib/gemini-region"
 import { logger } from "@/lib/logger"
 import type {
 	ExamPaperWithSections,
@@ -39,7 +38,6 @@ export type GradingResult = {
 	cap_applied?: string
 	mark_points_results: MarkPointResultEntry[]
 	mark_scheme_id: string | null
-	answer_regions: AnswerRegion[]
 }
 
 export type GradeAllQuestionsArgs = {
@@ -161,7 +159,6 @@ async function gradeOneQuestion({
 			feedback_summary: "No mark scheme available.",
 			mark_points_results: [],
 			mark_scheme_id: null,
-			answer_regions: [],
 		}
 	}
 
@@ -205,7 +202,6 @@ async function gradeOneQuestion({
 			cap_applied: grade.capApplied ?? undefined,
 			mark_points_results: grade.markPointsResults as MarkPointResultEntry[],
 			mark_scheme_id: ms.id,
-			answer_regions: [],
 		}
 	} catch (err) {
 		logger.error(TAG, "Grading failed for question", {
@@ -228,7 +224,6 @@ async function gradeOneQuestion({
 			feedback_summary: gradingFailedNote,
 			mark_points_results: [],
 			mark_scheme_id: ms.id,
-			answer_regions: [],
 		}
 	}
 }

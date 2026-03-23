@@ -6,6 +6,54 @@ import {
 } from "@/components/BoundingBoxViewer"
 import type { GradingResult, ScanPageUrl } from "@/lib/mark-actions"
 
+/**
+ * Lightweight clickable region overlay for pages that have no OCR analysis.
+ * Mirrors the coordinate system used by BoundingBoxViewer (0–1000 normalised).
+ */
+function SimpleRegionButton({
+	annotation,
+	onAnnotationClick,
+}: {
+	annotation: GradingAnnotation
+	onAnnotationClick?: (questionNumber: string) => void
+}) {
+	const [yMin, xMin, yMax, xMax] = annotation.box
+	if (yMax === 0 && xMax === 0) return null
+
+	const pct =
+		annotation.maxScore > 0
+			? annotation.awardedScore / annotation.maxScore
+			: null
+	const color =
+		pct === null
+			? "rgb(156 163 175)"
+			: pct >= 0.7
+				? "rgb(34 197 94)"
+				: pct >= 0.4
+					? "rgb(234 179 8)"
+					: "rgb(239 68 68)"
+
+	return (
+		<button
+			type="button"
+			aria-label={`Q${annotation.questionNumber}: jump to answer`}
+			onClick={() => onAnnotationClick?.(annotation.questionNumber)}
+			className="rounded-sm transition-opacity hover:opacity-70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
+			style={{
+				position: "absolute",
+				left: `${xMin / 10}%`,
+				top: `${yMin / 10}%`,
+				width: `${(xMax - xMin) / 10}%`,
+				height: `${(yMax - yMin) / 10}%`,
+				background: "transparent",
+				boxShadow: `inset 0 0 0 2px ${color}`,
+				padding: 0,
+				cursor: "pointer",
+			}}
+		/>
+	)
+}
+
 function annotationsForPage(
 	gradingResults: GradingResult[],
 	pageOrder: number,
@@ -93,6 +141,14 @@ export function AnnotatedScanColumn({
 									alt={`Scan page ${i + 1}`}
 									className="block w-full rounded-xl"
 								/>
+								{showRegions &&
+									annotations.map((ann, idx) => (
+										<SimpleRegionButton
+											key={idx}
+											annotation={ann}
+											onAnnotationClick={onAnnotationClick}
+										/>
+									))}
 							</div>
 						)}
 					</div>

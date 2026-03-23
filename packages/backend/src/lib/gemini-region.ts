@@ -1,6 +1,8 @@
+import { db } from "@/db"
 import { logger } from "@/lib/logger"
 import { getFileBase64 } from "@/lib/s3"
 import { GoogleGenAI, Type } from "@google/genai"
+import { logStudentPaperEvent } from "@mcp-gcse/db"
 import { Resource } from "sst"
 
 export type AnswerRegion = {
@@ -57,11 +59,12 @@ export type AttributeAnswerRegionsArgs = {
 }
 
 /**
- * Calls Gemini Vision once per image page to identify where each written answer
- * is located. All pages are processed in parallel so wall-clock time is bounded
- * by the slowest single page rather than the sum of all pages.
+ * Calls Gemini Vision once per image page (all pages in parallel) to identify
+ * where each answer is written. Rows are written to `student_paper_answer_regions`
+ * as each page resolves, so the frontend can poll for them incrementally.
  *
- * Returns a map of question_id → AnswerRegion[].
+ * Runs fire-and-forget alongside the grading pipeline — grading no longer
+ * waits for this to complete before writing ocr_complete status.
  * On any per-page failure the page is skipped gracefully; grading is unaffected.
  */
 export async function attributeAnswerRegions({
@@ -69,13 +72,11 @@ export async function attributeAnswerRegions({
 	pages,
 	s3Bucket,
 	jobId,
-}: AttributeAnswerRegionsArgs): Promise<Map<string, AnswerRegion[]>> {
-	const result = new Map<string, AnswerRegion[]>()
-
-	if (questions.length === 0) return result
+}: AttributeAnswerRegionsArgs): Promise<void> {
+	if (questions.length === 0) return
 
 	const imagePages = pages.filter((p) => p.mime_type !== "application/pdf")
-	if (imagePages.length === 0) return result
+	if (imagePages.length === 0) return
 
 	const gemini = new GoogleGenAI({ apiKey: Resource.GeminiApiKey.value })
 
@@ -88,8 +89,17 @@ export async function attributeAnswerRegions({
 		})
 		.join("\n")
 
+	// Build a lookup so we can attach question_number to each DB row.
+	const questionNumberById = new Map(
+		questions.map((q) => [q.question_id, q.question_number]),
+	)
+
+	// Accumulates across parallel page handlers — safe because JS is single-threaded.
+	// biome-ignore lint/style/useConst: mutated inside async lambdas
+	let totalLocated = 0
+
 	await Promise.all(
-		imagePages.map(async (page) => {
+		imagePages.map(async (page): Promise<void> => {
 			let imageBase64: string
 			try {
 				imageBase64 = await getFileBase64(s3Bucket, page.key)
@@ -147,12 +157,23 @@ Return bounding box coordinates as [yMin, xMin, yMax, xMax] normalised 0–1000.
 					total: geminiResult.regions?.length ?? 0,
 				})
 
-				// JS is single-threaded: Map mutations between await points are safe.
-				for (const region of found) {
-					const existing = result.get(region.question_id) ?? []
-					existing.push({ page: page.order, box: region.answer_region })
-					result.set(region.question_id, existing)
-				}
+				if (found.length === 0) return
+
+				// Write all found regions for this page in one DB call so they
+				// become visible to the frontend poller as soon as possible.
+				await db.studentPaperAnswerRegion.createMany({
+					data: found.map((region) => ({
+						job_id: jobId,
+						question_id: region.question_id,
+						question_number: questionNumberById.get(region.question_id) ?? "",
+						page_order: page.order,
+						box: region.answer_region,
+					})),
+					skipDuplicates: true,
+				})
+
+				// JS is single-threaded so this increment is race-free.
+				totalLocated += found.length
 			} catch (err) {
 				logger.error(TAG, "Gemini Vision region attribution failed for page", {
 					jobId,
@@ -163,5 +184,9 @@ Return bounding box coordinates as [yMin, xMin, yMax, xMax] normalised 0–1000.
 		}),
 	)
 
-	return result
+	void logStudentPaperEvent(db, jobId, {
+		type: "region_attribution_complete",
+		at: new Date().toISOString(),
+		questions_located: totalLocated,
+	})
 }

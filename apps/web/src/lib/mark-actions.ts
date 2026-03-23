@@ -368,6 +368,34 @@ export type GetStudentPaperJobResult =
 	| { ok: true; data: StudentPaperJobPayload }
 	| { ok: false; error: string }
 
+// ─── Region helpers ───────────────────────────────────────────────────────────
+
+type RegionRow = { question_id: string; page_order: number; box: unknown }
+
+/**
+ * Builds a question_id → AnswerRegion[] map from rows in
+ * student_paper_answer_regions, then merges it into the raw grading results
+ * so all downstream components see the same shape as before.
+ */
+function mergeRegionsIntoResults(
+	rawResults: GradingResult[],
+	regionRows: RegionRow[],
+): GradingResult[] {
+	const byQuestion = new Map<string, AnswerRegion[]>()
+	for (const row of regionRows) {
+		const existing = byQuestion.get(row.question_id) ?? []
+		existing.push({
+			page: row.page_order,
+			box: row.box as [number, number, number, number],
+		})
+		byQuestion.set(row.question_id, existing)
+	}
+	return rawResults.map((r) => ({
+		...r,
+		answer_regions: byQuestion.get(r.question_id) ?? [],
+	}))
+}
+
 export async function getStudentPaperJob(
 	jobId: string,
 ): Promise<GetStudentPaperJobResult> {
@@ -376,7 +404,12 @@ export async function getStudentPaperJob(
 
 	const job = await db.studentPaperJob.findFirst({
 		where: { id: jobId, uploaded_by: session.userId },
-		include: { exam_paper: { select: { id: true, title: true } } },
+		include: {
+			exam_paper: { select: { id: true, title: true } },
+			answer_regions: {
+				select: { question_id: true, page_order: true, box: true },
+			},
+		},
 	})
 	if (!job) return { ok: false, error: "Job not found" }
 
@@ -388,8 +421,9 @@ export async function getStudentPaperJob(
 
 	const pages = (job.pages ?? []) as PageEntry[]
 	const rawResults = (job.grading_results ?? []) as GradingResult[]
-	const totalAwarded = rawResults.reduce((s, r) => s + r.awarded_score, 0)
-	const totalMax = rawResults.reduce((s, r) => s + r.max_score, 0)
+	const gradingResults = mergeRegionsIntoResults(rawResults, job.answer_regions)
+	const totalAwarded = gradingResults.reduce((s, r) => s + r.awarded_score, 0)
+	const totalMax = gradingResults.reduce((s, r) => s + r.max_score, 0)
 	const rawExtracted = job.extracted_answers_raw as RawExtracted | null
 	const extractedAnswers = rawExtracted?.answers ?? null
 
@@ -402,7 +436,7 @@ export async function getStudentPaperJob(
 			student_id: job.student_id,
 			detected_subject: job.detected_subject,
 			pages_count: pages.length,
-			grading_results: rawResults,
+			grading_results: gradingResults,
 			exam_paper_title: job.exam_paper?.title ?? null,
 			exam_paper_id: job.exam_paper_id,
 			total_awarded: totalAwarded,
@@ -437,7 +471,12 @@ export async function getStudentPaperJobForPaper(
 			exam_paper_id: examPaperId,
 			uploaded_by: session.userId,
 		},
-		include: { exam_paper: { select: { id: true, title: true } } },
+		include: {
+			exam_paper: { select: { id: true, title: true } },
+			answer_regions: {
+				select: { question_id: true, page_order: true, box: true },
+			},
+		},
 	})
 	if (!job) return { ok: false, error: "Job not found" }
 
@@ -449,8 +488,9 @@ export async function getStudentPaperJobForPaper(
 
 	const pages = (job.pages ?? []) as PageEntry[]
 	const rawResults = (job.grading_results ?? []) as GradingResult[]
-	const totalAwarded = rawResults.reduce((s, r) => s + r.awarded_score, 0)
-	const totalMax = rawResults.reduce((s, r) => s + r.max_score, 0)
+	const gradingResults = mergeRegionsIntoResults(rawResults, job.answer_regions)
+	const totalAwarded = gradingResults.reduce((s, r) => s + r.awarded_score, 0)
+	const totalMax = gradingResults.reduce((s, r) => s + r.max_score, 0)
 	const rawExtracted = job.extracted_answers_raw as RawExtracted | null
 	const extractedAnswers = rawExtracted?.answers ?? null
 
@@ -463,7 +503,7 @@ export async function getStudentPaperJobForPaper(
 			student_id: job.student_id,
 			detected_subject: job.detected_subject,
 			pages_count: pages.length,
-			grading_results: rawResults,
+			grading_results: gradingResults,
 			exam_paper_title: job.exam_paper?.title ?? null,
 			exam_paper_id: job.exam_paper_id,
 			total_awarded: totalAwarded,

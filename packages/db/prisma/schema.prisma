@@ -423,11 +423,28 @@ model StudentPaperJob {
   created_at    DateTime   @default(now())
   processed_at  DateTime?
 
-  uploader   User      @relation("StudentPaperJobUploader", fields: [uploaded_by], references: [id])
-  exam_paper ExamPaper @relation(fields: [exam_paper_id], references: [id])
-  student    Student?  @relation("StudentPaperJobStudent", fields: [student_id], references: [id])
+  uploader       User                        @relation("StudentPaperJobUploader", fields: [uploaded_by], references: [id])
+  exam_paper     ExamPaper                   @relation(fields: [exam_paper_id], references: [id])
+  student        Student?                    @relation("StudentPaperJobStudent", fields: [student_id], references: [id])
+  answer_regions StudentPaperAnswerRegion[]  @relation("StudentPaperJobRegions")
 
   @@map("student_paper_jobs")
+}
+
+model StudentPaperAnswerRegion {
+  id              String   @id @default(cuid())
+  job_id          String
+  question_id     String
+  question_number String
+  page_order      Int
+  // [yMin, xMin, yMax, xMax] normalised 0–1000
+  box             Json
+  created_at      DateTime @default(now())
+
+  job StudentPaperJob @relation("StudentPaperJobRegions", fields: [job_id], references: [id])
+
+  @@unique([job_id, question_id, page_order])
+  @@map("student_paper_answer_regions")
 }
 
 model ExemplarAnswer {

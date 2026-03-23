@@ -3,11 +3,7 @@ import {
 	type CancellationToken,
 	createCancellationToken,
 } from "@/lib/cancellation"
-import {
-	type AnswerRegion,
-	type PageEntry,
-	attributeAnswerRegions,
-} from "@/lib/gemini-region"
+import { type PageEntry, attributeAnswerRegions } from "@/lib/gemini-region"
 import { defaultChatModel } from "@/lib/google-generative-ai"
 import { type GradingResult, gradeAllQuestions } from "@/lib/grade-questions"
 import { logger } from "@/lib/logger"
@@ -125,7 +121,10 @@ async function gradeJob({
 		questions_total: questionList.length,
 	})
 
-	const regionAttribution = beginRegionAttribution({ questionList, job, jobId })
+	// Region attribution runs fully independently — rows are written to
+	// student_paper_answer_regions as each page resolves, so the frontend
+	// can poll for them without waiting for grading to finish.
+	void beginRegionAttribution({ questionList, job, jobId })
 
 	const answerMap = new Map(
 		extractRawAnswers(job).map((a) => [a.question_id, a.answer_text]),
@@ -146,8 +145,6 @@ async function gradeJob({
 		logger.info(TAG, "Job was cancelled — skipping completion", { jobId })
 		return
 	}
-
-	await mergeAnswerRegions({ gradingResults, regionAttribution, jobId })
 
 	await completeGradingJob({ job, gradingResults, jobId })
 }
@@ -228,13 +225,15 @@ function beginRegionAttribution({
 	questionList: QuestionListItem[]
 	job: Pick<GradedJob, "pages" | "s3_bucket">
 	jobId: string
-}): Promise<Map<string, AnswerRegion[]>> {
+}): void {
 	void logStudentPaperEvent(db, jobId, {
 		type: "region_attribution_started",
 		at: new Date().toISOString(),
 	})
 
-	return attributeAnswerRegions({
+	// attributeAnswerRegions writes rows to student_paper_answer_regions as
+	// each page resolves and fires region_attribution_complete itself.
+	void attributeAnswerRegions({
 		questions: questionList.map((q) => ({
 			question_id: q.question_id,
 			question_number: q.question_number,
@@ -244,48 +243,12 @@ function beginRegionAttribution({
 		pages: (job.pages ?? []) as PageEntry[],
 		s3Bucket: job.s3_bucket,
 		jobId,
-	})
-}
-
-async function mergeAnswerRegions({
-	gradingResults,
-	regionAttribution,
-	jobId,
-}: {
-	gradingResults: GradingResult[]
-	regionAttribution: Promise<Map<string, AnswerRegion[]>>
-	jobId: string
-}): Promise<void> {
-	try {
-		const regionMap = await regionAttribution
-		for (const r of gradingResults) {
-			r.answer_regions = regionMap.get(r.question_id) ?? []
-		}
-		const questionsWithRegions = gradingResults.filter(
-			(r) => r.answer_regions.length > 0,
-		).length
-		logger.info(TAG, "Answer regions merged into grading results", {
+	}).catch((err) => {
+		logger.error(TAG, "Region attribution failed", {
 			jobId,
-			questions_with_regions: questionsWithRegions,
+			error: String(err),
 		})
-		void logStudentPaperEvent(db, jobId, {
-			type: "region_attribution_complete",
-			at: new Date().toISOString(),
-			questions_located: questionsWithRegions,
-		})
-	} catch (err) {
-		logger.error(
-			TAG,
-			"Region attribution failed — results saved without spatial data",
-			{
-				jobId,
-				error: String(err),
-			},
-		)
-		for (const r of gradingResults) {
-			r.answer_regions ??= []
-		}
-	}
+	})
 }
 
 async function completeGradingJob({

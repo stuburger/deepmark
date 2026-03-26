@@ -5,57 +5,48 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import type {
 	ExamPaperDetail,
 	ExamPaperQuestion,
+	ExamPaperSection,
 } from "@/lib/dashboard-actions"
-import { deleteQuestion } from "@/lib/dashboard-actions"
-import { Clock, Trash2 } from "lucide-react"
+import {
+	deleteQuestion,
+	reorderQuestionsInSection,
+	reorderSections,
+} from "@/lib/dashboard-actions"
+import {
+	DndContext,
+	PointerSensor,
+	closestCenter,
+	useSensor,
+	useSensors,
+} from "@dnd-kit/core"
+import type { DragEndEvent } from "@dnd-kit/core"
+import {
+	SortableContext,
+	arrayMove,
+	useSortable,
+	verticalListSortingStrategy,
+} from "@dnd-kit/sortable"
+import { CSS } from "@dnd-kit/utilities"
+import { Clock, GripVertical, Trash2 } from "lucide-react"
 import { useRouter } from "next/navigation"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 
-function naturalCompare(a: string | null, b: string | null): number {
-	if (a === null && b === null) return 0
-	if (a === null) return 1
-	if (b === null) return -1
-	const re = /(\d+)|(\D+)/g
-	const partsA = [...a.matchAll(re)].map((m) => m[0])
-	const partsB = [...b.matchAll(re)].map((m) => m[0])
-	for (let i = 0; i < Math.max(partsA.length, partsB.length); i++) {
-		const pa = partsA[i] ?? ""
-		const pb = partsB[i] ?? ""
-		const na = Number(pa)
-		const nb = Number(pb)
-		if (!isNaN(na) && !isNaN(nb)) {
-			if (na !== nb) return na - nb
-		} else {
-			if (pa < pb) return -1
-			if (pa > pb) return 1
-		}
-	}
-	return 0
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+type LocalSection = ExamPaperSection & { questions: ExamPaperQuestion[] }
+
+function buildSections(paper: ExamPaperDetail): LocalSection[] {
+	return paper.sections.map((section) => ({
+		...section,
+		questions: paper.questions
+			.filter((q) => q.exam_section_id === section.id)
+			.sort((a, b) => a.order - b.order),
+	}))
 }
 
-function groupBySection(
-	questions: ExamPaperQuestion[],
-): { sectionTitle: string; questions: ExamPaperQuestion[] }[] {
-	const sorted = [...questions].sort((a, b) => {
-		const cmp = naturalCompare(a.question_number, b.question_number)
-		return cmp !== 0 ? cmp : a.order - b.order
-	})
+// ─── Sortable question ────────────────────────────────────────────────────────
 
-	const sections: { sectionTitle: string; questions: ExamPaperQuestion[] }[] =
-		[]
-	for (const q of sorted) {
-		const title = q.section_title ?? ""
-		const existing = sections.find((s) => s.sectionTitle === title)
-		if (existing) {
-			existing.questions.push(q)
-		} else {
-			sections.push({ sectionTitle: title, questions: [q] })
-		}
-	}
-	return sections
-}
-
-function QuestionBlock({
+function SortableQuestion({
 	question,
 	paperId,
 	onQuestionClick,
@@ -70,6 +61,20 @@ function QuestionBlock({
 	const [confirmOpen, setConfirmOpen] = useState(false)
 	const [deleting, setDeleting] = useState(false)
 	const [deleteError, setDeleteError] = useState<string | null>(null)
+
+	const {
+		attributes,
+		listeners,
+		setNodeRef,
+		transform,
+		transition,
+		isDragging,
+	} = useSortable({ id: question.id })
+
+	const style = {
+		transform: CSS.Transform.toString(transform),
+		transition,
+	}
 
 	async function handleDelete() {
 		setDeleting(true)
@@ -91,8 +96,26 @@ function QuestionBlock({
 			: null
 
 	return (
-		<div className="group relative py-5 border-b border-dashed border-zinc-200 dark:border-zinc-700 last:border-0">
-			<div className="flex items-start gap-3">
+		<div
+			ref={setNodeRef}
+			style={style}
+			{...attributes}
+			className={[
+				"group relative py-5 border-b border-dashed border-zinc-200 dark:border-zinc-700 last:border-0",
+				isDragging ? "opacity-40" : "",
+			].join(" ")}
+		>
+			<div className="flex items-start gap-2">
+				{/* Drag handle */}
+				<button
+					type="button"
+					{...listeners}
+					className="shrink-0 mt-0.5 cursor-grab active:cursor-grabbing p-1 -ml-1 rounded text-zinc-300 dark:text-zinc-600 hover:text-zinc-500 dark:hover:text-zinc-400 opacity-0 group-hover:opacity-100 transition-opacity touch-none"
+					aria-label="Drag to reorder question"
+				>
+					<GripVertical className="h-4 w-4" />
+				</button>
+
 				{/* Question number */}
 				<span className="font-bold text-sm w-8 shrink-0 pt-0.5 tabular-nums">
 					{question.question_number ?? question.order}
@@ -183,6 +206,79 @@ function QuestionBlock({
 	)
 }
 
+// ─── Sortable section ─────────────────────────────────────────────────────────
+
+function SortableSection({
+	section,
+	paperId,
+	onQuestionClick,
+	onQuestionDeleted,
+}: {
+	section: LocalSection
+	paperId: string
+	onQuestionClick: (id: string) => void
+	onQuestionDeleted: () => void
+}) {
+	const {
+		attributes,
+		listeners,
+		setNodeRef,
+		transform,
+		transition,
+		isDragging,
+	} = useSortable({ id: section.id })
+
+	const style = {
+		transform: CSS.Transform.toString(transform),
+		transition,
+	}
+
+	return (
+		<div
+			ref={setNodeRef}
+			style={style}
+			{...attributes}
+			className={["mb-6 group/section", isDragging ? "opacity-40" : ""].join(
+				" ",
+			)}
+		>
+			{section.title && (
+				<div className="mb-3 pb-1.5 border-b border-zinc-200 dark:border-zinc-700 flex items-center gap-1.5">
+					{/* Section drag handle */}
+					<button
+						type="button"
+						{...listeners}
+						className="shrink-0 cursor-grab active:cursor-grabbing p-0.5 rounded text-zinc-300 dark:text-zinc-600 hover:text-zinc-500 dark:hover:text-zinc-400 opacity-0 group-hover/section:opacity-100 transition-opacity touch-none"
+						aria-label="Drag to reorder section"
+					>
+						<GripVertical className="h-4 w-4" />
+					</button>
+					<h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+						{section.title}
+					</h2>
+				</div>
+			)}
+
+			<SortableContext
+				items={section.questions.map((q) => q.id)}
+				strategy={verticalListSortingStrategy}
+			>
+				{section.questions.map((q) => (
+					<SortableQuestion
+						key={q.id}
+						question={q}
+						paperId={paperId}
+						onQuestionClick={onQuestionClick}
+						onDeleted={onQuestionDeleted}
+					/>
+				))}
+			</SortableContext>
+		</div>
+	)
+}
+
+// ─── Main component ───────────────────────────────────────────────────────────
+
 export function ExamPaperPaperView({
 	paper,
 	onQuestionClick,
@@ -191,7 +287,81 @@ export function ExamPaperPaperView({
 	onQuestionClick: (questionId: string) => void
 }) {
 	const router = useRouter()
-	const sections = groupBySection(paper.questions)
+	const [localSections, setLocalSections] = useState<LocalSection[]>(() =>
+		buildSections(paper),
+	)
+	const [reorderError, setReorderError] = useState<string | null>(null)
+
+	// Re-sync when questions are added or removed (e.g. after delete + router.refresh())
+	const questionIds = paper.questions
+		.map((q) => q.id)
+		.sort()
+		.join(",")
+	// biome-ignore lint/correctness/useExhaustiveDependencies: intentional — only sync on id set changes
+	useEffect(() => {
+		setLocalSections(buildSections(paper))
+	}, [questionIds])
+
+	const sensors = useSensors(
+		useSensor(PointerSensor, {
+			activationConstraint: { distance: 5 },
+		}),
+	)
+
+	async function onDragEnd(event: DragEndEvent) {
+		const { active, over } = event
+		if (!over || active.id === over.id) return
+
+		const activeId = String(active.id)
+		const overId = String(over.id)
+
+		const isSectionDrag = localSections.some((s) => s.id === activeId)
+
+		if (isSectionDrag) {
+			// Reorder sections
+			const oldIndex = localSections.findIndex((s) => s.id === activeId)
+			const newIndex = localSections.findIndex((s) => s.id === overId)
+			if (oldIndex === -1 || newIndex === -1) return
+
+			const newOrder = arrayMove(localSections, oldIndex, newIndex)
+			setLocalSections(newOrder)
+			setReorderError(null)
+
+			const result = await reorderSections(
+				paper.id,
+				newOrder.map((s) => s.id),
+			)
+			if (!result.ok) setReorderError(result.error)
+		} else {
+			// Reorder question within its section
+			const section = localSections.find((s) =>
+				s.questions.some((q) => q.id === activeId),
+			)
+			if (!section) return
+
+			// Ensure the over target is also a question in the same section
+			const isOverInSameSection = section.questions.some((q) => q.id === overId)
+			if (!isOverInSameSection) return
+
+			const oldIndex = section.questions.findIndex((q) => q.id === activeId)
+			const newIndex = section.questions.findIndex((q) => q.id === overId)
+			if (oldIndex === -1 || newIndex === -1) return
+
+			const newQuestions = arrayMove(section.questions, oldIndex, newIndex)
+			setLocalSections((prev) =>
+				prev.map((s) =>
+					s.id === section.id ? { ...s, questions: newQuestions } : s,
+				),
+			)
+			setReorderError(null)
+
+			const result = await reorderQuestionsInSection(
+				section.id,
+				newQuestions.map((q) => q.id),
+			)
+			if (!result.ok) setReorderError(result.error)
+		}
+	}
 
 	if (paper.questions.length === 0) {
 		return (
@@ -204,6 +374,12 @@ export function ExamPaperPaperView({
 
 	return (
 		<div className="bg-zinc-50 dark:bg-zinc-900/40 rounded-lg p-6">
+			{reorderError && (
+				<p className="mb-3 text-xs text-destructive text-center">
+					{reorderError}
+				</p>
+			)}
+
 			{/* Exam paper document */}
 			<div className="max-w-2xl mx-auto bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-md shadow-sm">
 				{/* Header */}
@@ -235,30 +411,28 @@ export function ExamPaperPaperView({
 					</div>
 				</div>
 
-				{/* Questions */}
+				{/* Questions with drag-and-drop */}
 				<div className="px-8 py-4">
-					{sections.map(({ sectionTitle, questions }) => (
-						<div key={sectionTitle || "__default__"} className="mb-6">
-							{sectionTitle && (
-								<div className="mb-3 pb-1.5 border-b border-zinc-200 dark:border-zinc-700">
-									<h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-										{sectionTitle}
-									</h2>
-								</div>
-							)}
-							<div>
-								{questions.map((q) => (
-									<QuestionBlock
-										key={q.id}
-										question={q}
-										paperId={paper.id}
-										onQuestionClick={onQuestionClick}
-										onDeleted={() => router.refresh()}
-									/>
-								))}
-							</div>
-						</div>
-					))}
+					<DndContext
+						sensors={sensors}
+						collisionDetection={closestCenter}
+						onDragEnd={onDragEnd}
+					>
+						<SortableContext
+							items={localSections.map((s) => s.id)}
+							strategy={verticalListSortingStrategy}
+						>
+							{localSections.map((section) => (
+								<SortableSection
+									key={section.id}
+									section={section}
+									paperId={paper.id}
+									onQuestionClick={onQuestionClick}
+									onQuestionDeleted={() => router.refresh()}
+								/>
+							))}
+						</SortableContext>
+					</DndContext>
 				</div>
 
 				{/* Footer */}

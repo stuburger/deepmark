@@ -426,9 +426,15 @@ export type ExamPaperQuestion = {
 	mark_scheme_id: string | null
 	mark_scheme_description: string | null
 	order: number
+	exam_section_id: string
 	section_title: string
 	question_number: string | null
 	multiple_choice_options: { option_label: string; option_text: string }[]
+}
+
+export type ExamPaperSection = {
+	id: string
+	title: string
 }
 
 export type ExamPaperDetail = {
@@ -443,6 +449,7 @@ export type ExamPaperDetail = {
 	is_active: boolean
 	is_public: boolean
 	created_at: Date
+	sections: ExamPaperSection[]
 	questions: ExamPaperQuestion[]
 	section_count: number
 }
@@ -491,6 +498,11 @@ export async function getExamPaperDetail(
 		})
 		if (!paper) return { ok: false, error: "Exam paper not found" }
 
+		const sections: ExamPaperSection[] = paper.sections.map((s) => ({
+			id: s.id,
+			title: s.title,
+		}))
+
 		const questions: ExamPaperQuestion[] = []
 		for (const section of paper.sections) {
 			for (const esq of section.exam_section_questions) {
@@ -514,6 +526,7 @@ export async function getExamPaperDetail(
 					mark_scheme_id: ms?.id ?? null,
 					mark_scheme_description: ms?.description ?? null,
 					order: esq.order,
+					exam_section_id: section.id,
 					section_title: section.title,
 				})
 			}
@@ -533,6 +546,7 @@ export async function getExamPaperDetail(
 				is_active: paper.is_active,
 				is_public: paper.is_public,
 				created_at: paper.created_at,
+				sections,
 				questions,
 				section_count: paper.sections.length,
 			},
@@ -834,6 +848,57 @@ export async function deleteQuestion(
 			error: String(err),
 		})
 		return { ok: false, error: "Failed to delete question" }
+	}
+}
+
+// ─── Reorder ──────────────────────────────────────────────────────────────────
+
+export type ReorderResult = { ok: true } | { ok: false; error: string }
+
+export async function reorderQuestionsInSection(
+	sectionId: string,
+	orderedQuestionIds: string[],
+): Promise<ReorderResult> {
+	const session = await auth()
+	if (!session) return { ok: false, error: "Not authenticated" }
+	try {
+		await db.$transaction(
+			orderedQuestionIds.map((questionId, index) =>
+				db.examSectionQuestion.update({
+					where: {
+						exam_section_id_question_id: {
+							exam_section_id: sectionId,
+							question_id: questionId,
+						},
+					},
+					data: { order: index + 1 },
+				}),
+			),
+		)
+		return { ok: true }
+	} catch {
+		return { ok: false, error: "Failed to reorder questions" }
+	}
+}
+
+export async function reorderSections(
+	examPaperId: string,
+	orderedSectionIds: string[],
+): Promise<ReorderResult> {
+	const session = await auth()
+	if (!session) return { ok: false, error: "Not authenticated" }
+	try {
+		await db.$transaction(
+			orderedSectionIds.map((sectionId, index) =>
+				db.examSection.update({
+					where: { id: sectionId },
+					data: { order: index + 1 },
+				}),
+			),
+		)
+		return { ok: true }
+	} catch {
+		return { ok: false, error: "Failed to reorder sections" }
 	}
 }
 

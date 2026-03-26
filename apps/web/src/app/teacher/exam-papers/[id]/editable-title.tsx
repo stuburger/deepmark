@@ -65,7 +65,7 @@ export function EditableTitle({
 				onBlur={handleBlur}
 				onKeyDown={handleKeyDown}
 				disabled={pending}
-				className="text-2xl font-semibold bg-transparent border-b border-foreground/30 focus:border-foreground outline-none w-full max-w-xl"
+				className="text-2xl font-semibold bg-transparent border-b border-foreground/30 focus:border-foreground outline-none w-full"
 				autoFocus
 			/>
 		)
@@ -73,9 +73,9 @@ export function EditableTitle({
 
 	return (
 		<h1
-			className="text-2xl font-semibold cursor-pointer hover:text-foreground/70 transition-colors"
+			className="text-2xl font-semibold cursor-pointer hover:text-foreground/70 transition-colors truncate min-w-0"
 			onClick={handleClick}
-			title="Click to edit title"
+			title={title}
 		>
 			{title}
 		</h1>

@@ -21,6 +21,10 @@ declare module "sst" {
       "type": "sst.sst.Linkable"
       "url": string
     }
+    "CloudVisionApiKey": {
+      "type": "sst.sst.Secret"
+      "value": string
+    }
     "ExemplarQueue": {
       "type": "sst.aws.Queue"
       "url": string

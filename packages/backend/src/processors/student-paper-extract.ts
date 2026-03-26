@@ -1,17 +1,19 @@
 import { db } from "@/db"
 import { createCancellationToken } from "@/lib/cancellation"
+import { runVisionOcr } from "@/lib/cloud-vision-ocr"
 import {
 	type PageMimeType,
 	type QuestionSeed,
 	extractStudentPaper,
 } from "@/lib/gemini-extract"
 import { logger } from "@/lib/logger"
-import { getFileBase64 } from "@/lib/s3"
+import { getFileBase64, s3 } from "@/lib/s3"
 import {
 	type SqsEvent,
 	markJobFailed,
 	parseSqsJobId,
 } from "@/lib/sqs-job-runner"
+import { PutObjectCommand } from "@aws-sdk/client-s3"
 import { SQSClient, SendMessageCommand } from "@aws-sdk/client-sqs"
 import {
 	type ScanStatus,
@@ -170,25 +172,44 @@ export async function handler(
 
 			logger.info(
 				TAG,
-				"Calling Gemini to extract student answers + per-page OCR",
+				"Calling Gemini (answer extraction + transcripts) and Cloud Vision (word tokens) in parallel",
 				{ jobId, page_count: pageData.length },
 			)
 
-			const extraction = await extractStudentPaper(pageData, questionSeeds)
+			// Fan out: Gemini answer extraction (all pages), per-page Gemini transcript,
+			// and per-page Cloud Vision word token detection — all in parallel.
+			const [extraction, ...visionResults] = await Promise.all([
+				extractStudentPaper(pageData, questionSeeds),
+				...sortedPages.map((page, i) => {
+					// Skip Vision for PDF pages (Cloud Vision requires raster images)
+					if (page.mime_type === "application/pdf") {
+						return Promise.resolve(null)
+					}
+					return runVisionOcr(pageData[i]?.data ?? "", page.mime_type).catch(
+						(err) => {
+							logger.error(TAG, "Cloud Vision failed for page — skipping", {
+								jobId,
+								pageOrder: page.order,
+								error: String(err),
+							})
+							return null
+						},
+					)
+				}),
+			])
 
 			if (cancellation.isCancelled()) {
-				logger.info(
-					TAG,
-					"Job cancelled after Gemini call — skipping DB write",
-					{ jobId },
-				)
+				logger.info(TAG, "Job cancelled after OCR calls — skipping DB write", {
+					jobId,
+				})
 				continue
 			}
 
-			// Map each OCR result back to its page order number
+			// Map each OCR result back to its page order number (transcript + observations only)
 			const pageAnalyses = extraction.ocrResults.map((analysis, i) => ({
 				page: sortedPages[i]?.order ?? i + 1,
-				analysis,
+				transcript: analysis.transcript,
+				observations: analysis.observations,
 			}))
 
 			const answersExtracted = extraction.answers.filter((a) =>
@@ -203,12 +224,70 @@ export async function handler(
 				answers_total: extraction.answers.length,
 				pages_analysed: pageAnalyses.length,
 			})
+
 			void logStudentPaperEvent(db, jobId, {
 				type: "answers_extracted",
 				at: new Date().toISOString(),
 				count: answersExtracted,
 				student_name: extraction.studentName?.trim() || null,
 			})
+
+			// Save raw Cloud Vision responses to S3
+			const visionRawKey = `scans/${jobId}/vision-raw.json`
+			const visionRawPayload = {
+				pages: visionResults.map((result, i) => ({
+					page_order: sortedPages[i]?.order ?? i + 1,
+					response: result?.rawResponse ?? null,
+				})),
+			}
+
+			try {
+				await s3.send(
+					new PutObjectCommand({
+						Bucket: bucket,
+						Key: visionRawKey,
+						Body: JSON.stringify(visionRawPayload),
+						ContentType: "application/json",
+					}),
+				)
+				logger.info(TAG, "Raw Cloud Vision output saved to S3", {
+					jobId,
+					key: visionRawKey,
+				})
+			} catch (err) {
+				logger.error(
+					TAG,
+					"Failed to save raw Vision output to S3 — non-fatal",
+					{
+						jobId,
+						error: String(err),
+					},
+				)
+			}
+
+			// Bulk-insert word tokens from Cloud Vision into Neon
+			const tokenRows = visionResults.flatMap((result, i) => {
+				if (!result) return []
+				const pageOrder = sortedPages[i]?.order ?? i + 1
+				return result.tokens.map((t) => ({
+					job_id: jobId,
+					page_order: pageOrder,
+					para_index: t.para_index,
+					line_index: t.line_index,
+					word_index: t.word_index,
+					text_raw: t.text_raw,
+					bbox: t.bbox,
+					confidence: t.confidence,
+				}))
+			})
+
+			if (tokenRows.length > 0) {
+				await db.studentPaperPageToken.createMany({ data: tokenRows })
+				logger.info(TAG, "Word tokens inserted", {
+					jobId,
+					token_count: tokenRows.length,
+				})
+			}
 
 			const rawSubject = extraction.detectedSubject?.trim().toLowerCase()
 			const detectedSubject: Subject | null =
@@ -225,6 +304,7 @@ export async function handler(
 						answers: extraction.answers,
 					},
 					page_analyses: pageAnalyses,
+					vision_raw_s3_key: visionRawKey,
 					processed_at: new Date(),
 					error: null,
 				},
@@ -246,6 +326,7 @@ export async function handler(
 				jobId,
 				exam_paper_id: job.exam_paper_id,
 				detected_subject: detectedSubject,
+				word_tokens_inserted: tokenRows.length,
 			})
 		} catch (err) {
 			await markJobFailed(jobId, TAG, "ocr", err)

@@ -44,6 +44,7 @@ export const webUrl = $dev ? "http://localhost:3000" : `https://${domain}`
 
 // Shared secrets used by API handlers and background processors.
 export const geminiApiKey = new sst.Secret("GeminiApiKey")
+export const cloudVisionApiKey = new sst.Secret("CloudVisionApiKey")
 /** Reserved for future OpenAI use; app code currently uses Gemini only. */
 export const openAiApiKey = new sst.Secret("OpenAiApiKey")
 

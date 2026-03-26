@@ -3,7 +3,6 @@ import {
 	type CancellationToken,
 	createCancellationToken,
 } from "@/lib/cancellation"
-import { type PageEntry, attributeAnswerRegions } from "@/lib/gemini-region"
 import { defaultChatModel } from "@/lib/google-generative-ai"
 import { type GradingResult, gradeAllQuestions } from "@/lib/grade-questions"
 import { logger } from "@/lib/logger"
@@ -18,6 +17,15 @@ import {
 	markJobFailed,
 	parseSqsJobId,
 } from "@/lib/sqs-job-runner"
+import {
+	type VisionAttributePageEntry,
+	type VisionAttributeQuestion,
+	visionAttributeRegions,
+} from "@/lib/vision-attribute"
+import {
+	type ReconcilePageEntry,
+	reconcilePageTokens,
+} from "@/lib/vision-reconcile"
 import { type ScanStatus, logStudentPaperEvent } from "@mcp-gcse/db"
 import {
 	DeterministicMarker,
@@ -121,10 +129,14 @@ async function gradeJob({
 		questions_total: questionList.length,
 	})
 
-	// Region attribution runs fully independently — rows are written to
-	// student_paper_answer_regions as each page resolves, so the frontend
-	// can poll for them without waiting for grading to finish.
-	void beginRegionAttribution({ questionList, job, jobId })
+	// Vision attribution: assigns Vision tokens to questions and derives precise
+	// answer regions from token hulls. Runs fire-and-forget — grading does not wait.
+	void beginVisionAttribution({ questionList, job, jobId })
+
+	// Token reconciliation also runs fire-and-forget — writes text_corrected
+	// onto StudentPaperPageToken rows after Gemini aligns Vision output to the
+	// transcript. Grading does not wait for this to complete.
+	void beginTokenReconciliation({ job, jobId })
 
 	const answerMap = new Map(
 		extractRawAnswers(job).map((a) => [a.question_id, a.answer_text]),
@@ -217,13 +229,13 @@ function extractRawAnswers(
 	return raw.answers ?? []
 }
 
-function beginRegionAttribution({
+function beginVisionAttribution({
 	questionList,
 	job,
 	jobId,
 }: {
 	questionList: QuestionListItem[]
-	job: Pick<GradedJob, "pages" | "s3_bucket">
+	job: Pick<GradedJob, "pages" | "s3_bucket" | "extracted_answers_raw">
 	jobId: string
 }): void {
 	void logStudentPaperEvent(db, jobId, {
@@ -231,20 +243,44 @@ function beginRegionAttribution({
 		at: new Date().toISOString(),
 	})
 
-	// attributeAnswerRegions writes rows to student_paper_answer_regions as
-	// each page resolves and fires region_attribution_complete itself.
-	void attributeAnswerRegions({
-		questions: questionList.map((q) => ({
-			question_id: q.question_id,
-			question_number: q.question_number,
-			question_text: q.question_text,
-			is_mcq: q.question_obj.question_type === "multiple_choice",
-		})),
-		pages: (job.pages ?? []) as PageEntry[],
+	const questions: VisionAttributeQuestion[] = questionList.map((q) => ({
+		question_id: q.question_id,
+		question_number: q.question_number,
+		question_text: q.question_text,
+		is_mcq: q.question_obj.question_type === "multiple_choice",
+	}))
+
+	const raw = (job.extracted_answers_raw ?? {
+		answers: [],
+	}) as ExtractedAnswersRaw
+	const extractedAnswers = raw.answers ?? []
+
+	void visionAttributeRegions({
+		questions,
+		extractedAnswers,
+		pages: (job.pages ?? []) as VisionAttributePageEntry[],
 		s3Bucket: job.s3_bucket,
 		jobId,
 	}).catch((err) => {
-		logger.error(TAG, "Region attribution failed", {
+		logger.error(TAG, "Vision region attribution failed", {
+			jobId,
+			error: String(err),
+		})
+	})
+}
+
+function beginTokenReconciliation({
+	job,
+	jobId,
+}: {
+	job: Pick<GradedJob, "pages">
+	jobId: string
+}): void {
+	void reconcilePageTokens({
+		pages: (job.pages ?? []) as ReconcilePageEntry[],
+		jobId,
+	}).catch((err) => {
+		logger.error(TAG, "Token reconciliation failed", {
 			jobId,
 			error: String(err),
 		})

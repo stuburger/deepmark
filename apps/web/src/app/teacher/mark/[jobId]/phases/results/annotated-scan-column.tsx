@@ -4,7 +4,7 @@ import {
 	BoundingBoxViewer,
 	type GradingAnnotation,
 } from "@/components/BoundingBoxViewer"
-import type { GradingResult, ScanPageUrl } from "@/lib/mark-actions"
+import type { GradingResult, PageToken, ScanPageUrl } from "@/lib/mark-actions"
 
 /**
  * Lightweight clickable region overlay for pages that have no OCR analysis.
@@ -69,6 +69,7 @@ function annotationsForPage(
 				awardedScore: r.awarded_score,
 				maxScore: r.max_score,
 				box: region.box,
+				source: region.source,
 			},
 		]
 	})
@@ -76,23 +77,29 @@ function annotationsForPage(
 
 /**
  * Renders all scan pages vertically with optional overlays.
- * showHighlights: toggles OCR bounding box overlays (words, corrections, etc.)
+ * showHighlights: toggles Cloud Vision word-token overlays
  * showRegions: toggles grading answer-region overlays (score badges on scan)
  */
 export function AnnotatedScanColumn({
 	pages,
+	pageTokens = [],
 	showHighlights,
 	showRegions = true,
 	gradingResults,
 	onAnnotationClick,
+	debugMode = false,
 }: {
 	pages: ScanPageUrl[]
+	/** Cloud Vision word-level tokens for all pages — filtered per page internally. */
+	pageTokens?: PageToken[]
 	showHighlights: boolean
 	/** When false, grading annotation boxes are hidden even if data is present. */
 	showRegions?: boolean
 	gradingResults: GradingResult[]
 	/** Called when a grading annotation region is clicked, with the question number. */
 	onAnnotationClick?: (questionNumber: string) => void
+	/** When true, shows debug labels on Gemini-fallback regions. */
+	debugMode?: boolean
 }) {
 	if (pages.length === 0) return null
 
@@ -103,6 +110,9 @@ export function AnnotatedScanColumn({
 				const label =
 					pages.length > 1 ? `Page ${i + 1} of ${pages.length}` : null
 				const annotations = annotationsForPage(gradingResults, page.order)
+				const tokensForPage = pageTokens.filter(
+					(t) => t.page_order === page.order,
+				)
 
 				return (
 					<div key={page.order} className="flex flex-col gap-2">
@@ -124,6 +134,7 @@ export function AnnotatedScanColumn({
 							<BoundingBoxViewer
 								imageUrl={page.url}
 								analysis={page.analysis}
+								tokens={tokensForPage}
 								showAnalysisText={false}
 								showHighlights={showHighlights}
 								gradingAnnotations={
@@ -132,6 +143,7 @@ export function AnnotatedScanColumn({
 										: undefined
 								}
 								onAnnotationClick={onAnnotationClick}
+								debugMode={debugMode}
 							/>
 						) : (
 							<div className="relative overflow-hidden rounded-xl border bg-muted/20">
@@ -143,11 +155,23 @@ export function AnnotatedScanColumn({
 								/>
 								{showRegions &&
 									annotations.map((ann, idx) => (
-										<SimpleRegionButton
-											key={idx}
-											annotation={ann}
-											onAnnotationClick={onAnnotationClick}
-										/>
+										<div key={idx}>
+											<SimpleRegionButton
+												annotation={ann}
+												onAnnotationClick={onAnnotationClick}
+											/>
+											{debugMode && ann.source === "gemini_fallback" && (
+												<span
+													className="pointer-events-none absolute rounded bg-slate-800/90 px-1.5 py-0.5 text-[10px] font-semibold text-white"
+													style={{
+														left: `${ann.box[1] / 10}%`,
+														top: `${ann.box[0] / 10}%`,
+													}}
+												>
+													gemini_fallback
+												</span>
+											)}
+										</div>
 									))}
 							</div>
 						)}

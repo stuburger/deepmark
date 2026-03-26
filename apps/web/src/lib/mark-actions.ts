@@ -29,6 +29,8 @@ export type AnswerRegion = {
 	page: number
 	/** [yMin, xMin, yMax, xMax] normalised 0–1000 */
 	box: [number, number, number, number]
+	/** null = precise Vision token hull; "gemini_fallback" = Gemini Vision estimate */
+	source: string | null
 }
 
 export type GradingResult = {
@@ -370,7 +372,12 @@ export type GetStudentPaperJobResult =
 
 // ─── Region helpers ───────────────────────────────────────────────────────────
 
-type RegionRow = { question_id: string; page_order: number; box: unknown }
+type RegionRow = {
+	question_id: string
+	page_order: number
+	box: unknown
+	source: string | null
+}
 
 /**
  * Builds a question_id → AnswerRegion[] map from rows in
@@ -387,6 +394,7 @@ function mergeRegionsIntoResults(
 		existing.push({
 			page: row.page_order,
 			box: row.box as [number, number, number, number],
+			source: row.source,
 		})
 		byQuestion.set(row.question_id, existing)
 	}
@@ -407,7 +415,12 @@ export async function getStudentPaperJob(
 		include: {
 			exam_paper: { select: { id: true, title: true } },
 			answer_regions: {
-				select: { question_id: true, page_order: true, box: true },
+				select: {
+					question_id: true,
+					page_order: true,
+					box: true,
+					source: true,
+				},
 			},
 		},
 	})
@@ -474,7 +487,12 @@ export async function getStudentPaperJobForPaper(
 		include: {
 			exam_paper: { select: { id: true, title: true } },
 			answer_regions: {
-				select: { question_id: true, page_order: true, box: true },
+				select: {
+					question_id: true,
+					page_order: true,
+					box: true,
+					source: true,
+				},
 			},
 		},
 	})
@@ -540,14 +558,15 @@ export async function updateStudentName(
 
 // ─── Scan page presigned URLs ─────────────────────────────────────────────────
 
-import type { HandwritingAnalysis } from "@/lib/handwriting-types"
+import type { HandwritingAnalysis, PageToken } from "@/lib/handwriting-types"
+export type { PageToken } from "@/lib/handwriting-types"
 
 export type ScanPageUrl = {
 	order: number
 	url: string
 	mimeType: string
-	/** Per-page OCR analysis (transcript + bounding box features). Present for
-	 *  jobs processed after the OCR overlay was added; absent for older jobs. */
+	/** Per-page OCR analysis (transcript + observations). Present for jobs
+	 *  processed after the OCR pipeline was added; absent for older jobs. */
 	analysis?: HandwritingAnalysis
 }
 
@@ -575,9 +594,21 @@ export async function getJobScanPageUrls(
 	const pages = (job.pages ?? []) as PageEntry[]
 	if (pages.length === 0) return { ok: true, pages: [] }
 
-	type PageAnalysisEntry = { page: number; analysis: HandwritingAnalysis }
+	type PageAnalysisEntry = {
+		page: number
+		transcript: string
+		observations: string[]
+	}
 	const analyses = (job.page_analyses ?? []) as PageAnalysisEntry[]
-	const analysisByPage = new Map(analyses.map((a) => [a.page, a.analysis]))
+	const analysisByPage = new Map(
+		analyses.map((a) => [
+			a.page,
+			{
+				transcript: a.transcript,
+				observations: a.observations,
+			} satisfies HandwritingAnalysis,
+		]),
+	)
 
 	const bucket = job.s3_bucket || bucketName
 
@@ -598,6 +629,65 @@ export async function getJobScanPageUrls(
 	)
 
 	return { ok: true, pages: resolved }
+}
+
+// ─── Word tokens (Cloud Vision) ───────────────────────────────────────────────
+
+export type GetJobPageTokensResult =
+	| { ok: true; tokens: PageToken[] }
+	| { ok: false; error: string }
+
+/**
+ * Returns all Cloud Vision word-level tokens for a job as a flat array,
+ * ordered by page_order → para_index → line_index → word_index.
+ * Callers filter by page_order as needed.
+ */
+export async function getJobPageTokens(
+	jobId: string,
+): Promise<GetJobPageTokensResult> {
+	const session = await auth()
+	if (!session) return { ok: false, error: "Not authenticated" }
+
+	const job = await db.studentPaperJob.findFirst({
+		where: { id: jobId, uploaded_by: session.userId },
+		select: { id: true },
+	})
+	if (!job) return { ok: false, error: "Job not found" }
+
+	const rows = await db.studentPaperPageToken.findMany({
+		where: { job_id: jobId },
+		orderBy: [
+			{ page_order: "asc" },
+			{ para_index: "asc" },
+			{ line_index: "asc" },
+			{ word_index: "asc" },
+		],
+		select: {
+			id: true,
+			page_order: true,
+			para_index: true,
+			line_index: true,
+			word_index: true,
+			text_raw: true,
+			text_corrected: true,
+			bbox: true,
+			confidence: true,
+		},
+	})
+
+	const tokens: PageToken[] = rows.map((row) => ({
+		id: row.id,
+		page_order: row.page_order,
+		para_index: row.para_index,
+		line_index: row.line_index,
+		word_index: row.word_index,
+		text_raw: row.text_raw,
+		text_corrected: row.text_corrected,
+		bbox: row.bbox as [number, number, number, number],
+		confidence: row.confidence,
+	}))
+
+	return { ok: true, tokens }
 }
 
 // ─── Link student to job ──────────────────────────────────────────────────────

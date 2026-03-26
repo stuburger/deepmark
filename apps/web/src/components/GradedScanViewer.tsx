@@ -1,11 +1,7 @@
 "use client"
 
 import { useAnswerRegionLayout } from "@/hooks/use-answer-region-layout"
-import type {
-	GradedAnswerOnPage,
-	GradedPage,
-	HandwritingFeature,
-} from "@/lib/handwriting-types"
+import type { GradedAnswerOnPage, GradedPage } from "@/lib/handwriting-types"
 import { cn } from "@/lib/utils"
 import { useState } from "react"
 import { MarkingFeedbackThread } from "./MarkingFeedbackThread"
@@ -23,28 +19,12 @@ function scoreColor(awarded: number, max: number): string {
 // ─── Region helpers ──────────────────────────────────────────────────────────
 
 /**
- * Returns [yMin, xMin, yMax, xMax] (0–1000 Gemini space) for the answer region.
- * Uses the refined answerRegion if available, otherwise the union of bounding boxes.
+ * Returns [yMin, xMin, yMax, xMax] (0–1000 normalised space) for the answer region.
  */
 function resolveRegion(
 	answer: GradedAnswerOnPage,
 ): [number, number, number, number] | null {
-	if (answer.answerRegion) return answer.answerRegion
-
-	const boxes = answer.boundingBoxes as HandwritingFeature[]
-	if (boxes.length === 0) return null
-
-	const yMins = boxes.map((b) => b.box_2d[0])
-	const xMins = boxes.map((b) => b.box_2d[1])
-	const yMaxs = boxes.map((b) => b.box_2d[2])
-	const xMaxs = boxes.map((b) => b.box_2d[3])
-
-	return [
-		Math.min(...yMins),
-		Math.min(...xMins),
-		Math.max(...yMaxs),
-		Math.max(...xMaxs),
-	]
+	return answer.answerRegion ?? null
 }
 
 /** Convert Gemini coords to CSS percentage strings for absolute positioning. */

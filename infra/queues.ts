@@ -1,4 +1,4 @@
-import { geminiApiKey, openAiApiKey } from "./config"
+import { cloudVisionApiKey, geminiApiKey, openAiApiKey } from "./config"
 import { neonPostgres } from "./database"
 import { scansBucket } from "./storage"
 
@@ -104,6 +104,7 @@ studentPaperOcrQueue.subscribe({
 	link: [
 		neonPostgres,
 		geminiApiKey,
+		cloudVisionApiKey,
 		openAiApiKey,
 		scansBucket,
 		studentPaperQueue,

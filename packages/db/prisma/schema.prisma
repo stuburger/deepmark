@@ -414,9 +414,11 @@ model StudentPaperJob {
   detected_subject Subject?
   // Raw OCR extraction before grading: { student_name?, answers: [{question_number, answer_text}] }
   extracted_answers_raw Json?
-  // Per-page OCR analysis: [{ page: number, analysis: HandwritingAnalysis }]
+  // Per-page OCR analysis: [{ page: number, transcript: string, observations: string[] }]
   page_analyses Json?
   grading_results Json?
+  // S3 key for the raw Cloud Vision API response: scans/{jobId}/vision-raw.json
+  vision_raw_s3_key String?
   // Ordered append-only event log: [{ type, at, ...payload }]
   job_events    Json?
   error         String?
@@ -427,6 +429,7 @@ model StudentPaperJob {
   exam_paper     ExamPaper                   @relation(fields: [exam_paper_id], references: [id])
   student        Student?                    @relation("StudentPaperJobStudent", fields: [student_id], references: [id])
   answer_regions StudentPaperAnswerRegion[]  @relation("StudentPaperJobRegions")
+  word_tokens    StudentPaperPageToken[]     @relation("JobWordTokens")
 
   @@map("student_paper_jobs")
 }
@@ -439,12 +442,35 @@ model StudentPaperAnswerRegion {
   page_order      Int
   // [yMin, xMin, yMax, xMax] normalised 0–1000
   box             Json
+  // null = derived from Vision token hull; "gemini_fallback" = Gemini Vision estimate (e.g. MCQ circles)
+  source          String?
   created_at      DateTime @default(now())
 
   job StudentPaperJob @relation("StudentPaperJobRegions", fields: [job_id], references: [id])
 
   @@unique([job_id, question_id, page_order])
   @@map("student_paper_answer_regions")
+}
+
+model StudentPaperPageToken {
+  id             String   @id @default(cuid())
+  job_id         String
+  page_order     Int
+  para_index     Int
+  line_index     Int
+  word_index     Int
+  text_raw       String
+  text_corrected String?
+  // [yMin, xMin, yMax, xMax] normalised 0-1000 — same coord system as StudentPaperAnswerRegion
+  bbox           Json
+  confidence     Float?
+  question_id    String?
+  created_at     DateTime @default(now())
+
+  job StudentPaperJob @relation("JobWordTokens", fields: [job_id], references: [id])
+
+  @@index([job_id, page_order])
+  @@map("student_paper_page_tokens")
 }
 
 model ExemplarAnswer {

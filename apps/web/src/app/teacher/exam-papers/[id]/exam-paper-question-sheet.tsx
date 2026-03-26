@@ -12,6 +12,7 @@ import {
 import { Spinner } from "@/components/ui/spinner"
 import type { QuestionDetail } from "@/lib/dashboard-actions"
 import { getQuestionDetail } from "@/lib/dashboard-actions"
+import { cn } from "@/lib/utils"
 import { ExternalLink } from "lucide-react"
 import Link from "next/link"
 import { useEffect, useState, useTransition } from "react"
@@ -231,36 +232,59 @@ export function ExamPaperQuestionSheet({
 							</div>
 
 							{/* MCQ options */}
-							{detail.multiple_choice_options.length > 0 && (
-								<div>
-									<h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
-										Options
-									</h3>
-									<div className="space-y-1.5">
-										{detail.multiple_choice_options.map((opt) => (
-											<div
-												key={opt.option_label}
-												className="flex items-start gap-2.5 text-sm"
-											>
-												<span className="font-semibold shrink-0 w-5">
-													{opt.option_label}.
-												</span>
-												<span>{opt.option_text}</span>
+							{detail.multiple_choice_options.length > 0 &&
+								(() => {
+									const correctLabels = new Set(
+										detail.mark_schemes
+											.filter((ms) => ms.marking_method === "deterministic")
+											.flatMap((ms) => ms.correct_option_labels),
+									)
+									return (
+										<div>
+											<h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
+												Options
+											</h3>
+											<div className="space-y-1.5">
+												{detail.multiple_choice_options.map((opt) => {
+													const isCorrect = correctLabels.has(opt.option_label)
+													return (
+														<div
+															key={opt.option_label}
+															className="flex items-start gap-2.5 text-sm"
+														>
+															<span
+																className={cn(
+																	"font-semibold shrink-0 w-5 h-5 flex items-center justify-center text-xs leading-none",
+																	isCorrect &&
+																		"rounded-full ring-2 ring-emerald-500 text-emerald-600",
+																)}
+															>
+																{opt.option_label}
+															</span>
+															<span className={cn(isCorrect && "font-medium")}>
+																{opt.option_text}
+															</span>
+														</div>
+													)
+												})}
 											</div>
-										))}
+										</div>
+									)
+								})()}
+
+							{detail.question_type !== "multiple_choice" && (
+								<>
+									<Separator />
+
+									{/* Mark scheme */}
+									<div>
+										<h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">
+											Mark scheme
+										</h3>
+										<MarkSchemeContent detail={detail} />
 									</div>
-								</div>
+								</>
 							)}
-
-							<Separator />
-
-							{/* Mark scheme */}
-							<div>
-								<h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">
-									Mark scheme
-								</h3>
-								<MarkSchemeContent detail={detail} />
-							</div>
 						</div>
 					</>
 				) : null}

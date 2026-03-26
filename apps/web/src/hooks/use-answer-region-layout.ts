@@ -1,18 +1,11 @@
 "use client"
 
-import type {
-	GradedAnswerOnPage,
-	HandwritingFeature,
-} from "@/lib/handwriting-types"
+import type { GradedAnswerOnPage } from "@/lib/handwriting-types"
 import { useMemo } from "react"
 
 export type AnswerAnchor = Pick<
 	GradedAnswerOnPage,
-	| "extractedAnswerId"
-	| "questionId"
-	| "questionPartId"
-	| "answerRegion"
-	| "boundingBoxes"
+	"extractedAnswerId" | "questionId" | "questionPartId" | "answerRegion"
 >
 
 export type LayoutItem = {
@@ -36,22 +29,13 @@ function geminiYToPixel(y: number, imageHeight: number): number {
 
 /**
  * Returns the pixel Y of the vertical midpoint of an answer region.
- * Falls back to the union of bounding boxes if no refined region is available.
  */
 function anchorYForAnswer(answer: AnswerAnchor, imageHeight: number): number {
 	if (answer.answerRegion) {
 		const [yMin, , yMax] = answer.answerRegion
 		return geminiYToPixel((yMin + yMax) / 2, imageHeight)
 	}
-
-	const boxes = answer.boundingBoxes as HandwritingFeature[]
-	if (boxes.length === 0) return 0
-
-	const yMins = boxes.map((b) => b.box_2d[0])
-	const yMaxs = boxes.map((b) => b.box_2d[2])
-	const unionYMin = Math.min(...yMins)
-	const unionYMax = Math.max(...yMaxs)
-	return geminiYToPixel((unionYMin + unionYMax) / 2, imageHeight)
+	return 0
 }
 
 export function useAnswerRegionLayout({

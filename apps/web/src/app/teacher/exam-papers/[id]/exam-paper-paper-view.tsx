@@ -27,9 +27,20 @@ import {
 	verticalListSortingStrategy,
 } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
-import { Clock, GripVertical, Trash2 } from "lucide-react"
+import {
+	Clock,
+	GripVertical,
+	Minus,
+	Plus,
+	RotateCcw,
+	Trash2,
+} from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
+
+const ZOOM_STEP = 0.15
+const ZOOM_MIN = 0.5
+const ZOOM_MAX = 2.0
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -291,6 +302,7 @@ export function ExamPaperPaperView({
 		buildSections(paper),
 	)
 	const [reorderError, setReorderError] = useState<string | null>(null)
+	const [zoom, setZoom] = useState(1)
 
 	// Re-sync when questions are added or removed (e.g. after delete + router.refresh())
 	const questionIds = paper.questions
@@ -380,66 +392,107 @@ export function ExamPaperPaperView({
 				</p>
 			)}
 
-			{/* Exam paper document */}
-			<div className="max-w-2xl mx-auto bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-md shadow-sm">
-				{/* Header */}
-				<div className="px-8 pt-8 pb-6 border-b border-zinc-200 dark:border-zinc-800">
-					<div className="text-center space-y-1">
-						{paper.exam_board && (
-							<p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-								{paper.exam_board}
+			{/* Zoom controls */}
+			<div className="flex items-center justify-end gap-1 mb-4">
+				<button
+					type="button"
+					onClick={() =>
+						setZoom((z) => Math.max(ZOOM_MIN, +(z - ZOOM_STEP).toFixed(2)))
+					}
+					disabled={zoom <= ZOOM_MIN}
+					className="flex h-7 w-7 items-center justify-center rounded border bg-background text-muted-foreground transition-colors hover:bg-muted disabled:opacity-30"
+					aria-label="Zoom out"
+				>
+					<Minus className="h-3.5 w-3.5" />
+				</button>
+				<button
+					type="button"
+					onClick={() => setZoom(1)}
+					className="flex h-7 items-center justify-center rounded border bg-background px-2 text-xs text-muted-foreground transition-colors hover:bg-muted tabular-nums"
+					aria-label="Reset zoom"
+					title="Reset zoom"
+				>
+					<RotateCcw className="h-3 w-3 mr-1" />
+					{Math.round(zoom * 100)}%
+				</button>
+				<button
+					type="button"
+					onClick={() =>
+						setZoom((z) => Math.min(ZOOM_MAX, +(z + ZOOM_STEP).toFixed(2)))
+					}
+					disabled={zoom >= ZOOM_MAX}
+					className="flex h-7 w-7 items-center justify-center rounded border bg-background text-muted-foreground transition-colors hover:bg-muted disabled:opacity-30"
+					aria-label="Zoom in"
+				>
+					<Plus className="h-3.5 w-3.5" />
+				</button>
+			</div>
+
+			{/* Exam paper document — scrollable when zoomed in */}
+			<div className="overflow-auto">
+				<div
+					className="mx-auto bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-md shadow-sm"
+					style={{ width: `min(${zoom * 100}%, ${zoom * 672}px)` }}
+				>
+					{/* Header */}
+					<div className="px-8 pt-8 pb-6 border-b border-zinc-200 dark:border-zinc-800">
+						<div className="text-center space-y-1">
+							{paper.exam_board && (
+								<p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+									{paper.exam_board}
+								</p>
+							)}
+							<h1 className="text-xl font-bold">{paper.title}</h1>
+							<p className="text-sm text-muted-foreground capitalize">
+								{paper.subject}
+								{paper.paper_number ? ` · Paper ${paper.paper_number}` : ""}
+								{" · "}
+								{paper.year}
 							</p>
-						)}
-						<h1 className="text-xl font-bold">{paper.title}</h1>
-						<p className="text-sm text-muted-foreground capitalize">
-							{paper.subject}
-							{paper.paper_number ? ` · Paper ${paper.paper_number}` : ""}
-							{" · "}
-							{paper.year}
+						</div>
+						<div className="mt-4 flex items-center justify-between text-xs text-muted-foreground border-t border-zinc-100 dark:border-zinc-800 pt-3">
+							<span className="flex items-center gap-1.5">
+								<Clock className="h-3.5 w-3.5" />
+								{paper.duration_minutes} minutes
+							</span>
+							<span>Total marks: {paper.total_marks}</span>
+							<span>
+								{paper.questions.length} question
+								{paper.questions.length !== 1 ? "s" : ""}
+							</span>
+						</div>
+					</div>
+
+					{/* Questions with drag-and-drop */}
+					<div className="px-8 py-4">
+						<DndContext
+							sensors={sensors}
+							collisionDetection={closestCenter}
+							onDragEnd={onDragEnd}
+						>
+							<SortableContext
+								items={localSections.map((s) => s.id)}
+								strategy={verticalListSortingStrategy}
+							>
+								{localSections.map((section) => (
+									<SortableSection
+										key={section.id}
+										section={section}
+										paperId={paper.id}
+										onQuestionClick={onQuestionClick}
+										onQuestionDeleted={() => router.refresh()}
+									/>
+								))}
+							</SortableContext>
+						</DndContext>
+					</div>
+
+					{/* Footer */}
+					<div className="px-8 py-4 border-t border-zinc-200 dark:border-zinc-800 text-center">
+						<p className="text-xs text-muted-foreground">
+							End of paper — Total: {paper.total_marks} marks
 						</p>
 					</div>
-					<div className="mt-4 flex items-center justify-between text-xs text-muted-foreground border-t border-zinc-100 dark:border-zinc-800 pt-3">
-						<span className="flex items-center gap-1.5">
-							<Clock className="h-3.5 w-3.5" />
-							{paper.duration_minutes} minutes
-						</span>
-						<span>Total marks: {paper.total_marks}</span>
-						<span>
-							{paper.questions.length} question
-							{paper.questions.length !== 1 ? "s" : ""}
-						</span>
-					</div>
-				</div>
-
-				{/* Questions with drag-and-drop */}
-				<div className="px-8 py-4">
-					<DndContext
-						sensors={sensors}
-						collisionDetection={closestCenter}
-						onDragEnd={onDragEnd}
-					>
-						<SortableContext
-							items={localSections.map((s) => s.id)}
-							strategy={verticalListSortingStrategy}
-						>
-							{localSections.map((section) => (
-								<SortableSection
-									key={section.id}
-									section={section}
-									paperId={paper.id}
-									onQuestionClick={onQuestionClick}
-									onQuestionDeleted={() => router.refresh()}
-								/>
-							))}
-						</SortableContext>
-					</DndContext>
-				</div>
-
-				{/* Footer */}
-				<div className="px-8 py-4 border-t border-zinc-200 dark:border-zinc-800 text-center">
-					<p className="text-xs text-muted-foreground">
-						End of paper — Total: {paper.total_marks} marks
-					</p>
 				</div>
 			</div>
 		</div>

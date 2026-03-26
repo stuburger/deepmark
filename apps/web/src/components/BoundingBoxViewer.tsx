@@ -9,53 +9,11 @@ import {
 	PopoverTitle,
 	PopoverTrigger,
 } from "@/components/ui/popover"
-import type {
-	HandwritingAnalysis,
-	HandwritingFeature,
-} from "@/lib/handwriting-types"
+import type { HandwritingAnalysis, PageToken } from "@/lib/handwriting-types"
 import { cn } from "@/lib/utils"
+import { Minus, Plus, RotateCcw } from "lucide-react"
 import { useState } from "react"
-
-// ─── Colour map ───────────────────────────────────────────────────────────────
-
-const FEATURE_META: Record<
-	string,
-	{ color: string; label: string; note?: string }
-> = {
-	word: { color: "rgb(59 130 246)", label: "Word" },
-	line: { color: "rgb(34 197 94)", label: "Line" },
-	paragraph: { color: "rgb(168 85 247)", label: "Paragraph" },
-	correction: {
-		color: "rgb(239 68 68)",
-		label: "Correction",
-		note: "Student has amended this text — consider both versions when awarding marks.",
-	},
-	"crossing-out": {
-		color: "rgb(249 115 22)",
-		label: "Crossed out",
-		note: "Student has rejected this text — do not credit crossed-out work.",
-	},
-	diagram: {
-		color: "rgb(20 184 166)",
-		label: "Diagram",
-		note: "Diagram detected — check labelling, scale, and accuracy against the mark scheme.",
-	},
-	punctuation: {
-		color: "rgb(234 179 8)",
-		label: "Punctuation",
-		note: "Punctuation mark — review in context of the surrounding text.",
-	},
-}
-
-const FALLBACK_META = {
-	color: "rgb(156 163 175)",
-	label: "Feature",
-	note: undefined,
-}
-
-function getMeta(featureType: string) {
-	return FEATURE_META[featureType] ?? FALLBACK_META
-}
+import { TransformComponent, TransformWrapper } from "react-zoom-pan-pinch"
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -81,6 +39,8 @@ export type GradingAnnotation = {
 	maxScore: number
 	/** [yMin, xMin, yMax, xMax] normalised 0–1000 */
 	box: [number, number, number, number]
+	/** null = Vision hull, "gemini_fallback" = fallback-estimated region */
+	source?: string | null
 }
 
 function annotationColor(awarded: number, max: number): string {
@@ -126,35 +86,24 @@ function GradingAnnotationOverlay({
 	)
 }
 
-// ─── Per-feature popover ──────────────────────────────────────────────────────
+// ─── Per-token popover ────────────────────────────────────────────────────────
 
-type FeatureProps = {
-	feature: HandwritingFeature
-	index: number
-}
+const TOKEN_COLOR = "rgb(59 130 246)" // blue-500
 
-function FeatureOverlay({ feature, index }: FeatureProps) {
-	const [yMin, xMin, yMax, xMax] = feature.box_2d
-	const meta = getMeta(feature.feature_type)
-
-	// Convert 0–1000 Gemini coordinates to CSS percentages.
-	// The parent container is `position: relative` and sized to the displayed
-	// image, so percentage values map exactly onto the image.
-	const left = `${xMin / 10}%`
-	const top = `${yMin / 10}%`
-	const width = `${(xMax - xMin) / 10}%`
-	const height = `${(yMax - yMin) / 10}%`
+function TokenOverlay({ token, index }: { token: PageToken; index: number }) {
+	const [yMin, xMin, yMax, xMax] = token.bbox
+	const displayText = token.text_corrected ?? token.text_raw
 
 	return (
 		<Popover key={index}>
 			<PopoverTrigger
-				aria-label={`${meta.label}: ${feature.label}`}
+				aria-label={`Word: ${displayText}`}
 				style={{
 					position: "absolute",
-					left,
-					top,
-					width,
-					height,
+					left: `${xMin / 10}%`,
+					top: `${yMin / 10}%`,
+					width: `${(xMax - xMin) / 10}%`,
+					height: `${(yMax - yMin) / 10}%`,
 					background: "transparent",
 					border: "none",
 					padding: 0,
@@ -162,31 +111,25 @@ function FeatureOverlay({ feature, index }: FeatureProps) {
 				}}
 			/>
 
-			<PopoverContent side="right" sideOffset={8} className="w-80">
+			<PopoverContent side="right" sideOffset={8} className="w-72">
 				<PopoverHeader>
-					{/* Feature type badge */}
 					<span
 						className="inline-flex w-fit items-center rounded-full px-2 py-0.5 text-xs font-semibold text-white"
-						style={{ backgroundColor: meta.color }}
+						style={{ backgroundColor: TOKEN_COLOR }}
 					>
-						{meta.label}
+						Word
 					</span>
-
-					{/* Transcribed text */}
 					<PopoverTitle className="mt-2 font-mono text-sm leading-snug wrap-break-word">
-						&ldquo;{feature.label}&rdquo;
+						&ldquo;{displayText}&rdquo;
 					</PopoverTitle>
 				</PopoverHeader>
 
-				{/* Marking note (only for relevant feature types) */}
-				{meta.note && (
-					<PopoverDescription className="flex items-start gap-1.5 rounded-md bg-amber-50 px-2.5 py-2 text-xs text-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
-						<span className="mt-px shrink-0">⚑</span>
-						<span>{meta.note}</span>
+				{token.text_corrected && token.text_corrected !== token.text_raw && (
+					<PopoverDescription className="rounded-md bg-blue-50 px-2.5 py-2 text-xs text-blue-800 dark:bg-blue-950/40 dark:text-blue-200">
+						OCR read: &ldquo;{token.text_raw}&rdquo;
 					</PopoverDescription>
 				)}
 
-				{/* Position + coordinates */}
 				<div className="space-y-1 border-t pt-2 text-xs text-muted-foreground">
 					<div className="flex items-center justify-between">
 						<span>Location</span>
@@ -200,6 +143,14 @@ function FeatureOverlay({ feature, index }: FeatureProps) {
 							y {yMin}–{yMax} · x {xMin}–{xMax}
 						</span>
 					</div>
+					{token.confidence !== null && (
+						<div className="flex items-center justify-between">
+							<span>Confidence</span>
+							<span className="font-mono tabular-nums">
+								{Math.round((token.confidence ?? 0) * 100)}%
+							</span>
+						</div>
+					)}
 				</div>
 			</PopoverContent>
 		</Popover>
@@ -211,33 +162,32 @@ function FeatureOverlay({ feature, index }: FeatureProps) {
 type Props = {
 	imageUrl: string
 	analysis: HandwritingAnalysis
+	/** Word-level tokens from Cloud Vision — rendered as interactive overlays. */
+	tokens?: PageToken[]
 	className?: string
-	/** When false, transcript and observations are omitted (shown elsewhere, e.g. mark flow RHS). */
+	/** When false, transcript and observations are omitted (shown elsewhere). */
 	showAnalysisText?: boolean
-	/** Controls highlight visibility. Defaults to false when omitted. */
+	/** Controls word-token highlight visibility. Defaults to false. */
 	showHighlights?: boolean
-	/**
-	 * Grading annotations to overlay on the image — one per question answer region.
-	 * Each annotation draws a coloured band and a click-to-expand feedback popover.
-	 */
+	/** Grading annotations to overlay on the image — one per question answer region. */
 	gradingAnnotations?: GradingAnnotation[]
-	/**
-	 * Called when a grading annotation region is clicked, with the question number.
-	 * Use this to synchronise the right-panel scroll position with the scan view.
-	 */
+	/** Called when a grading annotation region is clicked, with the question number. */
 	onAnnotationClick?: (questionNumber: string) => void
+	/** When true, shows debug labels on fallback-sourced regions. */
+	debugMode?: boolean
 }
 
 export function BoundingBoxViewer({
 	imageUrl,
 	analysis,
+	tokens = [],
 	className,
 	showAnalysisText = true,
 	showHighlights = false,
 	gradingAnnotations,
 	onAnnotationClick,
+	debugMode = false,
 }: Props) {
-	const features = analysis.features ?? []
 	const [imageDims, setImageDims] = useState<{ w: number; h: number } | null>(
 		null,
 	)
@@ -259,118 +209,185 @@ export function BoundingBoxViewer({
 		gradingAnnotations !== undefined && gradingAnnotations.length > 0
 
 	return (
-		<div className={cn("space-y-4", className)}>
-			{/* Image + overlay container */}
-			<div className="relative w-full overflow-visible rounded-lg border bg-muted">
-				{/* eslint-disable-next-line @next/next/no-img-element -- presigned S3 URL; next/image cannot optimize it and requires known dimensions */}
-				<img
-					src={imageUrl}
-					alt="Uploaded handwritten page"
-					className="block w-full rounded-lg"
-					onLoad={handleImageLoad}
-				/>
-
-				{imageDims && (
+		<div className={cn("space-y-2", className)}>
+			<TransformWrapper
+				minScale={0.3}
+				maxScale={8}
+				wheel={{ step: 0.08 }}
+				pinch={{ step: 5 }}
+				doubleClick={{ mode: "reset" }}
+				limitToBounds={false}
+			>
+				{({ zoomIn, zoomOut, resetTransform }) => (
 					<>
-						{/* Grading annotation bands — always shown when present.
-						    Rendered below the word-level highlights so they form a
-						    background wash rather than obscuring fine detail. */}
-						{hasAnnotations && (
-							<svg
-								viewBox={viewBox}
-								preserveAspectRatio="none"
-								className="absolute inset-0 h-full w-full"
-								style={{ pointerEvents: "none" }}
+						{/* Zoom controls */}
+						<div className="flex items-center justify-end gap-1 pb-1">
+							<button
+								type="button"
+								onClick={() => zoomOut(0.5)}
+								className="flex h-7 w-7 items-center justify-center rounded border bg-background text-muted-foreground transition-colors hover:bg-muted"
+								aria-label="Zoom out"
 							>
-								{gradingAnnotations.map((ann, i) => {
-									const [yMin, xMin, yMax, xMax] = ann.box
-									if (yMax === 0 && xMax === 0) return null
-									const color = annotationColor(ann.awardedScore, ann.maxScore)
-									return (
-										<rect
-											key={i}
-											x={xMin * scaleX}
-											y={yMin * scaleY}
-											width={(xMax - xMin) * scaleX}
-											height={(yMax - yMin) * scaleY}
-											fill={color}
-											fillOpacity={0.1}
-											stroke={color}
-											strokeWidth={2}
-											strokeOpacity={0.5}
-										/>
-									)
-								})}
-							</svg>
-						)}
-
-						{/* Word-level highlight layer */}
-						{showHighlights && (
-							<svg
-								viewBox={viewBox}
-								preserveAspectRatio="none"
-								className="absolute inset-0 h-full w-full"
-								style={{ pointerEvents: "none", mixBlendMode: "multiply" }}
+								<Minus className="h-3.5 w-3.5" />
+							</button>
+							<button
+								type="button"
+								onClick={() => resetTransform()}
+								className="flex h-7 w-7 items-center justify-center rounded border bg-background text-muted-foreground transition-colors hover:bg-muted"
+								aria-label="Reset zoom"
+								title="Reset zoom (or double-click the image)"
 							>
-								{features.map((f: HandwritingFeature, i: number) => {
-									const [yMin, xMin, yMax, xMax] = f.box_2d
-									const { color } = getMeta(f.feature_type)
-									return (
-										<rect
-											key={i}
-											x={xMin * scaleX}
-											y={yMin * scaleY}
-											width={(xMax - xMin) * scaleX}
-											height={(yMax - yMin) * scaleY}
-											fill={color}
-											fillOpacity={0.35}
-											stroke="none"
-										/>
-									)
-								})}
-							</svg>
-						)}
+								<RotateCcw className="h-3.5 w-3.5" />
+							</button>
+							<button
+								type="button"
+								onClick={() => zoomIn(0.5)}
+								className="flex h-7 w-7 items-center justify-center rounded border bg-background text-muted-foreground transition-colors hover:bg-muted"
+								aria-label="Zoom in"
+							>
+								<Plus className="h-3.5 w-3.5" />
+							</button>
+						</div>
 
-						{/* Grading annotation click targets (above SVG layers) */}
-						{hasAnnotations &&
-							gradingAnnotations.map((ann, i) => (
-								<GradingAnnotationOverlay
-									key={i}
-									annotation={ann}
-									onAnnotationClick={onAnnotationClick}
+						{/*
+						 * TransformComponent: the image + all overlays live here.
+						 * react-zoom-pan-pinch applies a single CSS matrix() transform
+						 * to the content div, so image, SVG geometry, and click targets
+						 * all scale and pan together — no coordinate maths needed.
+						 *
+						 * Drag to pan · Scroll to zoom · Double-click to reset
+						 */}
+						<TransformComponent
+							wrapperStyle={{
+								width: "100%",
+								overflow: "hidden",
+								borderRadius: "0.5rem",
+							}}
+							contentStyle={{ width: "100%" }}
+						>
+							<div className="relative w-full overflow-visible rounded-lg border bg-muted cursor-grab active:cursor-grabbing">
+								{/* eslint-disable-next-line @next/next/no-img-element -- presigned S3 URL */}
+								<img
+									src={imageUrl}
+									alt="Uploaded handwritten page"
+									className="block w-full rounded-lg"
+									onLoad={handleImageLoad}
+									draggable={false}
 								/>
-							))}
 
-						{/* Word-level feature popovers — only interactive when overlay is on */}
-						{showHighlights &&
-							features.map((f: HandwritingFeature, i: number) => (
-								<FeatureOverlay key={i} feature={f} index={i} />
-							))}
+								{imageDims && (
+									<>
+										{/* Grading annotation bands */}
+										{hasAnnotations && (
+											<svg
+												viewBox={viewBox}
+												preserveAspectRatio="none"
+												className="absolute inset-0 h-full w-full"
+												style={{ pointerEvents: "none" }}
+											>
+												{gradingAnnotations.map((ann, i) => {
+													const [yMin, xMin, yMax, xMax] = ann.box
+													if (yMax === 0 && xMax === 0) return null
+													const color = annotationColor(
+														ann.awardedScore,
+														ann.maxScore,
+													)
+													return (
+														<g key={i}>
+															<rect
+																x={xMin * scaleX}
+																y={yMin * scaleY}
+																width={(xMax - xMin) * scaleX}
+																height={(yMax - yMin) * scaleY}
+																fill={color}
+																fillOpacity={0.1}
+																stroke={color}
+																strokeWidth={2}
+																strokeOpacity={0.5}
+															/>
+															{debugMode &&
+																ann.source === "gemini_fallback" && (
+																	<>
+																		<rect
+																			x={xMin * scaleX}
+																			y={yMin * scaleY}
+																			width={120}
+																			height={18}
+																			fill="rgb(31 41 55)"
+																			fillOpacity={0.85}
+																		/>
+																		<text
+																			x={xMin * scaleX + 6}
+																			y={yMin * scaleY + 12}
+																			fill="white"
+																			fontSize="10"
+																			fontWeight="600"
+																		>
+																			gemini_fallback
+																		</text>
+																	</>
+																)}
+														</g>
+													)
+												})}
+											</svg>
+										)}
+
+										{/* Word-level highlight layer */}
+										{showHighlights && tokens.length > 0 && (
+											<svg
+												viewBox={viewBox}
+												preserveAspectRatio="none"
+												className="absolute inset-0 h-full w-full"
+												style={{
+													pointerEvents: "none",
+													mixBlendMode: "multiply",
+												}}
+											>
+												{tokens.map((t, i) => {
+													const [yMin, xMin, yMax, xMax] = t.bbox
+													return (
+														<rect
+															key={i}
+															x={xMin * scaleX}
+															y={yMin * scaleY}
+															width={(xMax - xMin) * scaleX}
+															height={(yMax - yMin) * scaleY}
+															fill={TOKEN_COLOR}
+															fillOpacity={0.25}
+															stroke="none"
+														/>
+													)
+												})}
+											</svg>
+										)}
+
+										{/* Grading annotation click targets */}
+										{hasAnnotations &&
+											gradingAnnotations.map((ann, i) => (
+												<GradingAnnotationOverlay
+													key={i}
+													annotation={ann}
+													onAnnotationClick={onAnnotationClick}
+												/>
+											))}
+
+										{/* Word-level token popovers */}
+										{showHighlights &&
+											tokens.map((t, i) => (
+												<TokenOverlay key={t.id} token={t} index={i} />
+											))}
+									</>
+								)}
+							</div>
+						</TransformComponent>
 					</>
 				)}
-			</div>
+			</TransformWrapper>
 
 			{showAnalysisText ? (
 				<HandwritingAnalysisPanel analysis={analysis} />
 			) : null}
-
-			{/* Legend — only shown when OCR overlay is active */}
-			{showHighlights && (
-				<div className="rounded-lg border bg-card p-4">
-					<h3 className="mb-2 font-medium">OCR feature legend</h3>
-					<div className="flex flex-wrap gap-3 text-xs">
-						{Object.entries(FEATURE_META).map(([type, { color, label }]) => (
-							<span key={type} className="flex items-center gap-1.5">
-								<span
-									className="inline-block size-3 rounded-sm"
-									style={{ backgroundColor: color }}
-								/>
-								{label}
-							</span>
-						))}
-					</div>
-				</div>
-			)}
 		</div>
 	)
 }

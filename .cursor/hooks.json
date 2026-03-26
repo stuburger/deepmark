@@ -3,12 +3,12 @@
 	"hooks": {
 		"afterFileEdit": [
 			{
-				"command": "bun .cursor/hooks/format.ts"
+				"command": "bun .cursor/hooks/biome-after-edit.ts"
 			}
 		],
 		"afterTabFileEdit": [
 			{
-				"command": "bun .cursor/hooks/format.ts"
+				"command": "bun .cursor/hooks/biome-after-edit.ts"
 			}
 		],
 		"stop": [

@@ -38,7 +38,7 @@ function formatDate(date: Date | null) {
 
 // ── Single PDF viewer dialog ──────────────────────────────────────────────────
 
-function PdfViewerDialog({
+export function PdfViewerDialog({
 	jobId,
 	label,
 }: {

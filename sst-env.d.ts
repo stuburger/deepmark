@@ -25,10 +25,6 @@ declare module "sst" {
       "type": "sst.aws.Queue"
       "url": string
     }
-    "ExtractionQueue": {
-      "type": "sst.aws.Queue"
-      "url": string
-    }
     "GeminiApiKey": {
       "type": "sst.sst.Secret"
       "value": string
@@ -62,10 +58,6 @@ declare module "sst" {
       "databaseUrl": string
       "type": "sst.sst.Linkable"
     }
-    "OcrQueue": {
-      "type": "sst.aws.Queue"
-      "url": string
-    }
     "OpenAiApiKey": {
       "type": "sst.sst.Secret"
       "value": string
@@ -74,16 +66,8 @@ declare module "sst" {
       "type": "sst.aws.Queue"
       "url": string
     }
-    "RegionRefinementQueue": {
-      "type": "sst.aws.Queue"
-      "url": string
-    }
     "Router": {
       "type": "sst.aws.Router"
-      "url": string
-    }
-    "ScanGradingQueue": {
-      "type": "sst.aws.Queue"
       "url": string
     }
     "ScansBucket": {

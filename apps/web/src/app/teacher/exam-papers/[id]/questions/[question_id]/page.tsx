@@ -24,8 +24,7 @@ import Link from "next/link"
 import { notFound } from "next/navigation"
 import { DeleteQuestionButton } from "./delete-question-button"
 import { EvalDialog } from "./eval-dialog"
-import { LorMarkSchemeEditForm } from "./lor-mark-scheme-edit-form"
-import { MarkSchemeEditForm } from "./mark-scheme-edit-form"
+import { MarkSchemeDialog } from "./mark-scheme-dialog"
 import { QuestionEditForm } from "./question-edit-form"
 import { SimilarQuestionsSection } from "./similar-questions-section"
 
@@ -202,22 +201,25 @@ export default async function QuestionDetailPage({
 			{question.mark_schemes.length === 0 ? (
 				<Card>
 					<CardHeader>
-						<CardTitle className="text-base">Create mark scheme</CardTitle>
-						<CardDescription>
-							Add a mark scheme manually for this question.
-						</CardDescription>
+						<div className="flex items-center justify-between gap-2">
+							<div>
+								<CardTitle className="text-base">Mark scheme</CardTitle>
+								<CardDescription className="mt-1">
+									No mark scheme yet. Add one manually or use Autofill.
+								</CardDescription>
+							</div>
+							{question.question_type === "multiple_choice" ? (
+								<MarkSchemeDialog
+									mode="create"
+									questionId={question.id}
+									questionType="multiple_choice"
+									multipleChoiceOptions={question.multiple_choice_options}
+								/>
+							) : (
+								<MarkSchemeDialog mode="create" questionId={question.id} />
+							)}
+						</div>
 					</CardHeader>
-					<CardContent>
-						{question.question_type === "multiple_choice" ? (
-							<MarkSchemeEditForm
-								questionId={question.id}
-								questionType="multiple_choice"
-								multipleChoiceOptions={question.multiple_choice_options}
-							/>
-						) : (
-							<MarkSchemeEditForm questionId={question.id} />
-						)}
-					</CardContent>
 				</Card>
 			) : (
 				question.mark_schemes.map((ms, idx) => {
@@ -230,212 +232,205 @@ export default async function QuestionDetailPage({
 							: null
 
 					return (
-						<div key={ms.id} className="space-y-4">
-							<Card>
-								<CardHeader>
-									<div className="flex items-center justify-between gap-2">
-										<CardTitle className="text-base">
-											Mark scheme
-											{question.mark_schemes.length > 1 ? ` ${idx + 1}` : ""}
-										</CardTitle>
-										<div className="flex items-center gap-2">
-											<Badge variant="outline">
-												{markingMethodLabel(ms.marking_method)}
-											</Badge>
-											<Badge variant="secondary">
-												{ms.points_total} mark
-												{ms.points_total !== 1 ? "s" : ""}
-											</Badge>
-										</div>
-									</div>
-									{ms.description && (
-										<CardDescription className="mt-1 whitespace-pre-wrap">
-											{ms.description}
-										</CardDescription>
-									)}
-								</CardHeader>
-
-								{(ms.marking_method === "deterministic" ||
-									markPoints.length > 0 ||
-									ms.guidance ||
-									rules) && (
-									<CardContent className="space-y-4">
-										{/* Multiple choice correct answer */}
-										{ms.marking_method === "deterministic" && (
-											<div className="flex items-center gap-3 rounded-lg border border-green-500/40 bg-green-500/5 px-3 py-2.5 text-sm">
-												<span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-													Correct answer
-												</span>
-												<span className="font-semibold text-green-700 dark:text-green-400">
-													{ms.correct_option_labels.join(", ") || "—"}
-												</span>
-											</div>
-										)}
-
-										{/* Point-based mark points */}
-										{ms.marking_method !== "level_of_response" &&
-											ms.marking_method !== "deterministic" &&
-											markPoints.length > 0 && (
-												<div>
-													<p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">
-														Mark points
-													</p>
-													<div className="space-y-2">
-														{markPoints.map((mp, i) => (
-															<div
-																key={i}
-																className="flex items-start gap-3 rounded-lg border p-3 text-sm"
-															>
-																<span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium">
-																	{mp.point_number ?? i + 1}
-																</span>
-																<div className="min-w-0 flex-1">
-																	<p>{mp.description}</p>
-																	{mp.criteria &&
-																		mp.criteria !== mp.description && (
-																			<p className="mt-1 text-xs text-muted-foreground">
-																				{mp.criteria}
-																			</p>
-																		)}
-																</div>
-																<span className="shrink-0 text-xs text-muted-foreground">
-																	{mp.points}m
-																</span>
-															</div>
-														))}
-													</div>
-												</div>
-											)}
-
-										{/* Level of response descriptors */}
-										{rules?.levels && rules.levels.length > 0 && (
-											<div>
-												<div className="flex items-center gap-3 mb-2">
-													<p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-														Level descriptors
-													</p>
-													{rules.command_word && (
-														<Badge variant="outline" className="text-xs">
-															{rules.command_word}
-														</Badge>
-													)}
-													{rules.items_required && (
-														<span className="text-xs text-muted-foreground">
-															{rules.items_required} item
-															{rules.items_required !== 1 ? "s" : ""} required
-														</span>
-													)}
-												</div>
-												<Table>
-													<TableHeader>
-														<TableRow>
-															<TableHead className="w-16">Level</TableHead>
-															<TableHead className="w-20">Marks</TableHead>
-															<TableHead>Descriptor</TableHead>
-														</TableRow>
-													</TableHeader>
-													<TableBody>
-														{[...rules.levels].reverse().map((level) => (
-															<TableRow key={level.level}>
-																<TableCell className="font-medium">
-																	{level.level}
-																</TableCell>
-																<TableCell className="text-muted-foreground">
-																	{level.mark_range[0]}–{level.mark_range[1]}
-																</TableCell>
-																<TableCell className="whitespace-pre-wrap text-sm">
-																	{level.descriptor}
-																	{level.ao_requirements &&
-																		level.ao_requirements.length > 0 && (
-																			<ul className="mt-1 list-disc list-inside text-xs text-muted-foreground space-y-0.5">
-																				{level.ao_requirements.map((ao, j) => (
-																					<li key={j}>{ao}</li>
-																				))}
-																			</ul>
-																		)}
-																</TableCell>
-															</TableRow>
-														))}
-													</TableBody>
-												</Table>
-
-												{rules.caps && rules.caps.length > 0 && (
-													<div className="mt-3 space-y-1">
-														<p className="text-xs font-medium text-muted-foreground">
-															Caps
-														</p>
-														{rules.caps.map((cap, i) => (
-															<p
-																key={i}
-																className="text-xs text-amber-700 dark:text-amber-300"
-															>
-																{cap.condition} → max{" "}
-																{cap.max_level != null
-																	? `Level ${cap.max_level}`
-																	: `${cap.max_mark} marks`}{" "}
-																({cap.reason})
-															</p>
-														))}
-													</div>
-												)}
-											</div>
-										)}
-
-										{/* Guidance */}
-										{ms.guidance && (
-											<>
-												<Separator />
-												<div>
-													<p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">
-														Guidance
-													</p>
-													<p className="text-sm whitespace-pre-wrap leading-relaxed">
-														{ms.guidance}
-													</p>
-												</div>
-											</>
-										)}
-									</CardContent>
-								)}
-							</Card>
-
-							<Card>
-								<CardHeader>
+						<Card key={ms.id}>
+							<CardHeader>
+								<div className="flex items-center justify-between gap-2">
 									<CardTitle className="text-base">
-										Edit mark scheme
+										Mark scheme
 										{question.mark_schemes.length > 1 ? ` ${idx + 1}` : ""}
 									</CardTitle>
-								</CardHeader>
-								<CardContent>
-									{ms.marking_method === "deterministic" ? (
-										<MarkSchemeEditForm
-											markSchemeId={ms.id}
-											markingMethod={ms.marking_method}
-											questionType="multiple_choice"
-											multipleChoiceOptions={question.multiple_choice_options}
-											initialDescription={ms.description ?? ""}
-											initialGuidance={ms.guidance ?? ""}
-											initialCorrectOptionLabels={ms.correct_option_labels}
-										/>
-									) : ms.marking_method === "level_of_response" ? (
-										<LorMarkSchemeEditForm
-											markSchemeId={ms.id}
-											initialDescription={ms.description ?? ""}
-											initialGuidance={ms.guidance ?? ""}
-											initialMarkingRules={rules as MarkingRulesInput | null}
-										/>
-									) : (
-										<MarkSchemeEditForm
-											markSchemeId={ms.id}
-											markingMethod={ms.marking_method}
-											initialDescription={ms.description ?? ""}
-											initialGuidance={ms.guidance ?? ""}
-											initialMarkPoints={markPoints}
-										/>
+									<div className="flex items-center gap-2">
+										<Badge variant="outline">
+											{markingMethodLabel(ms.marking_method)}
+										</Badge>
+										<Badge variant="secondary">
+											{ms.points_total} mark
+											{ms.points_total !== 1 ? "s" : ""}
+										</Badge>
+										{ms.marking_method === "deterministic" ? (
+											<MarkSchemeDialog
+												mode="edit"
+												questionId={question.id}
+												markSchemeId={ms.id}
+												markingMethod="deterministic"
+												multipleChoiceOptions={question.multiple_choice_options}
+												initialDescription={ms.description ?? ""}
+												initialGuidance={ms.guidance ?? ""}
+												initialCorrectOptionLabels={ms.correct_option_labels}
+											/>
+										) : ms.marking_method === "level_of_response" ? (
+											<MarkSchemeDialog
+												mode="edit"
+												questionId={question.id}
+												markSchemeId={ms.id}
+												markingMethod="level_of_response"
+												initialDescription={ms.description ?? ""}
+												initialGuidance={ms.guidance ?? ""}
+												initialMarkingRules={rules as MarkingRulesInput | null}
+											/>
+										) : (
+											<MarkSchemeDialog
+												mode="edit"
+												questionId={question.id}
+												markSchemeId={ms.id}
+												markingMethod="point_based"
+												initialDescription={ms.description ?? ""}
+												initialGuidance={ms.guidance ?? ""}
+												initialMarkPoints={markPoints}
+											/>
+										)}
+									</div>
+								</div>
+								{ms.description && (
+									<CardDescription className="mt-1 whitespace-pre-wrap">
+										{ms.description}
+									</CardDescription>
+								)}
+							</CardHeader>
+
+							{(ms.marking_method === "deterministic" ||
+								markPoints.length > 0 ||
+								ms.guidance ||
+								rules) && (
+								<CardContent className="space-y-4">
+									{/* Multiple choice correct answer */}
+									{ms.marking_method === "deterministic" && (
+										<div className="flex items-center gap-3 rounded-lg border border-green-500/40 bg-green-500/5 px-3 py-2.5 text-sm">
+											<span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+												Correct answer
+											</span>
+											<span className="font-semibold text-green-700 dark:text-green-400">
+												{ms.correct_option_labels.join(", ") || "—"}
+											</span>
+										</div>
+									)}
+
+									{/* Point-based mark points */}
+									{ms.marking_method !== "level_of_response" &&
+										ms.marking_method !== "deterministic" &&
+										markPoints.length > 0 && (
+											<div>
+												<p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">
+													Mark points
+												</p>
+												<div className="space-y-2">
+													{markPoints.map((mp, i) => (
+														<div
+															key={i}
+															className="flex items-start gap-3 rounded-lg border p-3 text-sm"
+														>
+															<span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium">
+																{mp.point_number ?? i + 1}
+															</span>
+															<div className="min-w-0 flex-1">
+																<p>{mp.description}</p>
+																{mp.criteria &&
+																	mp.criteria !== mp.description && (
+																		<p className="mt-1 text-xs text-muted-foreground">
+																			{mp.criteria}
+																		</p>
+																	)}
+															</div>
+															<span className="shrink-0 text-xs text-muted-foreground">
+																{mp.points}m
+															</span>
+														</div>
+													))}
+												</div>
+											</div>
+										)}
+
+									{/* Level of response descriptors */}
+									{rules?.levels && rules.levels.length > 0 && (
+										<div>
+											<div className="flex items-center gap-3 mb-2">
+												<p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+													Level descriptors
+												</p>
+												{rules.command_word && (
+													<Badge variant="outline" className="text-xs">
+														{rules.command_word}
+													</Badge>
+												)}
+												{rules.items_required && (
+													<span className="text-xs text-muted-foreground">
+														{rules.items_required} item
+														{rules.items_required !== 1 ? "s" : ""} required
+													</span>
+												)}
+											</div>
+											<Table>
+												<TableHeader>
+													<TableRow>
+														<TableHead className="w-16">Level</TableHead>
+														<TableHead className="w-20">Marks</TableHead>
+														<TableHead>Descriptor</TableHead>
+													</TableRow>
+												</TableHeader>
+												<TableBody>
+													{[...rules.levels].reverse().map((level) => (
+														<TableRow key={level.level}>
+															<TableCell className="font-medium">
+																{level.level}
+															</TableCell>
+															<TableCell className="text-muted-foreground">
+																{level.mark_range[0]}–{level.mark_range[1]}
+															</TableCell>
+															<TableCell className="whitespace-pre-wrap text-sm">
+																{level.descriptor}
+																{level.ao_requirements &&
+																	level.ao_requirements.length > 0 && (
+																		<ul className="mt-1 list-disc list-inside text-xs text-muted-foreground space-y-0.5">
+																			{level.ao_requirements.map((ao, j) => (
+																				<li key={j}>{ao}</li>
+																			))}
+																		</ul>
+																	)}
+															</TableCell>
+														</TableRow>
+													))}
+												</TableBody>
+											</Table>
+
+											{rules.caps && rules.caps.length > 0 && (
+												<div className="mt-3 space-y-1">
+													<p className="text-xs font-medium text-muted-foreground">
+														Caps
+													</p>
+													{rules.caps.map((cap, i) => (
+														<p
+															key={i}
+															className="text-xs text-amber-700 dark:text-amber-300"
+														>
+															{cap.condition} → max{" "}
+															{cap.max_level != null
+																? `Level ${cap.max_level}`
+																: `${cap.max_mark} marks`}{" "}
+															({cap.reason})
+														</p>
+													))}
+												</div>
+											)}
+										</div>
+									)}
+
+									{/* Guidance */}
+									{ms.guidance && (
+										<>
+											<Separator />
+											<div>
+												<p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">
+													Guidance
+												</p>
+												<p className="text-sm whitespace-pre-wrap leading-relaxed">
+													{ms.guidance}
+												</p>
+											</div>
+										</>
 									)}
 								</CardContent>
-							</Card>
-						</div>
+							)}
+						</Card>
 					)
 				})
 			)}

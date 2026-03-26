@@ -36,7 +36,9 @@ type BaseEdit = {
 type McqCreate = BaseCreate & {
 	questionType: "multiple_choice"
 	multipleChoiceOptions: McqOption[]
-	initialCorrectOptionLabels?: never
+	initialDescription?: string
+	initialGuidance?: string
+	initialCorrectOptionLabels?: string[]
 	initialMarkPoints?: never
 }
 type McqEdit = BaseEdit & {
@@ -50,8 +52,10 @@ type McqEdit = BaseEdit & {
 type WrittenCreate = BaseCreate & {
 	questionType?: "written" | string
 	multipleChoiceOptions?: never
+	initialDescription?: string
+	initialGuidance?: string
 	initialCorrectOptionLabels?: never
-	initialMarkPoints?: never
+	initialMarkPoints?: Array<{ description: string; points: number }>
 }
 type WrittenEdit = BaseEdit & {
 	questionType?: "written" | string
@@ -68,15 +72,22 @@ export function MarkSchemeEditForm(props: Props) {
 	const router = useRouter()
 	const [isPending, startTransition] = useTransition()
 
-	const [description, setDescription] = useState(
-		isEdit ? props.initialDescription : "",
-	)
-	const [guidance, setGuidance] = useState(isEdit ? props.initialGuidance : "")
+	const [description, setDescription] = useState(() => {
+		if (isEdit) return props.initialDescription
+		return (props as McqCreate | WrittenCreate).initialDescription ?? ""
+	})
+	const [guidance, setGuidance] = useState(() => {
+		if (isEdit) return props.initialGuidance
+		return (props as McqCreate | WrittenCreate).initialGuidance ?? ""
+	})
 
 	// MCQ state — which option labels are ticked as correct
 	const [correctLabels, setCorrectLabels] = useState<string[]>(() => {
 		if (isMcq && isEdit) {
 			return (props as McqEdit).initialCorrectOptionLabels ?? []
+		}
+		if (isMcq && !isEdit) {
+			return (props as McqCreate).initialCorrectOptionLabels ?? []
 		}
 		return []
 	})
@@ -85,6 +96,15 @@ export function MarkSchemeEditForm(props: Props) {
 	const [markPoints, setMarkPoints] = useState<MarkPointRow[]>(() => {
 		if (!isMcq && isEdit) {
 			const init = (props as WrittenEdit).initialMarkPoints
+			if (init && init.length > 0) {
+				return init.map((mp) => ({
+					description: mp.description,
+					points: String(mp.points),
+				}))
+			}
+		}
+		if (!isMcq && !isEdit) {
+			const init = (props as WrittenCreate).initialMarkPoints
 			if (init && init.length > 0) {
 				return init.map((mp) => ({
 					description: mp.description,

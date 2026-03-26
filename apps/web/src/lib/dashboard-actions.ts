@@ -428,6 +428,7 @@ export type ExamPaperQuestion = {
 	order: number
 	section_title: string
 	question_number: string | null
+	multiple_choice_options: { option_label: string; option_text: string }[]
 }
 
 export type ExamPaperDetail = {
@@ -471,6 +472,7 @@ export async function getExamPaperDetail(
 										points: true,
 										origin: true,
 										question_number: true,
+										multiple_choice_options: true,
 										mark_schemes: {
 											select: {
 												id: true,
@@ -493,6 +495,12 @@ export async function getExamPaperDetail(
 		for (const section of paper.sections) {
 			for (const esq of section.exam_section_questions) {
 				const ms = esq.question.mark_schemes[0]
+				const mcqOptions = Array.isArray(esq.question.multiple_choice_options)
+					? (esq.question.multiple_choice_options as {
+							option_label: string
+							option_text: string
+						}[])
+					: []
 				questions.push({
 					id: esq.question.id,
 					text: esq.question.text,
@@ -500,6 +508,7 @@ export async function getExamPaperDetail(
 					points: esq.question.points,
 					origin: esq.question.origin,
 					question_number: esq.question.question_number,
+					multiple_choice_options: mcqOptions,
 					mark_scheme_count: esq.question.mark_schemes.length,
 					mark_scheme_status: ms?.link_status ?? null,
 					mark_scheme_id: ms?.id ?? null,

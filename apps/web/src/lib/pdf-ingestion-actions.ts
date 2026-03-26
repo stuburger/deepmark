@@ -558,6 +558,80 @@ export async function getPdfDocumentsForPaper(
 	}
 }
 
+const INGESTION_UI_TERMINAL = new Set(["ocr_complete", "failed", "cancelled"])
+
+export type ExamPaperIngestionLiveState = {
+	jobs: ActiveExamPaperIngestionJob[]
+	documents: PdfDocument[]
+}
+
+/**
+ * Single DB read for the exam paper detail page: completed PDFs (all uploaders)
+ * plus in-progress / recent-failure jobs for the current user only.
+ * Poll this from one place to drive upload cards + processing banners.
+ */
+export async function getExamPaperIngestionLiveState(
+	examPaperId: string,
+): Promise<
+	| { ok: true; jobs: ActiveExamPaperIngestionJob[]; documents: PdfDocument[] }
+	| { ok: false; error: string }
+> {
+	const session = await auth()
+	if (!session) return { ok: false, error: "Not authenticated" }
+	const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000)
+
+	const rows = await db.pdfIngestionJob.findMany({
+		where: { exam_paper_id: examPaperId },
+		orderBy: { created_at: "desc" },
+		take: 200,
+		select: {
+			id: true,
+			document_type: true,
+			status: true,
+			error: true,
+			processed_at: true,
+			created_at: true,
+			uploaded_by: true,
+		},
+	})
+
+	const documents: PdfDocument[] = []
+	const jobs: ActiveExamPaperIngestionJob[] = []
+
+	for (const j of rows) {
+		if (j.status === "ocr_complete") {
+			documents.push({
+				id: j.id,
+				document_type: j.document_type,
+				processed_at: j.processed_at,
+			})
+			continue
+		}
+		if (j.uploaded_by !== session.userId) continue
+
+		const isNonTerminal = !INGESTION_UI_TERMINAL.has(j.status)
+		const isRecentFailure =
+			(j.status === "failed" || j.status === "cancelled") &&
+			j.created_at >= oneHourAgo
+		if (isNonTerminal || isRecentFailure) {
+			jobs.push({
+				id: j.id,
+				document_type: j.document_type,
+				status: j.status,
+				error: j.error,
+			})
+		}
+	}
+
+	documents.sort((a, b) => {
+		const ta = a.processed_at?.getTime() ?? 0
+		const tb = b.processed_at?.getTime() ?? 0
+		return tb - ta
+	})
+
+	return { ok: true, jobs, documents }
+}
+
 export type GetPdfDownloadUrlResult =
 	| { ok: true; url: string }
 	| { ok: false; error: string }

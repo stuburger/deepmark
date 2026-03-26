@@ -11,7 +11,6 @@ import {
 } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { Spinner } from "@/components/ui/spinner"
-import { Switch } from "@/components/ui/switch"
 import {
 	createLinkedPdfUpload,
 	getPdfIngestionJobStatus,
@@ -174,7 +173,6 @@ export function LinkedPdfUploadClient({
 	const fileInputRef = useRef<HTMLInputElement>(null)
 
 	const [documentType, setDocumentType] = useState<DocumentType>("mark_scheme")
-	const [runAdversarialLoop, setRunAdversarialLoop] = useState(false)
 	const [uploading, setUploading] = useState(false)
 	const [jobId, setJobId] = useState<string | null>(null)
 	const [jobStatus, setJobStatus] = useState<string | null>(null)
@@ -213,8 +211,7 @@ export function LinkedPdfUploadClient({
 			const result = await createLinkedPdfUpload({
 				exam_paper_id: examPaperId,
 				document_type: documentType,
-				run_adversarial_loop:
-					documentType === "mark_scheme" ? runAdversarialLoop : false,
+				run_adversarial_loop: false,
 			})
 			if (!result.ok) {
 				setError(result.error)
@@ -318,25 +315,6 @@ export function LinkedPdfUploadClient({
 							))}
 						</div>
 					</div>
-
-					{documentType === "mark_scheme" && !isProcessing && (
-						<div className="flex items-center justify-between rounded-lg border p-3">
-							<div>
-								<p className="text-sm font-medium">
-									Run adversarial quality check
-								</p>
-								<p className="text-xs text-muted-foreground">
-									Tests the mark scheme by generating synthetic student answers
-									at different score levels. Adds 5–20 minutes to processing.
-								</p>
-							</div>
-							<Switch
-								checked={runAdversarialLoop}
-								onCheckedChange={setRunAdversarialLoop}
-								disabled={uploading}
-							/>
-						</div>
-					)}
 
 					{!isProcessing && (
 						<>

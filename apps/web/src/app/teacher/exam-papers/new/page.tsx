@@ -23,14 +23,7 @@ import {
 	requestMetadataUpload,
 } from "@/lib/pdf-metadata-actions"
 import { SUBJECTS, SUBJECT_VALUES, type Subject } from "@/lib/subjects"
-import {
-	AlertTriangle,
-	CheckCircle2,
-	FileText,
-	Sparkles,
-	Upload,
-	X,
-} from "lucide-react"
+import { FileText, Sparkles, Upload } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useRef, useState } from "react"
@@ -38,30 +31,6 @@ import { useRef, useState } from "react"
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const EXAM_BOARDS = ["AQA", "OCR", "Edexcel", "WJEC", "Cambridge", "Other"]
-
-const DOCUMENT_TYPE_META: Record<
-	PdfDocumentType,
-	{ label: string; description: string }
-> = {
-	mark_scheme: {
-		label: "Mark scheme",
-		description: "Populates questions and mark scheme criteria",
-	},
-	question_paper: {
-		label: "Question paper",
-		description: "Populates questions without mark scheme",
-	},
-	exemplar: {
-		label: "Exemplar",
-		description: "Adds exemplar student answers",
-	},
-}
-
-const DOCUMENT_TYPE_ORDER: PdfDocumentType[] = [
-	"mark_scheme",
-	"question_paper",
-	"exemplar",
-]
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -71,15 +40,6 @@ type DocumentSlot = {
 	metadata: DetectedPdfMetadata
 }
 
-type SlotState =
-	| { kind: "empty" }
-	| { kind: "uploading"; fileName: string }
-	| { kind: "extracting"; fileName: string; s3Key: string }
-	| { kind: "ready"; slot: DocumentSlot }
-	| { kind: "error"; fileName: string; message: string }
-
-type Slots = Record<PdfDocumentType, SlotState>
-
 type ProcessingStage =
 	| { kind: "uploading"; fileName: string }
 	| { kind: "extracting"; fileName: string; s3Key: string }
@@ -87,92 +47,16 @@ type ProcessingStage =
 type Stage =
 	| { kind: "idle" }
 	| { kind: "processing"; sub: ProcessingStage }
-	| { kind: "confirm"; slots: Slots; autoDetected: boolean }
+	| {
+			kind: "confirm"
+			/** At most one PDF for metadata + ingestion; further docs are added on the paper page */
+			pendingIngestion: {
+				slot: DocumentSlot
+				documentType: PdfDocumentType
+			} | null
+			autoDetected: boolean
+	  }
 	| { kind: "error"; message: string }
-
-type ValidationWarning = { message: string; severity: "warning" | "error" }
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function emptySlots(): Slots {
-	return {
-		mark_scheme: { kind: "empty" },
-		question_paper: { kind: "empty" },
-		exemplar: { kind: "empty" },
-	}
-}
-
-function readySlots(
-	slots: Slots,
-): { type: PdfDocumentType; slot: DocumentSlot }[] {
-	return DOCUMENT_TYPE_ORDER.flatMap((t) => {
-		const s = slots[t]
-		return s.kind === "ready" ? [{ type: t, slot: s.slot }] : []
-	})
-}
-
-function computeWarnings(slots: Slots): ValidationWarning[] {
-	const ready = readySlots(slots)
-	if (ready.length < 2) return []
-
-	const warnings: ValidationWarning[] = []
-	const primary = ready[0]
-
-	for (const { type, slot } of ready.slice(1)) {
-		const label = DOCUMENT_TYPE_META[type].label.toLowerCase()
-
-		if (
-			slot.metadata.document_type !== type &&
-			// Only warn if Gemini strongly disagrees (not just uncertain)
-			slot.metadata.document_type !== primary?.slot.metadata.document_type
-		) {
-			warnings.push({
-				message: `The ${label} PDF looks like a ${DOCUMENT_TYPE_META[slot.metadata.document_type].label.toLowerCase()} — check you dropped it on the right card.`,
-				severity: "warning",
-			})
-		}
-
-		if (primary && slot.metadata.subject !== primary.slot.metadata.subject) {
-			warnings.push({
-				message: `Subject mismatch: the ${label} shows "${slot.metadata.subject}" but the primary document shows "${primary.slot.metadata.subject}".`,
-				severity: "error",
-			})
-		}
-
-		if (
-			primary &&
-			slot.metadata.exam_board !== primary.slot.metadata.exam_board
-		) {
-			warnings.push({
-				message: `Exam board mismatch: the ${label} shows "${slot.metadata.exam_board}" but the primary document shows "${primary.slot.metadata.exam_board}".`,
-				severity: "warning",
-			})
-		}
-
-		if (
-			primary &&
-			slot.metadata.year !== null &&
-			primary.slot.metadata.year !== null &&
-			slot.metadata.year !== primary.slot.metadata.year
-		) {
-			warnings.push({
-				message: `Year mismatch: the ${label} shows ${slot.metadata.year} but the primary document shows ${primary.slot.metadata.year}. Are these from the same exam?`,
-				severity: "error",
-			})
-		}
-	}
-
-	return warnings
-}
-
-function primaryMetadata(slots: Slots): DetectedPdfMetadata | null {
-	// Prefer mark_scheme → question_paper → exemplar as the source of truth
-	for (const t of DOCUMENT_TYPE_ORDER) {
-		const s = slots[t]
-		if (s.kind === "ready") return s.slot.metadata
-	}
-	return null
-}
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -190,8 +74,7 @@ export default function NewExamPaperPage() {
 	const [paperNumber, setPaperNumber] = useState("")
 	const [totalMarks, setTotalMarks] = useState("")
 	const [durationMinutes, setDurationMinutes] = useState("")
-	const [isPublic, setIsPublic] = useState(false)
-	const [runAdversarialLoop, setRunAdversarialLoop] = useState(false)
+	const [isPublic, setIsPublic] = useState(true)
 	const [submitting, setSubmitting] = useState(false)
 	const [submitError, setSubmitError] = useState<string | null>(null)
 
@@ -222,8 +105,7 @@ export default function NewExamPaperPage() {
 		setPaperNumber("")
 		setTotalMarks("")
 		setDurationMinutes("")
-		setIsPublic(false)
-		setRunAdversarialLoop(false)
+		setIsPublic(true)
 		setSubmitError(null)
 	}
 
@@ -231,7 +113,7 @@ export default function NewExamPaperPage() {
 		resetForm()
 		setStage({
 			kind: "confirm",
-			slots: emptySlots(),
+			pendingIngestion: null,
 			autoDetected: false,
 		})
 	}
@@ -293,129 +175,13 @@ export default function NewExamPaperPage() {
 		const { s3Key, metadata } = result
 		applyMetadataToForm(metadata)
 
-		const slots = emptySlots()
-		slots[metadata.document_type] = {
-			kind: "ready",
-			slot: { s3Key, fileName: file.name, metadata },
-		}
-
-		setStage({ kind: "confirm", slots, autoDetected: true })
-	}
-
-	// ── Drop on a card inside the confirm stage ──
-
-	async function processCardFile(file: File, cardType: PdfDocumentType) {
-		if (!file.type.includes("pdf")) return
-		if (stage.kind !== "confirm") return
-
-		// Optimistically update this slot to uploading
-		setStage((prev) => {
-			if (prev.kind !== "confirm") return prev
-			return {
-				...prev,
-				slots: {
-					...prev.slots,
-					[cardType]: { kind: "uploading", fileName: file.name },
-				},
-			}
-		})
-
-		const uploadResult = await requestMetadataUpload()
-		if (!uploadResult.ok) {
-			setStage((prev) => {
-				if (prev.kind !== "confirm") return prev
-				return {
-					...prev,
-					slots: {
-						...prev.slots,
-						[cardType]: {
-							kind: "error",
-							fileName: file.name,
-							message: uploadResult.error,
-						},
-					},
-				}
-			})
-			return
-		}
-
-		try {
-			const putRes = await fetch(uploadResult.url, {
-				method: "PUT",
-				body: file,
-				headers: { "Content-Type": "application/pdf" },
-			})
-			if (!putRes.ok) throw new Error("Upload failed")
-		} catch {
-			setStage((prev) => {
-				if (prev.kind !== "confirm") return prev
-				return {
-					...prev,
-					slots: {
-						...prev.slots,
-						[cardType]: {
-							kind: "error",
-							fileName: file.name,
-							message: "Upload failed. Please try again.",
-						},
-					},
-				}
-			})
-			return
-		}
-
-		setStage((prev) => {
-			if (prev.kind !== "confirm") return prev
-			return {
-				...prev,
-				slots: {
-					...prev.slots,
-					[cardType]: {
-						kind: "extracting",
-						fileName: file.name,
-						s3Key: uploadResult.s3Key,
-					},
-				},
-			}
-		})
-
-		const metadataResult = await extractPdfMetadata(uploadResult.s3Key)
-
-		setStage((prev) => {
-			if (prev.kind !== "confirm") return prev
-			if (!metadataResult.ok) {
-				return {
-					...prev,
-					slots: {
-						...prev.slots,
-						[cardType]: {
-							kind: "error",
-							fileName: file.name,
-							message: metadataResult.error,
-						},
-					},
-				}
-			}
-
-			const newSlots = {
-				...prev.slots,
-				[cardType]: {
-					kind: "ready" as const,
-					slot: {
-						s3Key: uploadResult.s3Key,
-						fileName: file.name,
-						metadata: metadataResult.metadata,
-					},
-				},
-			}
-
-			// If form is not yet populated (no primary doc yet), fill from this one
-			const existingPrimary = primaryMetadata(prev.slots)
-			if (!existingPrimary) {
-				applyMetadataToForm(metadataResult.metadata)
-			}
-
-			return { ...prev, slots: newSlots, autoDetected: true }
+		setStage({
+			kind: "confirm",
+			pendingIngestion: {
+				slot: { s3Key, fileName: file.name, metadata },
+				documentType: metadata.document_type,
+			},
+			autoDetected: true,
 		})
 	}
 
@@ -465,22 +231,16 @@ export default function NewExamPaperPage() {
 			return
 		}
 
-		const ready = readySlots(stage.slots)
+		const pending = stage.pendingIngestion
 		setSubmitting(true)
 
-		if (ready.length > 0) {
+		if (pending) {
 			const slots: [IngestionSlot, ...IngestionSlot[]] = [
 				{
-					s3MetadataKey: ready[0].slot.s3Key,
-					document_type: ready[0].type,
-					run_adversarial_loop:
-						ready[0].type === "mark_scheme" ? runAdversarialLoop : false,
-				},
-				...ready.slice(1).map(({ type, slot }) => ({
-					s3MetadataKey: slot.s3Key,
-					document_type: type,
+					s3MetadataKey: pending.slot.s3Key,
+					document_type: pending.documentType,
 					run_adversarial_loop: false,
-				})),
+				},
 			]
 
 			const result = await createExamPaperWithMultipleIngestions({
@@ -527,11 +287,8 @@ export default function NewExamPaperPage() {
 
 	// ── Render ──
 
-	const warnings = stage.kind === "confirm" ? computeWarnings(stage.slots) : []
-	const hasAnyReady =
-		stage.kind === "confirm" && readySlots(stage.slots).length > 0
-	const markSchemeReady =
-		stage.kind === "confirm" && stage.slots.mark_scheme.kind === "ready"
+	const hasPendingIngestion =
+		stage.kind === "confirm" && stage.pendingIngestion !== null
 
 	return (
 		<div className="max-w-xl space-y-6">
@@ -786,77 +543,6 @@ export default function NewExamPaperPage() {
 						</CardContent>
 					</Card>
 
-					{/* Document cards */}
-					<Card>
-						<CardHeader>
-							<CardTitle>Documents</CardTitle>
-							<CardDescription>
-								You can add more documents now or upload them later from the
-								paper page.
-							</CardDescription>
-						</CardHeader>
-						<CardContent className="space-y-3">
-							{DOCUMENT_TYPE_ORDER.map((docType) => (
-								<DocumentCard
-									key={docType}
-									docType={docType}
-									slotState={stage.slots[docType]}
-									onFile={(f) => processCardFile(f, docType)}
-									onClear={() =>
-										setStage((prev) => {
-											if (prev.kind !== "confirm") return prev
-											return {
-												...prev,
-												slots: {
-													...prev.slots,
-													[docType]: { kind: "empty" },
-												},
-											}
-										})
-									}
-								/>
-							))}
-						</CardContent>
-					</Card>
-
-					{/* Validation warnings */}
-					{warnings.length > 0 && (
-						<div className="space-y-2">
-							{warnings.map((w, i) => (
-								<div
-									key={i}
-									className={`flex items-start gap-2.5 rounded-lg border px-3 py-2.5 text-sm ${
-										w.severity === "error"
-											? "border-destructive/40 bg-destructive/5 text-destructive"
-											: "border-amber-400/40 bg-amber-500/5 text-amber-800 dark:text-amber-200"
-									}`}
-								>
-									<AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
-									<span>{w.message}</span>
-								</div>
-							))}
-						</div>
-					)}
-
-					{/* Adversarial loop — mark scheme only */}
-					{markSchemeReady && (
-						<div className="flex items-center justify-between rounded-lg border p-3">
-							<div>
-								<p className="text-sm font-medium">
-									Run adversarial quality check
-								</p>
-								<p className="text-xs text-muted-foreground">
-									Tests mark scheme with synthetic answers at different score
-									levels. Adds 5–20 minutes and incurs extra cost.
-								</p>
-							</div>
-							<Switch
-								checked={runAdversarialLoop}
-								onCheckedChange={setRunAdversarialLoop}
-							/>
-						</div>
-					)}
-
 					{/* Publish toggle */}
 					<div className="flex items-center justify-between rounded-lg border p-3">
 						<div>
@@ -876,7 +562,7 @@ export default function NewExamPaperPage() {
 						<Button type="submit" form="new-paper-form" disabled={submitting}>
 							{submitting
 								? "Creating…"
-								: hasAnyReady
+								: hasPendingIngestion
 									? "Create & process"
 									: "Create exam paper"}
 						</Button>
@@ -889,161 +575,11 @@ export default function NewExamPaperPage() {
 								setStage({ kind: "idle" })
 							}}
 						>
-							{hasAnyReady ? "Start over" : "Cancel"}
+							{hasPendingIngestion ? "Start over" : "Cancel"}
 						</Button>
 					</div>
 				</>
 			)}
-		</div>
-	)
-}
-
-// ─── DocumentCard ─────────────────────────────────────────────────────────────
-
-function DocumentCard({
-	docType,
-	slotState,
-	onFile,
-	onClear,
-}: {
-	docType: PdfDocumentType
-	slotState: SlotState
-	onFile: (file: File) => void
-	onClear: () => void
-}) {
-	const [isDragging, setIsDragging] = useState(false)
-	const inputRef = useRef<HTMLInputElement>(null)
-	const meta = DOCUMENT_TYPE_META[docType]
-
-	const isActive = slotState.kind !== "empty"
-	const isBusy =
-		slotState.kind === "uploading" || slotState.kind === "extracting"
-
-	function handleDragOver(e: React.DragEvent) {
-		e.preventDefault()
-		if (!isBusy) setIsDragging(true)
-	}
-
-	function handleDragLeave(e: React.DragEvent) {
-		e.preventDefault()
-		setIsDragging(false)
-	}
-
-	function handleDrop(e: React.DragEvent) {
-		e.preventDefault()
-		setIsDragging(false)
-		if (isBusy) return
-		const f = e.dataTransfer.files[0]
-		if (f?.type.includes("pdf")) onFile(f)
-	}
-
-	return (
-		<div
-			className={`relative rounded-lg border transition-colors ${
-				slotState.kind === "ready"
-					? "border-green-500/40 bg-green-500/5"
-					: slotState.kind === "error"
-						? "border-destructive/40 bg-destructive/5"
-						: isDragging
-							? "border-primary bg-primary/5"
-							: isActive
-								? "border-primary/30 bg-primary/5"
-								: "border-dashed border-input hover:border-primary/50 hover:bg-muted/30"
-			}`}
-		>
-			<div className="flex items-center gap-3 p-3">
-				{/* Status icon */}
-				<div
-					className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
-						slotState.kind === "ready"
-							? "bg-green-500/10"
-							: slotState.kind === "error"
-								? "bg-destructive/10"
-								: isBusy
-									? "bg-primary/10"
-									: "bg-muted"
-					}`}
-				>
-					{slotState.kind === "ready" ? (
-						<CheckCircle2 className="h-4 w-4 text-green-600" />
-					) : slotState.kind === "error" ? (
-						<X className="h-4 w-4 text-destructive" />
-					) : isBusy ? (
-						<Spinner className="h-4 w-4" />
-					) : (
-						<Upload className="h-4 w-4 text-muted-foreground" />
-					)}
-				</div>
-
-				{/* Label + filename */}
-				<div className="min-w-0 flex-1">
-					<p className="text-sm font-medium">{meta.label}</p>
-					{slotState.kind === "empty" && (
-						<p className="text-xs text-muted-foreground">{meta.description}</p>
-					)}
-					{slotState.kind === "uploading" && (
-						<p className="text-xs text-muted-foreground truncate">
-							Uploading {slotState.fileName}…
-						</p>
-					)}
-					{slotState.kind === "extracting" && (
-						<p className="text-xs text-muted-foreground truncate">
-							Detecting details…
-						</p>
-					)}
-					{slotState.kind === "ready" && (
-						<p className="text-xs text-muted-foreground truncate">
-							{slotState.slot.fileName}
-						</p>
-					)}
-					{slotState.kind === "error" && (
-						<p className="text-xs text-destructive truncate">
-							{slotState.message}
-						</p>
-					)}
-				</div>
-
-				{/* Right-side action */}
-				{slotState.kind === "empty" || slotState.kind === "error" ? (
-					<div
-						role="button"
-						tabIndex={0}
-						onDragOver={handleDragOver}
-						onDragEnter={handleDragOver}
-						onDragLeave={handleDragLeave}
-						onDrop={handleDrop}
-						onClick={() => inputRef.current?.click()}
-						onKeyDown={(e) => {
-							if (e.key === "Enter" || e.key === " ") inputRef.current?.click()
-						}}
-						className="cursor-pointer rounded-md border border-dashed px-2.5 py-1 text-xs text-muted-foreground hover:border-primary/50 hover:text-foreground transition-colors select-none"
-					>
-						{slotState.kind === "error" ? "Retry" : "Drop or browse"}
-					</div>
-				) : slotState.kind === "ready" ? (
-					<button
-						type="button"
-						onClick={onClear}
-						className="rounded-md p-1 text-muted-foreground hover:text-foreground transition-colors"
-						aria-label={`Remove ${meta.label}`}
-					>
-						<X className="h-4 w-4" />
-					</button>
-				) : null}
-			</div>
-
-			<input
-				ref={inputRef}
-				type="file"
-				accept=".pdf,application/pdf"
-				className="sr-only"
-				onChange={(e) => {
-					const f = e.target.files?.[0]
-					if (f) onFile(f)
-					// Reset so the same file can be re-selected after clearing it
-					e.target.value = ""
-				}}
-			/>
 		</div>
 	)
 }

@@ -43,7 +43,6 @@ export default function AdminUploadPage() {
 	const [year, setYear] = useState<string>("")
 	const [paperReference, setPaperReference] = useState("")
 	const [autoCreateExamPaper, setAutoCreateExamPaper] = useState(true)
-	const [runAdversarialLoop, setRunAdversarialLoop] = useState(false)
 	const [uploading, setUploading] = useState(false)
 	const [jobId, setJobId] = useState<string | null>(null)
 	const [status, setStatus] = useState<string | null>(null)
@@ -125,8 +124,7 @@ export default function AdminUploadPage() {
 								? true
 								: false,
 					exam_paper_id: linkedExamPaperId ?? undefined,
-					run_adversarial_loop:
-						documentType === "mark_scheme" ? runAdversarialLoop : false,
+					run_adversarial_loop: false,
 				})
 				if (!result.ok) {
 					setError(result.error)
@@ -158,7 +156,6 @@ export default function AdminUploadPage() {
 			year,
 			paperReference,
 			autoCreateExamPaper,
-			runAdversarialLoop,
 			linkedExamPaperId,
 		],
 	)
@@ -306,24 +303,6 @@ export default function AdminUploadPage() {
 							An exam paper will always be created from the detected metadata.
 							You can review and amend it after processing.
 						</p>
-					)}
-					{documentType === "mark_scheme" && (
-						<div className="flex items-center justify-between rounded border p-3">
-							<div>
-								<p className="text-sm font-medium">
-									Run adversarial quality check
-								</p>
-								<p className="text-xs text-muted-foreground">
-									Tests the mark scheme with synthetic student answers. Adds
-									5–20 minutes to processing.
-								</p>
-							</div>
-							<input
-								type="checkbox"
-								checked={runAdversarialLoop}
-								onChange={(e) => setRunAdversarialLoop(e.target.checked)}
-							/>
-						</div>
 					)}
 					<div className="grid grid-cols-2 gap-4">
 						<div className="space-y-2">

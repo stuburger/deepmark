@@ -1,0 +1,41 @@
+---
+description: Use nuqs for URL search param state in client components
+globs: apps/web/src/**/*.tsx
+alwaysApply: false
+---
+
+# URL State — use nuqs
+
+Whenever a client component needs to sync state with a URL search parameter, use `nuqs` instead of manually composing URLs with `useSearchParams` + `useRouter` + `usePathname`.
+
+## Pattern
+
+```tsx
+// ❌ BAD — manual URL state
+import { usePathname, useRouter, useSearchParams } from "next/navigation"
+
+const searchParams = useSearchParams()
+const pathname = usePathname()
+const router = useRouter()
+const tab = searchParams.get("tab") ?? "paper"
+
+function handleChange(v: string) {
+  const params = new URLSearchParams(searchParams.toString())
+  params.set("tab", v)
+  router.replace(`${pathname}?${params.toString()}`)
+}
+
+// ✅ GOOD — nuqs
+import { useQueryState, parseAsString } from "nuqs"
+
+const [tab, setTab] = useQueryState("tab", parseAsString.withDefault("paper"))
+```
+
+## Rules
+
+- Import from `"nuqs"` — the `NuqsAdapter` is already mounted in `providers.tsx`
+- Prefer `parseAsString`, `parseAsInteger`, `parseAsBoolean`, `parseAsStringEnum` etc. over raw string parsing
+- Use `.withDefault(...)` to avoid `null` returns
+- For multiple related params, use `useQueryStates` with a params object
+- `shallow: true` (default) means no server round-trip — fine for UI state like tabs, filters, pagination
+- Set `shallow: false` only when the server needs to know (e.g. SSR-dependent data)

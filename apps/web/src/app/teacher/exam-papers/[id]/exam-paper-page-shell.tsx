@@ -53,7 +53,8 @@ import {
 	Trash2,
 } from "lucide-react"
 import Link from "next/link"
-import { usePathname, useRouter, useSearchParams } from "next/navigation"
+import { useRouter } from "next/navigation"
+import { parseAsStringEnum, useQueryState } from "nuqs"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 import { DocumentUploadCards } from "./document-upload-cards"
@@ -239,15 +240,16 @@ export function ExamPaperPageShell({
 	// View toggle
 	const [view, setView] = useState<"table" | "paper">("paper")
 
-	// Tab navigation — synced with ?tab= search param
-	const searchParams = useSearchParams()
-	const pathname = usePathname()
-	const activeTab = searchParams.get("tab") ?? "paper"
+	// Tab navigation — synced with ?tab= search param via nuqs
+	const [activeTab, setActiveTab] = useQueryState(
+		"tab",
+		parseAsStringEnum(["paper", "submissions", "analytics"]).withDefault(
+			"paper",
+		),
+	)
 
-	function handleTabChange(tab: string) {
-		const params = new URLSearchParams(searchParams.toString())
-		params.set("tab", tab)
-		router.replace(`${pathname}?${params.toString()}`)
+	function handleTabChange(tab: "paper" | "submissions" | "analytics") {
+		setActiveTab(tab)
 		if (tab === "analytics") loadAnalytics()
 	}
 
@@ -500,7 +502,13 @@ export function ExamPaperPageShell({
 			</div>
 
 			{/* Tabs */}
-			<Tabs value={activeTab} onValueChange={handleTabChange} className="gap-0">
+			<Tabs
+				value={activeTab}
+				onValueChange={(v) =>
+					handleTabChange(v as "paper" | "submissions" | "analytics")
+				}
+				className="gap-0"
+			>
 				<div className="border-b">
 					<TabsList
 						variant="line"

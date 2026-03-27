@@ -17,15 +17,31 @@ import { type EvalResult, evaluateStudentAnswer } from "@/lib/eval-actions"
 import { CheckCircle2, FlaskConical, XCircle } from "lucide-react"
 import { useState } from "react"
 
-export function EvalDialog({ questionId }: { questionId: string }) {
-	const [open, setOpen] = useState(false)
+export function EvalDialog({
+	questionId,
+	open: controlledOpen,
+	onOpenChange: controlledOnOpenChange,
+	hideTrigger,
+}: {
+	questionId: string
+	open?: boolean
+	onOpenChange?: (open: boolean) => void
+	hideTrigger?: boolean
+}) {
+	const [internalOpen, setInternalOpen] = useState(false)
+	const open = controlledOpen !== undefined ? controlledOpen : internalOpen
+
 	const [answer, setAnswer] = useState("")
 	const [loading, setLoading] = useState(false)
 	const [result, setResult] = useState<EvalResult | null>(null)
 	const [error, setError] = useState<string | null>(null)
 
 	function handleOpenChange(next: boolean) {
-		setOpen(next)
+		if (controlledOpen !== undefined) {
+			controlledOnOpenChange?.(next)
+		} else {
+			setInternalOpen(next)
+		}
 		if (!next) {
 			setAnswer("")
 			setResult(null)
@@ -55,13 +71,15 @@ export function EvalDialog({ questionId }: { questionId: string }) {
 
 	return (
 		<Dialog open={open} onOpenChange={handleOpenChange}>
-			<DialogTrigger
-				className={buttonVariants({ variant: "outline", size: "sm" })}
-			>
-				<FlaskConical className="h-3.5 w-3.5 mr-1.5" />
-				Test answer
-			</DialogTrigger>
-			<DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+			{!hideTrigger && (
+				<DialogTrigger
+					className={buttonVariants({ variant: "outline", size: "sm" })}
+				>
+					<FlaskConical className="h-3.5 w-3.5 mr-1.5" />
+					Test answer
+				</DialogTrigger>
+			)}
+			<DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
 				<DialogHeader>
 					<DialogTitle>Test a student answer</DialogTitle>
 					<DialogDescription>

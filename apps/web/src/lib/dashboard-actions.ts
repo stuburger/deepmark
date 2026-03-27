@@ -425,6 +425,7 @@ export type ExamPaperQuestion = {
 	mark_scheme_status: string | null
 	mark_scheme_id: string | null
 	mark_scheme_description: string | null
+	mark_scheme_correct_option_labels: string[]
 	order: number
 	exam_section_id: string
 	section_title: string
@@ -485,6 +486,7 @@ export async function getExamPaperDetail(
 												id: true,
 												link_status: true,
 												description: true,
+												correct_option_labels: true,
 											},
 											take: 1,
 										},
@@ -525,6 +527,7 @@ export async function getExamPaperDetail(
 					mark_scheme_status: ms?.link_status ?? null,
 					mark_scheme_id: ms?.id ?? null,
 					mark_scheme_description: ms?.description ?? null,
+					mark_scheme_correct_option_labels: ms?.correct_option_labels ?? [],
 					order: esq.order,
 					exam_section_id: section.id,
 					section_title: section.title,
@@ -862,21 +865,40 @@ export async function reorderQuestionsInSection(
 	const session = await auth()
 	if (!session) return { ok: false, error: "Not authenticated" }
 	try {
-		await db.$transaction(
-			orderedQuestionIds.map((questionId, index) =>
-				db.examSectionQuestion.update({
-					where: {
-						exam_section_id_question_id: {
-							exam_section_id: sectionId,
-							question_id: questionId,
+		const n = orderedQuestionIds.length
+		// Two-phase update to avoid unique constraint violations on (exam_section_id, order):
+		// Phase 1 sets orders to a safe high range (n+1..2n), Phase 2 sets final values (1..n).
+		await db.$transaction(async (tx) => {
+			await Promise.all(
+				orderedQuestionIds.map((questionId, index) =>
+					tx.examSectionQuestion.update({
+						where: {
+							exam_section_id_question_id: {
+								exam_section_id: sectionId,
+								question_id: questionId,
+							},
 						},
-					},
-					data: { order: index + 1 },
-				}),
-			),
-		)
+						data: { order: n + index + 1 },
+					}),
+				),
+			)
+			await Promise.all(
+				orderedQuestionIds.map((questionId, index) =>
+					tx.examSectionQuestion.update({
+						where: {
+							exam_section_id_question_id: {
+								exam_section_id: sectionId,
+								question_id: questionId,
+							},
+						},
+						data: { order: index + 1 },
+					}),
+				),
+			)
+		})
 		return { ok: true }
-	} catch {
+	} catch (e) {
+		console.error(e)
 		return { ok: false, error: "Failed to reorder questions" }
 	}
 }
@@ -888,14 +910,25 @@ export async function reorderSections(
 	const session = await auth()
 	if (!session) return { ok: false, error: "Not authenticated" }
 	try {
-		await db.$transaction(
-			orderedSectionIds.map((sectionId, index) =>
-				db.examSection.update({
-					where: { id: sectionId },
-					data: { order: index + 1 },
-				}),
-			),
-		)
+		const n = orderedSectionIds.length
+		await db.$transaction(async (tx) => {
+			await Promise.all(
+				orderedSectionIds.map((sectionId, index) =>
+					tx.examSection.update({
+						where: { id: sectionId },
+						data: { order: n + index + 1 },
+					}),
+				),
+			)
+			await Promise.all(
+				orderedSectionIds.map((sectionId, index) =>
+					tx.examSection.update({
+						where: { id: sectionId },
+						data: { order: index + 1 },
+					}),
+				),
+			)
+		})
 		return { ok: true }
 	} catch {
 		return { ok: false, error: "Failed to reorder sections" }

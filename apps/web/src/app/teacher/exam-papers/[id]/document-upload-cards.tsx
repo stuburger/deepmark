@@ -11,6 +11,7 @@ import {
 	XCircle,
 } from "lucide-react"
 import { useRef, useState } from "react"
+import { toast } from "sonner"
 import { PdfViewerDialog } from "./pdf-preview-dialog"
 
 type DocType = "question_paper" | "mark_scheme" | "exemplar"
@@ -74,7 +75,6 @@ function DocCard({
 }) {
 	const fileInputRef = useRef<HTMLInputElement>(null)
 	const [uploading, setUploading] = useState(false)
-	const [uploadError, setUploadError] = useState<string | null>(null)
 
 	const isAcquired = completedDoc !== null
 	const isProcessing = activeJob !== null && !TERMINAL.has(activeJob.status)
@@ -84,10 +84,9 @@ function DocCard({
 
 	async function handleFile(file: File) {
 		if (!file.type.includes("pdf")) {
-			setUploadError("Please select a PDF file.")
+			toast.error("Please select a PDF file.")
 			return
 		}
-		setUploadError(null)
 		setUploading(true)
 		try {
 			const result = await createLinkedPdfUpload({
@@ -96,7 +95,7 @@ function DocCard({
 				run_adversarial_loop: false,
 			})
 			if (!result.ok) {
-				setUploadError(result.error)
+				toast.error(result.error)
 				return
 			}
 			const putRes = await fetch(result.url, {
@@ -105,12 +104,12 @@ function DocCard({
 				headers: { "Content-Type": "application/pdf" },
 			})
 			if (!putRes.ok) {
-				setUploadError("Upload to storage failed. Please try again.")
+				toast.error("Upload to storage failed. Please try again.")
 				return
 			}
 			onJobStarted()
 		} catch {
-			setUploadError("Upload failed. Please try again.")
+			toast.error("Upload failed. Please try again.")
 		} finally {
 			setUploading(false)
 		}
@@ -206,8 +205,6 @@ function DocCard({
 					Click to upload PDF
 				</p>
 			)}
-
-			{uploadError && <p className="text-xs text-destructive">{uploadError}</p>}
 
 			<input
 				ref={fileInputRef}

@@ -1,0 +1,40 @@
+---
+description: Frontend error handling via Sonner toasts — never inline error state
+globs: apps/web/src/**/*.tsx
+alwaysApply: false
+---
+
+# Frontend Error Handling
+
+Server action errors must always surface as Sonner toasts, never as inline React state.
+
+## Pattern
+
+```tsx
+// ❌ BAD — inline error state
+const [error, setError] = useState<string | null>(null)
+const result = await someServerAction()
+if (!result.ok) {
+  setError(result.error)
+  return
+}
+// ...
+{error && <p className="text-destructive">{error}</p>}
+
+// ✅ GOOD — Sonner toast
+import { toast } from "sonner"
+const result = await someServerAction()
+if (!result.ok) {
+  toast.error(result.error)
+  return
+}
+```
+
+## Rules
+
+- Import `toast` from `"sonner"` in any client component that calls server actions
+- Call `toast.error(result.error)` on `{ ok: false }` responses
+- Call `toast.success("...")` for meaningful success confirmations
+- Never use `useState` to store server action error strings for display
+- Never render `<p className="text-destructive">{error}</p>` for server errors
+- Validation errors that are field-specific (e.g. "text cannot be empty") may remain inline in forms

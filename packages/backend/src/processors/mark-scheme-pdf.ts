@@ -45,7 +45,27 @@ const MARK_SCHEME_SCHEMA = {
 					question_text: { type: Type.STRING },
 					question_type: { type: Type.STRING },
 					total_marks: { type: Type.INTEGER },
-					ao_breakdown: { type: Type.STRING },
+					ao_allocations: {
+						type: Type.ARRAY,
+						nullable: true,
+						description:
+							"AO codes and mark values from the 'Marks for this question:' header line. Include ONLY codes explicitly printed in the document — do NOT infer or add codes not present.",
+						items: {
+							type: Type.OBJECT,
+							properties: {
+								ao_code: {
+									type: Type.STRING,
+									description:
+										"The AO code exactly as printed, e.g. AO1, AO2, AO3",
+								},
+								marks: {
+									type: Type.INTEGER,
+									description: "Number of marks allocated to this AO",
+								},
+							},
+							required: ["ao_code", "marks"],
+						},
+					},
 					mark_points: {
 						type: Type.ARRAY,
 						items: {
@@ -157,6 +177,15 @@ const EXAM_PAPER_METADATA_SCHEMA = {
 		"total_marks",
 		"duration_minutes",
 	],
+}
+
+function formatAoAllocations(
+	allocations: Array<{ ao_code: string; marks: number }> | undefined,
+): string | undefined {
+	if (!allocations?.length) return undefined
+	return allocations
+		.map((a) => `${a.ao_code}: ${a.marks} mark${a.marks !== 1 ? "s" : ""}`)
+		.join(", ")
 }
 
 function parseJobIdFromKey(key: string): string {
@@ -391,9 +420,14 @@ Mark schemes for MCQ sections often show a table or list like "1 C  2 A  3 D ...
 
 GENERAL RULES:
 - Clean up all extracted text: ensure proper spacing between words, correct punctuation, and proper line breaks. Fix any OCR artefacts such as run-together words or missing spaces.
-- For each written question provide: question_text, question_type ("written"), total_marks, ao_breakdown if present, mark_points (array of { description, criteria, points }), acceptable_answers if listed, guidance, question_number.
+- For each written question provide: question_text, question_type ("written"), total_marks, ao_allocations if present, mark_points (array of { description, criteria, points }), acceptable_answers if listed, guidance, question_number.
 - Detect marking_method: "multiple_choice" for MCQ, "level_of_response" if the mark scheme uses level descriptors with mark ranges (e.g. Level 1: 1–3 marks), or "point_based" for individual mark point criteria.
-- If level_of_response: extract command_word if given, items_required if given, levels (array of { level, mark_range [min, max], descriptor, ao_requirements? }), and caps if any (array of { condition, max_level or max_mark, reason }).`,
+- If level_of_response: extract command_word if given, items_required if given, levels (array of { level, mark_range [min, max], descriptor, ao_requirements? }), and caps if any (array of { condition, max_level or max_mark, reason }).
+
+AO BREAKDOWN — CRITICAL RULES:
+- AQA mark schemes print a "Marks for this question:" header above the level table, e.g. "AO2 – 3 marks    AO3 – 6 marks". Extract ONLY the AO codes and mark values stated in that line as ao_allocations.
+- For level_of_response questions, the right-hand column of each level's bullet points is labelled with an AO code (e.g. AO3, AO2). Copy these labels verbatim into ao_requirements for each level — include ONLY the codes that appear in the document for that level.
+- NEVER invent or infer AO codes that are not explicitly printed in the mark scheme. AQA GCSE Business papers typically use only AO2 and AO3; do not add AO1 or AO4 unless they are literally present in the document.`,
 								},
 							],
 						},
@@ -441,7 +475,7 @@ GENERAL RULES:
 					question_text: string
 					question_type: string
 					total_marks: number
-					ao_breakdown?: string
+					ao_allocations?: Array<{ ao_code: string; marks: number }>
 					mark_points: Array<{
 						description: string
 						criteria: string
@@ -611,7 +645,9 @@ GENERAL RULES:
 						await db.markScheme.update({
 							where: { id: markScheme.id },
 							data: {
-								description: q.ao_breakdown ?? q.question_text.slice(0, 500),
+								description:
+									formatAoAllocations(q.ao_allocations) ??
+									q.question_text.slice(0, 500),
 								guidance: q.guidance ?? null,
 								points_total: pointsTotal,
 								mark_points: markPointsPrisma,
@@ -630,7 +666,7 @@ GENERAL RULES:
 								markPointsPrisma,
 								pointsTotal,
 								q.guidance,
-								q.ao_breakdown ?? "",
+								formatAoAllocations(q.ao_allocations) ?? "",
 								correctOptionLabels,
 								effectiveMarkingMethod,
 								markingRules ?? null,
@@ -672,7 +708,9 @@ GENERAL RULES:
 						const newMarkScheme = await db.markScheme.create({
 							data: {
 								question_id: existingId,
-								description: q.ao_breakdown ?? questionText.slice(0, 500),
+								description:
+									formatAoAllocations(q.ao_allocations) ??
+									questionText.slice(0, 500),
 								guidance: q.guidance ?? null,
 								created_by_id: uploadedBy,
 								tags: [],
@@ -693,7 +731,7 @@ GENERAL RULES:
 								markPointsPrisma,
 								pointsTotal,
 								q.guidance,
-								q.ao_breakdown ?? "",
+								formatAoAllocations(q.ao_allocations) ?? "",
 								correctOptionLabels,
 								effectiveMarkingMethod,
 								markingRules ?? null,
@@ -759,7 +797,9 @@ GENERAL RULES:
 					const newMarkScheme = await db.markScheme.create({
 						data: {
 							question_id: newQuestion.id,
-							description: q.ao_breakdown ?? questionText.slice(0, 500),
+							description:
+								formatAoAllocations(q.ao_allocations) ??
+								"",
 							guidance: q.guidance ?? null,
 							created_by_id: uploadedBy,
 							tags: [],
@@ -780,7 +820,7 @@ GENERAL RULES:
 							markPointsPrisma,
 							pointsTotal,
 							q.guidance,
-							q.ao_breakdown ?? "",
+							formatAoAllocations(q.ao_allocations) ?? "",
 							correctOptionLabels,
 							effectiveMarkingMethod,
 							markingRules ?? null,

@@ -52,11 +52,21 @@ Rules:
 - `"use client"` files: **only `import type`** from `@mcp-gcse/db`. For values like `SUBJECTS`, import from `@/lib/subjects` instead
 - Server components (no directive): same as server actions — value imports are fine
 
-## Hydration errors from dark mode
+## Hydration errors from `next-themes` / dark mode
 
-Do not add `suppressHydrationWarning` or dynamic `className` based on `window` in the root `<html>` tag. The theme provider handles dark mode class injection — the root layout should only set the font variable:
+`next-themes`' `ThemeProvider` injects `style="color-scheme: light|dark"` onto the `<html>` element **on the server** via its default `enableColorScheme={true}`. The client-side render won't carry that attribute until JS runs, causing a React hydration mismatch.
+
+**Always** add `suppressHydrationWarning` to the root `<html>` element when `ThemeProvider` is in use. This is the [canonical next-themes recommendation](https://github.com/pacocoursey/next-themes#with-app).
+
+Do **not** use `typeof window !== 'undefined'` or `window` checks anywhere in the root layout — that produces the same class of hydration error.
 
 ```tsx
-// ✅
-<html lang="en" className={plusJakartaSans.variable}>
+// ✅ GOOD — suppressHydrationWarning silences the expected color-scheme mismatch
+<html lang="en" className={`${plusJakartaSans.variable} ${haveIdea.variable}`} suppressHydrationWarning>
+
+// ❌ BAD — missing suppressHydrationWarning when ThemeProvider is present
+<html lang="en" className={`${plusJakartaSans.variable} ${haveIdea.variable}`}>
+
+// ❌ BAD — window check in root layout causes its own hydration error
+<html lang="en" className={typeof window !== 'undefined' ? 'loaded' : ''}>
 ```

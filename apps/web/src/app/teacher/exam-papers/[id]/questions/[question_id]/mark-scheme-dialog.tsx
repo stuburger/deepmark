@@ -91,18 +91,28 @@ type EditLorProps = {
 	initialMarkingRules: MarkingRulesInput | null
 }
 
-export type MarkSchemeDialogProps =
+export type MarkSchemeDialogProps = (
 	| CreateMcqProps
 	| CreateWrittenProps
 	| EditMcqProps
 	| EditWrittenProps
 	| EditLorProps
+) & {
+	onSuccess?: () => void
+	/** Controlled open state — if provided the dialog is driven externally. */
+	open?: boolean
+	/** Required when `open` is provided. */
+	onOpenChange?: (open: boolean) => void
+	/** Hide the built-in trigger button (use when controlling open externally). */
+	hideTrigger?: boolean
+}
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function MarkSchemeDialog(props: MarkSchemeDialogProps) {
 	const router = useRouter()
-	const [open, setOpen] = useState(false)
+	const [internalOpen, setInternalOpen] = useState(false)
+	const open = props.open !== undefined ? props.open : internalOpen
 	const [autofilling, setAutofilling] = useState(false)
 	const [autofillError, setAutofillError] = useState<string | null>(null)
 
@@ -183,13 +193,19 @@ export function MarkSchemeDialog(props: MarkSchemeDialogProps) {
 
 		setQuickSaved(true)
 		router.refresh()
+		props.onSuccess?.()
 		setTimeout(() => setQuickSaved(false), 3000)
 	}
 
 	function handleOpenChange(next: boolean) {
-		setOpen(next)
+		if (props.open !== undefined) {
+			props.onOpenChange?.(next)
+		} else {
+			setInternalOpen(next)
+		}
 		if (!next) {
 			setAutofillError(null)
+			props.onSuccess?.()
 		}
 	}
 
@@ -234,13 +250,15 @@ export function MarkSchemeDialog(props: MarkSchemeDialogProps) {
 				</>
 			)}
 			<Dialog open={open} onOpenChange={handleOpenChange}>
-				<DialogTrigger
-					className={buttonVariants({ variant: "outline", size: "sm" })}
-				>
-					{triggerLabel}
-				</DialogTrigger>
+				{!props.hideTrigger && (
+					<DialogTrigger
+						className={buttonVariants({ variant: "outline", size: "sm" })}
+					>
+						{triggerLabel}
+					</DialogTrigger>
+				)}
 
-				<DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+				<DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
 					<DialogHeader>
 						<div className="flex items-center justify-between gap-3">
 							<DialogTitle>{dialogTitle}</DialogTitle>

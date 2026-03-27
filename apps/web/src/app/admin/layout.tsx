@@ -1,5 +1,5 @@
 import { AdminSidebarNav } from "@/components/admin-sidebar-nav"
-import { ThemeToggle } from "@/components/theme-toggle"
+import { AppNavbar } from "@/components/app-navbar"
 import {
 	Sidebar,
 	SidebarFooter,
@@ -7,7 +7,6 @@ import {
 	SidebarInset,
 	SidebarProvider,
 	SidebarSeparator,
-	SidebarTrigger,
 } from "@/components/ui/sidebar"
 import { logout } from "@/lib/actions"
 import { auth } from "@/lib/auth"
@@ -40,9 +39,6 @@ export default async function AdminLayout({
 				</SidebarHeader>
 				<AdminSidebarNav />
 				<SidebarFooter>
-					<div className="flex justify-end">
-						<ThemeToggle className="text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground dark:hover:bg-sidebar-accent" />
-					</div>
 					<SidebarSeparator />
 					<Link
 						href="/teacher/mark"
@@ -61,17 +57,10 @@ export default async function AdminLayout({
 				</SidebarFooter>
 			</Sidebar>
 			<SidebarInset>
-				<header className="flex h-14 items-center gap-4 border-b bg-background px-6 md:hidden">
-					<SidebarTrigger />
-					<Link
-						href="/admin/overview"
-						className="flex min-w-0 flex-1 items-center gap-2 font-semibold"
-					>
-						<Shield className="h-5 w-5 shrink-0" />
-						<span className="truncate">Admin Space</span>
-					</Link>
-					<ThemeToggle className="shrink-0" />
-				</header>
+				<AppNavbar
+					icon={<Shield className="h-4 w-4 shrink-0" />}
+					title="Admin Space"
+				/>
 				<main className="flex-1 overflow-auto p-6">{children}</main>
 			</SidebarInset>
 		</SidebarProvider>

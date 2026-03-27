@@ -203,7 +203,7 @@ export function SubmissionToolbar({
 			{/* ── Row 1: Context / breadcrumb ─────────────────────────────────── */}
 			<div className="shrink-0 flex items-center gap-1.5 border-b bg-muted/40 px-4 h-9 text-sm">
 				<Link
-					href="/teacher/mark"
+					href="/teacher/exam-papers"
 					className="text-muted-foreground hover:text-foreground transition-colors shrink-0"
 				>
 					Papers
@@ -213,7 +213,7 @@ export function SubmissionToolbar({
 					<>
 						<ChevronRight className="h-3.5 w-3.5 text-muted-foreground/40 shrink-0" />
 						<Link
-							href={`/teacher/mark/papers/${examPaperId}`}
+							href={`/teacher/exam-papers/${examPaperId}`}
 							className="text-muted-foreground hover:text-foreground transition-colors truncate max-w-48"
 							title={data.exam_paper_title}
 						>

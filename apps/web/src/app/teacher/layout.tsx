@@ -31,7 +31,7 @@ export default async function TeacherLayout({
 			<Sidebar>
 				<SidebarHeader>
 					<Link
-						href="/teacher/mark"
+						href="/teacher/exam-papers"
 						className="flex items-center gap-2 rounded-md px-2 py-1.5 font-semibold text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
 					>
 						<GraduationCap className="h-5 w-5" />
@@ -64,7 +64,7 @@ export default async function TeacherLayout({
 				<header className="flex h-14 items-center gap-4 border-b bg-background px-6 md:hidden">
 					<SidebarTrigger />
 					<Link
-						href="/teacher/mark"
+						href="/teacher/exam-papers"
 						className="flex min-w-0 flex-1 items-center gap-2 font-semibold"
 					>
 						<GraduationCap className="h-5 w-5 shrink-0" />

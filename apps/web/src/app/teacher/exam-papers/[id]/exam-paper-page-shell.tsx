@@ -11,6 +11,7 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@/components/ui/dialog"
+import { Progress } from "@/components/ui/progress"
 import { Spinner } from "@/components/ui/spinner"
 import {
 	Table,
@@ -20,6 +21,7 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import type {
 	ExamPaperDetail,
 	SimilarPair,
@@ -32,28 +34,32 @@ import {
 	getUnlinkedMarkSchemes,
 	linkMarkSchemeToQuestion,
 } from "@/lib/dashboard-actions"
+import type { ExamPaperStats, SubmissionHistoryItem } from "@/lib/mark-actions"
+import { getExamPaperStats } from "@/lib/mark-actions"
 import type { PdfDocument } from "@/lib/pdf-ingestion-actions"
 import { getExamPaperIngestionLiveState } from "@/lib/pdf-ingestion-actions"
 import {
 	AlertTriangle,
 	ArrowUpDown,
-	CheckCircle2,
 	ChevronDown,
 	ChevronUp,
 	Globe,
 	LayoutList,
 	Link2,
+	Loader2,
 	Lock,
+	PenLine,
 	ScrollText,
 	Trash2,
 } from "lucide-react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
+import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 import { DocumentUploadCards } from "./document-upload-cards"
 import { EditableTitle } from "./editable-title"
 import { ExamPaperPaperView } from "./exam-paper-paper-view"
+import { MarkingJobDialog } from "./marking-job-dialog"
 import { UploadStudentScriptDialog } from "./upload-student-script-dialog"
 
 type IngestionJob = {
@@ -191,9 +197,11 @@ function TableRowDeleteButton({
 export function ExamPaperPageShell({
 	paper,
 	initialDocs = [],
+	initialSubmissions = [],
 }: {
 	paper: ExamPaperDetail
 	initialDocs?: PdfDocument[]
+	initialSubmissions?: SubmissionHistoryItem[]
 }) {
 	const router = useRouter()
 
@@ -216,6 +224,7 @@ export function ExamPaperPageShell({
 
 	// Upload student script
 	const [uploadScriptOpen, setUploadScriptOpen] = useState(false)
+	const [markingJobId, setMarkingJobId] = useState<string | null>(null)
 
 	// Delete
 	const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
@@ -229,6 +238,42 @@ export function ExamPaperPageShell({
 
 	// View toggle
 	const [view, setView] = useState<"table" | "paper">("paper")
+
+	// Tab navigation — synced with ?tab= search param
+	const searchParams = useSearchParams()
+	const pathname = usePathname()
+	const activeTab = searchParams.get("tab") ?? "paper"
+
+	function handleTabChange(tab: string) {
+		const params = new URLSearchParams(searchParams.toString())
+		params.set("tab", tab)
+		router.replace(`${pathname}?${params.toString()}`)
+		if (tab === "analytics") loadAnalytics()
+	}
+
+	// Analytics — lazy loaded on first tab activation
+	const [analyticsStats, setAnalyticsStats] = useState<ExamPaperStats | null>(
+		null,
+	)
+	const [analyticsLoading, setAnalyticsLoading] = useState(false)
+	const analyticsLoadedRef = useRef(false)
+
+	function loadAnalytics() {
+		if (analyticsLoadedRef.current) return
+		analyticsLoadedRef.current = true
+		setAnalyticsLoading(true)
+		getExamPaperStats(paper.id).then((r) => {
+			setAnalyticsLoading(false)
+			if (r.ok) setAnalyticsStats(r.stats)
+		})
+	}
+
+	// Trigger analytics load if the page lands directly on the analytics tab
+	useEffect(() => {
+		if (activeTab === "analytics") loadAnalytics()
+		// intentionally run only on mount
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [])
 
 	/** Single poll for jobs + completed PDF docs (one server round-trip). */
 	const fetchIngestionLiveState = useCallback(async () => {
@@ -408,6 +453,9 @@ export function ExamPaperPageShell({
 		return sort.dir === "asc" ? cmp : -cmp
 	})
 
+	const tabTriggerClass =
+		"rounded-none px-4 h-full after:bg-primary data-active:text-primary data-active:bg-transparent data-active:shadow-none"
+
 	return (
 		<>
 			{/* Header */}
@@ -451,160 +499,540 @@ export function ExamPaperPageShell({
 				</div>
 			</div>
 
-			{/* Readiness strip */}
-			<div className="flex items-center gap-3 rounded-lg border px-3 py-2 text-xs text-muted-foreground">
-				<div className="flex flex-1 flex-wrap items-center gap-x-4 gap-y-1">
-					<span
-						className={`flex items-center gap-1.5 ${
-							hasQuestionPaper
-								? "text-green-600 dark:text-green-400"
-								: "text-amber-600 dark:text-amber-400"
-						}`}
+			{/* Tabs */}
+			<Tabs value={activeTab} onValueChange={handleTabChange} className="gap-0">
+				<div className="border-b">
+					<TabsList
+						variant="line"
+						className="w-auto rounded-none h-10 gap-0 p-0"
 					>
-						<span
-							className={`h-1.5 w-1.5 shrink-0 rounded-full ${
-								hasQuestionPaper ? "bg-green-500" : "bg-amber-500"
-							}`}
-						/>
-						Question paper
-					</span>
-					<span
-						className={`flex items-center gap-1.5 ${
-							allQuestionsHaveMarkSchemes
-								? "text-green-600 dark:text-green-400"
-								: "text-amber-600 dark:text-amber-400"
-						}`}
-					>
-						<span
-							className={`h-1.5 w-1.5 shrink-0 rounded-full ${
-								allQuestionsHaveMarkSchemes ? "bg-green-500" : "bg-amber-500"
-							}`}
-						/>
-						Mark schemes
-						{!allQuestionsHaveMarkSchemes && totalQuestions > 0 && (
-							<span className="tabular-nums">
-								({questionsWithMarkScheme}/{totalQuestions})
-							</span>
-						)}
-					</span>
-					<span className="flex items-center gap-1.5">
-						<span
-							className={`h-1.5 w-1.5 shrink-0 rounded-full ${
-								hasExemplar ? "bg-green-500" : "bg-muted-foreground/40"
-							}`}
-						/>
-						Exemplars (optional)
-					</span>
+						<TabsTrigger value="paper" className={tabTriggerClass}>
+							Paper
+						</TabsTrigger>
+						<TabsTrigger value="submissions" className={tabTriggerClass}>
+							Submissions
+							{initialSubmissions.length > 0 && (
+								<span className="ml-1.5 inline-flex items-center justify-center rounded-full bg-muted px-1.5 py-0.5 text-xs tabular-nums leading-none">
+									{initialSubmissions.length}
+								</span>
+							)}
+						</TabsTrigger>
+						<TabsTrigger value="analytics" className={tabTriggerClass}>
+							Analytics
+						</TabsTrigger>
+					</TabsList>
 				</div>
-				{readyForSubmissions ? (
-					<button
-						type="button"
-						onClick={() => setUploadScriptOpen(true)}
-						className="flex shrink-0 items-center gap-1.5 rounded-md bg-green-500/10 px-2.5 py-1 text-xs font-medium text-green-700 transition-colors hover:bg-green-500/20 dark:text-green-400"
-					>
-						<CheckCircle2 className="h-3.5 w-3.5" />
-						Start marking!
-					</button>
-				) : (
-					<span className="shrink-0 text-xs text-muted-foreground/60">
-						Not ready
-					</span>
-				)}
-			</div>
 
-			{/* Document upload cards */}
-			<DocumentUploadCards
-				examPaperId={paper.id}
-				completedDocs={completedDocs}
-				activeJobs={jobs}
-				onJobStarted={() => void fetchIngestionLiveState()}
-			/>
-
-			{/* Duplicate warning banner */}
-			{similarPairs.length > 0 && !duplicateBannerDismissed && (
-				<div className="flex items-center gap-3 rounded-lg border border-amber-400/40 bg-amber-500/5 px-3 py-2.5 text-sm">
-					<AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
-					<span className="flex-1 text-amber-800 dark:text-amber-200">
-						{similarPairs.length} potential duplicate question
-						{similarPairs.length !== 1 ? "s" : ""} detected — rows marked with a
-						dot may need review.{" "}
-						<button
-							type="button"
-							className="underline underline-offset-2"
-							onClick={() => setSort({ key: "similarity", dir: "asc" })}
-						>
-							Sort by similarity
-						</button>{" "}
-						to group them.
-					</span>
-					<button
-						type="button"
-						className="shrink-0 text-xs text-amber-600 hover:text-amber-900 dark:text-amber-400"
-						onClick={() => setDuplicateBannerDismissed(true)}
-					>
-						Dismiss
-					</button>
-				</div>
-			)}
-
-			{/* Unlinked mark schemes panel */}
-			{unlinkedItems.length > 0 && (
-				<div className="rounded-lg border border-destructive/40 bg-destructive/5 p-3 space-y-3">
-					<div className="flex items-center gap-2">
-						<AlertTriangle className="h-4 w-4 shrink-0 text-destructive" />
-						<p className="text-sm font-medium text-destructive">
-							{unlinkedItems.length} unlinked mark scheme
-							{unlinkedItems.length !== 1 ? "s" : ""} — created during ingestion
-							but not matched to a question
-						</p>
-					</div>
-					<div className="space-y-2">
-						{unlinkedItems.map((item) => (
-							<div
-								key={item.markSchemeId}
-								className="flex items-start justify-between gap-3 rounded-md bg-background border px-3 py-2.5"
+				{/* ── Paper tab ── */}
+				<TabsContent value="paper" className="space-y-6 mt-6">
+					{/* Readiness strip */}
+					<div className="flex items-center gap-3 rounded-lg border px-3 py-2 text-xs text-muted-foreground">
+						<div className="flex flex-1 flex-wrap items-center gap-x-4 gap-y-1">
+							<span
+								className={`flex items-center gap-1.5 ${
+									hasQuestionPaper
+										? "text-green-600 dark:text-green-400"
+										: "text-amber-600 dark:text-amber-400"
+								}`}
 							>
-								<div className="min-w-0 flex-1">
-									{item.ghostQuestionNumber && (
-										<p className="text-xs text-muted-foreground mb-0.5">
-											Extracted as Q{item.ghostQuestionNumber}
-										</p>
-									)}
-									<p
-										className="text-sm truncate"
-										title={item.ghostQuestionText}
-									>
-										{item.ghostQuestionText}
-									</p>
-									{item.markSchemeDescription && (
-										<p
-											className="text-xs text-muted-foreground truncate mt-0.5"
-											title={item.markSchemeDescription}
-										>
-											Mark scheme: {item.markSchemeDescription}
-										</p>
-									)}
-									<p className="text-xs text-muted-foreground">
-										{item.pointsTotal} mark{item.pointsTotal !== 1 ? "s" : ""}
-									</p>
-								</div>
-								<Button
-									size="sm"
-									variant="outline"
-									className="shrink-0"
-									onClick={() => {
-										setLinkingItem(item)
-										setLinkingTargetId("")
-									}}
-								>
-									<Link2 className="h-3.5 w-3.5 mr-1.5" />
-									Link to question
-								</Button>
-							</div>
-						))}
+								<span
+									className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+										hasQuestionPaper ? "bg-green-500" : "bg-amber-500"
+									}`}
+								/>
+								Question paper
+							</span>
+							<span
+								className={`flex items-center gap-1.5 ${
+									allQuestionsHaveMarkSchemes
+										? "text-green-600 dark:text-green-400"
+										: "text-amber-600 dark:text-amber-400"
+								}`}
+							>
+								<span
+									className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+										allQuestionsHaveMarkSchemes
+											? "bg-green-500"
+											: "bg-amber-500"
+									}`}
+								/>
+								Mark schemes
+								{!allQuestionsHaveMarkSchemes && totalQuestions > 0 && (
+									<span className="tabular-nums">
+										({questionsWithMarkScheme}/{totalQuestions})
+									</span>
+								)}
+							</span>
+							<span className="flex items-center gap-1.5">
+								<span
+									className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+										hasExemplar ? "bg-green-500" : "bg-muted-foreground/40"
+									}`}
+								/>
+								Exemplars (optional)
+							</span>
+						</div>
 					</div>
-				</div>
-			)}
+
+					{/* Document upload cards */}
+					<DocumentUploadCards
+						examPaperId={paper.id}
+						completedDocs={completedDocs}
+						activeJobs={jobs}
+						onJobStarted={() => void fetchIngestionLiveState()}
+					/>
+
+					{/* Duplicate warning banner */}
+					{similarPairs.length > 0 && !duplicateBannerDismissed && (
+						<div className="flex items-center gap-3 rounded-lg border border-amber-400/40 bg-amber-500/5 px-3 py-2.5 text-sm">
+							<AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+							<span className="flex-1 text-amber-800 dark:text-amber-200">
+								{similarPairs.length} potential duplicate question
+								{similarPairs.length !== 1 ? "s" : ""} detected — rows marked
+								with a dot may need review.{" "}
+								<button
+									type="button"
+									className="underline underline-offset-2"
+									onClick={() => setSort({ key: "similarity", dir: "asc" })}
+								>
+									Sort by similarity
+								</button>{" "}
+								to group them.
+							</span>
+							<button
+								type="button"
+								className="shrink-0 text-xs text-amber-600 hover:text-amber-900 dark:text-amber-400"
+								onClick={() => setDuplicateBannerDismissed(true)}
+							>
+								Dismiss
+							</button>
+						</div>
+					)}
+
+					{/* Unlinked mark schemes panel */}
+					{unlinkedItems.length > 0 && (
+						<div className="rounded-lg border border-destructive/40 bg-destructive/5 p-3 space-y-3">
+							<div className="flex items-center gap-2">
+								<AlertTriangle className="h-4 w-4 shrink-0 text-destructive" />
+								<p className="text-sm font-medium text-destructive">
+									{unlinkedItems.length} unlinked mark scheme
+									{unlinkedItems.length !== 1 ? "s" : ""} — created during
+									ingestion but not matched to a question
+								</p>
+							</div>
+							<div className="space-y-2">
+								{unlinkedItems.map((item) => (
+									<div
+										key={item.markSchemeId}
+										className="flex items-start justify-between gap-3 rounded-md bg-background border px-3 py-2.5"
+									>
+										<div className="min-w-0 flex-1">
+											{item.ghostQuestionNumber && (
+												<p className="text-xs text-muted-foreground mb-0.5">
+													Extracted as Q{item.ghostQuestionNumber}
+												</p>
+											)}
+											<p
+												className="text-sm truncate"
+												title={item.ghostQuestionText}
+											>
+												{item.ghostQuestionText}
+											</p>
+											{item.markSchemeDescription && (
+												<p
+													className="text-xs text-muted-foreground truncate mt-0.5"
+													title={item.markSchemeDescription}
+												>
+													Mark scheme: {item.markSchemeDescription}
+												</p>
+											)}
+											<p className="text-xs text-muted-foreground">
+												{item.pointsTotal} mark
+												{item.pointsTotal !== 1 ? "s" : ""}
+											</p>
+										</div>
+										<Button
+											size="sm"
+											variant="outline"
+											className="shrink-0"
+											onClick={() => {
+												setLinkingItem(item)
+												setLinkingTargetId("")
+											}}
+										>
+											<Link2 className="h-3.5 w-3.5 mr-1.5" />
+											Link to question
+										</Button>
+									</div>
+								))}
+							</div>
+						</div>
+					)}
+
+					{/* Questions */}
+					<Card>
+						<CardHeader>
+							<div className="flex items-start justify-between gap-3">
+								<div className="flex items-center gap-1 rounded-md border p-0.5 shrink-0">
+									<button
+										type="button"
+										title="Exam paper view"
+										onClick={() => setView("paper")}
+										className={`flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-medium transition-colors ${
+											view === "paper"
+												? "bg-background shadow-sm text-foreground"
+												: "text-muted-foreground hover:text-foreground"
+										}`}
+									>
+										<ScrollText className="h-3.5 w-3.5" />
+										Paper
+									</button>
+									<button
+										type="button"
+										title="Table view"
+										onClick={() => setView("table")}
+										className={`flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-medium transition-colors ${
+											view === "table"
+												? "bg-background shadow-sm text-foreground"
+												: "text-muted-foreground hover:text-foreground"
+										}`}
+									>
+										<LayoutList className="h-3.5 w-3.5" />
+										Table
+									</button>
+								</div>
+							</div>
+						</CardHeader>
+						<CardContent>
+							{view === "paper" ? (
+								<ExamPaperPaperView paper={paper} />
+							) : paper.questions.length === 0 ? (
+								<div className="py-8 text-center text-sm text-muted-foreground">
+									No questions yet. Upload a question paper or mark scheme PDF
+									to populate this paper.
+								</div>
+							) : (
+								<Table>
+									<TableHeader>
+										<TableRow>
+											<TableHead className="w-16">
+												<button
+													type="button"
+													className="flex items-center gap-1 text-xs font-medium hover:text-foreground"
+													onClick={() => toggleSort("number")}
+												>
+													#
+													{sort.key === "number" ? (
+														sort.dir === "asc" ? (
+															<ChevronUp className="h-3 w-3" />
+														) : (
+															<ChevronDown className="h-3 w-3" />
+														)
+													) : (
+														<ArrowUpDown className="h-3 w-3 opacity-40" />
+													)}
+												</button>
+											</TableHead>
+											<TableHead>Section</TableHead>
+											<TableHead>Question</TableHead>
+											<TableHead>Source</TableHead>
+											<TableHead>
+												<button
+													type="button"
+													className="flex items-center gap-1 text-xs font-medium hover:text-foreground"
+													onClick={() => toggleSort("marks")}
+												>
+													Marks
+													{sort.key === "marks" ? (
+														sort.dir === "asc" ? (
+															<ChevronUp className="h-3 w-3" />
+														) : (
+															<ChevronDown className="h-3 w-3" />
+														)
+													) : (
+														<ArrowUpDown className="h-3 w-3 opacity-40" />
+													)}
+												</button>
+											</TableHead>
+											<TableHead>Mark scheme</TableHead>
+											<TableHead className="w-8">
+												<button
+													type="button"
+													className="flex items-center gap-1 text-xs font-medium hover:text-foreground"
+													onClick={() => toggleSort("similarity")}
+													title="Sort by similarity to group potential duplicates"
+												>
+													<ArrowUpDown
+														className={`h-3 w-3 ${
+															sort.key === "similarity" ? "" : "opacity-40"
+														}`}
+													/>
+												</button>
+											</TableHead>
+											<TableHead className="w-10" />
+										</TableRow>
+									</TableHeader>
+									<TableBody>
+										{sortedQuestions.map((q) => {
+											const isDuplicate = duplicateIds.has(q.id)
+											return (
+												<TableRow key={q.id} className="group">
+													<TableCell className="text-muted-foreground">
+														<div className="flex items-center gap-1.5">
+															{isDuplicate && (
+																<span
+																	className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500"
+																	title="Potential duplicate"
+																/>
+															)}
+															<span className="tabular-nums">
+																{q.question_number ?? q.order}
+															</span>
+														</div>
+													</TableCell>
+													<TableCell className="text-muted-foreground text-xs">
+														{q.section_title}
+													</TableCell>
+													<TableCell className="max-w-xs">
+														<p className="truncate text-sm" title={q.text}>
+															{q.text}
+														</p>
+													</TableCell>
+													<TableCell>
+														<Badge variant={originBadgeVariant(q.origin)}>
+															{originLabel(q.origin)}
+														</Badge>
+													</TableCell>
+													<TableCell>{q.points ?? "—"}</TableCell>
+													<TableCell>
+														{schemeBadge(q.mark_scheme_status)}
+													</TableCell>
+													<TableCell />
+													<TableCell>
+														<div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
+															<TableRowDeleteButton
+																questionId={q.id}
+																onDeleted={() => router.refresh()}
+															/>
+														</div>
+													</TableCell>
+												</TableRow>
+											)
+										})}
+									</TableBody>
+								</Table>
+							)}
+						</CardContent>
+					</Card>
+				</TabsContent>
+
+				{/* ── Submissions tab ── */}
+				<TabsContent value="submissions" className="space-y-6 mt-6">
+					<div className="flex items-center justify-between gap-4">
+						<p className="text-sm text-muted-foreground">
+							{initialSubmissions.length === 0
+								? "No submissions yet."
+								: `${initialSubmissions.length} submission${initialSubmissions.length !== 1 ? "s" : ""}`}
+						</p>
+						{readyForSubmissions ? (
+							<Button onClick={() => setUploadScriptOpen(true)}>
+								Start marking
+							</Button>
+						) : (
+							<button
+								type="button"
+								onClick={() => handleTabChange("paper")}
+								className="text-xs text-primary hover:underline"
+							>
+								Set up paper first →
+							</button>
+						)}
+					</div>
+
+					{initialSubmissions.length > 0 ? (
+						<Card>
+							<CardContent className="pt-4">
+								<Table>
+									<TableHeader>
+										<TableRow>
+											<TableHead>Student</TableHead>
+											<TableHead>Score</TableHead>
+											<TableHead>Date</TableHead>
+											<TableHead className="w-16" />
+										</TableRow>
+									</TableHeader>
+									<TableBody>
+										{initialSubmissions.map((sub) => {
+											const pct =
+												sub.total_max > 0
+													? Math.round(
+															(sub.total_awarded / sub.total_max) * 100,
+														)
+													: null
+											const colour =
+												pct === null
+													? "bg-muted text-muted-foreground"
+													: pct >= 70
+														? "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300"
+														: pct >= 40
+															? "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
+															: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300"
+											return (
+												<TableRow key={sub.id}>
+													<TableCell className="text-sm">
+														{sub.student_name ?? (
+															<span className="text-muted-foreground italic">
+																Unnamed
+															</span>
+														)}
+													</TableCell>
+													<TableCell>
+														{pct !== null ? (
+															<span
+																className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums ${colour}`}
+															>
+																{sub.total_awarded}/{sub.total_max} · {pct}%
+															</span>
+														) : (
+															<span className="text-xs text-muted-foreground capitalize">
+																{sub.status.replace(/_/g, " ")}
+															</span>
+														)}
+													</TableCell>
+													<TableCell className="text-xs text-muted-foreground tabular-nums">
+														{new Date(sub.created_at).toLocaleDateString()}
+													</TableCell>
+													<TableCell>
+														<button
+															type="button"
+															onClick={() => setMarkingJobId(sub.id)}
+															className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+														>
+															View
+														</button>
+													</TableCell>
+												</TableRow>
+											)
+										})}
+									</TableBody>
+								</Table>
+							</CardContent>
+						</Card>
+					) : (
+						readyForSubmissions && (
+							<div className="rounded-lg border border-dashed py-16 text-center text-sm text-muted-foreground">
+								No submissions yet. Click &ldquo;Start marking&rdquo; to mark
+								your first student script.
+							</div>
+						)
+					)}
+				</TabsContent>
+
+				{/* ── Analytics tab ── */}
+				<TabsContent value="analytics" className="space-y-6 mt-6">
+					{analyticsLoading ? (
+						<div className="flex items-center justify-center py-16">
+							<Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+						</div>
+					) : !analyticsStats || analyticsStats.submission_count === 0 ? (
+						<div className="rounded-lg border border-dashed py-16 text-center text-sm text-muted-foreground">
+							No completed submissions yet. Analytics will appear here once
+							student scripts have been marked.
+						</div>
+					) : (
+						<>
+							<div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+								<Card>
+									<CardContent className="pt-4">
+										<p className="text-2xl font-bold">
+											{analyticsStats.submission_count}
+										</p>
+										<p className="text-xs text-muted-foreground">
+											Papers marked
+										</p>
+									</CardContent>
+								</Card>
+								<Card>
+									<CardContent className="pt-4">
+										<p className="text-2xl font-bold">
+											{analyticsStats.avg_total_percent}%
+										</p>
+										<p className="text-xs text-muted-foreground">
+											Average score
+										</p>
+									</CardContent>
+								</Card>
+							</div>
+
+							{analyticsStats.question_stats.length > 0 && (
+								<Card>
+									<CardHeader>
+										<h3 className="text-sm font-semibold">
+											Per-question averages
+										</h3>
+										<p className="text-xs text-muted-foreground">
+											How students performed on each question.
+										</p>
+									</CardHeader>
+									<CardContent>
+										<Table>
+											<TableHeader>
+												<TableRow>
+													<TableHead className="w-12">#</TableHead>
+													<TableHead>Question</TableHead>
+													<TableHead className="w-28 text-right">
+														Avg score
+													</TableHead>
+													<TableHead className="w-32">Performance</TableHead>
+												</TableRow>
+											</TableHeader>
+											<TableBody>
+												{analyticsStats.question_stats.map((q) => {
+													const colour =
+														q.avg_percent >= 70
+															? "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300"
+															: q.avg_percent >= 40
+																? "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
+																: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300"
+													return (
+														<TableRow key={q.question_id}>
+															<TableCell className="text-muted-foreground font-mono text-xs">
+																Q{q.question_number}
+															</TableCell>
+															<TableCell>
+																<p
+																	className="text-sm truncate max-w-sm"
+																	title={q.question_text}
+																>
+																	{q.question_text}
+																</p>
+															</TableCell>
+															<TableCell className="text-right tabular-nums">
+																<span
+																	className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums ${colour}`}
+																>
+																	{q.avg_awarded}/{q.max_score} ({q.avg_percent}
+																	%)
+																</span>
+															</TableCell>
+															<TableCell>
+																<Progress
+																	value={q.avg_percent}
+																	className="h-2"
+																/>
+															</TableCell>
+														</TableRow>
+													)
+												})}
+											</TableBody>
+										</Table>
+									</CardContent>
+								</Card>
+							)}
+						</>
+					)}
+				</TabsContent>
+			</Tabs>
 
 			{/* Link mark scheme dialog */}
 			<Dialog
@@ -666,9 +1094,7 @@ export function ExamPaperPageShell({
 							<Button
 								variant="outline"
 								disabled={linkingBusy}
-								onClick={() => {
-									setLinkingItem(null)
-								}}
+								onClick={() => setLinkingItem(null)}
 							>
 								Cancel
 							</Button>
@@ -690,161 +1116,6 @@ export function ExamPaperPageShell({
 				</DialogContent>
 			</Dialog>
 
-			{/* Questions */}
-			<Card>
-				<CardHeader>
-					<div className="flex items-start justify-between gap-3">
-						<div className="flex items-center gap-1 rounded-md border p-0.5 shrink-0">
-							<button
-								type="button"
-								title="Exam paper view"
-								onClick={() => setView("paper")}
-								className={`flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-medium transition-colors ${
-									view === "paper"
-										? "bg-background shadow-sm text-foreground"
-										: "text-muted-foreground hover:text-foreground"
-								}`}
-							>
-								<ScrollText className="h-3.5 w-3.5" />
-								Paper
-							</button>
-
-							<button
-								type="button"
-								title="Table view"
-								onClick={() => setView("table")}
-								className={`flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-medium transition-colors ${
-									view === "table"
-										? "bg-background shadow-sm text-foreground"
-										: "text-muted-foreground hover:text-foreground"
-								}`}
-							>
-								<LayoutList className="h-3.5 w-3.5" />
-								Table
-							</button>
-						</div>
-					</div>
-				</CardHeader>
-				<CardContent>
-					{view === "paper" ? (
-						<ExamPaperPaperView paper={paper} />
-					) : paper.questions.length === 0 ? (
-						<div className="py-8 text-center text-sm text-muted-foreground">
-							No questions yet. Upload a question paper or mark scheme PDF to
-							populate this paper.
-						</div>
-					) : (
-						<Table>
-							<TableHeader>
-								<TableRow>
-									<TableHead className="w-16">
-										<button
-											type="button"
-											className="flex items-center gap-1 text-xs font-medium hover:text-foreground"
-											onClick={() => toggleSort("number")}
-										>
-											#
-											{sort.key === "number" ? (
-												sort.dir === "asc" ? (
-													<ChevronUp className="h-3 w-3" />
-												) : (
-													<ChevronDown className="h-3 w-3" />
-												)
-											) : (
-												<ArrowUpDown className="h-3 w-3 opacity-40" />
-											)}
-										</button>
-									</TableHead>
-									<TableHead>Section</TableHead>
-									<TableHead>Question</TableHead>
-									<TableHead>Source</TableHead>
-									<TableHead>
-										<button
-											type="button"
-											className="flex items-center gap-1 text-xs font-medium hover:text-foreground"
-											onClick={() => toggleSort("marks")}
-										>
-											Marks
-											{sort.key === "marks" ? (
-												sort.dir === "asc" ? (
-													<ChevronUp className="h-3 w-3" />
-												) : (
-													<ChevronDown className="h-3 w-3" />
-												)
-											) : (
-												<ArrowUpDown className="h-3 w-3 opacity-40" />
-											)}
-										</button>
-									</TableHead>
-									<TableHead>Mark scheme</TableHead>
-									<TableHead className="w-8">
-										<button
-											type="button"
-											className="flex items-center gap-1 text-xs font-medium hover:text-foreground"
-											onClick={() => toggleSort("similarity")}
-											title="Sort by similarity to group potential duplicates"
-										>
-											<ArrowUpDown
-												className={`h-3 w-3 ${
-													sort.key === "similarity" ? "" : "opacity-40"
-												}`}
-											/>
-										</button>
-									</TableHead>
-									<TableHead className="w-10" />
-								</TableRow>
-							</TableHeader>
-							<TableBody>
-								{sortedQuestions.map((q) => {
-									const isDuplicate = duplicateIds.has(q.id)
-									return (
-										<TableRow key={q.id} className="group">
-											<TableCell className="text-muted-foreground">
-												<div className="flex items-center gap-1.5">
-													{isDuplicate && (
-														<span
-															className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500"
-															title="Potential duplicate"
-														/>
-													)}
-													<span className="tabular-nums">
-														{q.question_number ?? q.order}
-													</span>
-												</div>
-											</TableCell>
-											<TableCell className="text-muted-foreground text-xs">
-												{q.section_title}
-											</TableCell>
-											<TableCell className="max-w-xs">
-												<p className="truncate text-sm" title={q.text}>
-													{q.text}
-												</p>
-											</TableCell>
-											<TableCell>
-												<Badge variant={originBadgeVariant(q.origin)}>
-													{originLabel(q.origin)}
-												</Badge>
-											</TableCell>
-											<TableCell>{q.points ?? "—"}</TableCell>
-											<TableCell>{schemeBadge(q.mark_scheme_status)}</TableCell>
-											<TableCell />
-											<TableCell>
-												<div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
-													<TableRowDeleteButton
-														questionId={q.id}
-														onDeleted={() => router.refresh()}
-													/>
-												</div>
-											</TableCell>
-										</TableRow>
-									)
-								})}
-							</TableBody>
-						</Table>
-					)}
-				</CardContent>
-			</Card>
-
 			<ConfirmDialog
 				open={deleteDialogOpen}
 				onOpenChange={(open) => {
@@ -861,7 +1132,30 @@ export function ExamPaperPageShell({
 				examPaperId={paper.id}
 				open={uploadScriptOpen}
 				onOpenChange={setUploadScriptOpen}
+				onJobReady={(jobId) => {
+					setUploadScriptOpen(false)
+					setMarkingJobId(jobId)
+				}}
 			/>
+
+			<MarkingJobDialog
+				examPaperId={paper.id}
+				jobId={markingJobId}
+				open={markingJobId !== null}
+				onOpenChange={(v) => {
+					if (!v) setMarkingJobId(null)
+				}}
+			/>
+
+			{/* Floating action button */}
+			<button
+				type="button"
+				onClick={() => setUploadScriptOpen(true)}
+				className="fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-full bg-primary px-5 py-3.5 text-sm font-medium text-primary-foreground shadow-lg transition-all hover:bg-primary/90 hover:shadow-xl active:scale-95"
+			>
+				<PenLine className="h-4 w-4" />
+				Mark paper
+			</button>
 		</>
 	)
 }

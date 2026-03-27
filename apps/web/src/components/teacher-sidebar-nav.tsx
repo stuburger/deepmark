@@ -8,13 +8,13 @@ import {
 	SidebarMenuButton,
 	SidebarMenuItem,
 } from "@/components/ui/sidebar"
-import { FileText, PenLine } from "lucide-react"
+import { ClipboardList, FileText } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 
 const navItems = [
-	{ href: "/teacher/mark", label: "Mark Papers", icon: PenLine },
 	{ href: "/teacher/exam-papers", label: "Exam Papers", icon: FileText },
+	{ href: "/teacher/mark", label: "Marking History", icon: ClipboardList },
 ]
 
 export function TeacherSidebarNav() {

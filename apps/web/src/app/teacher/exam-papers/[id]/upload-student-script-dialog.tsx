@@ -17,6 +17,7 @@ import {
 import { FileText, Trash2, Upload } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useRef, useState } from "react"
+import { toast } from "sonner"
 
 type PageItem = {
 	order: number
@@ -31,10 +32,12 @@ export function UploadStudentScriptDialog({
 	examPaperId,
 	open,
 	onOpenChange,
+	onJobReady,
 }: {
 	examPaperId: string
 	open: boolean
 	onOpenChange: (open: boolean) => void
+	onJobReady?: (jobId: string) => void
 }) {
 	const router = useRouter()
 	const fileInputRef = useRef<HTMLInputElement>(null)
@@ -42,7 +45,6 @@ export function UploadStudentScriptDialog({
 
 	const [pages, setPages] = useState<PageItem[]>([])
 	const [submitting, setSubmitting] = useState(false)
-	const [submitError, setSubmitError] = useState<string | null>(null)
 
 	async function ensureJob(): Promise<string> {
 		if (jobIdRef.current) return jobIdRef.current
@@ -55,33 +57,40 @@ export function UploadStudentScriptDialog({
 	async function handleFiles(files: FileList | null) {
 		if (!files || files.length === 0) return
 
+		// Add files to the list immediately so the user sees feedback right away.
+		const fileArray = Array.from(files)
+		const startOrder = pages.length + 1
+		const newItems: PageItem[] = fileArray.map((file, i) => ({
+			order: startOrder + i,
+			name: file.name,
+			mimeType: file.type || "application/pdf",
+			key: "",
+			uploading: true,
+			error: null,
+		}))
+		setPages((prev) => [...prev, ...newItems])
+
+		// Create / retrieve the job (may be a network round-trip).
 		let jid: string
 		try {
 			jid = await ensureJob()
 		} catch (err) {
-			setSubmitError(
-				err instanceof Error ? err.message : "Failed to create job",
+			const msg = err instanceof Error ? err.message : "Failed to create job"
+			toast.error(msg)
+			// Mark all the just-added items as errored.
+			const newOrders = newItems.map((item) => item.order)
+			setPages((prev) =>
+				prev.map((p) =>
+					newOrders.includes(p.order)
+						? { ...p, uploading: false, error: msg }
+						: p,
+				),
 			)
 			return
 		}
 
-		const startOrder = pages.length + 1
-		const newItems: PageItem[] = []
-		for (let i = 0; i < files.length; i++) {
-			const file = files[i]!
-			newItems.push({
-				order: startOrder + i,
-				name: file.name,
-				mimeType: file.type || "application/pdf",
-				key: "",
-				uploading: true,
-				error: null,
-			})
-		}
-		setPages((prev) => [...prev, ...newItems])
-
-		for (let i = 0; i < files.length; i++) {
-			const file = files[i]!
+		for (let i = 0; i < fileArray.length; i++) {
+			const file = fileArray[i]!
 			const order = startOrder + i
 			const mimeType = file.type || "application/pdf"
 			try {
@@ -125,21 +134,23 @@ export function UploadStudentScriptDialog({
 	async function handleSubmit() {
 		if (!jobIdRef.current) return
 		setSubmitting(true)
-		setSubmitError(null)
 		const result = await triggerOcr(jobIdRef.current)
 		setSubmitting(false)
 		if (!result.ok) {
-			setSubmitError(result.error)
+			toast.error(result.error)
 			return
 		}
-		router.push(`/teacher/mark/${jobIdRef.current}`)
+		if (onJobReady) {
+			onJobReady(jobIdRef.current)
+		} else {
+			router.push(`/teacher/mark/${jobIdRef.current}`)
+		}
 	}
 
 	function handleOpenChange(next: boolean) {
 		if (submitting) return
 		if (!next) {
 			setPages([])
-			setSubmitError(null)
 			jobIdRef.current = null
 		}
 		onOpenChange(next)
@@ -217,10 +228,6 @@ export function UploadStudentScriptDialog({
 								</div>
 							))}
 						</div>
-					)}
-
-					{submitError && (
-						<p className="text-sm text-destructive">{submitError}</p>
 					)}
 
 					<div className="flex gap-2">

@@ -172,6 +172,7 @@ export function SubmissionView({
 	pageTokens,
 	initialPhase,
 	debugMode = false,
+	mode = "page",
 }: {
 	examPaperId: string
 	jobId: string
@@ -180,6 +181,7 @@ export function SubmissionView({
 	pageTokens: PageToken[]
 	initialPhase: MarkingPhase
 	debugMode?: boolean
+	mode?: "page" | "dialog"
 }) {
 	const router = useRouter()
 	const [data, setData] = useState(initialData)
@@ -244,7 +246,13 @@ export function SubmissionView({
 	}, [])
 
 	return (
-		<div className="-m-6 flex flex-col overflow-hidden h-dvh">
+		<div
+			className={
+				mode === "dialog"
+					? "flex flex-col overflow-hidden h-full"
+					: "-m-6 flex flex-col overflow-hidden h-dvh"
+			}
+		>
 			<SubmissionToolbar
 				examPaperId={examPaperId}
 				jobId={jobId}

@@ -13,10 +13,11 @@ import {
 	type ExamPaperListItem,
 	deleteExamPaper,
 } from "@/lib/dashboard-actions"
+import { queryKeys } from "@/lib/query-keys"
 import { SUBJECT_LABELS, type Subject } from "@/lib/subjects"
+import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { Clock, Globe, Layers, Lock, Trash2 } from "lucide-react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
 import { useState } from "react"
 
 const SUBJECT_COLOURS: Record<string, string> = {
@@ -48,19 +49,17 @@ function formatDate(date: Date) {
 }
 
 export function ExamPaperCard({ paper }: { paper: ExamPaperListItem }) {
-	const router = useRouter()
+	const queryClient = useQueryClient()
 	const [confirmOpen, setConfirmOpen] = useState(false)
-	const [deleting, setDeleting] = useState(false)
 
-	async function handleDelete() {
-		setDeleting(true)
-		const result = await deleteExamPaper(paper.id)
-		setDeleting(false)
-		if (result.ok) {
+	const { mutate: doDelete, isPending: deleting } = useMutation({
+		mutationFn: () => deleteExamPaper(paper.id),
+		onSuccess: (result) => {
+			if (!result.ok) return
 			setConfirmOpen(false)
-			router.refresh()
-		}
-	}
+			void queryClient.invalidateQueries({ queryKey: queryKeys.examPapers() })
+		},
+	})
 
 	const subjectLabel = SUBJECT_LABELS[paper.subject as Subject] ?? paper.subject
 	const colour = subjectColour(paper.subject)
@@ -159,7 +158,7 @@ export function ExamPaperCard({ paper }: { paper: ExamPaperListItem }) {
 				description={`This will permanently delete "${paper.title.length > 50 ? `${paper.title.slice(0, 50)}…` : paper.title}" along with all its questions, mark schemes, and uploaded PDFs. This cannot be undone.`}
 				confirmLabel={deleting ? "Deleting…" : "Delete paper"}
 				loading={deleting}
-				onConfirm={handleDelete}
+				onConfirm={() => doDelete()}
 			/>
 		</>
 	)

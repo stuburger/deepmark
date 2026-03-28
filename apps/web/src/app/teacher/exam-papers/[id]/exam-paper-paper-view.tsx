@@ -11,14 +11,15 @@ import type {
 	ExamPaperDetail,
 	ExamPaperQuestion,
 	ExamPaperSection,
+	MarkingRulesInput,
 	QuestionDetail,
 } from "@/lib/dashboard-actions"
 import {
-	deleteQuestion,
 	getQuestionDetail,
 	reorderQuestionsInSection,
 	reorderSections,
 } from "@/lib/dashboard-actions"
+import { queryKeys } from "@/lib/query-keys"
 import { cn } from "@/lib/utils"
 import {
 	DndContext,
@@ -35,6 +36,7 @@ import {
 	verticalListSortingStrategy,
 } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
+import { useQueryClient } from "@tanstack/react-query"
 import {
 	AlertTriangle,
 	Clock,
@@ -44,9 +46,9 @@ import {
 	Pencil,
 	Trash2,
 } from "lucide-react"
-import { useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
+import { useDeleteQuestion } from "./hooks/use-exam-paper-mutations"
 import { EvalDialog } from "./questions/[question_id]/eval-dialog"
 import { MarkSchemeDialog } from "./questions/[question_id]/mark-scheme-dialog"
 import { QuestionEditDialog } from "./questions/[question_id]/question-edit-dialog"
@@ -71,12 +73,14 @@ const iconBtnClass =
 
 function SortableQuestion({
 	question,
+	paperId,
 	onDeleted,
 }: {
 	question: ExamPaperQuestion
+	paperId: string
 	onDeleted: () => void
 }) {
-	const router = useRouter()
+	const { mutate: deleteQ, isPending: deleting } = useDeleteQuestion(paperId)
 
 	// DnD
 	const {
@@ -96,7 +100,6 @@ function SortableQuestion({
 	const [msDetail, setMsDetail] = useState<QuestionDetail | null>(null)
 	const [msLoading, setMsLoading] = useState(false)
 	const [confirmOpen, setConfirmOpen] = useState(false)
-	const [deleting, setDeleting] = useState(false)
 
 	const hasScheme =
 		question.mark_scheme_status === "linked" ||
@@ -118,16 +121,13 @@ function SortableQuestion({
 		setMsOpen(true)
 	}
 
-	async function handleDelete() {
-		setDeleting(true)
-		const result = await deleteQuestion(question.id)
-		setDeleting(false)
-		if (!result.ok) {
-			toast.error(result.error)
-			return
-		}
-		router.refresh()
-		onDeleted()
+	function handleDelete() {
+		deleteQ(question.id, {
+			onSuccess: () => {
+				setConfirmOpen(false)
+				onDeleted()
+			},
+		})
 	}
 
 	const isMultipleChoice = question.question_type === "multiple_choice"
@@ -147,7 +147,7 @@ function SortableQuestion({
 				if (!v) setMsDetail(null)
 			},
 			hideTrigger: true as const,
-			onSuccess: () => router.refresh(),
+			paperId,
 		}
 		if (ms.marking_method === "deterministic") {
 			return {
@@ -171,7 +171,7 @@ function SortableQuestion({
 				markingMethod: "level_of_response" as const,
 				initialDescription: ms.description ?? "",
 				initialGuidance: ms.guidance ?? "",
-				initialMarkingRules: null,
+				initialMarkingRules: (ms.marking_rules as MarkingRulesInput) ?? null,
 			}
 		}
 		return {
@@ -347,9 +347,9 @@ function SortableQuestion({
 				initialText={question.text}
 				initialPoints={question.points}
 				initialQuestionNumber={question.question_number}
+				paperId={paperId}
 				open={editOpen}
 				onOpenChange={setEditOpen}
-				onSaved={() => router.refresh()}
 			/>
 
 			{/* Mark scheme dialog — create mode */}
@@ -363,7 +363,7 @@ function SortableQuestion({
 						open={msOpen}
 						onOpenChange={setMsOpen}
 						hideTrigger
-						onSuccess={() => router.refresh()}
+						paperId={paperId}
 					/>
 				) : (
 					<MarkSchemeDialog
@@ -372,7 +372,7 @@ function SortableQuestion({
 						open={msOpen}
 						onOpenChange={setMsOpen}
 						hideTrigger
-						onSuccess={() => router.refresh()}
+						paperId={paperId}
 					/>
 				))}
 
@@ -400,9 +400,11 @@ function SortableQuestion({
 
 function SortableSection({
 	section,
+	paperId,
 	onQuestionDeleted,
 }: {
 	section: LocalSection
+	paperId: string
 	onQuestionDeleted: () => void
 }) {
 	const {
@@ -453,6 +455,7 @@ function SortableSection({
 					<SortableQuestion
 						key={q.id}
 						question={q}
+						paperId={paperId}
 						onDeleted={onQuestionDeleted}
 					/>
 				))}
@@ -463,21 +466,31 @@ function SortableSection({
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export function ExamPaperPaperView({ paper }: { paper: ExamPaperDetail }) {
-	const router = useRouter()
+export function ExamPaperPaperView({
+	paper,
+	paperId,
+}: {
+	paper: ExamPaperDetail
+	paperId: string
+}) {
+	const queryClient = useQueryClient()
 	const [localSections, setLocalSections] = useState<LocalSection[]>(() =>
 		buildSections(paper),
 	)
 
-	// Re-sync when questions are added or removed (e.g. after delete + router.refresh())
-	const questionIds = paper.questions
-		.map((q) => q.id)
+	// Re-sync local DnD state whenever questions change — tracks IDs *and*
+	// mark_scheme_status so adding/removing a mark scheme also updates the view.
+	// With React Query, `paper` only gets a new reference when the server returns
+	// new data, so adding it to deps here is safe (no infinite loops).
+	const questionFingerprint = paper.questions
+		.map((q) => `${q.id}:${q.mark_scheme_status ?? "none"}`)
 		.sort()
 		.join(",")
-	// biome-ignore lint/correctness/useExhaustiveDependencies: intentional — only sync on id set changes
+	// biome-ignore lint/correctness/useExhaustiveDependencies: fingerprint intentionally used instead of full paper object
 	useEffect(() => {
 		setLocalSections(buildSections(paper))
-	}, [questionIds])
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [questionFingerprint])
 
 	const sensors = useSensors(
 		useSensor(PointerSensor, {
@@ -507,7 +520,13 @@ export function ExamPaperPaperView({ paper }: { paper: ExamPaperDetail }) {
 				paper.id,
 				newOrder.map((s) => s.id),
 			)
-			if (!result.ok) toast.error(result.error)
+			if (!result.ok) {
+				toast.error(result.error)
+			} else {
+				void queryClient.invalidateQueries({
+					queryKey: queryKeys.examPaper(paperId),
+				})
+			}
 		} else {
 			// Reorder question within its section
 			const section = localSections.find((s) =>
@@ -534,7 +553,13 @@ export function ExamPaperPaperView({ paper }: { paper: ExamPaperDetail }) {
 				section.id,
 				newQuestions.map((q) => q.id),
 			)
-			if (!result.ok) toast.error(result.error)
+			if (!result.ok) {
+				toast.error(result.error)
+			} else {
+				void queryClient.invalidateQueries({
+					queryKey: queryKeys.examPaper(paperId),
+				})
+			}
 		}
 	}
 
@@ -593,7 +618,12 @@ export function ExamPaperPaperView({ paper }: { paper: ExamPaperDetail }) {
 							<SortableSection
 								key={section.id}
 								section={section}
-								onQuestionDeleted={() => router.refresh()}
+								paperId={paperId}
+								onQuestionDeleted={() =>
+									void queryClient.invalidateQueries({
+										queryKey: queryKeys.examPaper(paperId),
+									})
+								}
 							/>
 						))}
 					</SortableContext>

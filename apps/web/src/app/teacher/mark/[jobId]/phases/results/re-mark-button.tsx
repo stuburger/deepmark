@@ -2,43 +2,43 @@
 
 import { Button } from "@/components/ui/button"
 import { retriggerGrading } from "@/lib/mark-actions"
+import { queryKeys } from "@/lib/query-keys"
+import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { Loader2, RefreshCw } from "lucide-react"
-import { useRouter } from "next/navigation"
-import { useState } from "react"
+import { toast } from "sonner"
 
 export function ReMarkButton({ jobId }: { jobId: string }) {
-	const router = useRouter()
-	const [loading, setLoading] = useState(false)
-	const [error, setError] = useState<string | null>(null)
+	const queryClient = useQueryClient()
 
-	async function handleRemark() {
-		setLoading(true)
-		setError(null)
-		const result = await retriggerGrading(jobId)
-		if (!result.ok) {
-			setError(result.error)
-			setLoading(false)
-			return
-		}
-		router.refresh()
-	}
+	const { mutate, isPending, error } = useMutation({
+		mutationFn: () => retriggerGrading(jobId),
+		onSuccess: (result) => {
+			if (!result.ok) {
+				toast.error(result.error)
+				return
+			}
+			void queryClient.invalidateQueries({
+				queryKey: queryKeys.studentJob(jobId),
+			})
+		},
+	})
 
 	return (
 		<div className="flex flex-col items-start gap-1">
 			<Button
 				variant="outline"
 				size="sm"
-				disabled={loading}
-				onClick={() => void handleRemark()}
+				disabled={isPending}
+				onClick={() => mutate()}
 			>
-				{loading ? (
+				{isPending ? (
 					<Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" />
 				) : (
 					<RefreshCw className="h-3.5 w-3.5 mr-2" />
 				)}
 				Re-mark
 			</Button>
-			{error && <p className="text-xs text-destructive">{error}</p>}
+			{error && <p className="text-xs text-destructive">{error.message}</p>}
 		</div>
 	)
 }

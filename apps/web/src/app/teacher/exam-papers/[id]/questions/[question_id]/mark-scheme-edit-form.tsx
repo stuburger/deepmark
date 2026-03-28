@@ -10,10 +10,15 @@ import {
 import { Input } from "@/components/ui/input"
 import { Spinner } from "@/components/ui/spinner"
 import { Textarea } from "@/components/ui/textarea"
+import type { MarkSchemeInput } from "@/lib/dashboard-actions"
 import { createMarkScheme, updateMarkScheme } from "@/lib/dashboard-actions"
 import { CheckCircle2, Plus, Trash2 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useState, useTransition } from "react"
+import {
+	useCreateMarkScheme,
+	useUpdateMarkScheme,
+} from "../../hooks/use-exam-paper-mutations"
 
 type MarkPointRow = { description: string; points: string }
 
@@ -64,13 +69,21 @@ type WrittenEdit = BaseEdit & {
 	initialMarkPoints: Array<{ description: string; points: number }>
 }
 
-type Props = McqCreate | McqEdit | WrittenCreate | WrittenEdit
+type Props = (McqCreate | McqEdit | WrittenCreate | WrittenEdit) & {
+	onSuccess?: () => void
+	/** When provided, enables optimistic cache updates on the exam paper query. */
+	paperId?: string
+}
 
 export function MarkSchemeEditForm(props: Props) {
 	const isEdit = props.markSchemeId !== undefined
 	const isMcq = props.questionType === "multiple_choice"
 	const router = useRouter()
 	const [isPending, startTransition] = useTransition()
+
+	// Optimistic hooks — active only when paperId is known (exam paper context)
+	const createHook = useCreateMarkScheme(props.paperId ?? "")
+	const updateHook = useUpdateMarkScheme(props.paperId ?? "")
 
 	const [description, setDescription] = useState(() => {
 		if (isEdit) return props.initialDescription
@@ -117,6 +130,9 @@ export function MarkSchemeEditForm(props: Props) {
 
 	const [error, setError] = useState<string | null>(null)
 	const [saved, setSaved] = useState(false)
+
+	const isHookPending = createHook.isPending || updateHook.isPending
+	const effectivelyPending = isPending || isHookPending
 
 	// For written edit: only show mark points if the existing method is point_based
 	const showMarkPoints =
@@ -187,41 +203,77 @@ export function MarkSchemeEditForm(props: Props) {
 			}
 		}
 
-		startTransition(async () => {
-			const baseInput = {
-				description: trimmedDescription,
-				guidance: guidance.trim() || null,
+		const baseInput = {
+			description: trimmedDescription,
+			guidance: guidance.trim() || null,
+		}
+
+		const input: MarkSchemeInput = isMcq
+			? {
+					...baseInput,
+					marking_method: "deterministic" as const,
+					correct_option_labels: correctLabels,
+				}
+			: {
+					...baseInput,
+					marking_method: "point_based" as const,
+					mark_points: showMarkPoints
+						? markPoints.map((mp) => ({
+								description: mp.description.trim(),
+								points: Number.parseInt(mp.points, 10),
+							}))
+						: [],
+				}
+
+		if (props.paperId) {
+			// Use optimistic mutation hooks in exam paper context
+			if (isEdit) {
+				updateHook.mutate(
+					{
+						markSchemeId: props.markSchemeId,
+						questionId: "",
+						input,
+					},
+					{
+						onSuccess: () => {
+							setSaved(true)
+							props.onSuccess?.()
+						},
+						onError: (err) => setError(err.message),
+					},
+				)
+			} else {
+				createHook.mutate(
+					{ questionId: props.questionId, input },
+					{
+						onSuccess: () => {
+							setSaved(true)
+							props.onSuccess?.()
+						},
+						onError: (err) => setError(err.message),
+					},
+				)
 			}
+		} else {
+			// Standalone page fallback — no cache to update
+			startTransition(async () => {
+				const result = isEdit
+					? await updateMarkScheme(props.markSchemeId, input)
+					: await createMarkScheme(props.questionId, input)
 
-			const input = isMcq
-				? {
-						...baseInput,
-						marking_method: "deterministic" as const,
-						correct_option_labels: correctLabels,
-					}
-				: {
-						...baseInput,
-						marking_method: "point_based" as const,
-						mark_points: showMarkPoints
-							? markPoints.map((mp) => ({
-									description: mp.description.trim(),
-									points: Number.parseInt(mp.points, 10),
-								}))
-							: [],
-					}
+				if (!result.ok) {
+					setError(result.error)
+					return
+				}
 
-			const result = isEdit
-				? await updateMarkScheme(props.markSchemeId, input)
-				: await createMarkScheme(props.questionId, input)
-
-			if (!result.ok) {
-				setError(result.error)
-				return
-			}
-
-			setSaved(true)
-			router.refresh()
-		})
+				setSaved(true)
+				if (props.onSuccess) {
+					props.onSuccess()
+				} else {
+					router.refresh()
+				}
+			})
+		}
 	}
 
 	return (
@@ -236,7 +288,7 @@ export function MarkSchemeEditForm(props: Props) {
 							setSaved(false)
 						}}
 						rows={3}
-						disabled={isPending}
+						disabled={effectivelyPending}
 						placeholder={
 							isMcq
 								? "e.g. The correct answer is B."
@@ -270,7 +322,7 @@ export function MarkSchemeEditForm(props: Props) {
 												type="checkbox"
 												checked={checked}
 												onChange={() => toggleCorrectLabel(opt.option_label)}
-												disabled={isPending}
+												disabled={effectivelyPending}
 												className="mt-0.5 accent-primary"
 											/>
 											<span className="shrink-0 font-mono font-medium text-sm w-4">
@@ -305,7 +357,7 @@ export function MarkSchemeEditForm(props: Props) {
 										onChange={(e) =>
 											updateMarkPoint(i, "description", e.target.value)
 										}
-										disabled={isPending}
+										disabled={effectivelyPending}
 										placeholder={`Mark point ${i + 1}`}
 										className="flex-1 text-sm"
 									/>
@@ -316,7 +368,7 @@ export function MarkSchemeEditForm(props: Props) {
 										onChange={(e) =>
 											updateMarkPoint(i, "points", e.target.value)
 										}
-										disabled={isPending}
+										disabled={effectivelyPending}
 										className="w-16 text-sm"
 										aria-label="Points"
 									/>
@@ -325,7 +377,7 @@ export function MarkSchemeEditForm(props: Props) {
 										variant="ghost"
 										size="icon"
 										onClick={() => removeMarkPoint(i)}
-										disabled={isPending || markPoints.length <= 1}
+										disabled={effectivelyPending || markPoints.length <= 1}
 										className="shrink-0 text-muted-foreground hover:text-destructive"
 									>
 										<Trash2 className="h-4 w-4" />
@@ -338,7 +390,7 @@ export function MarkSchemeEditForm(props: Props) {
 							variant="outline"
 							size="sm"
 							onClick={addMarkPoint}
-							disabled={isPending}
+							disabled={effectivelyPending}
 							className="mt-2"
 						>
 							<Plus className="h-3.5 w-3.5 mr-1.5" />
@@ -364,7 +416,7 @@ export function MarkSchemeEditForm(props: Props) {
 							setSaved(false)
 						}}
 						rows={2}
-						disabled={isPending}
+						disabled={effectivelyPending}
 						placeholder="Additional guidance for markers…"
 						className="resize-y text-sm"
 					/>
@@ -379,8 +431,8 @@ export function MarkSchemeEditForm(props: Props) {
 				)}
 
 			<div className="mt-4 flex items-center gap-3">
-				<Button type="submit" size="sm" disabled={isPending}>
-					{isPending ? (
+				<Button type="submit" size="sm" disabled={effectivelyPending}>
+					{effectivelyPending ? (
 						<>
 							<Spinner className="h-3.5 w-3.5 mr-1.5" />
 							Saving…

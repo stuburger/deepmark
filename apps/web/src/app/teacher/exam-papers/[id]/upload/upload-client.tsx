@@ -15,10 +15,12 @@ import {
 	createLinkedPdfUpload,
 	getPdfIngestionJobStatus,
 } from "@/lib/pdf-ingestion-actions"
+import { queryKeys } from "@/lib/query-keys"
+import { useQuery } from "@tanstack/react-query"
 import { CheckCircle2, Upload } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 
 type DocumentType = "mark_scheme" | "exemplar" | "question_paper"
 
@@ -175,30 +177,38 @@ export function LinkedPdfUploadClient({
 	const [documentType, setDocumentType] = useState<DocumentType>("mark_scheme")
 	const [uploading, setUploading] = useState(false)
 	const [jobId, setJobId] = useState<string | null>(null)
-	const [jobStatus, setJobStatus] = useState<string | null>(null)
 	const [error, setError] = useState<string | null>(null)
 	const [retrying, setRetrying] = useState(false)
 
-	const pollStatus = useCallback(
-		async (id: string) => {
-			const result = await getPdfIngestionJobStatus(id)
-			if (!result.ok) return
-			setJobStatus(result.status)
-			if (result.status === "ocr_complete") {
-				router.push(`/teacher/exam-papers/${examPaperId}`)
-			}
-			if (result.status === "failed") {
-				setError(result.error ?? "Processing failed. Please try again.")
-			}
+	// Poll the ingestion job status while it's active
+	const { data: jobStatusData } = useQuery({
+		queryKey: queryKeys.ingestionJob(jobId ?? ""),
+		queryFn: async () => {
+			if (!jobId) return null
+			const result = await getPdfIngestionJobStatus(jobId)
+			if (!result.ok) return null
+			return result
 		},
-		[router, examPaperId],
-	)
+		enabled: !!jobId,
+		refetchInterval: (q) => {
+			const status = q.state.data?.status
+			if (!status || status === "ocr_complete" || status === "failed")
+				return false
+			return 3000
+		},
+	})
 
+	const jobStatus = jobStatusData?.status ?? null
+
+	// Navigate when complete; surface error when failed
 	useEffect(() => {
-		if (!jobId || jobStatus === "ocr_complete" || jobStatus === "failed") return
-		const interval = setInterval(() => pollStatus(jobId), 3000)
-		return () => clearInterval(interval)
-	}, [jobId, jobStatus, pollStatus])
+		if (jobStatus === "ocr_complete") {
+			router.push(`/teacher/exam-papers/${examPaperId}`)
+		}
+		if (jobStatus === "failed" && jobStatusData?.error) {
+			setError(jobStatusData.error ?? "Processing failed. Please try again.")
+		}
+	}, [jobStatus, jobStatusData?.error, examPaperId, router])
 
 	async function handleFile(file: File) {
 		if (!file.type.includes("pdf")) {

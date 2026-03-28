@@ -2,39 +2,39 @@
 
 import { Button } from "@/components/ui/button"
 import { retriggerOcr } from "@/lib/mark-actions"
+import { queryKeys } from "@/lib/query-keys"
+import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { Loader2 } from "lucide-react"
-import { useRouter } from "next/navigation"
-import { useState } from "react"
+import { toast } from "sonner"
 
 export function ReScanButton({ jobId }: { jobId: string }) {
-	const router = useRouter()
-	const [loading, setLoading] = useState(false)
-	const [error, setError] = useState<string | null>(null)
+	const queryClient = useQueryClient()
 
-	async function handleRescan() {
-		setLoading(true)
-		setError(null)
-		const result = await retriggerOcr(jobId)
-		if (!result.ok) {
-			setError(result.error)
-			setLoading(false)
-			return
-		}
-		router.refresh()
-	}
+	const { mutate, isPending, error } = useMutation({
+		mutationFn: () => retriggerOcr(jobId),
+		onSuccess: (result) => {
+			if (!result.ok) {
+				toast.error(result.error)
+				return
+			}
+			void queryClient.invalidateQueries({
+				queryKey: queryKeys.studentJob(jobId),
+			})
+		},
+	})
 
 	return (
 		<div className="flex flex-col items-start gap-1">
 			<Button
 				variant="outline"
 				size="sm"
-				disabled={loading}
-				onClick={() => void handleRescan()}
+				disabled={isPending}
+				onClick={() => mutate()}
 			>
-				{loading && <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" />}
+				{isPending && <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" />}
 				Re-scan pages
 			</Button>
-			{error && <p className="text-xs text-destructive">{error}</p>}
+			{error && <p className="text-xs text-destructive">{error.message}</p>}
 		</div>
 	)
 }

@@ -1,10 +1,7 @@
 "use client"
 
-import type { StudentPaperJobPayload } from "@/lib/mark-actions"
 import { Loader2 } from "lucide-react"
-import { useRouter } from "next/navigation"
-import { useCallback } from "react"
-import { useJobPoller } from "../shared/use-job-poller"
+import { useJobQuery } from "../shared/use-job-query"
 
 const STATUS_LABELS: Record<string, string> = {
 	pending: "Queued — waiting to start",
@@ -15,8 +12,8 @@ const STATUS_LABELS: Record<string, string> = {
 }
 
 /**
- * Shown while the scan is being processed by OCR (pending / processing states).
- * Polls every 5 seconds and triggers a server refresh when the status changes.
+ * Shown while the scan is being processed by OCR.
+ * Reads live status from the shared useJobQuery cache — no manual polling needed.
  */
 export function ScanProcessingPanel({
 	jobId,
@@ -25,32 +22,9 @@ export function ScanProcessingPanel({
 	jobId: string
 	initialStatus: string
 }) {
-	const router = useRouter()
-
-	const handleResult = useCallback(
-		(data: StudentPaperJobPayload) => {
-			if (data.status !== initialStatus) {
-				router.refresh()
-			}
-		},
-		[initialStatus, router],
-	)
-
-	const POLLING_STATUSES = new Set([
-		"pending",
-		"processing",
-		"text_extracted",
-		"grading",
-	])
-
-	useJobPoller({
-		jobId,
-		intervalMs: 5000,
-		enabled: POLLING_STATUSES.has(initialStatus),
-		onResult: handleResult,
-	})
-
-	const label = STATUS_LABELS[initialStatus] ?? `Processing (${initialStatus})`
+	const { data } = useJobQuery(jobId)
+	const status = data?.status ?? initialStatus
+	const label = STATUS_LABELS[status] ?? `Processing (${status})`
 
 	return (
 		<div className="flex items-center gap-3 rounded-xl border bg-card px-4 py-3">

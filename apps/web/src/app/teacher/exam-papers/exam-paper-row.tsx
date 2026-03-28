@@ -7,9 +7,10 @@ import {
 	type ExamPaperListItem,
 	deleteExamPaper,
 } from "@/lib/dashboard-actions"
+import { queryKeys } from "@/lib/query-keys"
+import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { Globe, Lock, Trash2 } from "lucide-react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
 import { useState } from "react"
 
 type BadgeVariant = "default" | "secondary" | "destructive" | "outline"
@@ -48,19 +49,17 @@ function truncate(s: string, max = 40) {
 }
 
 export function ExamPaperRow({ paper }: { paper: ExamPaperListItem }) {
-	const router = useRouter()
+	const queryClient = useQueryClient()
 	const [confirmOpen, setConfirmOpen] = useState(false)
-	const [deleting, setDeleting] = useState(false)
 
-	async function handleDelete() {
-		setDeleting(true)
-		const result = await deleteExamPaper(paper.id)
-		setDeleting(false)
-		if (result.ok) {
+	const { mutate: doDelete, isPending: deleting } = useMutation({
+		mutationFn: () => deleteExamPaper(paper.id),
+		onSuccess: (result) => {
+			if (!result.ok) return
 			setConfirmOpen(false)
-			router.refresh()
-		}
-	}
+			void queryClient.invalidateQueries({ queryKey: queryKeys.examPapers() })
+		},
+	})
 
 	return (
 		<>
@@ -124,7 +123,7 @@ export function ExamPaperRow({ paper }: { paper: ExamPaperListItem }) {
 				description={`This will permanently delete "${truncate(paper.title, 50)}" along with all its questions, mark schemes, and uploaded PDFs. This cannot be undone.`}
 				confirmLabel={deleting ? "Deleting…" : "Delete paper"}
 				loading={deleting}
-				onConfirm={handleDelete}
+				onConfirm={() => doDelete()}
 			/>
 		</>
 	)

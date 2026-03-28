@@ -18,6 +18,7 @@ import {
 import { CheckCircle2, Plus, Trash2 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useState, useTransition } from "react"
+import { useUpdateMarkScheme } from "../../hooks/use-exam-paper-mutations"
 
 type LevelRow = {
 	level: string
@@ -38,6 +39,9 @@ type Props = {
 	markSchemeId: string
 	initialDescription: string
 	initialGuidance: string
+	onSuccess?: () => void
+	/** When provided, enables optimistic cache updates on the exam paper query. */
+	paperId?: string
 	initialMarkingRules: {
 		command_word?: string
 		items_required?: number
@@ -60,10 +64,13 @@ export function LorMarkSchemeEditForm({
 	markSchemeId,
 	initialDescription,
 	initialGuidance,
+	onSuccess,
+	paperId,
 	initialMarkingRules,
 }: Props) {
 	const router = useRouter()
 	const [isPending, startTransition] = useTransition()
+	const updateHook = useUpdateMarkScheme(paperId ?? "")
 
 	const [description, setDescription] = useState(initialDescription)
 	const [guidance, setGuidance] = useState(initialGuidance)
@@ -108,6 +115,7 @@ export function LorMarkSchemeEditForm({
 
 	const [error, setError] = useState<string | null>(null)
 	const [saved, setSaved] = useState(false)
+	const effectivelyPending = isPending || updateHook.isPending
 
 	function updateLevel(index: number, key: keyof LevelRow, value: string) {
 		setLevels((prev) =>
@@ -271,20 +279,39 @@ export function LorMarkSchemeEditForm({
 			...(parsedCaps.length > 0 ? { caps: parsedCaps } : {}),
 		}
 
-		startTransition(async () => {
-			const result = await updateMarkScheme(markSchemeId, {
-				marking_method: "level_of_response",
-				description: trimmedDescription,
-				guidance: guidance.trim() || null,
-				marking_rules: markingRules,
+		const input = {
+			marking_method: "level_of_response" as const,
+			description: trimmedDescription,
+			guidance: guidance.trim() || null,
+			marking_rules: markingRules,
+		}
+
+		if (paperId) {
+			updateHook.mutate(
+				{ markSchemeId, questionId: "", input },
+				{
+					onSuccess: () => {
+						setSaved(true)
+						onSuccess?.()
+					},
+					onError: (err) => setError(err.message),
+				},
+			)
+		} else {
+			startTransition(async () => {
+				const result = await updateMarkScheme(markSchemeId, input)
+				if (!result.ok) {
+					setError(result.error)
+					return
+				}
+				setSaved(true)
+				if (onSuccess) {
+					onSuccess()
+				} else {
+					router.refresh()
+				}
 			})
-			if (!result.ok) {
-				setError(result.error)
-				return
-			}
-			setSaved(true)
-			router.refresh()
-		})
+		}
 	}
 
 	return (
@@ -299,7 +326,7 @@ export function LorMarkSchemeEditForm({
 							setSaved(false)
 						}}
 						rows={3}
-						disabled={isPending}
+						disabled={effectivelyPending}
 						className="resize-y text-sm"
 					/>
 				</Field>
@@ -313,7 +340,7 @@ export function LorMarkSchemeEditForm({
 								setCommandWord(e.target.value)
 								setSaved(false)
 							}}
-							disabled={isPending}
+							disabled={effectivelyPending}
 							placeholder="e.g. Explain"
 						/>
 					</Field>
@@ -327,7 +354,7 @@ export function LorMarkSchemeEditForm({
 								setItemsRequired(e.target.value)
 								setSaved(false)
 							}}
-							disabled={isPending}
+							disabled={effectivelyPending}
 							placeholder="optional"
 						/>
 					</Field>
@@ -347,7 +374,7 @@ export function LorMarkSchemeEditForm({
 										min={1}
 										value={row.level}
 										onChange={(e) => updateLevel(i, "level", e.target.value)}
-										disabled={isPending}
+										disabled={effectivelyPending}
 										placeholder="Level"
 									/>
 									<Input
@@ -355,7 +382,7 @@ export function LorMarkSchemeEditForm({
 										min={0}
 										value={row.minMark}
 										onChange={(e) => updateLevel(i, "minMark", e.target.value)}
-										disabled={isPending}
+										disabled={effectivelyPending}
 										placeholder="Min mark"
 									/>
 									<Input
@@ -363,7 +390,7 @@ export function LorMarkSchemeEditForm({
 										min={0}
 										value={row.maxMark}
 										onChange={(e) => updateLevel(i, "maxMark", e.target.value)}
-										disabled={isPending}
+										disabled={effectivelyPending}
 										placeholder="Max mark"
 									/>
 									<Button
@@ -371,7 +398,7 @@ export function LorMarkSchemeEditForm({
 										variant="ghost"
 										size="icon"
 										onClick={() => removeLevel(i)}
-										disabled={isPending || levels.length <= 1}
+										disabled={effectivelyPending || levels.length <= 1}
 										className="text-muted-foreground hover:text-destructive"
 									>
 										<Trash2 className="h-4 w-4" />
@@ -380,7 +407,7 @@ export function LorMarkSchemeEditForm({
 								<Textarea
 									value={row.descriptor}
 									onChange={(e) => updateLevel(i, "descriptor", e.target.value)}
-									disabled={isPending}
+									disabled={effectivelyPending}
 									rows={3}
 									placeholder="Level descriptor"
 									className="resize-y text-sm"
@@ -390,7 +417,7 @@ export function LorMarkSchemeEditForm({
 									onChange={(e) =>
 										updateLevel(i, "aoRequirementsText", e.target.value)
 									}
-									disabled={isPending}
+									disabled={effectivelyPending}
 									rows={2}
 									placeholder="AO requirements (one per line, optional)"
 									className="resize-y text-sm"
@@ -403,7 +430,7 @@ export function LorMarkSchemeEditForm({
 						variant="outline"
 						size="sm"
 						onClick={addLevel}
-						disabled={isPending}
+						disabled={effectivelyPending}
 						className="mt-2"
 					>
 						<Plus className="h-3.5 w-3.5 mr-1.5" />
@@ -419,7 +446,7 @@ export function LorMarkSchemeEditForm({
 								<Input
 									value={cap.condition}
 									onChange={(e) => updateCap(i, "condition", e.target.value)}
-									disabled={isPending}
+									disabled={effectivelyPending}
 									placeholder="Condition"
 								/>
 								<div className="grid grid-cols-2 gap-2">
@@ -428,7 +455,7 @@ export function LorMarkSchemeEditForm({
 										min={1}
 										value={cap.maxLevel}
 										onChange={(e) => updateCap(i, "maxLevel", e.target.value)}
-										disabled={isPending}
+										disabled={effectivelyPending}
 										placeholder="Max level (or leave blank)"
 									/>
 									<Input
@@ -436,14 +463,14 @@ export function LorMarkSchemeEditForm({
 										min={0}
 										value={cap.maxMark}
 										onChange={(e) => updateCap(i, "maxMark", e.target.value)}
-										disabled={isPending}
+										disabled={effectivelyPending}
 										placeholder="Max mark (or leave blank)"
 									/>
 								</div>
 								<Input
 									value={cap.reason}
 									onChange={(e) => updateCap(i, "reason", e.target.value)}
-									disabled={isPending}
+									disabled={effectivelyPending}
 									placeholder="Reason"
 								/>
 								<Button
@@ -451,7 +478,7 @@ export function LorMarkSchemeEditForm({
 									variant="ghost"
 									size="sm"
 									onClick={() => removeCap(i)}
-									disabled={isPending}
+									disabled={effectivelyPending}
 									className="text-muted-foreground hover:text-destructive"
 								>
 									<Trash2 className="h-4 w-4 mr-1.5" />
@@ -465,7 +492,7 @@ export function LorMarkSchemeEditForm({
 						variant="outline"
 						size="sm"
 						onClick={addCap}
-						disabled={isPending}
+						disabled={effectivelyPending}
 						className="mt-2"
 					>
 						<Plus className="h-3.5 w-3.5 mr-1.5" />
@@ -487,7 +514,7 @@ export function LorMarkSchemeEditForm({
 							setSaved(false)
 						}}
 						rows={2}
-						disabled={isPending}
+						disabled={effectivelyPending}
 						placeholder="Additional guidance for markers…"
 						className="resize-y text-sm"
 					/>
@@ -497,8 +524,8 @@ export function LorMarkSchemeEditForm({
 			</FieldGroup>
 
 			<div className="mt-4 flex items-center gap-3">
-				<Button type="submit" size="sm" disabled={isPending}>
-					{isPending ? (
+				<Button type="submit" size="sm" disabled={effectivelyPending}>
+					{effectivelyPending ? (
 						<>
 							<Spinner className="h-3.5 w-3.5 mr-1.5" />
 							Saving…

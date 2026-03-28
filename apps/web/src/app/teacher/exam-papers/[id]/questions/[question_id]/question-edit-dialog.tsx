@@ -14,6 +14,7 @@ export function QuestionEditDialog({
 	initialText,
 	initialPoints,
 	initialQuestionNumber,
+	paperId,
 	open,
 	onOpenChange,
 	onSaved,
@@ -22,6 +23,7 @@ export function QuestionEditDialog({
 	initialText: string
 	initialPoints: number | null
 	initialQuestionNumber: string | null
+	paperId?: string
 	open: boolean
 	onOpenChange: (open: boolean) => void
 	onSaved?: () => void
@@ -40,6 +42,7 @@ export function QuestionEditDialog({
 					initialText={initialText}
 					initialPoints={initialPoints}
 					initialQuestionNumber={initialQuestionNumber}
+					paperId={paperId}
 					onSaved={onSaved}
 				/>
 			</DialogContent>

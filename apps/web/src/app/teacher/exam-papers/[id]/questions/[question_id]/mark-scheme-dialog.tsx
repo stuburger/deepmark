@@ -18,7 +18,6 @@ import {
 	updateMarkScheme,
 } from "@/lib/dashboard-actions"
 import { CheckCircle2, Sparkles } from "lucide-react"
-import { useRouter } from "next/navigation"
 import { useState } from "react"
 import { LorMarkSchemeEditForm } from "./lor-mark-scheme-edit-form"
 import { MarkSchemeEditForm } from "./mark-scheme-edit-form"
@@ -99,6 +98,8 @@ export type MarkSchemeDialogProps = (
 	| EditLorProps
 ) & {
 	onSuccess?: () => void
+	/** When provided, enables optimistic cache updates on the exam paper query. */
+	paperId?: string
 	/** Controlled open state — if provided the dialog is driven externally. */
 	open?: boolean
 	/** Required when `open` is provided. */
@@ -110,7 +111,6 @@ export type MarkSchemeDialogProps = (
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function MarkSchemeDialog(props: MarkSchemeDialogProps) {
-	const router = useRouter()
 	const [internalOpen, setInternalOpen] = useState(false)
 	const open = props.open !== undefined ? props.open : internalOpen
 	const [autofilling, setAutofilling] = useState(false)
@@ -192,7 +192,6 @@ export function MarkSchemeDialog(props: MarkSchemeDialogProps) {
 		}
 
 		setQuickSaved(true)
-		router.refresh()
 		props.onSuccess?.()
 		setTimeout(() => setQuickSaved(false), 3000)
 	}
@@ -301,6 +300,8 @@ export function MarkSchemeDialog(props: MarkSchemeDialogProps) {
 								initialMarkingRules={
 									(props as EditLorProps).initialMarkingRules
 								}
+								paperId={props.paperId}
+								onSuccess={props.onSuccess}
 							/>
 						) : (
 							<MarkSchemeFormWithAutofill
@@ -313,6 +314,8 @@ export function MarkSchemeDialog(props: MarkSchemeDialogProps) {
 										| EditWrittenProps
 								}
 								autofillValues={autofillValues}
+								paperId={props.paperId}
+								onSuccess={props.onSuccess}
 							/>
 						)}
 					</div>
@@ -327,9 +330,13 @@ export function MarkSchemeDialog(props: MarkSchemeDialogProps) {
 function MarkSchemeFormWithAutofill({
 	props,
 	autofillValues,
+	paperId,
+	onSuccess,
 }: {
 	props: CreateMcqProps | CreateWrittenProps | EditMcqProps | EditWrittenProps
 	autofillValues: AutofillValues | null
+	paperId?: string
+	onSuccess?: () => void
 }) {
 	const isMcq =
 		(props.mode === "create" && props.questionType === "multiple_choice") ||
@@ -350,6 +357,8 @@ function MarkSchemeFormWithAutofill({
 					}
 					initialDescription={autofill?.description}
 					initialCorrectOptionLabels={autofill?.correct_option_labels}
+					paperId={paperId}
+					onSuccess={onSuccess}
 				/>
 			)
 		}
@@ -361,6 +370,8 @@ function MarkSchemeFormWithAutofill({
 				initialDescription={autofill?.description}
 				initialGuidance={autofill?.guidance}
 				initialMarkPoints={autofill?.mark_points}
+				paperId={paperId}
+				onSuccess={onSuccess}
 			/>
 		)
 	}
@@ -380,6 +391,8 @@ function MarkSchemeFormWithAutofill({
 				initialCorrectOptionLabels={
 					autofill?.correct_option_labels ?? props.initialCorrectOptionLabels
 				}
+				paperId={paperId}
+				onSuccess={onSuccess}
 			/>
 		)
 	}
@@ -396,6 +409,8 @@ function MarkSchemeFormWithAutofill({
 			initialMarkPoints={
 				autofill?.mark_points ?? (props as EditWrittenProps).initialMarkPoints
 			}
+			paperId={paperId}
+			onSuccess={onSuccess}
 		/>
 	)
 }

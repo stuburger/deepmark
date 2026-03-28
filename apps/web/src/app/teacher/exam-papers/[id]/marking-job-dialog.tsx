@@ -6,23 +6,12 @@ import {
 	getJobScanPageUrls,
 	getStudentPaperJobForPaper,
 } from "@/lib/mark-actions"
-import type {
-	PageToken,
-	ScanPageUrl,
-	StudentPaperJobPayload,
-} from "@/lib/mark-actions"
+import type { StudentPaperJobPayload } from "@/lib/mark-actions"
+import { queryKeys } from "@/lib/query-keys"
+import { useQuery } from "@tanstack/react-query"
 import { Loader2 } from "lucide-react"
-import { useEffect, useState } from "react"
 import { derivePhase } from "../../mark/[jobId]/shared/phase"
-import type { MarkingPhase } from "../../mark/[jobId]/shared/phase"
 import { SubmissionView } from "../../mark/papers/[examPaperId]/submissions/[jobId]/submission-view"
-
-type DialogData = {
-	data: StudentPaperJobPayload
-	scanPages: ScanPageUrl[]
-	pageTokens: PageToken[]
-	phase: MarkingPhase
-}
 
 export function MarkingJobDialog({
 	examPaperId,
@@ -35,52 +24,50 @@ export function MarkingJobDialog({
 	open: boolean
 	onOpenChange: (open: boolean) => void
 }) {
-	const [loading, setLoading] = useState(false)
-	const [dialogData, setDialogData] = useState<DialogData | null>(null)
+	const enabled = open && !!jobId
 
-	useEffect(() => {
-		if (!jobId || !open) {
-			setDialogData(null)
-			return
-		}
+	// Three separate queries keyed correctly so that SubmissionView's internal
+	// queries (useJobQuery, jobScanUrls, jobPageTokens) hit warm cache immediately
+	// instead of seeing a mis-typed combined object under the same key.
+	const { data: jobData } = useQuery<StudentPaperJobPayload | null>({
+		queryKey: queryKeys.studentJob(jobId ?? ""),
+		queryFn: async () => {
+			if (!jobId) return null
+			const result = await getStudentPaperJobForPaper(examPaperId, jobId)
+			return result.ok ? result.data : null
+		},
+		enabled,
+		staleTime: 0,
+	})
 
-		let cancelled = false
-		setLoading(true)
+	const { data: scanPages = [] } = useQuery({
+		queryKey: queryKeys.jobScanUrls(jobId ?? ""),
+		queryFn: async () => {
+			if (!jobId) return []
+			const result = await getJobScanPageUrls(jobId)
+			return result.ok ? result.pages : []
+		},
+		enabled,
+		staleTime: Number.POSITIVE_INFINITY,
+	})
 
-		async function fetchData() {
-			if (!jobId) return
-			const [result, scanResult, tokensResult] = await Promise.all([
-				getStudentPaperJobForPaper(examPaperId, jobId),
-				getJobScanPageUrls(jobId),
-				getJobPageTokens(jobId),
-			])
+	const { data: pageTokens = [] } = useQuery({
+		queryKey: queryKeys.jobPageTokens(jobId ?? ""),
+		queryFn: async () => {
+			if (!jobId) return []
+			const result = await getJobPageTokens(jobId)
+			return result.ok ? result.tokens : []
+		},
+		enabled,
+		staleTime: Number.POSITIVE_INFINITY,
+	})
 
-			if (cancelled) return
-
-			if (!result.ok) {
-				setLoading(false)
-				return
-			}
-
-			setDialogData({
-				data: result.data,
-				scanPages: scanResult.ok ? scanResult.pages : [],
-				pageTokens: tokensResult.ok ? tokensResult.tokens : [],
-				phase: derivePhase(result.data),
-			})
-			setLoading(false)
-		}
-
-		void fetchData()
-		return () => {
-			cancelled = true
-		}
-	}, [jobId, open, examPaperId])
+	const isLoading = enabled && !jobData
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent className="sm:max-w-[98vw] h-[98vh] p-0 overflow-hidden">
-				{loading || !dialogData || !jobId ? (
+				{isLoading || !jobData || !jobId ? (
 					<div className="flex h-full items-center justify-center">
 						<Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
 					</div>
@@ -89,10 +76,10 @@ export function MarkingJobDialog({
 						mode="dialog"
 						examPaperId={examPaperId}
 						jobId={jobId}
-						initialData={dialogData.data}
-						scanPages={dialogData.scanPages}
-						pageTokens={dialogData.pageTokens}
-						initialPhase={dialogData.phase}
+						initialData={jobData}
+						scanPages={scanPages}
+						pageTokens={pageTokens}
+						initialPhase={derivePhase(jobData)}
 					/>
 				)}
 			</DialogContent>

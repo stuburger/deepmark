@@ -29,15 +29,16 @@ import type {
 } from "@/lib/dashboard-actions"
 import {
 	deleteExamPaper,
-	deleteQuestion,
+	getExamPaperDetail,
 	getSimilarQuestionsForPaper,
 	getUnlinkedMarkSchemes,
-	linkMarkSchemeToQuestion,
 } from "@/lib/dashboard-actions"
 import type { ExamPaperStats, SubmissionHistoryItem } from "@/lib/mark-actions"
 import { getExamPaperStats } from "@/lib/mark-actions"
 import type { PdfDocument } from "@/lib/pdf-ingestion-actions"
 import { getExamPaperIngestionLiveState } from "@/lib/pdf-ingestion-actions"
+import { queryKeys } from "@/lib/query-keys"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import {
 	AlertTriangle,
 	ArrowUpDown,
@@ -54,22 +55,19 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { parseAsStringEnum, useQueryState } from "nuqs"
-import { useCallback, useEffect, useRef, useState } from "react"
+import { parseAsString, parseAsStringEnum, useQueryState } from "nuqs"
+import { useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 import { DocumentUploadCards } from "./document-upload-cards"
 import { EditableTitle } from "./editable-title"
 import { ExamPaperPaperView } from "./exam-paper-paper-view"
+import {
+	useDeleteQuestion,
+	useLinkMarkScheme,
+} from "./hooks/use-exam-paper-mutations"
 import { MarkingJobDialog } from "./marking-job-dialog"
 import { SubmissionGrid } from "./submission-grid"
 import { UploadStudentScriptDialog } from "./upload-student-script-dialog"
-
-type IngestionJob = {
-	id: string
-	document_type: string
-	status: string
-	error: string | null
-}
 
 const TERMINAL = new Set(["ocr_complete", "failed", "cancelled"])
 const POLL_MS = 3000
@@ -104,7 +102,7 @@ function naturalCompare(a: string | null, b: string | null): number {
 }
 
 function schemeBadge(status: string | null) {
-	if (!status) return <Badge variant="outline">No scheme</Badge>
+	if (!status) return <Badge variant="destructive">No scheme</Badge>
 	switch (status) {
 		case "linked":
 		case "auto_linked":
@@ -148,23 +146,13 @@ function capitalize(s: string) {
 
 function TableRowDeleteButton({
 	questionId,
-	onDeleted,
+	paperId,
 }: {
 	questionId: string
-	onDeleted: () => void
+	paperId: string
 }) {
 	const [confirmOpen, setConfirmOpen] = useState(false)
-	const [deleting, setDeleting] = useState(false)
-
-	async function handleConfirm() {
-		setDeleting(true)
-		const result = await deleteQuestion(questionId)
-		setDeleting(false)
-		if (result.ok) {
-			onDeleted()
-		}
-		setConfirmOpen(false)
-	}
+	const { mutate: doDelete, isPending: deleting } = useDeleteQuestion(paperId)
 
 	return (
 		<>
@@ -190,14 +178,16 @@ function TableRowDeleteButton({
 				description="This will permanently remove the question, its mark scheme, and all associated data. This cannot be undone."
 				confirmLabel={deleting ? "Deleting…" : "Delete question"}
 				loading={deleting}
-				onConfirm={handleConfirm}
+				onConfirm={() =>
+					doDelete(questionId, { onSuccess: () => setConfirmOpen(false) })
+				}
 			/>
 		</>
 	)
 }
 
 export function ExamPaperPageShell({
-	paper,
+	paper: initialPaper,
 	initialDocs = [],
 	initialSubmissions = [],
 }: {
@@ -206,31 +196,127 @@ export function ExamPaperPageShell({
 	initialSubmissions?: SubmissionHistoryItem[]
 }) {
 	const router = useRouter()
+	const queryClient = useQueryClient()
 
-	const [jobs, setJobs] = useState<IngestionJob[]>([])
-	const [completedDocs, setCompletedDocs] = useState<PdfDocument[]>(initialDocs)
-	const prevJobStatuses = useRef<Record<string, string>>({})
+	// Live exam paper data — seeded from SSR, kept fresh by mutations
+	const { data: paper } = useQuery({
+		queryKey: queryKeys.examPaper(initialPaper.id),
+		queryFn: async () => {
+			const r = await getExamPaperDetail(initialPaper.id)
+			if (!r.ok) throw new Error(r.error)
+			return r.paper
+		},
+		initialData: initialPaper,
+	})
+
+	// Ingestion live state (active jobs + completed docs) — polls while jobs are active
+	const prevJobStatusesRef = useRef<Record<string, string>>({})
+	const { data: liveState } = useQuery({
+		queryKey: queryKeys.examPaperLiveState(paper.id),
+		queryFn: async () => {
+			const r = await getExamPaperIngestionLiveState(paper.id)
+			if (!r.ok) throw new Error(r.error)
+			return r
+		},
+		initialData: { ok: true as const, jobs: [], documents: initialDocs },
+		refetchInterval: (q) => {
+			const jobs = q.state.data?.jobs ?? []
+			return jobs.some((j) => !TERMINAL.has(j.status)) ? POLL_MS : false
+		},
+	})
+
+	// liveState is always defined — initialData guarantees it
+	const jobs = liveState.jobs
+	const completedDocs = liveState.documents
+
+	// When ingestion jobs complete, invalidate paper data + related queries
+	useEffect(() => {
+		const currentIds = new Set(jobs.map((j) => j.id))
+		let shouldRefresh = false
+
+		for (const [id, prevStatus] of Object.entries(prevJobStatusesRef.current)) {
+			if (!currentIds.has(id) && !TERMINAL.has(prevStatus)) {
+				shouldRefresh = true
+				break
+			}
+		}
+
+		for (const job of jobs) {
+			const prev = prevJobStatusesRef.current[job.id]
+			if (
+				prev !== undefined &&
+				prev !== job.status &&
+				TERMINAL.has(job.status)
+			) {
+				shouldRefresh = true
+			}
+			prevJobStatusesRef.current[job.id] = job.status
+		}
+
+		for (const id of Object.keys(prevJobStatusesRef.current)) {
+			if (!currentIds.has(id)) {
+				delete prevJobStatusesRef.current[id]
+			}
+		}
+
+		if (shouldRefresh) {
+			void queryClient.invalidateQueries({
+				queryKey: queryKeys.examPaper(paper.id),
+			})
+			void queryClient.invalidateQueries({
+				queryKey: queryKeys.similarQuestions(paper.id),
+			})
+			void queryClient.invalidateQueries({
+				queryKey: queryKeys.unlinkedMarkSchemes(paper.id),
+			})
+		}
+	}, [jobs, paper.id, queryClient])
 
 	// Similarity / duplicate detection
-	const [similarPairs, setSimilarPairs] = useState<SimilarPair[]>([])
 	const [duplicateBannerDismissed, setDuplicateBannerDismissed] =
 		useState(false)
 
+	const { data: similarPairs = [] } = useQuery<SimilarPair[]>({
+		queryKey: queryKeys.similarQuestions(paper.id),
+		queryFn: async () => {
+			const r = await getSimilarQuestionsForPaper(paper.id)
+			if (!r.ok) return []
+			return r.pairs
+		},
+	})
+
 	// Unlinked mark schemes
-	const [unlinkedItems, setUnlinkedItems] = useState<UnlinkedMarkScheme[]>([])
 	const [linkingItem, setLinkingItem] = useState<UnlinkedMarkScheme | null>(
 		null,
 	)
 	const [linkingTargetId, setLinkingTargetId] = useState<string>("")
-	const [linkingBusy, setLinkingBusy] = useState(false)
+
+	const { data: unlinkedItems = [] } = useQuery<UnlinkedMarkScheme[]>({
+		queryKey: queryKeys.unlinkedMarkSchemes(paper.id),
+		queryFn: async () => {
+			const r = await getUnlinkedMarkSchemes(paper.id)
+			if (!r.ok) return []
+			return r.items
+		},
+	})
 
 	// Upload student script
 	const [uploadScriptOpen, setUploadScriptOpen] = useState(false)
-	const [markingJobId, setMarkingJobId] = useState<string | null>(null)
+	const [markingJobId, setMarkingJobId] = useQueryState("job", parseAsString)
 
-	// Delete
+	// Delete exam paper
 	const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
-	const [deleting, setDeleting] = useState(false)
+	const { mutate: doDeletePaper, isPending: deleting } = useMutation({
+		mutationFn: () => deleteExamPaper(paper.id),
+		onSuccess: (result) => {
+			if (!result.ok) {
+				toast.error(result.error)
+				return
+			}
+			router.push("/teacher/exam-papers")
+		},
+		onError: () => toast.error("Failed to delete exam paper"),
+	})
 
 	// Sort state
 	const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({
@@ -251,127 +337,24 @@ export function ExamPaperPageShell({
 
 	function handleTabChange(tab: "paper" | "submissions" | "analytics") {
 		setActiveTab(tab)
-		if (tab === "analytics") loadAnalytics()
 	}
 
-	// Analytics — lazy loaded on first tab activation
-	const [analyticsStats, setAnalyticsStats] = useState<ExamPaperStats | null>(
-		null,
-	)
-	const [analyticsLoading, setAnalyticsLoading] = useState(false)
-	const analyticsLoadedRef = useRef(false)
-
-	function loadAnalytics() {
-		if (analyticsLoadedRef.current) return
-		analyticsLoadedRef.current = true
-		setAnalyticsLoading(true)
-		getExamPaperStats(paper.id).then((r) => {
-			setAnalyticsLoading(false)
-			if (r.ok) setAnalyticsStats(r.stats)
+	// Analytics — lazy loaded on first tab activation via enabled flag
+	const { data: analyticsStats, isLoading: analyticsLoading } =
+		useQuery<ExamPaperStats | null>({
+			queryKey: queryKeys.examPaperStats(paper.id),
+			queryFn: async () => {
+				const r = await getExamPaperStats(paper.id)
+				if (!r.ok) return null
+				return r.stats
+			},
+			enabled: activeTab === "analytics",
+			staleTime: 60 * 1000,
 		})
-	}
 
-	// Trigger analytics load if the page lands directly on the analytics tab
-	useEffect(() => {
-		if (activeTab === "analytics") loadAnalytics()
-		// intentionally run only on mount
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [])
-
-	/** Single poll for jobs + completed PDF docs (one server round-trip). */
-	const fetchIngestionLiveState = useCallback(async () => {
-		const r = await getExamPaperIngestionLiveState(paper.id)
-		if (!r.ok) return
-		setJobs(r.jobs)
-		setCompletedDocs(r.documents)
-	}, [paper.id])
-
-	useEffect(() => {
-		const run = () => void fetchIngestionLiveState()
-		const initial = setTimeout(run, 0)
-		const id = setInterval(run, POLL_MS)
-		return () => {
-			clearTimeout(initial)
-			clearInterval(id)
-		}
-	}, [fetchIngestionLiveState])
-
-	useEffect(() => {
-		const currentIds = new Set(jobs.map((j) => j.id))
-		let shouldRefresh = false
-
-		// Successful completion: job becomes ocr_complete and drops out of the
-		// "active jobs" list entirely, so we never see a terminal status in-array.
-		for (const [id, prevStatus] of Object.entries(prevJobStatuses.current)) {
-			if (!currentIds.has(id) && !TERMINAL.has(prevStatus)) {
-				shouldRefresh = true
-				break
-			}
-		}
-
-		for (const job of jobs) {
-			const prev = prevJobStatuses.current[job.id]
-			if (
-				prev !== undefined &&
-				prev !== job.status &&
-				TERMINAL.has(job.status)
-			) {
-				shouldRefresh = true
-			}
-			prevJobStatuses.current[job.id] = job.status
-		}
-
-		for (const id of Object.keys(prevJobStatuses.current)) {
-			if (!currentIds.has(id)) {
-				delete prevJobStatuses.current[id]
-			}
-		}
-
-		if (shouldRefresh) {
-			router.refresh()
-			getSimilarQuestionsForPaper(paper.id).then((r) => {
-				if (r.ok) setSimilarPairs(r.pairs)
-			})
-			getUnlinkedMarkSchemes(paper.id).then((r) => {
-				if (r.ok) setUnlinkedItems(r.items)
-			})
-		}
-	}, [jobs, router, paper.id])
-
-	// Load similarity pairs once on mount (lazy, non-blocking)
-	useEffect(() => {
-		getSimilarQuestionsForPaper(paper.id).then((r) => {
-			if (r.ok) setSimilarPairs(r.pairs)
-		})
-	}, [paper.id])
-
-	// Load unlinked mark schemes on mount (lazy, non-blocking)
-	useEffect(() => {
-		getUnlinkedMarkSchemes(paper.id).then((r) => {
-			if (r.ok) setUnlinkedItems(r.items)
-		})
-	}, [paper.id])
-
-	async function handleLinkMarkScheme() {
-		if (!linkingItem || !linkingTargetId) return
-		setLinkingBusy(true)
-		const result = await linkMarkSchemeToQuestion(
-			linkingItem.ghostQuestionId,
-			linkingTargetId,
-		)
-		setLinkingBusy(false)
-		if (!result.ok) {
-			toast.error(result.error)
-			return
-		}
-		setLinkingItem(null)
-		setLinkingTargetId("")
-		router.refresh()
-		// Re-fetch unlinked items after linking
-		getUnlinkedMarkSchemes(paper.id).then((r) => {
-			if (r.ok) setUnlinkedItems(r.items)
-		})
-	}
+	// Link mark scheme mutation — uses optimistic hook
+	const { mutate: doLinkMarkScheme, isPending: linkingBusy } =
+		useLinkMarkScheme(paper.id)
 
 	function toggleSort(key: SortKey) {
 		setSort((prev) =>
@@ -379,17 +362,6 @@ export function ExamPaperPageShell({
 				? { key, dir: prev.dir === "asc" ? "desc" : "asc" }
 				: { key, dir: "asc" },
 		)
-	}
-
-	async function handleDelete() {
-		setDeleting(true)
-		const result = await deleteExamPaper(paper.id)
-		setDeleting(false)
-		if (!result.ok) {
-			toast.error(result.error)
-			return
-		}
-		router.push("/teacher/exam-papers")
 	}
 
 	// Build a set of question IDs that have at least one similar pair
@@ -435,12 +407,10 @@ export function ExamPaperPageShell({
 			const pb = b.points ?? -1
 			cmp = pa - pb
 		} else if (sort.key === "similarity") {
-			// Duplicates first (group them), then by question number
 			const aDup = duplicateIds.has(a.id) ? 0 : 1
 			const bDup = duplicateIds.has(b.id) ? 0 : 1
 			cmp = aDup - bDup
 			if (cmp === 0) {
-				// Within duplicates, group actual pairs together
 				const aPairId =
 					similarPairs.find(
 						(p) => p.questionId === a.id || p.similarToId === a.id,
@@ -593,10 +563,31 @@ export function ExamPaperPageShell({
 								examPaperId={paper.id}
 								completedDocs={completedDocs}
 								activeJobs={jobs}
-								onJobStarted={() => void fetchIngestionLiveState()}
+								onJobStarted={() =>
+									void queryClient.invalidateQueries({
+										queryKey: queryKeys.examPaperLiveState(paper.id),
+									})
+								}
 							/>
 						</CardContent>
 					</Card>
+
+					{/* Missing mark scheme banner */}
+					{totalQuestions > 0 && !allQuestionsHaveMarkSchemes && (
+						<div className="flex items-center gap-3 rounded-lg border border-destructive/40 bg-destructive/5 px-3 py-2.5 text-sm">
+							<AlertTriangle className="h-4 w-4 shrink-0 text-destructive" />
+							<span className="flex-1 text-destructive dark:text-red-400">
+								<span className="font-medium">
+									{totalQuestions - questionsWithMarkScheme} of {totalQuestions}{" "}
+									{totalQuestions - questionsWithMarkScheme === 1
+										? "question is"
+										: "questions are"}{" "}
+									missing a mark scheme.
+								</span>{" "}
+								Upload a mark scheme PDF or add one manually before marking.
+							</span>
+						</div>
+					)}
 
 					{/* Duplicate warning banner */}
 					{similarPairs.length > 0 && !duplicateBannerDismissed && (
@@ -721,7 +712,7 @@ export function ExamPaperPageShell({
 						</CardHeader>
 						<CardContent>
 							{view === "paper" ? (
-								<ExamPaperPaperView paper={paper} />
+								<ExamPaperPaperView paper={paper} paperId={paper.id} />
 							) : paper.questions.length === 0 ? (
 								<div className="py-8 text-center text-sm text-muted-foreground">
 									No questions yet. Upload a question paper or mark scheme PDF
@@ -828,7 +819,7 @@ export function ExamPaperPageShell({
 														<div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
 															<TableRowDeleteButton
 																questionId={q.id}
-																onDeleted={() => router.refresh()}
+																paperId={paper.id}
 															/>
 														</div>
 													</TableCell>
@@ -844,22 +835,6 @@ export function ExamPaperPageShell({
 
 				{/* ── Submissions tab ── */}
 				<TabsContent value="submissions" className="space-y-6 mt-10">
-					<div className="flex items-center justify-end gap-4">
-						{readyForSubmissions ? (
-							<Button onClick={() => setUploadScriptOpen(true)}>
-								Start marking
-							</Button>
-						) : (
-							<button
-								type="button"
-								onClick={() => handleTabChange("paper")}
-								className="text-xs text-primary hover:underline"
-							>
-								Set up paper first →
-							</button>
-						)}
-					</div>
-
 					{initialSubmissions.length > 0 ? (
 						<SubmissionGrid
 							submissions={initialSubmissions}
@@ -1047,7 +1022,21 @@ export function ExamPaperPageShell({
 							</Button>
 							<Button
 								disabled={!linkingTargetId || linkingBusy}
-								onClick={handleLinkMarkScheme}
+								onClick={() => {
+									if (!linkingItem || !linkingTargetId) return
+									doLinkMarkScheme(
+										{
+											ghostQuestionId: linkingItem.ghostQuestionId,
+											targetQuestionId: linkingTargetId,
+										},
+										{
+											onSuccess: () => {
+												setLinkingItem(null)
+												setLinkingTargetId("")
+											},
+										},
+									)
+								}}
 							>
 								{linkingBusy ? (
 									<>
@@ -1072,7 +1061,7 @@ export function ExamPaperPageShell({
 				description={`This will permanently delete "${paper.title}" along with all its questions, mark schemes, and uploaded PDFs. This cannot be undone.`}
 				confirmLabel={deleting ? "Deleting…" : "Delete paper"}
 				loading={deleting}
-				onConfirm={handleDelete}
+				onConfirm={() => doDeletePaper()}
 			/>
 
 			<UploadStudentScriptDialog
@@ -1097,8 +1086,16 @@ export function ExamPaperPageShell({
 			{/* Floating action button */}
 			<button
 				type="button"
-				onClick={() => setUploadScriptOpen(true)}
-				className="fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-full bg-primary px-5 py-3.5 text-sm font-medium text-primary-foreground shadow-lg transition-all hover:bg-primary/90 hover:shadow-xl active:scale-95"
+				onClick={() => readyForSubmissions && setUploadScriptOpen(true)}
+				disabled={!readyForSubmissions}
+				title={
+					!readyForSubmissions
+						? totalQuestions === 0
+							? "Upload a question paper before marking"
+							: `${totalQuestions - questionsWithMarkScheme} question${totalQuestions - questionsWithMarkScheme === 1 ? "" : "s"} missing a mark scheme — add mark schemes before marking`
+						: undefined
+				}
+				className="fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-full bg-primary px-5 py-3.5 text-sm font-medium text-primary-foreground shadow-lg transition-all hover:bg-primary/90 hover:shadow-xl active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-lg disabled:hover:bg-primary"
 			>
 				<PenLine className="h-4 w-4" />
 				Mark paper

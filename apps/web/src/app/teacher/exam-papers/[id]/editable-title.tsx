@@ -1,7 +1,8 @@
 "use client"
 
 import { updateExamPaperTitle } from "@/lib/dashboard-actions"
-import { useRouter } from "next/navigation"
+import { queryKeys } from "@/lib/query-keys"
+import { useQueryClient } from "@tanstack/react-query"
 import { useRef, useState } from "react"
 
 export function EditableTitle({
@@ -11,11 +12,11 @@ export function EditableTitle({
 	id: string
 	initialTitle: string
 }) {
+	const queryClient = useQueryClient()
 	const [editing, setEditing] = useState(false)
 	const [title, setTitle] = useState(initialTitle)
 	const [pending, setPending] = useState(false)
 	const inputRef = useRef<HTMLInputElement>(null)
-	const router = useRouter()
 
 	function handleClick() {
 		setEditing(true)
@@ -42,7 +43,7 @@ export function EditableTitle({
 			setTitle(initialTitle)
 		} else {
 			setTitle(trimmed)
-			router.refresh()
+			void queryClient.invalidateQueries({ queryKey: queryKeys.examPaper(id) })
 		}
 	}
 

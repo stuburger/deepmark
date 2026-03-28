@@ -8,13 +8,15 @@ import {
 } from "@/components/ui/resizable"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { getJobPageTokens, getJobScanPageUrls } from "@/lib/mark-actions"
 import type {
 	PageToken,
 	ScanPageUrl,
 	StudentPaperJobPayload,
 } from "@/lib/mark-actions"
+import { queryKeys } from "@/lib/query-keys"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { Loader2 } from "lucide-react"
-import { useRouter } from "next/navigation"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { CancelledPanel } from "../../../../[jobId]/phases/cancelled"
 import { FailedPanel } from "../../../../[jobId]/phases/failed"
@@ -25,7 +27,7 @@ import {
 	type MarkingPhase,
 	derivePhase,
 } from "../../../../[jobId]/shared/phase"
-import { useJobPoller } from "../../../../[jobId]/shared/use-job-poller"
+import { useJobQuery } from "../../../../[jobId]/shared/use-job-query"
 import { EventLog } from "./event-log"
 import { SubmissionToolbar } from "./submission-toolbar"
 
@@ -171,8 +173,8 @@ export function SubmissionView({
 	examPaperId,
 	jobId,
 	initialData,
-	scanPages,
-	pageTokens,
+	scanPages: initialScanPages,
+	pageTokens: initialPageTokens,
 	initialPhase,
 	debugMode = false,
 	mode = "page",
@@ -186,45 +188,57 @@ export function SubmissionView({
 	debugMode?: boolean
 	mode?: "page" | "dialog"
 }) {
-	const router = useRouter()
-	const [data, setData] = useState(initialData)
+	const queryClient = useQueryClient()
 	const [showOcr, setShowOcr] = useState(false)
 	const [showRegions, setShowRegions] = useState(true)
 	const [activeQuestionNumber, setActiveQuestionNumber] = useState<
 		string | null
 	>(null)
 
+	// Live job data — replaces useState(initialData) + useJobPoller
+	const { data: jobData } = useJobQuery(jobId, initialData)
+	const data = jobData ?? initialData
 	const phase = derivePhase(data)
 	const isTerminal = TERMINAL_STATUSES.has(data.status)
 	const isPolling = !isTerminal
 
-	const intervalMs = phase === "marking_in_progress" ? 2000 : 5000
+	// Scan pages — seeded with SSR data, refetched when OCR populates page.analysis
+	const { data: scanPages } = useQuery({
+		queryKey: queryKeys.jobScanUrls(jobId),
+		queryFn: async () => {
+			const r = await getJobScanPageUrls(jobId)
+			return r.ok ? r.pages : []
+		},
+		initialData: initialScanPages,
+		staleTime: Number.POSITIVE_INFINITY,
+	})
 
-	const handleResult = useCallback((fresh: StudentPaperJobPayload) => {
-		setData(fresh)
-	}, [])
+	// Page tokens — seeded with SSR data, stable after initial load
+	const { data: pageTokens } = useQuery({
+		queryKey: queryKeys.jobPageTokens(jobId),
+		queryFn: async () => {
+			const r = await getJobPageTokens(jobId)
+			return r.ok ? r.tokens : []
+		},
+		initialData: initialPageTokens,
+		staleTime: Number.POSITIVE_INFINITY,
+	})
 
-	// When OCR completes and the phase moves from scan_processing →
-	// marking_in_progress, the server has just written page_analyses to the DB.
-	// Calling router.refresh() re-runs the server component so scanPages comes
-	// back with page.analysis populated — no manual refresh needed by the teacher.
+	// When OCR completes (scan_processing → marking_in_progress), invalidate the
+	// scan URLs query so page.analysis data is fetched. This replaces the old
+	// router.refresh() which re-ran the entire server component just for this.
 	const prevPhaseRef = useRef(initialPhase)
 	useEffect(() => {
 		if (
 			prevPhaseRef.current === "scan_processing" &&
 			phase === "marking_in_progress"
 		) {
-			router.refresh()
+			void queryClient.invalidateQueries({
+				queryKey: queryKeys.jobScanUrls(jobId),
+			})
 		}
 		prevPhaseRef.current = phase
-	}, [phase, router])
-
-	useJobPoller({
-		jobId,
-		intervalMs,
-		enabled: isPolling,
-		onResult: handleResult,
-	})
+	}, [phase, jobId, queryClient])
 
 	const scrollToQuestion = useCallback((questionNumber: string) => {
 		setActiveQuestionNumber(questionNumber)

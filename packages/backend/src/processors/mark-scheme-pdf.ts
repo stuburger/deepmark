@@ -147,6 +147,12 @@ const MARK_SCHEME_SCHEMA = {
 							required: ["condition", "reason"],
 						},
 					},
+					matched_question_id: {
+						type: Type.STRING,
+						nullable: true,
+						description:
+							"The id of the matching question from the EXISTING QUESTIONS list provided in the prompt, or null if no match was found. Only set this when you are confident the question numbers and/or content match.",
+					},
 				},
 				required: [
 					"question_text",
@@ -388,9 +394,57 @@ export async function handler(
 			const uploadedBy = job.uploaded_by
 			const autoCreateExamPaper = job.auto_create_exam_paper
 
+			// Fetch questions already on the paper (or recent question_paper uploads for this
+			// exam_board) so Gemini can map mark scheme entries directly to existing questions
+			// rather than creating duplicates.
+			type ExistingQuestionContext = {
+				id: string
+				question_number: string | null
+				text: string
+				question_type: string
+			}
+			let existingQuestionsForContext: ExistingQuestionContext[] = []
+			if (job.exam_paper_id) {
+				existingQuestionsForContext = await db.$queryRaw<
+					ExistingQuestionContext[]
+				>`
+			SELECT q.id, q.question_number, q.text, q.question_type
+			FROM questions q
+			JOIN exam_section_questions esq ON esq.question_id = q.id
+			JOIN exam_sections es ON es.id = esq.exam_section_id
+			WHERE es.exam_paper_id = ${job.exam_paper_id}
+			ORDER BY esq.order
+		`
+			} else {
+				existingQuestionsForContext = await db.$queryRaw<
+					ExistingQuestionContext[]
+				>`
+			SELECT DISTINCT ON (q.question_number) q.id, q.question_number, q.text, q.question_type
+			FROM questions q
+			JOIN pdf_ingestion_jobs pij ON q.source_pdf_ingestion_job_id = pij.id
+			WHERE pij.exam_board = ${examBoard}
+			AND q.origin = 'question_paper'
+			ORDER BY q.question_number, pij.created_at DESC
+			LIMIT 60
+		`
+			}
+
+			const existingQuestionsBlock =
+				existingQuestionsForContext.length > 0
+					? `\n\nEXISTING QUESTIONS (for matched_question_id lookup ONLY):\n${existingQuestionsForContext
+							.map(
+								(eq) =>
+									`- id: "${eq.id}" | question_number: "${eq.question_number ?? "?"}" | text: "${eq.text.slice(0, 300)}"`,
+							)
+							.join(
+								"\n",
+							)}\n\nMATCHING INSTRUCTIONS — READ CAREFULLY:\n- For EACH extracted mark scheme entry, check whether it corresponds to one of the EXISTING QUESTIONS above (match primarily by question_number, and secondarily by content). If a match is found, set matched_question_id to that question's id. If no match is found, set matched_question_id to null.\n- CRITICAL: The existing questions list is ONLY used to populate matched_question_id. You MUST extract ALL other fields (question_text, question_type, correct_option, mark_points, marking_method, etc.) EXCLUSIVELY from the mark scheme PDF document. Do NOT use the existing questions list to influence any other field. An MCQ entry that shows only "1 C" in the PDF must still be extracted as question_type "multiple_choice" with correct_option "C" — even if the matched existing question has a long written text.`
+					: ""
+
 			logger.info(TAG, "Calling Gemini for mark scheme + metadata extraction", {
 				jobId,
 				auto_create_exam_paper: autoCreateExamPaper,
+				existing_questions_in_context: existingQuestionsForContext.length,
 			})
 			const [markSchemeResponse, metadataResponse] = await Promise.all([
 				gemini.models.generateContent({
@@ -427,7 +481,7 @@ GENERAL RULES:
 AO BREAKDOWN — CRITICAL RULES:
 - AQA mark schemes print a "Marks for this question:" header above the level table, e.g. "AO2 – 3 marks    AO3 – 6 marks". Extract ONLY the AO codes and mark values stated in that line as ao_allocations.
 - For level_of_response questions, the right-hand column of each level's bullet points is labelled with an AO code (e.g. AO3, AO2). Copy these labels verbatim into ao_requirements for each level — include ONLY the codes that appear in the document for that level.
-- NEVER invent or infer AO codes that are not explicitly printed in the mark scheme. AQA GCSE Business papers typically use only AO2 and AO3; do not add AO1 or AO4 unless they are literally present in the document.`,
+- NEVER invent or infer AO codes that are not explicitly printed in the mark scheme. AQA GCSE Business papers typically use only AO2 and AO3; do not add AO1 or AO4 unless they are literally present in the document.${existingQuestionsBlock}`,
 								},
 							],
 						},
@@ -501,6 +555,7 @@ AO BREAKDOWN — CRITICAL RULES:
 						max_mark?: number
 						reason: string
 					}>
+					matched_question_id?: string | null
 				}>
 			}
 
@@ -556,22 +611,44 @@ AO BREAKDOWN — CRITICAL RULES:
 				const canonicalNumber = q.question_number
 					? normalizeQuestionNumber(q.question_number)
 					: null
+
+				// Validate Gemini's matched_question_id against our prefetched list to
+				// guard against hallucinated IDs.
+				const geminiMatchedId =
+					q.matched_question_id &&
+					existingQuestionsForContext.some(
+						(eq) => eq.id === q.matched_question_id,
+					)
+						? q.matched_question_id
+						: null
+
 				logger.info(TAG, "Processing question", {
 					jobId,
 					index: i + 1,
 					total: questionCount,
 					question_number: canonicalNumber,
 					marking_method: q.marking_method ?? "point_based",
+					gemini_matched: geminiMatchedId != null,
 				})
-				const embeddingVec = await embedQuestionText(questionText)
-				const existingId = await findMatchingQuestionId(
-					job.exam_paper_id,
-					examBoard,
-					canonicalNumber,
-					embeddingVec,
-				)
-				const matchMethod =
-					existingId && canonicalNumber
+
+				// Skip the embedding API call when Gemini already provided a confident
+				// match — it would be wasted work and "Question N" placeholder text
+				// produces a meaningless vector anyway.
+				let embeddingVec: number[] = []
+				let existingId: string | null = geminiMatchedId
+				if (!existingId) {
+					embeddingVec = await embedQuestionText(questionText)
+					existingId = await findMatchingQuestionId(
+						job.exam_paper_id,
+						examBoard,
+						canonicalNumber,
+						embeddingVec,
+					)
+				}
+
+				const matchMethod = geminiMatchedId
+					? "gemini_context"
+					: existingId && canonicalNumber
 						? "question_number"
 						: existingId
 							? "embedding"
@@ -583,7 +660,8 @@ AO BREAKDOWN — CRITICAL RULES:
 						: "No match — creating new question",
 					{ jobId, question_index: i + 1, existing_id: existingId },
 				)
-				const vecStr = embeddingToVectorStr(embeddingVec)
+				const vecStr =
+					embeddingVec.length > 0 ? embeddingToVectorStr(embeddingVec) : null
 				const markPointsPrisma = (q.mark_points ?? []).map((mp, idx) => ({
 					point_number: idx + 1,
 					description: mp.description,
@@ -592,15 +670,26 @@ AO BREAKDOWN — CRITICAL RULES:
 				}))
 				const pointsTotal =
 					q.total_marks ?? markPointsPrisma.reduce((s, mp) => s + mp.points, 0)
+
+				// When Gemini matched this entry to an existing question, use the existing
+				// question's authoritative question_type rather than Gemini's extraction.
+				// The extraction can be contaminated by the questions-in-context block causing
+				// Gemini to output "written" for an MCQ entry whose full text is now visible.
+				const matchedExistingQuestion = geminiMatchedId
+					? existingQuestionsForContext.find((eq) => eq.id === geminiMatchedId)
+					: null
+				const resolvedQuestionType =
+					matchedExistingQuestion?.question_type ?? q.question_type
+
 				const correctOptionLabels =
-					q.question_type === "multiple_choice" && q.correct_option
+					resolvedQuestionType === "multiple_choice" && q.correct_option
 						? [q.correct_option.trim()]
 						: []
 				const effectiveMarkingMethod:
 					| "deterministic"
 					| "point_based"
 					| "level_of_response" =
-					q.question_type === "multiple_choice"
+					resolvedQuestionType === "multiple_choice"
 						? "deterministic"
 						: q.marking_method === "level_of_response"
 							? "level_of_response"
@@ -621,23 +710,41 @@ AO BREAKDOWN — CRITICAL RULES:
 					await db.question.update({
 						where: { id: existingId },
 						data: {
-							text: questionText,
+							// Never overwrite question text from the mark scheme — the question
+							// paper upload is the authoritative source of question text.
+							// When Gemini matched this to an existing question, also trust its
+							// existing question_type (the extraction can be contaminated by the
+							// questions-in-context block). Only write question_type when we found
+							// the match via the fallback path (embedding / question_number), where
+							// no context was injected and the extraction is clean.
 							topic: subject,
 							points: pointsTotal,
-							question_type:
-								q.question_type === "multiple_choice"
-									? "multiple_choice"
-									: "written",
-							multiple_choice_options:
-								q.question_type === "multiple_choice" && q.options?.length
-									? q.options
-									: [],
+							...(geminiMatchedId
+								? {}
+								: {
+										question_type:
+											q.question_type === "multiple_choice"
+												? "multiple_choice"
+												: "written",
+									}),
+							// Only overwrite options if the mark scheme actually provides them.
+							// Mark scheme PDFs often only show the correct letter ("1 C") with no
+							// option texts — in that case leave the question paper's options intact.
+							...(resolvedQuestionType === "multiple_choice" &&
+							q.options?.length
+								? { multiple_choice_options: q.options }
+								: {}),
 							...(canonicalNumber ? { question_number: canonicalNumber } : {}),
 						},
 					})
-					await db.$executeRaw`
+					// Only refresh the embedding when we computed one (i.e. no Gemini match).
+					// If Gemini matched via context we have no new embedding, and we definitely
+					// don't want to clobber a good embedding with a "Question N" vector.
+					if (vecStr) {
+						await db.$executeRaw`
 						UPDATE questions SET embedding = (${vecStr}::text)::vector WHERE id = ${existingId}
 					`
+					}
 					const markScheme = await db.markScheme.findFirst({
 						where: { question_id: existingId },
 					})
@@ -791,15 +898,15 @@ AO BREAKDOWN — CRITICAL RULES:
 							question_number: canonicalNumber,
 						},
 					})
-					await db.$executeRaw`
-					UPDATE questions SET embedding = (${vecStr}::text)::vector WHERE id = ${newQuestion.id}
-				`
+					if (vecStr) {
+						await db.$executeRaw`
+						UPDATE questions SET embedding = (${vecStr}::text)::vector WHERE id = ${newQuestion.id}
+					`
+					}
 					const newMarkScheme = await db.markScheme.create({
 						data: {
 							question_id: newQuestion.id,
-							description:
-								formatAoAllocations(q.ao_allocations) ??
-								"",
+							description: formatAoAllocations(q.ao_allocations) ?? "",
 							guidance: q.guidance ?? null,
 							created_by_id: uploadedBy,
 							tags: [],

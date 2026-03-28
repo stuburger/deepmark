@@ -61,6 +61,7 @@ import { DocumentUploadCards } from "./document-upload-cards"
 import { EditableTitle } from "./editable-title"
 import { ExamPaperPaperView } from "./exam-paper-paper-view"
 import { MarkingJobDialog } from "./marking-job-dialog"
+import { SubmissionGrid } from "./submission-grid"
 import { UploadStudentScriptDialog } from "./upload-student-script-dialog"
 
 type IngestionJob = {
@@ -843,12 +844,7 @@ export function ExamPaperPageShell({
 
 				{/* ── Submissions tab ── */}
 				<TabsContent value="submissions" className="space-y-6 mt-10">
-					<div className="flex items-center justify-between gap-4">
-						<p className="text-sm text-muted-foreground">
-							{initialSubmissions.length === 0
-								? "No submissions yet."
-								: `${initialSubmissions.length} submission${initialSubmissions.length !== 1 ? "s" : ""}`}
-						</p>
+					<div className="flex items-center justify-end gap-4">
 						{readyForSubmissions ? (
 							<Button onClick={() => setUploadScriptOpen(true)}>
 								Start marking
@@ -865,74 +861,10 @@ export function ExamPaperPageShell({
 					</div>
 
 					{initialSubmissions.length > 0 ? (
-						<Card>
-							<CardContent className="pt-4">
-								<Table>
-									<TableHeader>
-										<TableRow>
-											<TableHead>Student</TableHead>
-											<TableHead>Score</TableHead>
-											<TableHead>Date</TableHead>
-											<TableHead className="w-16" />
-										</TableRow>
-									</TableHeader>
-									<TableBody>
-										{initialSubmissions.map((sub) => {
-											const pct =
-												sub.total_max > 0
-													? Math.round(
-															(sub.total_awarded / sub.total_max) * 100,
-														)
-													: null
-											const colour =
-												pct === null
-													? "bg-muted text-muted-foreground"
-													: pct >= 70
-														? "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300"
-														: pct >= 40
-															? "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
-															: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300"
-											return (
-												<TableRow key={sub.id}>
-													<TableCell className="text-sm">
-														{sub.student_name ?? (
-															<span className="text-muted-foreground italic">
-																Unnamed
-															</span>
-														)}
-													</TableCell>
-													<TableCell>
-														{pct !== null ? (
-															<span
-																className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums ${colour}`}
-															>
-																{sub.total_awarded}/{sub.total_max} · {pct}%
-															</span>
-														) : (
-															<span className="text-xs text-muted-foreground capitalize">
-																{sub.status.replace(/_/g, " ")}
-															</span>
-														)}
-													</TableCell>
-													<TableCell className="text-xs text-muted-foreground tabular-nums">
-														{new Date(sub.created_at).toLocaleDateString()}
-													</TableCell>
-													<TableCell>
-														<button
-															type="button"
-															onClick={() => setMarkingJobId(sub.id)}
-															className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-														>
-															View
-														</button>
-													</TableCell>
-												</TableRow>
-											)
-										})}
-									</TableBody>
-								</Table>
-							</CardContent>
-						</Card>
+						<SubmissionGrid
+							submissions={initialSubmissions}
+							onView={(id) => setMarkingJobId(id)}
+						/>
 					) : (
 						readyForSubmissions && (
 							<div className="rounded-lg border border-dashed py-16 text-center text-sm text-muted-foreground">

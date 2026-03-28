@@ -213,7 +213,7 @@ export function BoundingBoxViewer({
 			<TransformWrapper
 				minScale={0.3}
 				maxScale={8}
-				wheel={{ step: 0.08 }}
+				wheel={{ step: 0.08, activationKeys: ["Control", "Meta"] }}
 				pinch={{ step: 5 }}
 				doubleClick={{ mode: "reset" }}
 				limitToBounds={false}

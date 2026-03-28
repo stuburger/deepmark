@@ -6,6 +6,7 @@ import {
 	ResizablePanel,
 	ResizablePanelGroup,
 } from "@/components/ui/resizable"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import type {
 	PageToken,
@@ -118,7 +119,7 @@ function ScanPanel({
 	debugMode?: boolean
 }) {
 	return (
-		<div className="h-full overflow-y-auto bg-muted/20">
+		<ScrollArea className="h-full w-full bg-muted/20">
 			<AnnotatedScanColumn
 				pages={scanPages}
 				pageTokens={pageTokens}
@@ -128,7 +129,7 @@ function ScanPanel({
 				onAnnotationClick={onAnnotationClick}
 				debugMode={debugMode}
 			/>
-		</div>
+		</ScrollArea>
 	)
 }
 
@@ -148,17 +149,19 @@ function ResultsPanel({
 	activeQuestionNumber: string | null
 }) {
 	return (
-		<div data-results-panel className="h-full overflow-y-auto flex flex-col">
-			<div className="flex-1 p-4 space-y-5 max-w-2xl w-full">
-				<DigitalPanelContent
-					jobId={jobId}
-					data={data}
-					phase={phase}
-					activeQuestionNumber={activeQuestionNumber}
-				/>
+		<ScrollArea data-results-panel className="h-full w-full">
+			<div className="flex flex-col">
+				<div className="flex-1 p-4 space-y-5 max-w-2xl w-full">
+					<DigitalPanelContent
+						jobId={jobId}
+						data={data}
+						phase={phase}
+						activeQuestionNumber={activeQuestionNumber}
+					/>
+				</div>
+				<EventLog events={data.job_events} isPolling={isPolling} />
 			</div>
-			<EventLog events={data.job_events} isPolling={isPolling} />
-		</div>
+		</ScrollArea>
 	)
 }
 
@@ -225,22 +228,26 @@ export function SubmissionView({
 
 	const scrollToQuestion = useCallback((questionNumber: string) => {
 		setActiveQuestionNumber(questionNumber)
-		// Find the panel first, then scope the element query within it.
-		// Both mobile and desktop layouts render DigitalPanelContent simultaneously
-		// (one is CSS-hidden), so there are duplicate IDs in the DOM. Querying
-		// within the panel guarantees we target the visible desktop element.
-		const panel = document.querySelector(
+		// Find the panel root, then its ScrollArea viewport (the actual scrollable
+		// element). Both mobile and desktop layouts render DigitalPanelContent
+		// simultaneously (one is CSS-hidden), so querying within the panel
+		// guarantees we target the visible desktop element.
+		const panelRoot = document.querySelector(
 			"[data-results-panel]",
 		) as HTMLElement | null
-		if (!panel) return
-		const el = panel.querySelector(
+		if (!panelRoot) return
+		const viewport = panelRoot.querySelector(
+			"[data-slot='scroll-area-viewport']",
+		) as HTMLElement | null
+		const scrollEl = viewport ?? panelRoot
+		const el = scrollEl.querySelector(
 			`[id="question-${questionNumber}"]`,
 		) as HTMLElement | null
 		if (!el) return
-		const panelRect = panel.getBoundingClientRect()
+		const scrollRect = scrollEl.getBoundingClientRect()
 		const elRect = el.getBoundingClientRect()
-		panel.scrollTo({
-			top: panel.scrollTop + (elRect.top - panelRect.top) - 16,
+		scrollEl.scrollTo({
+			top: scrollEl.scrollTop + (elRect.top - scrollRect.top) - 16,
 			behavior: "smooth",
 		})
 	}, [])
@@ -287,29 +294,36 @@ export function SubmissionView({
 
 					<TabsContent
 						value="scan"
-						className="flex-1 overflow-y-auto bg-muted/20 m-0 p-0"
+						className="flex-1 min-h-0 overflow-hidden bg-muted/20 m-0 p-0"
 					>
-						<AnnotatedScanColumn
-							pages={scanPages}
-							pageTokens={pageTokens}
-							showHighlights={showOcr}
-							showRegions={showRegions}
-							gradingResults={data.grading_results}
-							onAnnotationClick={scrollToQuestion}
-							debugMode={debugMode}
-						/>
+						<ScrollArea className="h-full w-full">
+							<AnnotatedScanColumn
+								pages={scanPages}
+								pageTokens={pageTokens}
+								showHighlights={showOcr}
+								showRegions={showRegions}
+								gradingResults={data.grading_results}
+								onAnnotationClick={scrollToQuestion}
+								debugMode={debugMode}
+							/>
+						</ScrollArea>
 					</TabsContent>
 
-					<TabsContent value="results" className="flex-1 overflow-y-auto m-0">
-						<div className="p-4 space-y-5 max-w-2xl">
-							<DigitalPanelContent
-								jobId={jobId}
-								data={data}
-								phase={phase}
-								activeQuestionNumber={activeQuestionNumber}
-							/>
-						</div>
-						<EventLog events={data.job_events} isPolling={isPolling} />
+					<TabsContent
+						value="results"
+						className="flex-1 min-h-0 overflow-hidden m-0"
+					>
+						<ScrollArea className="h-full w-full">
+							<div className="p-4 space-y-5 max-w-2xl">
+								<DigitalPanelContent
+									jobId={jobId}
+									data={data}
+									phase={phase}
+									activeQuestionNumber={activeQuestionNumber}
+								/>
+							</div>
+							<EventLog events={data.job_events} isPolling={isPolling} />
+						</ScrollArea>
 					</TabsContent>
 				</Tabs>
 			</div>

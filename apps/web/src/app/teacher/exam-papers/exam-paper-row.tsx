@@ -7,11 +7,12 @@ import {
 	type ExamPaperListItem,
 	deleteExamPaper,
 } from "@/lib/dashboard-actions"
-import { queryKeys } from "@/lib/query-keys"
-import { useMutation, useQueryClient } from "@tanstack/react-query"
+import { useMutation } from "@tanstack/react-query"
 import { Globe, Lock, Trash2 } from "lucide-react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { useState } from "react"
+import { toast } from "sonner"
 
 type BadgeVariant = "default" | "secondary" | "destructive" | "outline"
 
@@ -49,17 +50,31 @@ function truncate(s: string, max = 40) {
 }
 
 export function ExamPaperRow({ paper }: { paper: ExamPaperListItem }) {
-	const queryClient = useQueryClient()
+	const router = useRouter()
 	const [confirmOpen, setConfirmOpen] = useState(false)
+	const [hidden, setHidden] = useState(false)
 
 	const { mutate: doDelete, isPending: deleting } = useMutation({
 		mutationFn: () => deleteExamPaper(paper.id),
-		onSuccess: (result) => {
-			if (!result.ok) return
+		onMutate: () => {
 			setConfirmOpen(false)
-			void queryClient.invalidateQueries({ queryKey: queryKeys.examPapers() })
+			setHidden(true)
+		},
+		onSuccess: (result) => {
+			if (!result.ok) {
+				setHidden(false)
+				toast.error(result.error)
+				return
+			}
+			router.refresh()
+		},
+		onError: () => {
+			setHidden(false)
+			toast.error("Failed to delete exam paper")
 		},
 	})
+
+	if (hidden) return null
 
 	return (
 		<>
@@ -116,12 +131,10 @@ export function ExamPaperRow({ paper }: { paper: ExamPaperListItem }) {
 
 			<ConfirmDialog
 				open={confirmOpen}
-				onOpenChange={(open) => {
-					if (!deleting) setConfirmOpen(open)
-				}}
+				onOpenChange={setConfirmOpen}
 				title="Delete exam paper?"
 				description={`This will permanently delete "${truncate(paper.title, 50)}" along with all its questions, mark schemes, and uploaded PDFs. This cannot be undone.`}
-				confirmLabel={deleting ? "Deleting…" : "Delete paper"}
+				confirmLabel="Delete paper"
 				loading={deleting}
 				onConfirm={() => doDelete()}
 			/>

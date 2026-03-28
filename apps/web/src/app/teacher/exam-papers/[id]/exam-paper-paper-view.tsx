@@ -136,6 +136,12 @@ function SortableQuestion({
 			? `[${question.points} mark${question.points !== 1 ? "s" : ""}]`
 			: null
 
+	const pointsMismatch =
+		hasScheme &&
+		question.points !== null &&
+		question.mark_scheme_points_total !== null &&
+		question.points !== question.mark_scheme_points_total
+
 	// Build mark scheme dialog props for edit mode
 	const ms = msDetail?.mark_schemes[0]
 	const msDialogEditProps = (() => {
@@ -221,12 +227,35 @@ function SortableQuestion({
 						<div className="flex items-center gap-1.5 shrink-0">
 							{(!question.mark_scheme_status ||
 								question.mark_scheme_status === "unlinked") && (
-								<span title="No mark scheme">
-									<AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
-								</span>
+								<Tooltip>
+									<TooltipTrigger>
+										<AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
+									</TooltipTrigger>
+									<TooltipContent>No mark scheme</TooltipContent>
+								</Tooltip>
+							)}
+							{pointsMismatch && (
+								<Tooltip>
+									<TooltipTrigger>
+										<AlertTriangle className="h-3.5 w-3.5 text-orange-500" />
+									</TooltipTrigger>
+									<TooltipContent>
+										Mark scheme total ({question.mark_scheme_points_total}{" "}
+										{question.mark_scheme_points_total === 1 ? "mark" : "marks"}
+										) doesn&apos;t match question ({question.points}{" "}
+										{question.points === 1 ? "mark" : "marks"})
+									</TooltipContent>
+								</Tooltip>
 							)}
 							{marksLabel && (
-								<span className="text-xs text-muted-foreground font-medium tabular-nums">
+								<span
+									className={cn(
+										"text-xs font-medium tabular-nums",
+										pointsMismatch
+											? "text-orange-500"
+											: "text-muted-foreground",
+									)}
+								>
 									{marksLabel}
 								</span>
 							)}

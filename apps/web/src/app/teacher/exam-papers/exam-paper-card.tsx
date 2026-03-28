@@ -13,12 +13,13 @@ import {
 	type ExamPaperListItem,
 	deleteExamPaper,
 } from "@/lib/dashboard-actions"
-import { queryKeys } from "@/lib/query-keys"
 import { SUBJECT_LABELS, type Subject } from "@/lib/subjects"
-import { useMutation, useQueryClient } from "@tanstack/react-query"
+import { useMutation } from "@tanstack/react-query"
 import { Clock, Globe, Layers, Lock, Trash2 } from "lucide-react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { useState } from "react"
+import { toast } from "sonner"
 
 const SUBJECT_COLOURS: Record<string, string> = {
 	biology: "bg-green-500",
@@ -49,21 +50,36 @@ function formatDate(date: Date) {
 }
 
 export function ExamPaperCard({ paper }: { paper: ExamPaperListItem }) {
-	const queryClient = useQueryClient()
+	const router = useRouter()
 	const [confirmOpen, setConfirmOpen] = useState(false)
+	const [hidden, setHidden] = useState(false)
 
 	const { mutate: doDelete, isPending: deleting } = useMutation({
 		mutationFn: () => deleteExamPaper(paper.id),
-		onSuccess: (result) => {
-			if (!result.ok) return
+		onMutate: () => {
+			// Close modal and hide card immediately — revert in onError if needed
 			setConfirmOpen(false)
-			void queryClient.invalidateQueries({ queryKey: queryKeys.examPapers() })
+			setHidden(true)
+		},
+		onSuccess: (result) => {
+			if (!result.ok) {
+				setHidden(false)
+				toast.error(result.error)
+				return
+			}
+			router.refresh()
+		},
+		onError: () => {
+			setHidden(false)
+			toast.error("Failed to delete exam paper")
 		},
 	})
 
 	const subjectLabel = SUBJECT_LABELS[paper.subject as Subject] ?? paper.subject
 	const colour = subjectColour(paper.subject)
 	const paperLabel = paper.paper_number ? `Paper ${paper.paper_number}` : null
+
+	if (hidden) return null
 
 	return (
 		<>
@@ -151,12 +167,10 @@ export function ExamPaperCard({ paper }: { paper: ExamPaperListItem }) {
 
 			<ConfirmDialog
 				open={confirmOpen}
-				onOpenChange={(open) => {
-					if (!deleting) setConfirmOpen(open)
-				}}
+				onOpenChange={setConfirmOpen}
 				title="Delete exam paper?"
 				description={`This will permanently delete "${paper.title.length > 50 ? `${paper.title.slice(0, 50)}…` : paper.title}" along with all its questions, mark schemes, and uploaded PDFs. This cannot be undone.`}
-				confirmLabel={deleting ? "Deleting…" : "Delete paper"}
+				confirmLabel="Delete paper"
 				loading={deleting}
 				onConfirm={() => doDelete()}
 			/>

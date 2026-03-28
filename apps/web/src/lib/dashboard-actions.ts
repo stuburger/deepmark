@@ -426,6 +426,7 @@ export type ExamPaperQuestion = {
 	mark_scheme_id: string | null
 	mark_scheme_description: string | null
 	mark_scheme_correct_option_labels: string[]
+	mark_scheme_points_total: number | null
 	order: number
 	exam_section_id: string
 	section_title: string
@@ -487,6 +488,7 @@ export async function getExamPaperDetail(
 												link_status: true,
 												description: true,
 												correct_option_labels: true,
+												points_total: true,
 											},
 											take: 1,
 										},
@@ -528,6 +530,7 @@ export async function getExamPaperDetail(
 					mark_scheme_id: ms?.id ?? null,
 					mark_scheme_description: ms?.description ?? null,
 					mark_scheme_correct_option_labels: ms?.correct_option_labels ?? [],
+					mark_scheme_points_total: ms?.points_total ?? null,
 					order: esq.order,
 					exam_section_id: section.id,
 					section_title: section.title,

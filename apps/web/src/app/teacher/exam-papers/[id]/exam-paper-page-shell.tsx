@@ -35,7 +35,10 @@ import {
 } from "@/lib/dashboard-actions"
 import type { ExamPaperStats, SubmissionHistoryItem } from "@/lib/mark-actions"
 import { getExamPaperStats } from "@/lib/mark-actions"
-import type { PdfDocument } from "@/lib/pdf-ingestion-actions"
+import type {
+	ActiveExamPaperIngestionJob,
+	PdfDocument,
+} from "@/lib/pdf-ingestion-actions"
 import { getExamPaperIngestionLiveState } from "@/lib/pdf-ingestion-actions"
 import { queryKeys } from "@/lib/query-keys"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
@@ -188,11 +191,15 @@ function TableRowDeleteButton({
 
 export function ExamPaperPageShell({
 	paper: initialPaper,
-	initialDocs = [],
+	initialLiveState = { ok: true as const, jobs: [], documents: [] },
 	initialSubmissions = [],
 }: {
 	paper: ExamPaperDetail
-	initialDocs?: PdfDocument[]
+	initialLiveState?: {
+		ok: true
+		jobs: ActiveExamPaperIngestionJob[]
+		documents: PdfDocument[]
+	}
 	initialSubmissions?: SubmissionHistoryItem[]
 }) {
 	const router = useRouter()
@@ -218,7 +225,7 @@ export function ExamPaperPageShell({
 			if (!r.ok) throw new Error(r.error)
 			return r
 		},
-		initialData: { ok: true as const, jobs: [], documents: initialDocs },
+		initialData: initialLiveState,
 		refetchInterval: (q) => {
 			const jobs = q.state.data?.jobs ?? []
 			return jobs.some((j) => !TERMINAL.has(j.status)) ? POLL_MS : false
@@ -308,6 +315,10 @@ export function ExamPaperPageShell({
 	const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
 	const { mutate: doDeletePaper, isPending: deleting } = useMutation({
 		mutationFn: () => deleteExamPaper(paper.id),
+		onMutate: () => {
+			// Close the dialog immediately so the user sees instant feedback
+			setDeleteDialogOpen(false)
+		},
 		onSuccess: (result) => {
 			if (!result.ok) {
 				toast.error(result.error)
@@ -1054,12 +1065,10 @@ export function ExamPaperPageShell({
 
 			<ConfirmDialog
 				open={deleteDialogOpen}
-				onOpenChange={(open) => {
-					if (!deleting) setDeleteDialogOpen(open)
-				}}
+				onOpenChange={setDeleteDialogOpen}
 				title="Delete exam paper?"
 				description={`This will permanently delete "${paper.title}" along with all its questions, mark schemes, and uploaded PDFs. This cannot be undone.`}
-				confirmLabel={deleting ? "Deleting…" : "Delete paper"}
+				confirmLabel="Delete paper"
 				loading={deleting}
 				onConfirm={() => doDeletePaper()}
 			/>

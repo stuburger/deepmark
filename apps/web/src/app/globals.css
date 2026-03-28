@@ -50,23 +50,24 @@
 }
 
 :root {
-	--background: oklch(0.985 0.008 130);
+	/* Light mode: solid surfaces — no image, no transparency needed */
+	--background: oklch(0.97 0.008 130);
 	--foreground: oklch(0.16 0.015 155);
-	--card: oklch(0.995 0.005 130);
+	--card: oklch(1 0 0 / 0.92);
 	--card-foreground: oklch(0.16 0.015 155);
 	--popover: oklch(0.995 0.005 130);
 	--popover-foreground: oklch(0.16 0.015 155);
 	--primary: oklch(0.38 0.12 155);
-	--primary-foreground: oklch(0.985 0.005 130);
-	--secondary: oklch(0.945 0.018 145);
+	--primary-foreground: oklch(1 0 0);
+	--secondary: oklch(0.935 0.018 145);
 	--secondary-foreground: oklch(0.32 0.08 155);
-	--muted: oklch(0.945 0.018 145);
-	--muted-foreground: oklch(0.52 0.035 155);
-	--accent: oklch(0.935 0.025 145);
+	--muted: oklch(0.935 0.018 145);
+	--muted-foreground: oklch(0.45 0.025 155);
+	--accent: oklch(0.925 0.022 145);
 	--accent-foreground: oklch(0.32 0.08 155);
 	--destructive: oklch(0.577 0.245 27.325);
-	--border: oklch(0.89 0.022 145);
-	--input: oklch(0.89 0.022 145);
+	--border: oklch(0.88 0.018 145);
+	--input: oklch(0.92 0.015 145);
 	--ring: oklch(0.55 0.09 155);
 	--chart-1: oklch(0.55 0.14 155);
 	--chart-2: oklch(0.48 0.12 175);
@@ -77,44 +78,45 @@
 	--sidebar: oklch(0.975 0.01 135);
 	--sidebar-foreground: oklch(0.16 0.015 155);
 	--sidebar-primary: oklch(0.38 0.12 155);
-	--sidebar-primary-foreground: oklch(0.985 0.005 130);
-	--sidebar-accent: oklch(0.935 0.025 145);
+	--sidebar-primary-foreground: oklch(1 0 0);
+	--sidebar-accent: oklch(0.925 0.022 145);
 	--sidebar-accent-foreground: oklch(0.32 0.08 155);
-	--sidebar-border: oklch(0.89 0.022 145);
+	--sidebar-border: oklch(0.88 0.018 145);
 	--sidebar-ring: oklch(0.55 0.09 155);
 }
 
 .dark {
 	--background: oklch(0.14 0.015 160);
 	--foreground: oklch(0.95 0.01 130);
-	--card: oklch(0.19 0.018 158);
+	--card: oklch(0.19 0.015 158);
 	--card-foreground: oklch(0.95 0.01 130);
-	--popover: oklch(0.19 0.018 158);
+	--popover: oklch(0.21 0.018 158);
 	--popover-foreground: oklch(0.95 0.01 130);
 	--primary: oklch(0.72 0.14 155);
 	--primary-foreground: oklch(0.14 0.015 160);
-	--secondary: oklch(0.26 0.025 158);
+	--secondary: oklch(0.22 0.015 155);
 	--secondary-foreground: oklch(0.95 0.01 130);
-	--muted: oklch(0.26 0.025 158);
-	--muted-foreground: oklch(0.65 0.04 150);
-	--accent: oklch(0.28 0.03 155);
+	--muted: oklch(0.22 0.015 155);
+	--muted-foreground: oklch(0.82 0.025 150);
+	--accent: oklch(0.23 0.015 155);
 	--accent-foreground: oklch(0.95 0.01 130);
 	--destructive: oklch(0.704 0.191 22.216);
-	--border: oklch(1 0 0 / 10%);
-	--input: oklch(1 0 0 / 15%);
+	--border: oklch(1 0 0 / 12%);
+	--input: oklch(0.21 0.015 158);
 	--ring: oklch(0.55 0.09 155);
 	--chart-1: oklch(0.72 0.14 155);
 	--chart-2: oklch(0.62 0.12 175);
 	--chart-3: oklch(0.68 0.1 130);
 	--chart-4: oklch(0.72 0.1 100);
 	--chart-5: oklch(0.55 0.1 200);
-	--sidebar: oklch(0.19 0.018 158);
+	/* Sidebar keeps transparent values — it sits over the image with backdrop-filter */
+	--sidebar: oklch(0 0 0 / 0.7);
 	--sidebar-foreground: oklch(0.95 0.01 130);
 	--sidebar-primary: oklch(0.72 0.14 155);
 	--sidebar-primary-foreground: oklch(0.14 0.015 160);
-	--sidebar-accent: oklch(0.28 0.03 155);
+	--sidebar-accent: oklch(0 0 0 / 0.65);
 	--sidebar-accent-foreground: oklch(0.95 0.01 130);
-	--sidebar-border: oklch(1 0 0 / 10%);
+	--sidebar-border: oklch(1 0 0 / 15%);
 	--sidebar-ring: oklch(0.55 0.09 155);
 }
 
@@ -123,11 +125,45 @@
 		@apply border-border outline-ring/50;
 	}
 	body {
+		/* Light mode: clean solid sage — no image */
 		@apply bg-background text-foreground;
 	}
 	html {
 		@apply font-sans;
 	}
+}
+
+/* Dark mode only: mountain image sits on body so backdrop-filter on the sidebar can reach it */
+.dark body {
+	background-color: transparent;
+	background-image: url("/desktop-mountain.jpg");
+	background-size: cover;
+	background-position: center;
+	background-attachment: fixed;
+}
+
+/* Content area: transparent in light mode (body provides the solid sage bg).
+   In dark mode we set a solid background — the image is only visible behind the sidebar. */
+[data-slot="sidebar-inset"] {
+	background-color: transparent;
+}
+.dark [data-slot="sidebar-inset"] {
+	background-color: var(--background);
+}
+
+/* Sidebar: frosted glass over the image */
+[data-slot="sidebar-inner"] {
+	backdrop-filter: blur(72px);
+	-webkit-backdrop-filter: blur(72px);
+}
+
+/* Navbar: blurs content that scrolls beneath it */
+[data-slot="sidebar-inset"] > header {
+	backdrop-filter: blur(64px);
+	-webkit-backdrop-filter: blur(64px);
+}
+.dark [data-slot="sidebar-inset"] > header {
+	background-color: oklch(0.14 0.015 160 / 0.85);
 }
 
 @utility font-handwriting {

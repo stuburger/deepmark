@@ -269,7 +269,10 @@ function SortableQuestion({
 						<div
 							className="mt-3 rounded border border-dashed border-zinc-300 dark:border-zinc-600 bg-zinc-50/50 dark:bg-zinc-900/30"
 							style={{
-								height: `${Math.max(3, Math.min(10, (question.points ?? 3) * 1.2))}rem`,
+								height: `${Math.max(
+									3,
+									Math.min(10, (question.points ?? 3) * 1.2),
+								)}rem`,
 							}}
 							aria-hidden
 						/>
@@ -460,11 +463,7 @@ function SortableSection({
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export function ExamPaperPaperView({
-	paper,
-}: {
-	paper: ExamPaperDetail
-}) {
+export function ExamPaperPaperView({ paper }: { paper: ExamPaperDetail }) {
 	const router = useRouter()
 	const [localSections, setLocalSections] = useState<LocalSection[]>(() =>
 		buildSections(paper),
@@ -549,68 +548,63 @@ export function ExamPaperPaperView({
 	}
 
 	return (
-		<div className="bg-zinc-50 dark:bg-zinc-900/40 rounded-lg p-6">
-			{/* Exam paper document */}
-			<div>
-				<div className="max-w-2xl mx-auto bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-md shadow-sm">
-					{/* Header */}
-					<div className="px-8 pt-8 pb-6 border-b border-zinc-200 dark:border-zinc-800">
-						<div className="text-center space-y-1">
-							{paper.exam_board && (
-								<p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-									{paper.exam_board}
-								</p>
-							)}
-							<h1 className="text-xl font-bold">{paper.title}</h1>
-							<p className="text-sm text-muted-foreground capitalize">
-								{paper.subject}
-								{paper.paper_number ? ` · Paper ${paper.paper_number}` : ""}
-								{" · "}
-								{paper.year}
-							</p>
-						</div>
-						<div className="mt-4 flex items-center justify-between text-xs text-muted-foreground border-t border-zinc-100 dark:border-zinc-800 pt-3">
-							<span className="flex items-center gap-1.5">
-								<Clock className="h-3.5 w-3.5" />
-								{paper.duration_minutes} minutes
-							</span>
-							<span>Total marks: {paper.total_marks}</span>
-							<span>
-								{paper.questions.length} question
-								{paper.questions.length !== 1 ? "s" : ""}
-							</span>
-						</div>
-					</div>
-
-					{/* Questions with drag-and-drop */}
-					<div className="px-8 py-4">
-						<DndContext
-							sensors={sensors}
-							collisionDetection={closestCenter}
-							onDragEnd={onDragEnd}
-						>
-							<SortableContext
-								items={localSections.map((s) => s.id)}
-								strategy={verticalListSortingStrategy}
-							>
-								{localSections.map((section) => (
-									<SortableSection
-										key={section.id}
-										section={section}
-										onQuestionDeleted={() => router.refresh()}
-									/>
-								))}
-							</SortableContext>
-						</DndContext>
-					</div>
-
-					{/* Footer */}
-					<div className="px-8 py-4 border-t border-zinc-200 dark:border-zinc-800 text-center">
-						<p className="text-xs text-muted-foreground">
-							End of paper — Total: {paper.total_marks} marks
+		<div className="max-w-4xl mx-auto bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md shadow-sm">
+			{/* Header */}
+			<div className="px-8 pt-8 pb-6 border-b border-zinc-200 dark:border-zinc-700">
+				<div className="text-center space-y-1">
+					{paper.exam_board && (
+						<p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+							{paper.exam_board}
 						</p>
-					</div>
+					)}
+					<h1 className="text-xl font-bold">{paper.title}</h1>
+					<p className="text-sm text-muted-foreground capitalize">
+						{paper.subject}
+						{paper.paper_number ? ` · Paper ${paper.paper_number}` : ""}
+						{" · "}
+						{paper.year}
+					</p>
 				</div>
+				<div className="mt-4 flex items-center justify-between text-xs text-muted-foreground border-t border-zinc-100 dark:border-zinc-700 pt-3">
+					<span className="flex items-center gap-1.5">
+						<Clock className="h-3.5 w-3.5" />
+						{paper.duration_minutes} minutes
+					</span>
+					<span>Total marks: {paper.total_marks}</span>
+					<span>
+						{paper.questions.length} question
+						{paper.questions.length !== 1 ? "s" : ""}
+					</span>
+				</div>
+			</div>
+
+			{/* Questions with drag-and-drop */}
+			<div className="px-8 py-4">
+				<DndContext
+					sensors={sensors}
+					collisionDetection={closestCenter}
+					onDragEnd={onDragEnd}
+				>
+					<SortableContext
+						items={localSections.map((s) => s.id)}
+						strategy={verticalListSortingStrategy}
+					>
+						{localSections.map((section) => (
+							<SortableSection
+								key={section.id}
+								section={section}
+								onQuestionDeleted={() => router.refresh()}
+							/>
+						))}
+					</SortableContext>
+				</DndContext>
+			</div>
+
+			{/* Footer */}
+			<div className="px-8 py-4 border-t border-zinc-200 dark:border-zinc-700 text-center">
+				<p className="text-xs text-muted-foreground">
+					End of paper — Total: {paper.total_marks} marks
+				</p>
 			</div>
 		</div>
 	)

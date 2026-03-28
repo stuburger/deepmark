@@ -49,21 +49,21 @@ export default async function ExamPaperStatsPage({
 
 	return (
 		<div className="space-y-6">
-			<div>
-				<Link
-					href="/teacher/mark"
-					className="text-sm text-muted-foreground hover:text-foreground"
-				>
-					← Mark history
-				</Link>
-				<h1 className="mt-2 text-2xl font-semibold">
-					{stats.exam_paper_title}
-				</h1>
-				<p className="text-sm text-muted-foreground mt-1">
-					Performance summary across {stats.submission_count} submission
-					{stats.submission_count !== 1 ? "s" : ""}
-				</p>
-			</div>
+			<Card>
+				<CardHeader>
+					<Link
+						href="/teacher/mark"
+						className="text-sm text-muted-foreground hover:text-foreground"
+					>
+						← Mark history
+					</Link>
+					<CardTitle className="text-2xl">{stats.exam_paper_title}</CardTitle>
+					<CardDescription>
+						Performance summary across {stats.submission_count} submission
+						{stats.submission_count !== 1 ? "s" : ""}
+					</CardDescription>
+				</CardHeader>
+			</Card>
 
 			<div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
 				<Card>

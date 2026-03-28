@@ -460,47 +460,6 @@ export function ExamPaperPageShell({
 
 	return (
 		<>
-			{/* Header */}
-			<div>
-				<Link
-					href="/teacher/exam-papers"
-					className="text-sm text-muted-foreground hover:text-foreground"
-				>
-					← Back to exam papers
-				</Link>
-				<div className="mt-2 flex items-start justify-between gap-4">
-					<div>
-						<EditableTitle id={paper.id} initialTitle={paper.title} />
-						<div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-							<Badge variant="secondary">{capitalize(paper.subject)}</Badge>
-							{paper.exam_board && <span>{paper.exam_board}</span>}
-							<span>{paper.year}</span>
-							{paper.paper_number && <span>Paper {paper.paper_number}</span>}
-							{paper.is_public ? (
-								<Badge variant="default" className="gap-1">
-									<Globe className="h-3 w-3" /> Public
-								</Badge>
-							) : (
-								<Badge variant="outline" className="gap-1">
-									<Lock className="h-3 w-3" /> Draft
-								</Badge>
-							)}
-						</div>
-					</div>
-					<div className="flex shrink-0 items-center gap-2">
-						<Button
-							size="sm"
-							variant="ghost"
-							className="text-muted-foreground hover:text-destructive"
-							onClick={() => setDeleteDialogOpen(true)}
-						>
-							<Trash2 className="h-3.5 w-3.5" />
-							<span className="sr-only">Delete paper</span>
-						</Button>
-					</div>
-				</div>
-			</div>
-
 			{/* Tabs */}
 			<Tabs
 				value={activeTab}
@@ -509,7 +468,51 @@ export function ExamPaperPageShell({
 				}
 				className="gap-0"
 			>
-				<div className="border-b">
+				{/* Sticky frosted-glass header: title + tabs bar */}
+				<div className="sticky top-0 z-10 -mx-6 -mt-6 px-6 pt-6 pb-2 backdrop-blur-xl bg-background/60 border-b">
+					{/* Title row */}
+					<div className="pb-4">
+						<Link
+							href="/teacher/exam-papers"
+							className="text-sm text-muted-foreground hover:text-foreground"
+						>
+							← Back to exam papers
+						</Link>
+						<div className="mt-2 flex items-start justify-between gap-4">
+							<div>
+								<EditableTitle id={paper.id} initialTitle={paper.title} />
+								<div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+									<Badge variant="secondary">{capitalize(paper.subject)}</Badge>
+									{paper.exam_board && <span>{paper.exam_board}</span>}
+									<span>{paper.year}</span>
+									{paper.paper_number && (
+										<span>Paper {paper.paper_number}</span>
+									)}
+									{paper.is_public ? (
+										<Badge variant="default" className="gap-1">
+											<Globe className="h-3 w-3" /> Public
+										</Badge>
+									) : (
+										<Badge variant="outline" className="gap-1">
+											<Lock className="h-3 w-3" /> Draft
+										</Badge>
+									)}
+								</div>
+							</div>
+							<div className="flex shrink-0 items-center gap-2">
+								<Button
+									size="sm"
+									variant="ghost"
+									className="text-muted-foreground hover:text-destructive"
+									onClick={() => setDeleteDialogOpen(true)}
+								>
+									<Trash2 className="h-3.5 w-3.5" />
+									<span className="sr-only">Delete paper</span>
+								</Button>
+							</div>
+						</div>
+					</div>
+					{/* Tabs bar */}
 					<TabsList
 						variant="line"
 						className="w-auto rounded-none h-10 gap-0 p-0"
@@ -532,63 +535,67 @@ export function ExamPaperPageShell({
 				</div>
 
 				{/* ── Paper tab ── */}
-				<TabsContent value="paper" className="space-y-6 mt-6">
-					{/* Readiness strip */}
-					<div className="flex items-center gap-3 rounded-lg border px-3 py-2 text-xs text-muted-foreground">
-						<div className="flex flex-1 flex-wrap items-center gap-x-4 gap-y-1">
-							<span
-								className={`flex items-center gap-1.5 ${
-									hasQuestionPaper
-										? "text-green-600 dark:text-green-400"
-										: "text-amber-600 dark:text-amber-400"
-								}`}
-							>
-								<span
-									className={`h-1.5 w-1.5 shrink-0 rounded-full ${
-										hasQuestionPaper ? "bg-green-500" : "bg-amber-500"
-									}`}
-								/>
-								Question paper
-							</span>
-							<span
-								className={`flex items-center gap-1.5 ${
-									allQuestionsHaveMarkSchemes
-										? "text-green-600 dark:text-green-400"
-										: "text-amber-600 dark:text-amber-400"
-								}`}
-							>
-								<span
-									className={`h-1.5 w-1.5 shrink-0 rounded-full ${
-										allQuestionsHaveMarkSchemes
-											? "bg-green-500"
-											: "bg-amber-500"
-									}`}
-								/>
-								Mark schemes
-								{!allQuestionsHaveMarkSchemes && totalQuestions > 0 && (
-									<span className="tabular-nums">
-										({questionsWithMarkScheme}/{totalQuestions})
+				<TabsContent value="paper" className="space-y-6 mt-10">
+					<Card>
+						<CardContent className="pt-4 space-y-4">
+							{/* Readiness strip */}
+							<div className="flex items-center gap-3 rounded-lg border px-3 py-2 text-xs text-muted-foreground">
+								<div className="flex flex-1 flex-wrap items-center gap-x-4 gap-y-1">
+									<span
+										className={`flex items-center gap-1.5 ${
+											hasQuestionPaper
+												? "text-green-600 dark:text-green-400"
+												: "text-amber-600 dark:text-amber-400"
+										}`}
+									>
+										<span
+											className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+												hasQuestionPaper ? "bg-green-500" : "bg-amber-500"
+											}`}
+										/>
+										Question paper
 									</span>
-								)}
-							</span>
-							<span className="flex items-center gap-1.5">
-								<span
-									className={`h-1.5 w-1.5 shrink-0 rounded-full ${
-										hasExemplar ? "bg-green-500" : "bg-muted-foreground/40"
-									}`}
-								/>
-								Exemplars (optional)
-							</span>
-						</div>
-					</div>
+									<span
+										className={`flex items-center gap-1.5 ${
+											allQuestionsHaveMarkSchemes
+												? "text-green-600 dark:text-green-400"
+												: "text-amber-600 dark:text-amber-400"
+										}`}
+									>
+										<span
+											className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+												allQuestionsHaveMarkSchemes
+													? "bg-green-500"
+													: "bg-amber-500"
+											}`}
+										/>
+										Mark schemes
+										{!allQuestionsHaveMarkSchemes && totalQuestions > 0 && (
+											<span className="tabular-nums">
+												({questionsWithMarkScheme}/{totalQuestions})
+											</span>
+										)}
+									</span>
+									<span className="flex items-center gap-1.5">
+										<span
+											className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+												hasExemplar ? "bg-green-500" : "bg-muted-foreground/40"
+											}`}
+										/>
+										Exemplars (optional)
+									</span>
+								</div>
+							</div>
 
-					{/* Document upload cards */}
-					<DocumentUploadCards
-						examPaperId={paper.id}
-						completedDocs={completedDocs}
-						activeJobs={jobs}
-						onJobStarted={() => void fetchIngestionLiveState()}
-					/>
+							{/* Document upload cards */}
+							<DocumentUploadCards
+								examPaperId={paper.id}
+								completedDocs={completedDocs}
+								activeJobs={jobs}
+								onJobStarted={() => void fetchIngestionLiveState()}
+							/>
+						</CardContent>
+					</Card>
 
 					{/* Duplicate warning banner */}
 					{similarPairs.length > 0 && !duplicateBannerDismissed && (
@@ -835,7 +842,7 @@ export function ExamPaperPageShell({
 				</TabsContent>
 
 				{/* ── Submissions tab ── */}
-				<TabsContent value="submissions" className="space-y-6 mt-6">
+				<TabsContent value="submissions" className="space-y-6 mt-10">
 					<div className="flex items-center justify-between gap-4">
 						<p className="text-sm text-muted-foreground">
 							{initialSubmissions.length === 0
@@ -937,7 +944,7 @@ export function ExamPaperPageShell({
 				</TabsContent>
 
 				{/* ── Analytics tab ── */}
-				<TabsContent value="analytics" className="space-y-6 mt-6">
+				<TabsContent value="analytics" className="space-y-6 mt-10">
 					{analyticsLoading ? (
 						<div className="flex items-center justify-center py-16">
 							<Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />

@@ -23,7 +23,7 @@ export function FailedPanel({
 				</div>
 			</div>
 			<Link
-				href="/teacher/mark/new"
+				href="/teacher/exam-papers"
 				className={buttonVariants({ className: "w-full justify-center" })}
 			>
 				Start over — mark a new paper

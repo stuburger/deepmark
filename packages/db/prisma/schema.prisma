@@ -102,6 +102,31 @@ enum MarkSchemeStatus {
   unlinked
 }
 
+enum BatchStatus {
+  uploading
+  classifying
+  staging
+  marking
+  complete
+  failed
+}
+
+enum ReviewMode {
+  auto
+  required
+}
+
+enum BlankPageMode {
+  script_page
+  separator
+}
+
+enum StagedScriptStatus {
+  proposed
+  confirmed
+  excluded
+}
+
 model User {
   id         String   @id @default(cuid())
   email      String?  @unique
@@ -123,6 +148,8 @@ model User {
   students            Student[]          @relation("TeacherStudents")
   pdf_ingestion_jobs  PdfIngestionJob[]  @relation("PdfIngestionJobUploader")
   student_paper_jobs  StudentPaperJob[]  @relation("StudentPaperJobUploader")
+  batch_marking_jobs  BatchMarkingJob[]  @relation("BatchMarkingJobUploader")
+  push_subscriptions  UserPushSubscription[] @relation("UserPushSubscriptions")
 
   @@map("users")
 }
@@ -292,6 +319,7 @@ model ExamPaper {
   sections           ExamSection[]
   pdf_ingestion_jobs PdfIngestionJob[]
   student_paper_jobs StudentPaperJob[]
+  batch_marking_jobs BatchMarkingJob[]
 
   @@map("exam_papers")
 }
@@ -425,11 +453,17 @@ model StudentPaperJob {
   created_at    DateTime   @default(now())
   processed_at  DateTime?
 
+  batch_job_id  String?
+  remark_count  Int       @default(0)
+  remarked_at   DateTime?
+
   uploader       User                        @relation("StudentPaperJobUploader", fields: [uploaded_by], references: [id])
   exam_paper     ExamPaper                   @relation(fields: [exam_paper_id], references: [id])
   student        Student?                    @relation("StudentPaperJobStudent", fields: [student_id], references: [id])
   answer_regions StudentPaperAnswerRegion[]  @relation("StudentPaperJobRegions")
   word_tokens    StudentPaperPageToken[]     @relation("JobWordTokens")
+  batch_job      BatchMarkingJob?            @relation("BatchStudentJobs", fields: [batch_job_id], references: [id])
+  staged_script  StagedScript?               @relation("StagedScriptJob")
 
   @@map("student_paper_jobs")
 }
@@ -518,4 +552,60 @@ model MarkSchemeTestRun {
   exemplar    ExemplarAnswer? @relation(fields: [exemplar_id], references: [id])
 
   @@map("mark_scheme_test_runs")
+}
+
+model BatchMarkingJob {
+  id                   String        @id @default(cuid())
+  exam_paper_id        String
+  uploaded_by          String
+  status               BatchStatus   @default(uploading)
+  review_mode          ReviewMode    @default(auto)
+  blank_page_mode      BlankPageMode @default(script_page)
+  pages_per_script     Int           @default(4)
+  total_student_jobs   Int           @default(0)
+  notification_sent_at DateTime?
+  error                String?
+  job_events           Json?
+  created_at           DateTime      @default(now())
+  processed_at         DateTime?
+
+  uploader       User              @relation("BatchMarkingJobUploader", fields: [uploaded_by], references: [id])
+  exam_paper     ExamPaper         @relation(fields: [exam_paper_id], references: [id])
+  student_jobs   StudentPaperJob[] @relation("BatchStudentJobs")
+  staged_scripts StagedScript[]
+
+  @@map("batch_marking_jobs")
+}
+
+model StagedScript {
+  id             String             @id @default(cuid())
+  batch_job_id   String
+  // [{ s3_key, order, mime_type, source_file }]
+  page_keys      Json
+  proposed_name  String?
+  confidence     Float?
+  confirmed_name String?
+  status         StagedScriptStatus @default(proposed)
+  created_at     DateTime           @default(now())
+  student_job_id String?            @unique
+
+  batch_job   BatchMarkingJob  @relation(fields: [batch_job_id], references: [id])
+  student_job StudentPaperJob? @relation("StagedScriptJob", fields: [student_job_id], references: [id])
+
+  @@map("staged_scripts")
+}
+
+model UserPushSubscription {
+  id         String   @id @default(cuid())
+  user_id    String
+  endpoint   String   @unique
+  p256dh     String
+  auth       String
+  user_agent String?
+  created_at DateTime @default(now())
+
+  user User @relation("UserPushSubscriptions", fields: [user_id], references: [id])
+
+  @@index([user_id])
+  @@map("user_push_subscriptions")
 }

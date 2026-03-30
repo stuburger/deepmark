@@ -1,0 +1,591 @@
+{
+	"user": {
+		"id": "test-user-batch-pipeline",
+		"email": "test+batch@deepmark.test",
+		"name": "Batch Test Teacher",
+		"role": "teacher",
+		"is_active": true
+	},
+	"exam_paper": {
+		"id": "cmnajrwnx0000dxw36cojno51",
+		"title": "ABC",
+		"subject": "business",
+		"exam_board": "AQA",
+		"year": 2026,
+		"paper_number": null,
+		"total_marks": 35,
+		"duration_minutes": 40,
+		"is_active": true,
+		"is_public": true,
+		"metadata": null
+	},
+	"exam_section": {
+		"id": "cmnajs9oh000c9ww31znl5ufq",
+		"exam_paper_id": "cmnajrwnx0000dxw36cojno51",
+		"title": "Section 1",
+		"description": null,
+		"total_marks": 35,
+		"instructions": null,
+		"order": 1
+	},
+	"questions": [
+		{
+			"id": "cmnajs6x300009ww3k1ts29ht",
+			"text": "Which of the following is most likely to be produced using flow production?",
+			"topic": "business",
+			"question_type": "multiple_choice",
+			"question_number": "1.1",
+			"points": 1,
+			"multiple_choice_options": [
+				{ "option_text": "A bridge", "option_label": "A" },
+				{ "option_text": "Made to measure curtains", "option_label": "B" },
+				{ "option_text": "Packet of crisps", "option_label": "C" },
+				{ "option_text": "Personalised birthday cake", "option_label": "D" }
+			],
+			"origin": "question_paper"
+		},
+		{
+			"id": "cmnajs7ar00019ww3ta0ofa9e",
+			"text": "Which of the following describes the process of managing the providers of resources at the different stages in the production process?",
+			"topic": "business",
+			"question_type": "multiple_choice",
+			"question_number": "1.2",
+			"points": 1,
+			"multiple_choice_options": [
+				{ "option_text": "Just in case", "option_label": "A" },
+				{ "option_text": "Just in time", "option_label": "B" },
+				{ "option_text": "Supply chain management", "option_label": "C" },
+				{ "option_text": "Total quality management", "option_label": "D" }
+			],
+			"origin": "question_paper"
+		},
+		{
+			"id": "cmnajs7j100029ww36q9l90wi",
+			"text": "Which of the following is a cost of maintaining quality?",
+			"topic": "business",
+			"question_type": "multiple_choice",
+			"question_number": "1.3",
+			"points": 1,
+			"multiple_choice_options": [
+				{ "option_text": "Additional sales", "option_label": "A" },
+				{ "option_text": "Higher prices can be charged", "option_label": "B" },
+				{ "option_text": "Improved reputation", "option_label": "C" },
+				{ "option_text": "Staff training", "option_label": "D" }
+			],
+			"origin": "question_paper"
+		},
+		{
+			"id": "cmnajs7r800039ww39lfzl64r",
+			"text": "Which of the following describes the process of choosing suppliers and negotiating the overall supplier/business contract alongside the payment terms?",
+			"topic": "business",
+			"question_type": "multiple_choice",
+			"question_number": "1.4",
+			"points": 1,
+			"multiple_choice_options": [
+				{ "option_text": "Efficiency", "option_label": "A" },
+				{ "option_text": "Logistics", "option_label": "B" },
+				{ "option_text": "Procurement", "option_label": "C" },
+				{ "option_text": "Supply chain management", "option_label": "D" }
+			],
+			"origin": "question_paper"
+		},
+		{
+			"id": "cmnajs7zm00049ww3jdh6j8x4",
+			"text": "Identify two ways a business can identify quality problems.",
+			"topic": "business",
+			"question_type": "written",
+			"question_number": "01.5",
+			"points": 2,
+			"multiple_choice_options": [],
+			"origin": "question_paper"
+		},
+		{
+			"id": "cmnajs87u00059ww3tcetwzs5",
+			"text": "Explain one advantage of job production.",
+			"topic": "business",
+			"question_type": "written",
+			"question_number": "01.6",
+			"points": 2,
+			"multiple_choice_options": [],
+			"origin": "question_paper"
+		},
+		{
+			"id": "cmnajs8fy00069ww3lbclaagd",
+			"text": "State and explain two methods of post sales service.",
+			"topic": "business",
+			"question_type": "written",
+			"question_number": "01.7",
+			"points": 4,
+			"multiple_choice_options": [],
+			"origin": "question_paper"
+		},
+		{
+			"id": "cmnajs8of00079ww31ljgl01p",
+			"text": "Using Item A, calculate the average number of tea bags a tea drinker in the UK uses each day in one year. Show your workings.",
+			"topic": "business",
+			"question_type": "written",
+			"question_number": "02.1",
+			"points": 2,
+			"multiple_choice_options": [],
+			"origin": "question_paper"
+		},
+		{
+			"id": "cmnajs8wr00089ww35qq7q8qo",
+			"text": "Explain one customer expectation of quality when buying products from Yorkshire Tea.",
+			"topic": "business",
+			"question_type": "written",
+			"question_number": "02.2",
+			"points": 4,
+			"multiple_choice_options": [],
+			"origin": "question_paper"
+		},
+		{
+			"id": "cmnajs95600099ww3rox739o5",
+			"text": "Analyse one benefit to Yorkshire Tea of effective logistics throughout the tea production process.",
+			"topic": "business",
+			"question_type": "written",
+			"question_number": "02.3",
+			"points": 6,
+			"multiple_choice_options": [],
+			"origin": "question_paper"
+		},
+		{
+			"id": "cmnajs9dc000a9ww3oinjq1wy",
+			"text": "Define the term customer engagement.",
+			"topic": "business",
+			"question_type": "written",
+			"question_number": "02.4",
+			"points": 2,
+			"multiple_choice_options": [],
+			"origin": "question_paper"
+		},
+		{
+			"id": "cmnajs9lc000b9ww3t4p2wgnz",
+			"text": "Recommend whether Taylors should increase the amount of customer engagement activities for its Yorkshire Tea brand. Give reasons for your recommendation.",
+			"topic": "business",
+			"question_type": "written",
+			"question_number": "02.5",
+			"points": 9,
+			"multiple_choice_options": [],
+			"origin": "question_paper"
+		}
+	],
+	"mark_schemes": [
+		{
+			"id": "cmnajtu4f0000mqw33l6d28mx",
+			"question_id": "cmnajs6x300009ww3k1ts29ht",
+			"question_part_id": null,
+			"description": "AO1: 1 mark",
+			"guidance": "",
+			"points_total": 1,
+			"mark_points": [
+				{
+					"points": 1,
+					"criteria": "Award 1 mark for the correct option.",
+					"description": "Correct answer",
+					"point_number": 1
+				}
+			],
+			"correct_option_labels": ["C"],
+			"marking_method": "deterministic",
+			"marking_rules": null,
+			"tags": []
+		},
+		{
+			"id": "cmnajtu6c0001mqw34zxpbeid",
+			"question_id": "cmnajs7ar00019ww3ta0ofa9e",
+			"question_part_id": null,
+			"description": "AO1: 1 mark",
+			"guidance": "",
+			"points_total": 1,
+			"mark_points": [
+				{
+					"points": 1,
+					"criteria": "Award 1 mark for the correct option.",
+					"description": "Correct answer",
+					"point_number": 1
+				}
+			],
+			"correct_option_labels": ["C"],
+			"marking_method": "deterministic",
+			"marking_rules": null,
+			"tags": []
+		},
+		{
+			"id": "cmnajtu8a0002mqw3tadol3le",
+			"question_id": "cmnajs7j100029ww36q9l90wi",
+			"question_part_id": null,
+			"description": "AO1: 1 mark",
+			"guidance": "",
+			"points_total": 1,
+			"mark_points": [
+				{
+					"points": 1,
+					"criteria": "Award 1 mark for the correct option.",
+					"description": "Correct answer",
+					"point_number": 1
+				}
+			],
+			"correct_option_labels": ["D"],
+			"marking_method": "deterministic",
+			"marking_rules": null,
+			"tags": []
+		},
+		{
+			"id": "cmnajtu9x0003mqw3fk39udoe",
+			"question_id": "cmnajs7r800039ww39lfzl64r",
+			"question_part_id": null,
+			"description": "AO1: 1 mark",
+			"guidance": "",
+			"points_total": 1,
+			"mark_points": [
+				{
+					"points": 1,
+					"criteria": "Award 1 mark for the correct option.",
+					"description": "Correct answer",
+					"point_number": 1
+				}
+			],
+			"correct_option_labels": ["C"],
+			"marking_method": "deterministic",
+			"marking_rules": null,
+			"tags": []
+		},
+		{
+			"id": "cmnajtubl0004mqw3zxchgx8a",
+			"question_id": "cmnajs7zm00049ww3jdh6j8x4",
+			"question_part_id": null,
+			"description": "AO1: 2 marks",
+			"guidance": "Answers may include: Mystery shoppers; Customer service surveys; Number of repeat sales; Amount of returned products; Volume of complaints from customers; Quality control checks; Quality assurance; Total quality management (TQM)",
+			"points_total": 2,
+			"mark_points": [
+				{
+					"points": 1,
+					"criteria": "Acceptable: Mystery shoppers / Customer service surveys / Number of repeat sales / Amount of returned products / Volume of complaints from customers / Quality control checks / Quality assurance / Total quality management (TQM)",
+					"description": "Identifies a valid way a business can identify quality problems",
+					"point_number": 1
+				},
+				{
+					"points": 1,
+					"criteria": "Acceptable: Mystery shoppers / Customer service surveys / Number of repeat sales / Amount of returned products / Volume of complaints from customers / Quality control checks / Quality assurance / Total quality management (TQM)",
+					"description": "Identifies a second valid way a business can identify quality problems",
+					"point_number": 2
+				}
+			],
+			"correct_option_labels": [],
+			"marking_method": "point_based",
+			"marking_rules": null,
+			"tags": []
+		},
+		{
+			"id": "cmnajtudd0005mqw36120xpfz",
+			"question_id": "cmnajs87u00059ww3tcetwzs5",
+			"question_part_id": null,
+			"description": "AO1: 2 marks",
+			"guidance": "Possible answers may include: Able to meet the exact requirements of customers; Highly flexible; High levels of customer satisfaction; Increased levels of employee motivation; Products are usually high quality; Unique products can be produced; High prices can be charged; Businesses are able to differentiate their products from rivals.",
+			"points_total": 2,
+			"mark_points": [
+				{
+					"points": 1,
+					"criteria": "Acceptable: Able to meet the exact requirements of customers / Highly flexible / High levels of customer satisfaction / Increased levels of employee motivation / Products are usually high quality / Unique products can be produced / High prices can be charged / Businesses are able to differentiate their products from rivals",
+					"description": "Identifies an advantage of job production",
+					"point_number": 1
+				},
+				{
+					"points": 1,
+					"criteria": "Award 1 mark for a linked explanation or consequence that develops the identified point.",
+					"description": "Develops the identified advantage",
+					"point_number": 2
+				}
+			],
+			"correct_option_labels": [],
+			"marking_method": "point_based",
+			"marking_rules": null,
+			"tags": []
+		},
+		{
+			"id": "cmnajtuf20006mqw3b4crzedf",
+			"question_id": "cmnajs8fy00069ww3lbclaagd",
+			"question_part_id": null,
+			"description": "AO1: 4 marks",
+			"guidance": "Answers may include: User training; Help lines; Servicing; Warranties/guarantees; Exchanging/refunding goods that do not meet customer needs or are faulty; Efficient delivery of products.",
+			"points_total": 4,
+			"mark_points": [
+				{
+					"points": 1,
+					"criteria": "Acceptable: User training / Help lines / Servicing / Warranties/guarantees / Exchanging/refunding goods that do not meet customer needs or are faulty / Efficient delivery of products",
+					"description": "States a method of post sales service",
+					"point_number": 1
+				},
+				{
+					"points": 1,
+					"criteria": "Award 1 mark for some development of the stated method.",
+					"description": "Develops the first stated method",
+					"point_number": 2
+				},
+				{
+					"points": 1,
+					"criteria": "Acceptable: User training / Help lines / Servicing / Warranties/guarantees / Exchanging/refunding goods that do not meet customer needs or are faulty / Efficient delivery of products",
+					"description": "States a second method of post sales service",
+					"point_number": 3
+				},
+				{
+					"points": 1,
+					"criteria": "Award 1 mark for some development of the stated method.",
+					"description": "Develops the second stated method",
+					"point_number": 4
+				}
+			],
+			"correct_option_labels": [],
+			"marking_method": "point_based",
+			"marking_rules": null,
+			"tags": []
+		},
+		{
+			"id": "cmnajtugu0007mqw3hviejntp",
+			"question_id": "cmnajs8of00079ww31ljgl01p",
+			"question_part_id": null,
+			"description": "AO1: 2 marks",
+			"guidance": "2 marks for calculation. 4 tea bags (2). Method 1: 1,460/365 (1) = 4 tea bags (1). Method 2: 1 460/52/7 (1) = 4.01 tea bags (1).",
+			"points_total": 2,
+			"mark_points": [
+				{
+					"points": 1,
+					"criteria": "Award 1 mark for showing a correct method (e.g., 1,460/365 or 1,460/52/7).",
+					"description": "Correct calculation method shown",
+					"point_number": 1
+				},
+				{
+					"points": 1,
+					"criteria": "Award 1 mark for the correct answer (4 tea bags or 4.01 tea bags).",
+					"description": "Correct final answer",
+					"point_number": 2
+				}
+			],
+			"correct_option_labels": [],
+			"marking_method": "point_based",
+			"marking_rules": null,
+			"tags": []
+		},
+		{
+			"id": "cmnajtuil0008mqw3t6tmw1si",
+			"question_id": "cmnajs8wr00089ww35qq7q8qo",
+			"question_part_id": null,
+			"description": "AO1: 2 marks, AO2: 2 marks",
+			"guidance": "Answers may include: Flavour; Taste; Value for money; Sustainability; Environmental issues; Ethical trading.",
+			"points_total": 4,
+			"mark_points": [],
+			"correct_option_labels": [],
+			"marking_method": "level_of_response",
+			"marking_rules": {
+				"levels": [
+					{
+						"level": 2,
+						"descriptor": "Sound understanding and application of the topics. Applies knowledge and understanding to the context sufficiently.",
+						"mark_range": [3, 4],
+						"ao_requirements": ["AO2", "AO1"]
+					},
+					{
+						"level": 1,
+						"descriptor": "Basic understanding and application of the topics. Applies basic knowledge and understanding to the context.",
+						"mark_range": [1, 2],
+						"ao_requirements": ["AO2", "AO1"]
+					},
+					{
+						"level": 0,
+						"descriptor": "Nothing worthy of credit",
+						"mark_range": [0, 0],
+						"ao_requirements": null
+					}
+				],
+				"command_word": "Explain",
+				"items_required": 1
+			},
+			"tags": []
+		},
+		{
+			"id": "cmnajtuka0009mqw3xypslii1",
+			"question_id": "cmnajs95600099ww3rox739o5",
+			"question_part_id": null,
+			"description": "AO2: 3 marks, AO3: 3 marks",
+			"guidance": "Answers may include: Freshness and quality of tea can be assured; Tea tasters and production line workers will not be idle; Yorkshire Tea sells its products both in the UK and internationally.",
+			"points_total": 6,
+			"mark_points": [],
+			"correct_option_labels": [],
+			"marking_method": "level_of_response",
+			"marking_rules": {
+				"levels": [
+					{
+						"level": 3,
+						"descriptor": "Detailed analysis of topics based on the context. Business areas are fully analysed.",
+						"mark_range": [5, 6],
+						"ao_requirements": ["AO3", "AO2"]
+					},
+					{
+						"level": 2,
+						"descriptor": "Sound analysis of topics based on the context. Business areas are partially analysed.",
+						"mark_range": [3, 4],
+						"ao_requirements": ["AO3", "AO2"]
+					},
+					{
+						"level": 1,
+						"descriptor": "Basic analysis of topics based on the context. Basic analysis of business areas.",
+						"mark_range": [1, 2],
+						"ao_requirements": ["AO3", "AO2"]
+					},
+					{
+						"level": 0,
+						"descriptor": "Nothing worthy of credit",
+						"mark_range": [0, 0],
+						"ao_requirements": null
+					}
+				],
+				"command_word": "Analyse",
+				"items_required": 1
+			},
+			"tags": []
+		},
+		{
+			"id": "cmnajtum5000amqw3wdchv7br",
+			"question_id": "cmnajs9dc000a9ww3oinjq1wy",
+			"question_part_id": null,
+			"description": "AO1: 2 marks",
+			"guidance": "Answers may include: The relationship that exists between a business and its customers; Ways in which a business interacts with its customers; Emotional connection between a customer and a business.",
+			"points_total": 2,
+			"mark_points": [
+				{
+					"points": 1,
+					"criteria": "Acceptable: The relationship that exists between a business and its customers / Ways in which a business interacts with its customers / Emotional connection between a customer and a business / Positive customer engagement can lead to a high degree of brand loyalty/higher sales / Social media is often used as a way to connect and engage with customers",
+					"description": "Gives a limited description of customer engagement",
+					"point_number": 1
+				},
+				{
+					"points": 1,
+					"criteria": "Award 1 mark for some development of the description.",
+					"description": "Develops the description of customer engagement",
+					"point_number": 2
+				}
+			],
+			"correct_option_labels": [],
+			"marking_method": "point_based",
+			"marking_rules": null,
+			"tags": []
+		},
+		{
+			"id": "cmnajtunv000bmqw3bgj6dmlz",
+			"question_id": "cmnajs9lc000b9ww3t4p2wgnz",
+			"question_part_id": null,
+			"description": "AO2: 3 marks, AO3: 6 marks",
+			"guidance": "Recommend whether Taylors should increase the amount of customer engagement activities for its Yorkshire Tea brand.",
+			"points_total": 9,
+			"mark_points": [],
+			"correct_option_labels": [],
+			"marking_method": "level_of_response",
+			"marking_rules": {
+				"levels": [
+					{
+						"level": 3,
+						"descriptor": "Detailed analysis and evaluation of topics based on the context. Sustained line of reasoning, coherent, relevant, substantiated with a focused conclusion.",
+						"mark_range": [7, 9],
+						"ao_requirements": ["AO3", "AO3", "AO2"]
+					},
+					{
+						"level": 2,
+						"descriptor": "Sound analysis and evaluation of topics based on the context. A line of reasoning with a conclusion that has some justification.",
+						"mark_range": [4, 6],
+						"ao_requirements": ["AO3", "AO3", "AO2"]
+					},
+					{
+						"level": 1,
+						"descriptor": "Basic analysis and evaluation of topics based on the context. Basic line of reasoning with a conclusion.",
+						"mark_range": [1, 3],
+						"ao_requirements": ["AO3", "AO3", "AO2"]
+					},
+					{
+						"level": 0,
+						"descriptor": "Nothing worthy of credit",
+						"mark_range": [0, 0],
+						"ao_requirements": null
+					}
+				],
+				"command_word": "Recommend",
+				"items_required": null
+			},
+			"tags": []
+		}
+	],
+	"exam_section_questions": [
+		{
+			"id": "cmnajs9pm000d9ww3cbhjngaj",
+			"exam_section_id": "cmnajs9oh000c9ww31znl5ufq",
+			"question_id": "cmnajs6x300009ww3k1ts29ht",
+			"order": 1
+		},
+		{
+			"id": "cmnajs9qb000e9ww3l04o8tz8",
+			"exam_section_id": "cmnajs9oh000c9ww31znl5ufq",
+			"question_id": "cmnajs7ar00019ww3ta0ofa9e",
+			"order": 2
+		},
+		{
+			"id": "cmnajs9qs000f9ww3nveko6rs",
+			"exam_section_id": "cmnajs9oh000c9ww31znl5ufq",
+			"question_id": "cmnajs7j100029ww36q9l90wi",
+			"order": 3
+		},
+		{
+			"id": "cmnajs9rb000g9ww3oom0frqw",
+			"exam_section_id": "cmnajs9oh000c9ww31znl5ufq",
+			"question_id": "cmnajs7r800039ww39lfzl64r",
+			"order": 4
+		},
+		{
+			"id": "cmnajs9rt000h9ww3ry03vp3v",
+			"exam_section_id": "cmnajs9oh000c9ww31znl5ufq",
+			"question_id": "cmnajs7zm00049ww3jdh6j8x4",
+			"order": 5
+		},
+		{
+			"id": "cmnajs9sj000i9ww3hwf1dhok",
+			"exam_section_id": "cmnajs9oh000c9ww31znl5ufq",
+			"question_id": "cmnajs87u00059ww3tcetwzs5",
+			"order": 6
+		},
+		{
+			"id": "cmnajs9sz000j9ww3swh6zzo3",
+			"exam_section_id": "cmnajs9oh000c9ww31znl5ufq",
+			"question_id": "cmnajs8fy00069ww3lbclaagd",
+			"order": 7
+		},
+		{
+			"id": "cmnajs9tk000k9ww3i6koj6js",
+			"exam_section_id": "cmnajs9oh000c9ww31znl5ufq",
+			"question_id": "cmnajs8of00079ww31ljgl01p",
+			"order": 8
+		},
+		{
+			"id": "cmnajs9u3000l9ww3wttj1gld",
+			"exam_section_id": "cmnajs9oh000c9ww31znl5ufq",
+			"question_id": "cmnajs8wr00089ww35qq7q8qo",
+			"order": 9
+		},
+		{
+			"id": "cmnajs9uk000m9ww3d8l5vu5e",
+			"exam_section_id": "cmnajs9oh000c9ww31znl5ufq",
+			"question_id": "cmnajs95600099ww3rox739o5",
+			"order": 10
+		},
+		{
+			"id": "cmnajs9v3000n9ww3xy60e8ut",
+			"exam_section_id": "cmnajs9oh000c9ww31znl5ufq",
+			"question_id": "cmnajs9dc000a9ww3oinjq1wy",
+			"order": 11
+		},
+		{
+			"id": "cmnajs9vp000o9ww3oaha4mmf",
+			"exam_section_id": "cmnajs9oh000c9ww31znl5ufq",
+			"question_id": "cmnajs9lc000b9ww3t4p2wgnz",
+			"order": 12
+		}
+	]
+}

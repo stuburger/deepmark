@@ -2,6 +2,15 @@ import { cloudVisionApiKey, geminiApiKey, openAiApiKey } from "./config"
 import { neonPostgres } from "./database"
 import { scansBucket } from "./storage"
 
+export const vapidPublicKey = new sst.Secret(
+	"VapidPublicKey",
+	"BIe7yQ7YXA0TuJu7Ay03GkTcb_jkJE3o43civiMveCY9XKeZo4MeGouO-JADVIvew4Py3n13n-V0ZhYAlm8t0IE",
+)
+export const vapidPrivateKey = new sst.Secret(
+	"VapidPrivateKey",
+	"MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQg_Gxr7I5Bc4OshZBjlNvTUTLFIDq6zzxfvoWanSj3ttWhRANCAASHu8kO2FwNE7ibuwMtNxpE3G_45CRN6ON3Ir4jL3gmPVynmaODHhqLjviQA1SL3sOD8t59d5_ldGYWAJZvLdCB",
+)
+
 export const markSchemePdfQueue = new sst.aws.Queue("MarkSchemePdfQueue", {
 	visibilityTimeout: "10 minutes",
 })
@@ -49,6 +58,18 @@ scansBucket.notify({
 		},
 		// Student paper OCR and grading are manually queued by server actions.
 	],
+})
+
+export const batchClassifyQueue = new sst.aws.Queue("BatchClassifyQueue", {
+	visibilityTimeout: "5 minutes",
+})
+
+batchClassifyQueue.subscribe({
+	handler: "packages/backend/src/processors/batch-classify.handler",
+	link: [neonPostgres, geminiApiKey, scansBucket, studentPaperOcrQueue],
+	timeout: "4 minutes",
+	memory: "1 GB",
+	nodejs: { install: ["sharp"] },
 })
 
 // Triggered automatically: S3 fires a message when a PDF is uploaded to pdfs/mark-schemes/.
@@ -108,6 +129,7 @@ studentPaperOcrQueue.subscribe({
 		openAiApiKey,
 		scansBucket,
 		studentPaperQueue,
+		batchClassifyQueue,
 	],
 	timeout: "8 minutes",
 	memory: "1 GB",
@@ -122,7 +144,14 @@ studentPaperOcrQueue.subscribe({
 // normalised Answer + MarkingResult rows to the database.
 studentPaperQueue.subscribe({
 	handler: "packages/backend/src/processors/student-paper-grade.handler",
-	link: [neonPostgres, geminiApiKey, openAiApiKey, scansBucket],
+	link: [
+		neonPostgres,
+		geminiApiKey,
+		openAiApiKey,
+		scansBucket,
+		vapidPublicKey,
+		vapidPrivateKey,
+	],
 	timeout: "8 minutes",
 	memory: "1 GB",
 })

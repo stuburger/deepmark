@@ -15,8 +15,8 @@ export function CancelledPanel() {
 					No results were saved.
 				</p>
 			</div>
-			<Link href="/teacher/mark/new" className={buttonVariants()}>
-				Mark a new paper
+			<Link href="/teacher/exam-papers" className={buttonVariants()}>
+				Browse exam papers
 			</Link>
 		</div>
 	)

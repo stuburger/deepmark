@@ -148,11 +148,11 @@ export default async function MarkPage() {
 					</p>
 				</div>
 				<Link
-					href="/teacher/mark/new"
+					href="/teacher/exam-papers"
 					className={buttonVariants({ size: "lg" })}
 				>
 					<PlusCircle className="h-4 w-4 mr-2" />
-					Mark a paper
+					Browse exam papers
 				</Link>
 			</div>
 
@@ -170,11 +170,11 @@ export default async function MarkPage() {
 							</p>
 						</div>
 						<Link
-							href="/teacher/mark/new"
+							href="/teacher/exam-papers"
 							className={buttonVariants({ size: "lg" })}
 						>
 							<PlusCircle className="h-4 w-4 mr-2" />
-							Mark your first paper
+							Browse exam papers
 						</Link>
 					</CardContent>
 				</Card>

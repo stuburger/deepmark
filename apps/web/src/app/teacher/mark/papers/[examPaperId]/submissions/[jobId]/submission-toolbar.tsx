@@ -332,7 +332,7 @@ export function SubmissionToolbar({
 						<DownloadPdfButton data={data} />
 						<ReMarkButton jobId={jobId} />
 						<Link
-							href="/teacher/mark/new"
+							href={`/teacher/exam-papers/${examPaperId}`}
 							className={buttonVariants({ size: "sm" })}
 						>
 							<PlusCircle className="h-3.5 w-3.5 mr-1.5" />

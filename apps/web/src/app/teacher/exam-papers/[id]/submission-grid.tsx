@@ -9,6 +9,7 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import type { SubmissionHistoryItem } from "@/lib/mark-actions"
 import { LayoutGrid, List } from "lucide-react"
 import { parseAsStringEnum, useQueryState } from "nuqs"
@@ -58,6 +59,8 @@ function statusDot(status: string, pct: number | null) {
 function statusLabel(status: string) {
 	return status.replace(/_/g, " ")
 }
+
+const TERMINAL_STATUSES = new Set(["ocr_complete", "failed", "cancelled"])
 
 // ─── Single script card ────────────────────────────────────────────────────────
 
@@ -175,24 +178,52 @@ export function SubmissionGrid({
 		"submissions_view",
 		parseAsStringEnum(["grid", "table"]).withDefault("grid"),
 	)
+	const [subTab, setSubTab] = useQueryState(
+		"submissions_tab",
+		parseAsStringEnum(["complete", "backlog"]).withDefault("complete"),
+	)
+
+	const complete = submissions.filter((s) => TERMINAL_STATUSES.has(s.status))
+	const backlog = submissions.filter((s) => !TERMINAL_STATUSES.has(s.status))
+	const visible = subTab === "complete" ? complete : backlog
 
 	return (
 		<div className="space-y-4">
-			{/* Header row: count + toggle */}
+			<Tabs
+				value={subTab}
+				onValueChange={(v) => setSubTab(v as "complete" | "backlog")}
+			>
+				<TabsList>
+					<TabsTrigger value="complete">
+						Complete
+						<span className="ml-1.5 rounded-full bg-background/60 px-1.5 py-0.5 text-xs tabular-nums">
+							{complete.length}
+						</span>
+					</TabsTrigger>
+					<TabsTrigger value="backlog">
+						Backlog
+						<span className="ml-1.5 rounded-full bg-background/60 px-1.5 py-0.5 text-xs tabular-nums">
+							{backlog.length}
+						</span>
+					</TabsTrigger>
+				</TabsList>
+			</Tabs>
+
+			{/* Header row: count + view toggle */}
 			<div className="flex items-center justify-between gap-4">
 				<p className="text-sm text-muted-foreground">
-					{submissions.length === 0
+					{visible.length === 0
 						? "No submissions yet."
-						: `${submissions.length} submission${submissions.length !== 1 ? "s" : ""}`}
+						: `${visible.length} submission${visible.length !== 1 ? "s" : ""}`}
 				</p>
-				{submissions.length > 0 && (
+				{visible.length > 0 && (
 					<ViewToggle value={subView} onChange={setSubView} />
 				)}
 			</div>
 
 			{subView === "grid" ? (
 				<div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-					{submissions.map((sub) => (
+					{visible.map((sub) => (
 						<ScriptCard key={sub.id} sub={sub} onView={() => onView(sub.id)} />
 					))}
 				</div>
@@ -209,7 +240,7 @@ export function SubmissionGrid({
 								</TableRow>
 							</TableHeader>
 							<TableBody>
-								{submissions.map((sub) => {
+								{visible.map((sub) => {
 									const pct =
 										sub.total_max > 0
 											? Math.round((sub.total_awarded / sub.total_max) * 100)

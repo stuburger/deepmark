@@ -22,6 +22,12 @@ import {
 	TableRow,
 } from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import {
+	commitBatch,
+	getActiveBatchForPaper,
+	updateStagedScript,
+} from "@/lib/batch-actions"
+import type { ActiveBatchInfo } from "@/lib/batch-actions"
 import type {
 	ExamPaperDetail,
 	SimilarPair,
@@ -55,12 +61,17 @@ import {
 	PenLine,
 	ScrollText,
 	Trash2,
+	Users,
 } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { parseAsString, parseAsStringEnum, useQueryState } from "nuqs"
 import { useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
+import {
+	BatchMarkingDialog,
+	StagedScriptReviewCards,
+} from "./batch-marking-dialog"
 import { DocumentUploadCards } from "./document-upload-cards"
 import { EditableTitle } from "./editable-title"
 import { ExamPaperPaperView } from "./exam-paper-paper-view"
@@ -193,6 +204,7 @@ export function ExamPaperPageShell({
 	paper: initialPaper,
 	initialLiveState = { ok: true as const, jobs: [], documents: [] },
 	initialSubmissions = [],
+	initialAnalytics = null,
 }: {
 	paper: ExamPaperDetail
 	initialLiveState?: {
@@ -201,6 +213,7 @@ export function ExamPaperPageShell({
 		documents: PdfDocument[]
 	}
 	initialSubmissions?: SubmissionHistoryItem[]
+	initialAnalytics?: ExamPaperStats | null
 }) {
 	const router = useRouter()
 	const queryClient = useQueryClient()
@@ -307,9 +320,28 @@ export function ExamPaperPageShell({
 		},
 	})
 
-	// Upload student script
+	// Upload student script + batch marking
 	const [uploadScriptOpen, setUploadScriptOpen] = useState(false)
+	const [batchOpen, setBatchOpen] = useState(false)
 	const [markingJobId, setMarkingJobId] = useQueryState("job", parseAsString)
+	const [committingBatch, setCommittingBatch] = useState(false)
+
+	const { data: activeBatch, refetch: refetchActiveBatch } =
+		useQuery<ActiveBatchInfo>({
+			queryKey: ["activeBatch", paper.id],
+			queryFn: async () => {
+				const r = await getActiveBatchForPaper(paper.id)
+				return r.ok ? r.batch : null
+			},
+			refetchInterval: (q) => {
+				const b = q.state.data
+				return b?.status === "classifying" || b?.status === "marking"
+					? 3000
+					: false
+			},
+		})
+
+	const hasActiveBatch = activeBatch?.status === "marking"
 
 	// Delete exam paper
 	const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
@@ -350,7 +382,9 @@ export function ExamPaperPageShell({
 		setActiveTab(tab)
 	}
 
-	// Analytics — lazy loaded on first tab activation via enabled flag
+	// Analytics — seeded from SSR, refetches once on first tab activation if stale.
+	// initialData is undefined (not null) when the SSR fetch failed so the query
+	// still enters a loading state rather than showing an empty result.
 	const { data: analyticsStats, isLoading: analyticsLoading } =
 		useQuery<ExamPaperStats | null>({
 			queryKey: queryKeys.examPaperStats(paper.id),
@@ -359,7 +393,8 @@ export function ExamPaperPageShell({
 				if (!r.ok) return null
 				return r.stats
 			},
-			enabled: activeTab === "analytics",
+			initialData: initialAnalytics ?? undefined,
+			enabled: initialAnalytics != null || activeTab === "analytics",
 			staleTime: 60 * 1000,
 		})
 
@@ -504,6 +539,9 @@ export function ExamPaperPageShell({
 						</TabsTrigger>
 						<TabsTrigger value="submissions" className={tabTriggerClass}>
 							Submissions
+							{hasActiveBatch && (
+								<span className="ml-1.5 h-1.5 w-1.5 rounded-full bg-primary animate-pulse shrink-0" />
+							)}
 							{initialSubmissions.length > 0 && (
 								<span className="ml-1.5 inline-flex items-center justify-center rounded-full bg-muted px-1.5 py-0.5 text-xs tabular-nums leading-none">
 									{initialSubmissions.length}
@@ -846,16 +884,124 @@ export function ExamPaperPageShell({
 
 				{/* ── Submissions tab ── */}
 				<TabsContent value="submissions" className="space-y-6 mt-10">
+					{activeBatch?.status === "classifying" && (
+						<div className="flex items-center gap-3 rounded-lg border bg-muted/30 px-4 py-4">
+							<Loader2 className="h-5 w-5 animate-spin text-muted-foreground shrink-0" />
+							<p className="text-sm text-muted-foreground">
+								Analysing upload… scripts will appear here shortly.
+							</p>
+						</div>
+					)}
+
+					{activeBatch?.status === "staging" && (
+						<div className="space-y-4">
+							<div className="flex items-center justify-between gap-3">
+								<p className="text-sm font-medium">
+									Review detected scripts before marking
+								</p>
+								{activeBatch.staged_scripts.filter(
+									(s) => s.status !== "excluded",
+								).length > 0 && (
+									<Button
+										size="sm"
+										disabled={committingBatch}
+										onClick={async () => {
+											setCommittingBatch(true)
+											const proposed = activeBatch.staged_scripts.filter(
+												(s) => s.status === "proposed",
+											)
+											for (const s of proposed) {
+												await updateStagedScript(s.id, {
+													status: "confirmed",
+												})
+											}
+											const r = await commitBatch(activeBatch.id)
+											setCommittingBatch(false)
+											if (!r.ok) {
+												toast.error(r.error)
+												return
+											}
+											void refetchActiveBatch()
+										}}
+									>
+										{committingBatch ? (
+											<>
+												<Spinner className="h-3.5 w-3.5 mr-1.5" />
+												Starting…
+											</>
+										) : (
+											`Start marking ${activeBatch.staged_scripts.filter((s) => s.status !== "excluded").length} scripts`
+										)}
+									</Button>
+								)}
+							</div>
+
+							<StagedScriptReviewCards
+								batchId={activeBatch.id}
+								scripts={activeBatch.staged_scripts}
+								onUpdateName={async (id, name) => {
+									await updateStagedScript(id, { confirmedName: name })
+								}}
+								onToggleExclude={async (id, status) => {
+									await updateStagedScript(id, {
+										status: status === "excluded" ? "confirmed" : "excluded",
+									})
+									void refetchActiveBatch()
+								}}
+								onDeleteScript={() => void refetchActiveBatch()}
+							/>
+						</div>
+					)}
+
+					{activeBatch?.status === "marking" && (
+						<div className="rounded-lg border bg-muted/20 px-4 py-4 space-y-2">
+							<div className="flex items-center justify-between text-sm">
+								<span className="font-medium">
+									{
+										activeBatch.student_jobs.filter(
+											(j) => j.status === "ocr_complete",
+										).length
+									}{" "}
+									of {activeBatch.total_student_jobs} scripts marked
+								</span>
+								<span className="text-muted-foreground">
+									{activeBatch.total_student_jobs > 0
+										? Math.round(
+												(activeBatch.student_jobs.filter(
+													(j) => j.status === "ocr_complete",
+												).length /
+													activeBatch.total_student_jobs) *
+													100,
+											)
+										: 0}
+									%
+								</span>
+							</div>
+							<Progress
+								value={
+									activeBatch.total_student_jobs > 0
+										? (activeBatch.student_jobs.filter(
+												(j) => j.status === "ocr_complete",
+											).length /
+												activeBatch.total_student_jobs) *
+											100
+										: 0
+								}
+							/>
+						</div>
+					)}
+
 					{initialSubmissions.length > 0 ? (
 						<SubmissionGrid
 							submissions={initialSubmissions}
 							onView={(id) => setMarkingJobId(id)}
 						/>
 					) : (
+						!activeBatch &&
 						readyForSubmissions && (
 							<div className="rounded-lg border border-dashed py-16 text-center text-sm text-muted-foreground">
-								No submissions yet. Click &ldquo;Start marking&rdquo; to mark
-								your first student script.
+								No submissions yet. Click &ldquo;Mark paper&rdquo; to mark your
+								first student script.
 							</div>
 						)
 					)}
@@ -1092,23 +1238,44 @@ export function ExamPaperPageShell({
 				}}
 			/>
 
-			{/* Floating action button */}
-			<button
-				type="button"
-				onClick={() => readyForSubmissions && setUploadScriptOpen(true)}
-				disabled={!readyForSubmissions}
+			<BatchMarkingDialog
+				examPaperId={paper.id}
+				open={batchOpen}
+				onOpenChange={setBatchOpen}
+			/>
+
+			{/* Floating action button — split: left = single script, right = batch */}
+			<div
+				className="fixed bottom-6 right-6 z-50 flex items-center rounded-full shadow-lg"
 				title={
 					!readyForSubmissions
 						? totalQuestions === 0
 							? "Upload a question paper before marking"
-							: `${totalQuestions - questionsWithMarkScheme} question${totalQuestions - questionsWithMarkScheme === 1 ? "" : "s"} missing a mark scheme — add mark schemes before marking`
+							: `${totalQuestions - questionsWithMarkScheme} question${totalQuestions - questionsWithMarkScheme === 1 ? "" : "s"} missing a mark scheme`
 						: undefined
 				}
-				className="fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-full bg-primary px-5 py-3.5 text-sm font-medium text-primary-foreground shadow-lg transition-all hover:bg-primary/90 hover:shadow-xl active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-lg disabled:hover:bg-primary"
 			>
-				<PenLine className="h-4 w-4" />
-				Mark paper
-			</button>
+				<button
+					type="button"
+					onClick={() => readyForSubmissions && setUploadScriptOpen(true)}
+					disabled={!readyForSubmissions}
+					className="flex items-center gap-2 rounded-l-full bg-primary px-5 py-3.5 text-sm font-medium text-primary-foreground transition-all hover:bg-primary/90 hover:shadow-sm active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+				>
+					<PenLine className="h-4 w-4" />
+					Mark paper
+				</button>
+				<div className="w-px self-stretch bg-primary-foreground/20" />
+				<button
+					type="button"
+					onClick={() => readyForSubmissions && setBatchOpen(true)}
+					disabled={!readyForSubmissions}
+					className="flex items-center rounded-r-full bg-primary px-3.5 py-3.5 text-primary-foreground transition-all hover:bg-primary/90 hover:shadow-sm active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+					title="Upload class batch"
+				>
+					<Users className="h-4 w-4" />
+					<span className="sr-only">Upload class batch</span>
+				</button>
+			</div>
 		</>
 	)
 }

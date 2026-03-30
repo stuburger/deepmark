@@ -1,6 +1,7 @@
 "use client"
 
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import {
 	Card,
 	CardContent,
@@ -17,15 +18,38 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table"
+import { getActiveBatchForPaper } from "@/lib/batch-actions"
+import type { ActiveBatchInfo } from "@/lib/batch-actions"
 import { getExamPaperStats, listMySubmissions } from "@/lib/mark-actions"
 import type { ExamPaperStats, SubmissionHistoryItem } from "@/lib/mark-actions"
 import { queryKeys } from "@/lib/query-keys"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
-import { Loader2 } from "lucide-react"
+import { AlertCircle, Loader2, Users } from "lucide-react"
 import Link from "next/link"
-import { useEffect, useRef } from "react"
+import { useEffect, useRef, useState } from "react"
+import {
+	Bar,
+	BarChart,
+	CartesianGrid,
+	Cell,
+	ResponsiveContainer,
+	Tooltip,
+	XAxis,
+	YAxis,
+} from "recharts"
+import { BatchMarkingDialog } from "../../../exam-papers/[id]/batch-marking-dialog"
 
 const TERMINAL_STATUSES = new Set(["ocr_complete", "failed", "cancelled"])
+
+const GRADE_BANDS = [
+	{ label: "0–20%", min: 0, max: 20 },
+	{ label: "20–40%", min: 20, max: 40 },
+	{ label: "40–60%", min: 40, max: 60 },
+	{ label: "60–80%", min: 60, max: 80 },
+	{ label: "80–100%", min: 80, max: 101 },
+]
+
+const BAND_COLORS = ["#ef4444", "#f97316", "#eab308", "#22c55e", "#16a34a"]
 
 function scoreBadgeVariant(
 	pct: number,
@@ -47,7 +71,7 @@ function statusLabel(status: string) {
 		case "grading":
 			return "Marking…"
 		case "ocr_complete":
-			return null // show score instead
+			return null
 		case "failed":
 			return "Failed"
 		case "cancelled":
@@ -67,8 +91,8 @@ export function ExamPaperStatsShell({
 	initialSubmissions: SubmissionHistoryItem[]
 }) {
 	const queryClient = useQueryClient()
+	const [batchOpen, setBatchOpen] = useState(false)
 
-	// Live submissions — polls while any submission for this paper is active
 	const { data: submissions } = useQuery({
 		queryKey: queryKeys.submissions(examPaperId),
 		queryFn: async () => {
@@ -84,7 +108,6 @@ export function ExamPaperStatsShell({
 		},
 	})
 
-	// Stats — refetch when a submission transitions to completed
 	const { data: stats } = useQuery({
 		queryKey: queryKeys.examPaperStats(examPaperId),
 		queryFn: async () => {
@@ -95,7 +118,18 @@ export function ExamPaperStatsShell({
 		staleTime: 30 * 1000,
 	})
 
-	// When any in-progress submission transitions to terminal, invalidate stats
+	const { data: activeBatch } = useQuery<ActiveBatchInfo>({
+		queryKey: ["activeBatch", examPaperId],
+		queryFn: async () => {
+			const r = await getActiveBatchForPaper(examPaperId)
+			return r.ok ? r.batch : null
+		},
+		refetchInterval: (q) => {
+			const b = q.state.data
+			return b?.status === "marking" ? 3000 : false
+		},
+	})
+
 	const prevStatusesRef = useRef<Record<string, string>>({})
 	useEffect(() => {
 		let statsStale = false
@@ -123,30 +157,56 @@ export function ExamPaperStatsShell({
 	const activeSubmissions = submissions.filter(
 		(s) => !TERMINAL_STATUSES.has(s.status),
 	)
+	const failedSubmissions = submissions.filter((s) => s.status === "failed")
+
+	const gradeBandData = GRADE_BANDS.map((band, i) => ({
+		label: band.label,
+		count: completedSubmissions.filter((s) => {
+			const pct = s.total_max > 0 ? (s.total_awarded / s.total_max) * 100 : 0
+			return pct >= band.min && pct < band.max
+		}).length,
+		color: BAND_COLORS[i]!,
+	}))
+
+	const batchCompleteCount =
+		activeBatch?.student_jobs.filter((j) => j.status === "ocr_complete")
+			.length ?? 0
 
 	return (
 		<div className="space-y-6">
+			{/* Header */}
 			<Card>
 				<CardHeader>
-					<Link
-						href="/teacher/mark"
-						className="text-sm text-muted-foreground hover:text-foreground"
-					>
-						← Mark history
-					</Link>
-					<CardTitle className="text-2xl">{stats.exam_paper_title}</CardTitle>
-					<CardDescription>
-						Performance summary across {stats.submission_count} submission
-						{stats.submission_count !== 1 ? "s" : ""}
-					</CardDescription>
+					<div className="flex items-start justify-between gap-4">
+						<div>
+							<Link
+								href="/teacher/mark"
+								className="text-sm text-muted-foreground hover:text-foreground"
+							>
+								← Mark history
+							</Link>
+							<CardTitle className="text-2xl mt-1">
+								{stats.exam_paper_title}
+							</CardTitle>
+							<CardDescription>
+								Performance summary across {stats.submission_count} submission
+								{stats.submission_count !== 1 ? "s" : ""}
+							</CardDescription>
+						</div>
+						<Button onClick={() => setBatchOpen(true)} className="shrink-0">
+							<Users className="h-4 w-4 mr-2" />
+							Mark class
+						</Button>
+					</div>
 				</CardHeader>
 			</Card>
 
-			<div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+			{/* KPI strip */}
+			<div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
 				<Card>
 					<CardContent className="pt-4">
 						<p className="text-2xl font-bold">{stats.submission_count}</p>
-						<p className="text-xs text-muted-foreground">Papers marked</p>
+						<p className="text-xs text-muted-foreground">Total marked</p>
 					</CardContent>
 				</Card>
 				<Card>
@@ -155,8 +215,96 @@ export function ExamPaperStatsShell({
 						<p className="text-xs text-muted-foreground">Average score</p>
 					</CardContent>
 				</Card>
+				<Card>
+					<CardContent className="pt-4">
+						<p className="text-2xl font-bold text-destructive">
+							{failedSubmissions.length}
+						</p>
+						<p className="text-xs text-muted-foreground">
+							Failed / needs re-mark
+						</p>
+					</CardContent>
+				</Card>
+				<Card>
+					<CardContent className="pt-4 flex items-start gap-2">
+						{activeSubmissions.length > 0 && (
+							<Loader2 className="h-4 w-4 animate-spin text-muted-foreground mt-0.5 shrink-0" />
+						)}
+						<div>
+							<p className="text-2xl font-bold">{activeSubmissions.length}</p>
+							<p className="text-xs text-muted-foreground">In progress</p>
+						</div>
+					</CardContent>
+				</Card>
 			</div>
 
+			{/* Active batch progress */}
+			{activeBatch?.status === "marking" &&
+				activeBatch.total_student_jobs > 0 && (
+					<Card>
+						<CardHeader>
+							<CardTitle className="flex items-center gap-2">
+								<Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+								Batch marking in progress
+							</CardTitle>
+							<CardDescription>
+								{batchCompleteCount} of {activeBatch.total_student_jobs} scripts
+								marked · {activeBatch.total_student_jobs - batchCompleteCount}{" "}
+								in progress
+							</CardDescription>
+						</CardHeader>
+						<CardContent>
+							<Progress
+								value={
+									(batchCompleteCount / activeBatch.total_student_jobs) * 100
+								}
+							/>
+						</CardContent>
+					</Card>
+				)}
+
+			{/* Grade distribution chart */}
+			{completedSubmissions.length >= 3 && (
+				<Card>
+					<CardHeader>
+						<CardTitle>Grade distribution</CardTitle>
+						<CardDescription>
+							Number of students in each score band.
+						</CardDescription>
+					</CardHeader>
+					<CardContent>
+						<ResponsiveContainer width="100%" height={200}>
+							<BarChart data={gradeBandData} barCategoryGap="30%">
+								<CartesianGrid strokeDasharray="3 3" vertical={false} />
+								<XAxis
+									dataKey="label"
+									tick={{ fontSize: 12 }}
+									axisLine={false}
+									tickLine={false}
+								/>
+								<YAxis
+									allowDecimals={false}
+									tick={{ fontSize: 12 }}
+									axisLine={false}
+									tickLine={false}
+									width={30}
+								/>
+								<Tooltip
+									formatter={(value) => [value, "Students"]}
+									cursor={{ fill: "hsl(var(--muted))" }}
+								/>
+								<Bar dataKey="count" radius={[4, 4, 0, 0]}>
+									{gradeBandData.map((entry) => (
+										<Cell key={entry.label} fill={entry.color} />
+									))}
+								</Bar>
+							</BarChart>
+						</ResponsiveContainer>
+					</CardContent>
+				</Card>
+			)}
+
+			{/* Per-question averages */}
 			{stats.question_stats.length > 0 && (
 				<Card>
 					<CardHeader>
@@ -205,7 +353,7 @@ export function ExamPaperStatsShell({
 				</Card>
 			)}
 
-			{/* Active (in-progress) submissions */}
+			{/* Active submissions */}
 			{activeSubmissions.length > 0 && (
 				<Card>
 					<CardHeader>
@@ -251,7 +399,7 @@ export function ExamPaperStatsShell({
 				</Card>
 			)}
 
-			{/* Completed submissions */}
+			{/* Individual results */}
 			{completedSubmissions.length > 0 && (
 				<Card>
 					<CardHeader>
@@ -263,8 +411,8 @@ export function ExamPaperStatsShell({
 							<TableHeader>
 								<TableRow>
 									<TableHead>Student</TableHead>
-									<TableHead className="text-right">Score</TableHead>
-									<TableHead />
+									<TableHead className="w-40">Score</TableHead>
+									<TableHead className="text-right w-20" />
 								</TableRow>
 							</TableHeader>
 							<TableBody>
@@ -282,20 +430,25 @@ export function ExamPaperStatsShell({
 													</span>
 												)}
 											</TableCell>
-											<TableCell className="text-right">
-												<Badge
-													variant={scoreBadgeVariant(pct)}
-													className="tabular-nums"
-												>
-													{sub.total_awarded}/{sub.total_max} ({pct}%)
-												</Badge>
-											</TableCell>
 											<TableCell>
+												<div className="space-y-1">
+													<div className="flex items-center justify-between text-xs">
+														<Badge
+															variant={scoreBadgeVariant(pct)}
+															className="tabular-nums"
+														>
+															{sub.total_awarded}/{sub.total_max} ({pct}%)
+														</Badge>
+													</div>
+													<Progress value={pct} className="h-1.5" />
+												</div>
+											</TableCell>
+											<TableCell className="text-right">
 												<Link
 													href={`/teacher/mark/papers/${examPaperId}/submissions/${sub.id}`}
 													className="text-sm text-primary underline underline-offset-4 hover:no-underline"
 												>
-													View
+													View →
 												</Link>
 											</TableCell>
 										</TableRow>
@@ -306,6 +459,53 @@ export function ExamPaperStatsShell({
 					</CardContent>
 				</Card>
 			)}
+
+			{/* Failed submissions */}
+			{failedSubmissions.length > 0 && (
+				<Card className="border-destructive/50">
+					<CardHeader>
+						<CardTitle className="flex items-center gap-2 text-destructive">
+							<AlertCircle className="h-4 w-4" />
+							Failed submissions
+						</CardTitle>
+						<CardDescription>
+							These scripts failed to process and may need re-uploading.
+						</CardDescription>
+					</CardHeader>
+					<CardContent>
+						<Table>
+							<TableHeader>
+								<TableRow>
+									<TableHead>Student</TableHead>
+									<TableHead>Error</TableHead>
+								</TableRow>
+							</TableHeader>
+							<TableBody>
+								{failedSubmissions.map((sub) => (
+									<TableRow key={sub.id}>
+										<TableCell>
+											{sub.student_name ?? (
+												<span className="italic text-muted-foreground">
+													Unknown student
+												</span>
+											)}
+										</TableCell>
+										<TableCell className="text-xs text-muted-foreground">
+											Failed
+										</TableCell>
+									</TableRow>
+								))}
+							</TableBody>
+						</Table>
+					</CardContent>
+				</Card>
+			)}
+
+			<BatchMarkingDialog
+				examPaperId={examPaperId}
+				open={batchOpen}
+				onOpenChange={setBatchOpen}
+			/>
 		</div>
 	)
 }

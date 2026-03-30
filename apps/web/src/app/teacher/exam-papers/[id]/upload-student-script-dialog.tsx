@@ -12,9 +12,11 @@ import { Spinner } from "@/components/ui/spinner"
 import {
 	addPageToJob,
 	createStudentPaperJob,
+	reorderPages,
 	triggerOcr,
 } from "@/lib/mark-actions"
-import { FileText, Trash2, Upload } from "lucide-react"
+import { convertPdfToJpegs } from "@/lib/pdf-to-jpeg"
+import { ArrowDown, ArrowUp, FileText, Trash2, Upload } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useRef, useState } from "react"
 import { toast } from "sonner"
@@ -44,6 +46,7 @@ export function UploadStudentScriptDialog({
 	const jobIdRef = useRef<string | null>(null)
 
 	const [pages, setPages] = useState<PageItem[]>([])
+	const [converting, setConverting] = useState(false)
 	const [submitting, setSubmitting] = useState(false)
 
 	async function ensureJob(): Promise<string> {
@@ -57,13 +60,36 @@ export function UploadStudentScriptDialog({
 	async function handleFiles(files: FileList | null) {
 		if (!files || files.length === 0) return
 
-		// Add files to the list immediately so the user sees feedback right away.
-		const fileArray = Array.from(files)
+		// Expand any PDFs into per-page JPEGs so Cloud Vision can run on them
+		// and bounding boxes can be overlaid in the results view.
+		let expanded: File[] = []
+		for (const file of Array.from(files)) {
+			if (
+				file.type === "application/pdf" ||
+				file.name.toLowerCase().endsWith(".pdf")
+			) {
+				setConverting(true)
+				try {
+					const jpegs = await convertPdfToJpegs(file)
+					expanded = expanded.concat(jpegs)
+				} catch (err) {
+					setConverting(false)
+					toast.error(
+						`Failed to convert PDF "${file.name}": ${err instanceof Error ? err.message : String(err)}`,
+					)
+					return
+				}
+				setConverting(false)
+			} else {
+				expanded.push(file)
+			}
+		}
+
 		const startOrder = pages.length + 1
-		const newItems: PageItem[] = fileArray.map((file, i) => ({
+		const newItems: PageItem[] = expanded.map((file, i) => ({
 			order: startOrder + i,
 			name: file.name,
-			mimeType: file.type || "application/pdf",
+			mimeType: file.type,
 			key: "",
 			uploading: true,
 			error: null,
@@ -77,7 +103,6 @@ export function UploadStudentScriptDialog({
 		} catch (err) {
 			const msg = err instanceof Error ? err.message : "Failed to create job"
 			toast.error(msg)
-			// Mark all the just-added items as errored.
 			const newOrders = newItems.map((item) => item.order)
 			setPages((prev) =>
 				prev.map((p) =>
@@ -89,17 +114,16 @@ export function UploadStudentScriptDialog({
 			return
 		}
 
-		for (let i = 0; i < fileArray.length; i++) {
-			const file = fileArray[i]!
+		for (let i = 0; i < expanded.length; i++) {
+			const file = expanded[i]!
 			const order = startOrder + i
-			const mimeType = file.type || "application/pdf"
 			try {
-				const result = await addPageToJob(jid, order, mimeType)
+				const result = await addPageToJob(jid, order, file.type)
 				if (!result.ok) throw new Error(result.error)
 				const putRes = await fetch(result.uploadUrl, {
 					method: "PUT",
 					body: file,
-					headers: { "Content-Type": mimeType },
+					headers: { "Content-Type": file.type },
 				})
 				if (!putRes.ok) throw new Error("Upload to storage failed")
 				setPages((prev) =>
@@ -131,6 +155,27 @@ export function UploadStudentScriptDialog({
 		)
 	}
 
+	async function handleMove(order: number, direction: "up" | "down") {
+		const idx = pages.findIndex((p) => p.order === order)
+		if (idx < 0) return
+		const swapIdx = direction === "up" ? idx - 1 : idx + 1
+		if (swapIdx < 0 || swapIdx >= pages.length) return
+
+		const reordered = [...pages]
+		;[reordered[idx], reordered[swapIdx]] = [
+			reordered[swapIdx]!,
+			reordered[idx]!,
+		]
+		const renumbered = reordered.map((p, i) => ({ ...p, order: i + 1 }))
+		setPages(renumbered)
+
+		const jid = jobIdRef.current
+		const uploadedKeys = renumbered.filter((p) => p.key).map((p) => p.key)
+		if (jid && uploadedKeys.length > 0) {
+			await reorderPages(jid, uploadedKeys).catch(() => {})
+		}
+	}
+
 	async function handleSubmit() {
 		if (!jobIdRef.current) return
 		setSubmitting(true)
@@ -148,7 +193,7 @@ export function UploadStudentScriptDialog({
 	}
 
 	function handleOpenChange(next: boolean) {
-		if (submitting) return
+		if (submitting || converting) return
 		if (!next) {
 			setPages([])
 			jobIdRef.current = null
@@ -156,7 +201,7 @@ export function UploadStudentScriptDialog({
 		onOpenChange(next)
 	}
 
-	const isUploading = pages.some((p) => p.uploading)
+	const isUploading = pages.some((p) => p.uploading) || converting
 	const hasErrors = pages.some((p) => p.error !== null)
 	const canSubmit =
 		pages.length > 0 && !isUploading && !hasErrors && !submitting
@@ -167,8 +212,9 @@ export function UploadStudentScriptDialog({
 				<DialogHeader>
 					<DialogTitle>Upload student script</DialogTitle>
 					<DialogDescription>
-						Upload the student&apos;s answer sheet as a PDF or images of each
-						page. Both formats are supported.
+						Upload the student&apos;s answer sheet as images or a PDF. PDFs are
+						automatically converted to images so bounding boxes appear in
+						results.
 					</DialogDescription>
 				</DialogHeader>
 
@@ -176,14 +222,23 @@ export function UploadStudentScriptDialog({
 					{/* Drop zone */}
 					<button
 						type="button"
+						disabled={converting}
 						onClick={() => fileInputRef.current?.click()}
-						className="w-full flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border px-6 py-8 text-center transition-colors hover:bg-muted/30 hover:border-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+						className="w-full flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border px-6 py-8 text-center transition-colors hover:bg-muted/30 hover:border-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 disabled:cursor-not-allowed"
 					>
-						<Upload className="h-8 w-8 text-muted-foreground" />
+						{converting ? (
+							<Spinner className="h-8 w-8 text-muted-foreground" />
+						) : (
+							<Upload className="h-8 w-8 text-muted-foreground" />
+						)}
 						<div>
-							<p className="text-sm font-medium">Click to upload</p>
+							<p className="text-sm font-medium">
+								{converting ? "Converting PDF…" : "Click to upload"}
+							</p>
 							<p className="text-xs text-muted-foreground mt-0.5">
-								PDF or images (JPG, PNG) — multiple files supported
+								{converting
+									? "Rendering pages to images"
+									: "Images or PDF — multiple files supported"}
 							</p>
 						</div>
 					</button>
@@ -215,6 +270,28 @@ export function UploadStudentScriptDialog({
 											</p>
 										)}
 									</div>
+									{!page.uploading && pages.length > 1 && (
+										<div className="flex flex-col gap-0.5 shrink-0">
+											<button
+												type="button"
+												disabled={idx === 0}
+												onClick={() => handleMove(page.order, "up")}
+												className="p-1 rounded text-muted-foreground hover:bg-muted disabled:opacity-30"
+												aria-label="Move page up"
+											>
+												<ArrowUp className="h-3 w-3" />
+											</button>
+											<button
+												type="button"
+												disabled={idx === pages.length - 1}
+												onClick={() => handleMove(page.order, "down")}
+												className="p-1 rounded text-muted-foreground hover:bg-muted disabled:opacity-30"
+												aria-label="Move page down"
+											>
+												<ArrowDown className="h-3 w-3" />
+											</button>
+										</div>
+									)}
 									{!page.uploading && (
 										<button
 											type="button"
@@ -237,6 +314,7 @@ export function UploadStudentScriptDialog({
 								variant="outline"
 								size="sm"
 								className="shrink-0"
+								disabled={converting}
 								onClick={() => fileInputRef.current?.click()}
 							>
 								+ Add more
@@ -251,6 +329,11 @@ export function UploadStudentScriptDialog({
 								<>
 									<Spinner className="h-4 w-4 mr-2" />
 									Starting…
+								</>
+							) : converting ? (
+								<>
+									<Spinner className="h-4 w-4 mr-2" />
+									Converting PDF…
 								</>
 							) : isUploading ? (
 								<>

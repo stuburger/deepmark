@@ -2,11 +2,14 @@ import { auth, authUrl } from "./auth"
 import { domain, geminiApiKey, webUrl } from "./config"
 import { neonPostgres } from "./database"
 import {
+	batchClassifyQueue,
 	exemplarQueue,
 	markSchemePdfQueue,
 	questionPaperQueue,
 	studentPaperOcrQueue,
 	studentPaperQueue,
+	vapidPrivateKey,
+	vapidPublicKey,
 } from "./queues"
 import { router } from "./router"
 import { scansBucket } from "./storage"
@@ -22,7 +25,10 @@ export const web = new sst.aws.Nextjs("Web", {
 		questionPaperQueue,
 		studentPaperOcrQueue,
 		studentPaperQueue,
+		batchClassifyQueue,
 		geminiApiKey,
+		vapidPublicKey,
+		vapidPrivateKey,
 	],
 	dev: {
 		url: "http://localhost:3000",

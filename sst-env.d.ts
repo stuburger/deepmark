@@ -21,6 +21,10 @@ declare module "sst" {
       "type": "sst.sst.Linkable"
       "url": string
     }
+    "BatchClassifyQueue": {
+      "type": "sst.aws.Queue"
+      "url": string
+    }
     "CloudVisionApiKey": {
       "type": "sst.sst.Secret"
       "value": string
@@ -85,6 +89,14 @@ declare module "sst" {
     "StudentPaperQueue": {
       "type": "sst.aws.Queue"
       "url": string
+    }
+    "VapidPrivateKey": {
+      "type": "sst.sst.Secret"
+      "value": string
+    }
+    "VapidPublicKey": {
+      "type": "sst.sst.Secret"
+      "value": string
     }
     "Web": {
       "type": "sst.aws.Nextjs"

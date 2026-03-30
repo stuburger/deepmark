@@ -7,6 +7,7 @@ import { defaultChatModel } from "@/lib/google-generative-ai"
 import { type GradingResult, gradeAllQuestions } from "@/lib/grade-questions"
 import { logger } from "@/lib/logger"
 import { persistAnswerRows } from "@/lib/persist-answers"
+import { sendBatchCompleteNotification } from "@/lib/push-notification"
 import {
 	type ExamPaperWithSections,
 	type QuestionListItem,
@@ -306,7 +307,7 @@ async function completeGradingJob({
 		questions_graded: gradingResults.length,
 	})
 
-	await db.studentPaperJob.update({
+	const updatedJob = await db.studentPaperJob.update({
 		where: { id: jobId },
 		data: {
 			status: "ocr_complete" as ScanStatus,
@@ -318,6 +319,7 @@ async function completeGradingJob({
 			grading_results: gradingResults,
 			error: null,
 		},
+		select: { batch_job_id: true },
 	})
 
 	void logStudentPaperEvent(db, jobId, {
@@ -334,4 +336,66 @@ async function completeGradingJob({
 			jobId,
 		})
 	}
+
+	if (updatedJob.batch_job_id) {
+		await checkAndNotifyBatchCompletion(updatedJob.batch_job_id)
+	}
+}
+
+// ─── Batch completion check ───────────────────────────────────────────────────
+
+const TERMINAL_STATUSES = ["ocr_complete", "failed", "cancelled"]
+
+/**
+ * Atomically checks whether all child jobs for a batch are in a terminal
+ * status and, if so, marks the batch complete and sends a push notification.
+ * Uses an UPDATE...WHERE pattern so only one Lambda invocation can win the race.
+ * Safe to call multiple times — idempotent once notification_sent_at is set.
+ */
+export async function checkAndNotifyBatchCompletion(
+	batchJobId: string,
+): Promise<void> {
+	const batch = await db.batchMarkingJob.findUnique({
+		where: { id: batchJobId },
+		select: {
+			id: true,
+			total_student_jobs: true,
+			notification_sent_at: true,
+			uploaded_by: true,
+			exam_paper: { select: { title: true } },
+		},
+	})
+
+	if (!batch || batch.notification_sent_at || batch.total_student_jobs === 0) {
+		return
+	}
+
+	const terminalCount = await db.studentPaperJob.count({
+		where: {
+			batch_job_id: batchJobId,
+			status: { in: TERMINAL_STATUSES as ScanStatus[] },
+		},
+	})
+
+	if (terminalCount < batch.total_student_jobs) return
+
+	const now = new Date()
+	const updated = await db.batchMarkingJob.updateMany({
+		where: { id: batchJobId, notification_sent_at: null },
+		data: { status: "complete", notification_sent_at: now },
+	})
+
+	if (updated.count === 0) return
+
+	logger.info(TAG, "Batch complete — sending push notification", {
+		batchJobId,
+		studentCount: batch.total_student_jobs,
+	})
+
+	await sendBatchCompleteNotification(
+		batchJobId,
+		batch.uploaded_by,
+		batch.exam_paper.title,
+		batch.total_student_jobs,
+	)
 }

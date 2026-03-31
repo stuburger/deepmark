@@ -28,12 +28,24 @@ export type JobEvent =
 			questions_located: number
 	  }
 	| {
+			type: "token_reconciliation_complete"
+			at: string
+			tokens_corrected: number
+	  }
+	| {
 			type: "grading_complete"
 			at: string
 			total_awarded: number
 			total_max: number
 	  }
-	| { type: "job_failed"; at: string; phase: "ocr" | "grading"; error: string }
+	| { type: "enrich_started"; at: string }
+	| { type: "enrich_complete"; at: string }
+	| {
+			type: "job_failed"
+			at: string
+			phase: "ocr" | "grading" | "enrich"
+			error: string
+	  }
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
 

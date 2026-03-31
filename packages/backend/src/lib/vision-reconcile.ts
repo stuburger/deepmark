@@ -13,6 +13,22 @@ export type ReconcilePageEntry = {
 	mime_type: string
 }
 
+/** Token row as returned from the DB insert (or equivalent in-memory record). */
+export type PageToken = {
+	id: string
+	page_order: number
+	para_index: number
+	line_index: number
+	word_index: number
+	text_raw: string
+	bbox: unknown
+}
+
+/** Token row with OCR corrections applied — output of reconcilePageTokens. */
+export type CorrectedPageToken = PageToken & {
+	text_corrected: string | null
+}
+
 const RECONCILE_SCHEMA = {
 	type: Type.ARRAY,
 	description:
@@ -34,51 +50,70 @@ const RECONCILE_SCHEMA = {
 	},
 }
 
-type TokenRow = {
-	id: string
-	text_raw: string
-}
-
 /**
- * Fire-and-forget reconciliation: for each page, loads the Cloud Vision word
- * tokens stored in Neon, sends the page image + Gemini transcript + token list
- * to Gemini, and asks it to correct the raw Vision text for each token.
+ * Corrects Cloud Vision OCR token text against the original page images using Gemini.
  *
- * Writes `text_corrected` back onto each `StudentPaperPageToken` row.
- * Failures per page are logged and skipped — grading is never blocked by this.
+ * Accepts the pre-loaded token rows (returned from the DB insert in the extract
+ * pipeline), so no DB read is required. The explicit token input makes the
+ * reconcile → attribution dependency visible in the call chain rather than
+ * hidden behind a shared DB table.
+ *
+ * Still writes `text_corrected` back to each `StudentPaperPageToken` row so the
+ * corrected text is available to any future readers (e.g. the annotation engine).
+ * Returns the same tokens with `text_corrected` populated — null for any token
+ * on a page that failed or was skipped.
  */
 export async function reconcilePageTokens({
 	pages,
+	tokens,
 	jobId,
 }: {
 	pages: ReconcilePageEntry[]
+	/** Pre-loaded token rows from the DB insert — avoids a redundant re-read. */
+	tokens: PageToken[]
 	jobId: string
-}): Promise<void> {
-	if (pages.length === 0) return
+}): Promise<CorrectedPageToken[]> {
+	if (pages.length === 0 || tokens.length === 0) {
+		return tokens.map((t) => ({ ...t, text_corrected: null }))
+	}
 
 	const imagePages = pages.filter((p) => p.mime_type !== "application/pdf")
-	if (imagePages.length === 0) return
+	if (imagePages.length === 0) {
+		return tokens.map((t) => ({ ...t, text_corrected: null }))
+	}
+
+	// Group tokens by page, sorted into reading order.
+	const tokensByPage = new Map<number, PageToken[]>()
+	for (const t of tokens) {
+		const existing = tokensByPage.get(t.page_order) ?? []
+		existing.push(t)
+		tokensByPage.set(t.page_order, existing)
+	}
+	for (const [pageOrder, pageTokens] of tokensByPage) {
+		tokensByPage.set(
+			pageOrder,
+			pageTokens.sort((a, b) =>
+				a.para_index !== b.para_index
+					? a.para_index - b.para_index
+					: a.line_index !== b.line_index
+						? a.line_index - b.line_index
+						: a.word_index - b.word_index,
+			),
+		)
+	}
 
 	const gemini = new GoogleGenAI({ apiKey: Resource.GeminiApiKey.value })
 
+	// Collect corrections keyed by token id.
+	const correctionById = new Map<string, string>()
 	let totalCorrected = 0
 
 	await Promise.all(
 		imagePages.map(async (page): Promise<void> => {
+			const pageTokens = tokensByPage.get(page.order) ?? []
+			if (pageTokens.length === 0) return
+
 			try {
-				// Load tokens for this page
-				const tokens = await db.studentPaperPageToken.findMany({
-					where: { job_id: jobId, page_order: page.order },
-					orderBy: [
-						{ para_index: "asc" },
-						{ line_index: "asc" },
-						{ word_index: "asc" },
-					],
-					select: { id: true, text_raw: true },
-				})
-
-				if (tokens.length === 0) return
-
 				let imageBase64: string
 				try {
 					imageBase64 = await getFileBase64(Resource.ScansBucket.name, page.key)
@@ -91,9 +126,8 @@ export async function reconcilePageTokens({
 					return
 				}
 
-				const mimeType = page.mime_type as string
-				const tokenList = tokens
-					.map((t: TokenRow, i: number) => `${i}: "${t.text_raw}"`)
+				const tokenList = pageTokens
+					.map((t, i) => `${i}: "${t.text_raw}"`)
 					.join("\n")
 
 				const response = await gemini.models.generateContent({
@@ -102,7 +136,7 @@ export async function reconcilePageTokens({
 						{
 							role: "user",
 							parts: [
-								{ inlineData: { data: imageBase64, mimeType } },
+								{ inlineData: { data: imageBase64, mimeType: page.mime_type } },
 								{
 									text: `You are correcting OCR errors in a list of words extracted from a student's handwritten exam script.
 
@@ -124,18 +158,25 @@ Return one entry per token, preserving the original token_idx values.`,
 				})
 
 				const responseText = response.candidates?.[0]?.content?.parts?.[0]?.text
-				if (!responseText) return
+				if (!responseText) {
+					logger.error(TAG, "Gemini reconciliation returned no text", {
+						jobId,
+						pageOrder: page.order,
+					})
+					return
+				}
 
 				const corrections = JSON.parse(responseText) as Array<{
 					token_idx: number
 					text_corrected: string
 				}>
 
-				// Write corrections back to the token rows
+				// Write corrections to DB and collect into the in-memory map.
 				await Promise.all(
 					corrections.map(async (c) => {
-						const token = tokens[c.token_idx]
+						const token = pageTokens[c.token_idx]
 						if (!token) return
+						correctionById.set(token.id, c.text_corrected)
 						await db.studentPaperPageToken.update({
 							where: { id: token.id },
 							data: { text_corrected: c.text_corrected },
@@ -165,4 +206,10 @@ Return one entry per token, preserving the original token_idx values.`,
 		at: new Date().toISOString(),
 		tokens_corrected: totalCorrected,
 	})
+
+	// Merge corrections back onto the input tokens and return.
+	return tokens.map((t) => ({
+		...t,
+		text_corrected: correctionById.get(t.id) ?? null,
+	}))
 }

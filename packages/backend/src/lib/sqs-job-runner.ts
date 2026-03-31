@@ -33,7 +33,7 @@ export function parseSqsJobId(record: SqsRecord, tag: string): string | null {
 export async function markJobFailed(
 	jobId: string,
 	tag: string,
-	phase: "ocr" | "grading",
+	phase: "ocr" | "grading" | "enrich",
 	err: unknown,
 ): Promise<void> {
 	logger.error(tag, "Job failed", { jobId, phase, error: String(err) })

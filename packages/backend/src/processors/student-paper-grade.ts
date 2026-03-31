@@ -18,15 +18,7 @@ import {
 	markJobFailed,
 	parseSqsJobId,
 } from "@/lib/sqs-job-runner"
-import {
-	type VisionAttributePageEntry,
-	type VisionAttributeQuestion,
-	visionAttributeRegions,
-} from "@/lib/vision-attribute"
-import {
-	type ReconcilePageEntry,
-	reconcilePageTokens,
-} from "@/lib/vision-reconcile"
+import { SQSClient, SendMessageCommand } from "@aws-sdk/client-sqs"
 import { type ScanStatus, logStudentPaperEvent } from "@mcp-gcse/db"
 import {
 	DeterministicMarker,
@@ -35,8 +27,11 @@ import {
 	LlmMarker,
 	MarkerOrchestrator,
 } from "@mcp-gcse/shared"
+import { Resource } from "sst"
 
 const TAG = "student-paper-grade"
+
+const sqs = new SQSClient({})
 
 const EXAMINER_SYSTEM_PROMPT =
 	"You are an expert GCSE examiner. Mark the student's answer against the provided mark scheme. Return valid JSON matching the schema. Ignore spelling and grammar; focus on understanding and correct concepts. Be consistent and conservative: only award marks when there is clear evidence."
@@ -130,15 +125,6 @@ async function gradeJob({
 		questions_total: questionList.length,
 	})
 
-	// Vision attribution: assigns Vision tokens to questions and derives precise
-	// answer regions from token hulls. Runs fire-and-forget — grading does not wait.
-	void beginVisionAttribution({ questionList, job, jobId })
-
-	// Token reconciliation also runs fire-and-forget — writes text_corrected
-	// onto StudentPaperPageToken rows after Gemini aligns Vision output to the
-	// transcript. Grading does not wait for this to complete.
-	void beginTokenReconciliation({ job, jobId })
-
 	const answerMap = new Map(
 		extractRawAnswers(job).map((a) => [a.question_id, a.answer_text]),
 	)
@@ -226,66 +212,17 @@ async function markJobAsProcessing(jobId: string): Promise<void> {
 function extractRawAnswers(
 	job: Pick<GradedJob, "extracted_answers_raw">,
 ): Array<{ question_id: string; answer_text: string }> {
-	const raw = job.extracted_answers_raw as ExtractedAnswersRaw
-	return raw.answers ?? []
-}
-
-function beginVisionAttribution({
-	questionList,
-	job,
-	jobId,
-}: {
-	questionList: QuestionListItem[]
-	job: Pick<GradedJob, "pages" | "s3_bucket" | "extracted_answers_raw">
-	jobId: string
-}): void {
-	void logStudentPaperEvent(db, jobId, {
-		type: "region_attribution_started",
-		at: new Date().toISOString(),
-	})
-
-	const questions: VisionAttributeQuestion[] = questionList.map((q) => ({
-		question_id: q.question_id,
-		question_number: q.question_number,
-		question_text: q.question_text,
-		is_mcq: q.question_obj.question_type === "multiple_choice",
-	}))
-
-	const raw = (job.extracted_answers_raw ?? {
-		answers: [],
-	}) as ExtractedAnswersRaw
-	const extractedAnswers = raw.answers ?? []
-
-	void visionAttributeRegions({
-		questions,
-		extractedAnswers,
-		pages: (job.pages ?? []) as VisionAttributePageEntry[],
-		s3Bucket: job.s3_bucket,
-		jobId,
-	}).catch((err) => {
-		logger.error(TAG, "Vision region attribution failed", {
-			jobId,
-			error: String(err),
-		})
-	})
-}
-
-function beginTokenReconciliation({
-	job,
-	jobId,
-}: {
-	job: Pick<GradedJob, "pages">
-	jobId: string
-}): void {
-	void reconcilePageTokens({
-		pages: (job.pages ?? []) as ReconcilePageEntry[],
-		jobId,
-	}).catch((err) => {
-		logger.error(TAG, "Token reconciliation failed", {
-			jobId,
-			error: String(err),
-		})
-	})
+	const raw = job.extracted_answers_raw as unknown
+	if (
+		typeof raw !== "object" ||
+		raw === null ||
+		!Array.isArray((raw as Record<string, unknown>).answers)
+	) {
+		throw new Error(
+			"extracted_answers_raw is missing or has no answers array — extract lambda may not have completed",
+		)
+	}
+	return (raw as ExtractedAnswersRaw).answers
 }
 
 async function completeGradingJob({
@@ -340,6 +277,13 @@ async function completeGradingJob({
 	if (updatedJob.batch_job_id) {
 		await checkAndNotifyBatchCompletion(updatedJob.batch_job_id)
 	}
+
+	await sqs.send(
+		new SendMessageCommand({
+			QueueUrl: Resource.StudentPaperEnrichQueue.url,
+			MessageBody: JSON.stringify({ job_id: jobId }),
+		}),
+	)
 }
 
 // ─── Batch completion check ───────────────────────────────────────────────────

@@ -1,6 +1,7 @@
 import { db } from "@/db"
 import { logger } from "@/lib/logger"
 import { getFileBase64 } from "@/lib/s3"
+import type { CorrectedPageToken } from "@/lib/vision-reconcile"
 import { GoogleGenAI, Type } from "@google/genai"
 import { logStudentPaperEvent } from "@mcp-gcse/db"
 import { Resource } from "sst"
@@ -28,14 +29,9 @@ export type VisionAttributeArgs = {
 	pages: VisionAttributePageEntry[]
 	s3Bucket: string
 	jobId: string
-}
-
-type TokenRow = {
-	id: string
-	page_order: number
-	text_raw: string
-	text_corrected: string | null
-	bbox: unknown
+	/** Corrected token rows from reconcilePageTokens — must be provided by the
+	 *  caller. Attribution does not read tokens from the DB. */
+	tokens: CorrectedPageToken[]
 }
 
 // Ranges are far more compact than flat index arrays — asking Gemini to list
@@ -85,6 +81,25 @@ const ATTRIBUTION_SCHEMA = {
 }
 
 /**
+ * Narrows an unknown bbox value to [yMin, xMin, yMax, xMax].
+ * Throws if the value is not a 4-element numeric array — a malformed bbox is a
+ * data integrity error that must not silently propagate NaN into hull arithmetic.
+ */
+function parseBbox(
+	raw: unknown,
+	context: string,
+): [number, number, number, number] {
+	if (
+		!Array.isArray(raw) ||
+		raw.length !== 4 ||
+		raw.some((v) => typeof v !== "number")
+	) {
+		throw new Error(`Invalid bbox at ${context}: ${JSON.stringify(raw)}`)
+	}
+	return raw as [number, number, number, number]
+}
+
+/**
  * Computes the bounding-box hull (min/max envelope) of a set of token bboxes.
  * Each bbox is [yMin, xMin, yMax, xMax] normalised 0–1000.
  */
@@ -127,37 +142,20 @@ export async function visionAttributeRegions({
 	pages,
 	s3Bucket,
 	jobId,
+	tokens,
 }: VisionAttributeArgs): Promise<void> {
 	if (questions.length === 0) return
 
 	const imagePages = pages.filter((p) => p.mime_type !== "application/pdf")
 
-	// Load all Vision tokens for this job grouped by page.
-	const allTokens = await db.studentPaperPageToken.findMany({
-		where: { job_id: jobId },
-		orderBy: [
-			{ page_order: "asc" },
-			{ para_index: "asc" },
-			{ line_index: "asc" },
-			{ word_index: "asc" },
-		],
-		select: {
-			id: true,
-			page_order: true,
-			text_raw: true,
-			text_corrected: true,
-			bbox: true,
-		},
-	})
-
-	if (allTokens.length === 0) {
+	if (tokens.length === 0) {
 		logger.warn(TAG, "No Vision tokens found — skipping attribution", { jobId })
 		return
 	}
 
 	// Group tokens by page_order.
-	const tokensByPage = new Map<number, TokenRow[]>()
-	for (const t of allTokens) {
+	const tokensByPage = new Map<number, CorrectedPageToken[]>()
+	for (const t of tokens) {
 		const existing = tokensByPage.get(t.page_order) ?? []
 		existing.push(t)
 		tokensByPage.set(t.page_order, existing)
@@ -214,8 +212,6 @@ export async function visionAttributeRegions({
 				return
 			}
 
-			const mimeType = page.mime_type as string
-
 			// Build the token list shown to Gemini — use corrected text where available.
 			const tokenList = tokens
 				.map((t, i) => `${i}: "${t.text_corrected ?? t.text_raw}"`)
@@ -247,7 +243,7 @@ IMPORTANT:
 						{
 							role: "user",
 							parts: [
-								{ inlineData: { data: imageBase64, mimeType } },
+								{ inlineData: { data: imageBase64, mimeType: page.mime_type } },
 								{ text: prompt },
 							],
 						},
@@ -268,7 +264,13 @@ IMPORTANT:
 			}
 
 			const responseText = response.candidates?.[0]?.content?.parts?.[0]?.text
-			if (!responseText) return
+			if (!responseText) {
+				logger.error(TAG, "Gemini attribution returned no text", {
+					jobId,
+					pageOrder: page.order,
+				})
+				return
+			}
 
 			type AssignmentResponse = {
 				assignments: Array<{
@@ -289,6 +291,8 @@ IMPORTANT:
 			}
 
 			// Expand ranges into individual token indices and validate.
+			// parsed.assignments must be an array — if Gemini returned a different
+			// shape the per-page catch above already handles the JSON.parse failure.
 			const validAssignments = (parsed.assignments ?? [])
 				.filter(
 					(a) => questionNumberById.has(a.question_id) && a.ranges?.length > 0,
@@ -323,19 +327,21 @@ IMPORTANT:
 			const regionRows = validAssignments.flatMap((assignment) => {
 				const assignedBboxes = assignment.token_indices
 					.map((idx) => tokens[idx])
-					.filter((t): t is TokenRow => t != null)
-					.map((t) => t.bbox as [number, number, number, number])
+					.filter((t): t is CorrectedPageToken => t != null)
+					.map((t) => parseBbox(t.bbox, `token ${t.id} (page ${page.order})`))
 
 				if (assignedBboxes.length === 0) return []
 
 				const hull = computeHull(assignedBboxes)
 
+				// questionNumberById.has() above guarantees the key is present.
+				const question_number = questionNumberById.get(assignment.question_id)!
+
 				return [
 					{
 						job_id: jobId,
 						question_id: assignment.question_id,
-						question_number:
-							questionNumberById.get(assignment.question_id) ?? "",
+						question_number,
 						page_order: page.order,
 						box: hull,
 						source: null, // Vision token hull — precise coordinates
@@ -472,8 +478,6 @@ async function runMcqGeminiFallback({
 				return
 			}
 
-			const mimeType = page.mime_type as string
-
 			const questionsText = questions
 				.map((q) => {
 					const selected = extractedAnswerById.get(q.question_id)
@@ -499,7 +503,7 @@ Return bounding box coordinates as [yMin, xMin, yMax, xMax] normalised 0–1000.
 						{
 							role: "user",
 							parts: [
-								{ inlineData: { data: imageBase64, mimeType } },
+								{ inlineData: { data: imageBase64, mimeType: page.mime_type } },
 								{ text: prompt },
 							],
 						},
@@ -520,7 +524,13 @@ Return bounding box coordinates as [yMin, xMin, yMax, xMax] normalised 0–1000.
 			}
 
 			const responseText = response.candidates?.[0]?.content?.parts?.[0]?.text
-			if (!responseText) return
+			if (!responseText) {
+				logger.error(TAG, "Gemini MCQ fallback returned no text", {
+					jobId,
+					pageOrder: page.order,
+				})
+				return
+			}
 
 			type FallbackResponse = {
 				regions: Array<{
@@ -550,11 +560,12 @@ Return bounding box coordinates as [yMin, xMin, yMax, xMax] normalised 0–1000.
 
 			if (found.length === 0) return
 
+			// questionNumberById.has() above guarantees the key is present.
 			await db.studentPaperAnswerRegion.createMany({
 				data: found.map((r) => ({
 					job_id: jobId,
 					question_id: r.question_id,
-					question_number: questionNumberById.get(r.question_id) ?? "",
+					question_number: questionNumberById.get(r.question_id)!,
 					page_order: page.order,
 					box: r.box,
 					source: "gemini_fallback",

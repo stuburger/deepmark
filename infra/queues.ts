@@ -33,6 +33,13 @@ export const studentPaperQueue = new sst.aws.Queue("StudentPaperQueue", {
 	visibilityTimeout: "10 minutes",
 })
 
+// Enrich queue: automatically triggered by student-paper-grade once grading completes.
+// Reserved for the annotation rendering stage (embedding feedback on scanned scripts).
+export const studentPaperEnrichQueue = new sst.aws.Queue(
+	"StudentPaperEnrichQueue",
+	{ visibilityTimeout: "10 minutes" },
+)
+
 scansBucket.notify({
 	notifications: [
 		{
@@ -116,10 +123,12 @@ questionPaperQueue.subscribe({
 
 // Triggered manually: a server action pushes { job_id } after a teacher finalises a student paper upload.
 // exam_paper_id must be set on the job before this queue is triggered.
-// Handler: loads all page files for the job from S3, then fans out to Gemini in parallel —
-// one call across all pages to extract the student name + every answer keyed by question number,
-// plus a per-page runOcr call for transcripts and bounding boxes. Saves the raw extracted answers
-// and page-level OCR analyses back onto the PdfIngestionJob, then automatically enqueues studentPaperQueue.
+// Handler runs in three phases:
+//   Phase 1 (parallel): Gemini answer extraction + per-page Cloud Vision word token detection.
+//   Phase 2a (awaited): Gemini token reconciliation — corrects raw OCR text per page.
+//   Phase 2b (awaited): Gemini vision attribution — assigns corrected tokens to questions,
+//     derives precise answer region bboxes. Runs after Phase 2a so corrected text is available.
+// On completion enqueues studentPaperQueue for grading.
 studentPaperOcrQueue.subscribe({
 	handler: "packages/backend/src/processors/student-paper-extract.handler",
 	link: [
@@ -131,17 +140,15 @@ studentPaperOcrQueue.subscribe({
 		studentPaperQueue,
 		batchClassifyQueue,
 	],
-	timeout: "8 minutes",
+	timeout: "10 minutes",
 	memory: "1 GB",
 })
 
-// Triggered automatically by student-paper-extract once OCR completes (exam_paper_id always required).
-// Handler: loads the exam paper's questions and mark schemes, then aligns the OCR-extracted answers
-// to the correct questions using three passes — (1) normalised string match on question number,
-// (2) positional match when counts agree, (3) LLM fallback for OCR misreads. Grades each aligned
-// answer via the MarkerOrchestrator (Deterministic → LevelOfResponse → LLM) and stores the full
-// results as a JSON blob on the job. If a Student record is linked to the job, also writes
-// normalised Answer + MarkingResult rows to the database.
+// Triggered automatically by student-paper-extract once OCR + reconciliation + attribution completes.
+// Handler: pure assessment — loads questions and mark schemes, grades each answer via the
+// MarkerOrchestrator (Deterministic → LevelOfResponse → LLM), streams incremental results to
+// the DB, and stores the full grading_results JSON on the job. If a Student record is linked,
+// also writes normalised Answer + MarkingResult rows. On completion enqueues studentPaperEnrichQueue.
 studentPaperQueue.subscribe({
 	handler: "packages/backend/src/processors/student-paper-grade.handler",
 	link: [
@@ -151,7 +158,19 @@ studentPaperQueue.subscribe({
 		scansBucket,
 		vapidPublicKey,
 		vapidPrivateKey,
+		studentPaperEnrichQueue,
 	],
 	timeout: "8 minutes",
+	memory: "1 GB",
+})
+
+// Triggered automatically by student-paper-grade once grading completes.
+// Stub: logs enrich_started and enrich_complete events.
+// Future work: annotation rendering — embed per-question feedback inline on the
+// student's scanned script using word-level bboxes and answer region hulls.
+studentPaperEnrichQueue.subscribe({
+	handler: "packages/backend/src/processors/student-paper-enrich.handler",
+	link: [neonPostgres, geminiApiKey, scansBucket],
+	timeout: "10 minutes",
 	memory: "1 GB",
 })

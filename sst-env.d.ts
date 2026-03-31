@@ -90,6 +90,10 @@ declare module "sst" {
       "type": "sst.aws.Queue"
       "url": string
     }
+    "StudentPaperEnrichQueue": {
+      "type": "sst.aws.Queue"
+      "url": string
+    }
     "VapidPrivateKey": {
       "type": "sst.sst.Secret"
       "value": string

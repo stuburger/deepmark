@@ -8,16 +8,14 @@ import { type GradingResult, gradeAllQuestions } from "@/lib/grade-questions"
 import { logger } from "@/lib/logger"
 import { persistAnswerRows } from "@/lib/persist-answers"
 import { sendBatchCompleteNotification } from "@/lib/push-notification"
-import {
-	type ExamPaperWithSections,
-	type QuestionListItem,
-	loadQuestionList,
-} from "@/lib/question-list"
+import { type QuestionListItem, loadQuestionList } from "@/lib/question-list"
 import {
 	type SqsEvent,
 	markJobFailed,
 	parseSqsJobId,
 } from "@/lib/sqs-job-runner"
+import { loadExamPaperForGrading } from "@/lib/student-paper/grade-queries"
+import { EXAMINER_SYSTEM_PROMPT } from "@/lib/student-paper/grader-config"
 import { SQSClient, SendMessageCommand } from "@aws-sdk/client-sqs"
 import { type ScanStatus, logStudentPaperEvent } from "@mcp-gcse/db"
 import {
@@ -32,9 +30,6 @@ import { Resource } from "sst"
 const TAG = "student-paper-grade"
 
 const sqs = new SQSClient({})
-
-const EXAMINER_SYSTEM_PROMPT =
-	"You are an expert GCSE examiner. Mark the student's answer against the provided mark scheme. Return valid JSON matching the schema. Ignore spelling and grammar; focus on understanding and correct concepts. Be consistent and conservative: only award marks when there is clear evidence."
 
 type ExtractedAnswersRaw = {
 	student_name?: string | null
@@ -146,41 +141,6 @@ async function gradeJob({
 	}
 
 	await completeGradingJob({ job, gradingResults, jobId })
-}
-
-// ─── Data access ──────────────────────────────────────────────────────────────
-
-async function loadExamPaperForGrading(
-	examPaperId: string,
-): Promise<ExamPaperWithSections> {
-	return db.examPaper.findUniqueOrThrow({
-		where: { id: examPaperId },
-		include: {
-			sections: {
-				orderBy: { order: "asc" },
-				include: {
-					exam_section_questions: {
-						orderBy: { order: "asc" },
-						include: {
-							question: {
-								include: {
-									mark_schemes: { take: 1, orderBy: { created_at: "desc" } },
-									question_parts: {
-										include: {
-											mark_schemes: {
-												take: 1,
-												orderBy: { created_at: "desc" },
-											},
-										},
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-	})
 }
 
 // ─── Job lifecycle steps ──────────────────────────────────────────────────────

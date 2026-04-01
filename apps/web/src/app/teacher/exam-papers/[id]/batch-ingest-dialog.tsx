@@ -20,8 +20,8 @@ import {
 	triggerClassification,
 	updateBatchJobSettings,
 	updateStagedScript,
-} from "@/lib/batch-actions"
-import type { BatchIngestJobData } from "@/lib/batch-actions"
+} from "@/lib/batch/mutations"
+import type { BatchIngestJobData } from "@/lib/batch/mutations"
 import {
 	CheckCircle2,
 	ChevronDown,

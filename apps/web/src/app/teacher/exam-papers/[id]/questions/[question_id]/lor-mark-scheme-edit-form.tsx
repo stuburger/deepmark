@@ -15,10 +15,12 @@ import {
 	type MarkingRulesInput,
 	updateMarkScheme,
 } from "@/lib/mark-scheme/manual"
-import { CheckCircle2, Plus, Trash2 } from "lucide-react"
+import { CheckCircle2, Plus } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useState, useTransition } from "react"
 import { useUpdateMarkScheme } from "../../hooks/use-exam-paper-mutations"
+import { CapBlock } from "./cap-block"
+import { LevelBlock } from "./level-block"
 
 type LevelRow = {
 	level: string
@@ -367,62 +369,15 @@ export function LorMarkSchemeEditForm({
 					</FieldDescription>
 					<div className="space-y-3">
 						{levels.map((row, i) => (
-							<div key={i} className="rounded-md border p-3 space-y-3">
-								<div className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2">
-									<Input
-										type="number"
-										min={1}
-										value={row.level}
-										onChange={(e) => updateLevel(i, "level", e.target.value)}
-										disabled={effectivelyPending}
-										placeholder="Level"
-									/>
-									<Input
-										type="number"
-										min={0}
-										value={row.minMark}
-										onChange={(e) => updateLevel(i, "minMark", e.target.value)}
-										disabled={effectivelyPending}
-										placeholder="Min mark"
-									/>
-									<Input
-										type="number"
-										min={0}
-										value={row.maxMark}
-										onChange={(e) => updateLevel(i, "maxMark", e.target.value)}
-										disabled={effectivelyPending}
-										placeholder="Max mark"
-									/>
-									<Button
-										type="button"
-										variant="ghost"
-										size="icon"
-										onClick={() => removeLevel(i)}
-										disabled={effectivelyPending || levels.length <= 1}
-										className="text-muted-foreground hover:text-destructive"
-									>
-										<Trash2 className="h-4 w-4" />
-									</Button>
-								</div>
-								<Textarea
-									value={row.descriptor}
-									onChange={(e) => updateLevel(i, "descriptor", e.target.value)}
-									disabled={effectivelyPending}
-									rows={3}
-									placeholder="Level descriptor"
-									className="resize-y text-sm"
-								/>
-								<Textarea
-									value={row.aoRequirementsText}
-									onChange={(e) =>
-										updateLevel(i, "aoRequirementsText", e.target.value)
-									}
-									disabled={effectivelyPending}
-									rows={2}
-									placeholder="AO requirements (one per line, optional)"
-									className="resize-y text-sm"
-								/>
-							</div>
+							<LevelBlock
+								key={i}
+								row={row}
+								index={i}
+								disabled={effectivelyPending}
+								isOnly={levels.length <= 1}
+								onChange={(key, value) => updateLevel(i, key, value)}
+								onRemove={() => removeLevel(i)}
+							/>
 						))}
 					</div>
 					<Button
@@ -442,49 +397,14 @@ export function LorMarkSchemeEditForm({
 					<FieldLabel>Caps (optional)</FieldLabel>
 					<div className="space-y-3">
 						{caps.map((cap, i) => (
-							<div key={i} className="rounded-md border p-3 space-y-2">
-								<Input
-									value={cap.condition}
-									onChange={(e) => updateCap(i, "condition", e.target.value)}
-									disabled={effectivelyPending}
-									placeholder="Condition"
-								/>
-								<div className="grid grid-cols-2 gap-2">
-									<Input
-										type="number"
-										min={1}
-										value={cap.maxLevel}
-										onChange={(e) => updateCap(i, "maxLevel", e.target.value)}
-										disabled={effectivelyPending}
-										placeholder="Max level (or leave blank)"
-									/>
-									<Input
-										type="number"
-										min={0}
-										value={cap.maxMark}
-										onChange={(e) => updateCap(i, "maxMark", e.target.value)}
-										disabled={effectivelyPending}
-										placeholder="Max mark (or leave blank)"
-									/>
-								</div>
-								<Input
-									value={cap.reason}
-									onChange={(e) => updateCap(i, "reason", e.target.value)}
-									disabled={effectivelyPending}
-									placeholder="Reason"
-								/>
-								<Button
-									type="button"
-									variant="ghost"
-									size="sm"
-									onClick={() => removeCap(i)}
-									disabled={effectivelyPending}
-									className="text-muted-foreground hover:text-destructive"
-								>
-									<Trash2 className="h-4 w-4 mr-1.5" />
-									Remove cap
-								</Button>
-							</div>
+							<CapBlock
+								key={i}
+								cap={cap}
+								index={i}
+								disabled={effectivelyPending}
+								onChange={(key, value) => updateCap(i, key, value)}
+								onRemove={() => removeCap(i)}
+							/>
 						))}
 					</div>
 					<Button

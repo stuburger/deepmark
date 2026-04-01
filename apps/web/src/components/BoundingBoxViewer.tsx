@@ -1,161 +1,28 @@
 "use client"
 
+import { GradingAnnotationOverlay } from "@/components/BoundingBoxViewer/grading-annotation-overlay"
+import { TokenOverlay } from "@/components/BoundingBoxViewer/token-overlay"
 import { HandwritingAnalysisPanel } from "@/components/HandwritingAnalysisPanel"
 import {
-	Popover,
-	PopoverContent,
-	PopoverDescription,
-	PopoverHeader,
-	PopoverTitle,
-	PopoverTrigger,
-} from "@/components/ui/popover"
+	type GradingAnnotation,
+	TOKEN_COLOR,
+	annotationColor,
+} from "@/lib/bounding-box"
 import type { HandwritingAnalysis, PageToken } from "@/lib/handwriting-types"
 import { cn } from "@/lib/utils"
 import { Minus, Plus, RotateCcw } from "lucide-react"
 import { useState } from "react"
 import { TransformComponent, TransformWrapper } from "react-zoom-pan-pinch"
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+export type { GradingAnnotation }
 
-function rowLabel(y: number) {
-	if (y < 333) return "top"
-	if (y < 667) return "middle"
-	return "bottom"
-}
+// ─── TransformWrapper config ──────────────────────────────────────────────────
 
-function colLabel(x: number) {
-	if (x < 333) return "left"
-	if (x < 667) return "centre"
-	return "right"
-}
-
-// ─── Grading annotation types ─────────────────────────────────────────────────
-
-export type GradingAnnotation = {
-	questionNumber: string
-	questionText: string
-	feedbackSummary: string
-	awardedScore: number
-	maxScore: number
-	/** [yMin, xMin, yMax, xMax] normalised 0–1000 */
-	box: [number, number, number, number]
-	/** null = Vision hull, "gemini_fallback" = fallback-estimated region */
-	source?: string | null
-}
-
-function annotationColor(awarded: number, max: number): string {
-	if (max === 0) return "rgb(156 163 175)"
-	const pct = awarded / max
-	if (pct >= 0.7) return "rgb(34 197 94)"
-	if (pct >= 0.4) return "rgb(234 179 8)"
-	return "rgb(239 68 68)"
-}
-
-// ─── Per-grading-annotation overlay ──────────────────────────────────────────
-
-function GradingAnnotationOverlay({
-	annotation,
-	onAnnotationClick,
-}: {
-	annotation: GradingAnnotation
-	onAnnotationClick?: (questionNumber: string) => void
-}) {
-	const [yMin, xMin, yMax, xMax] = annotation.box
-	if (yMax === 0 && xMax === 0) return null
-
-	const color = annotationColor(annotation.awardedScore, annotation.maxScore)
-
-	return (
-		<button
-			type="button"
-			aria-label={`Q${annotation.questionNumber}: jump to answer`}
-			onClick={() => onAnnotationClick?.(annotation.questionNumber)}
-			className="rounded-sm transition-opacity hover:opacity-70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
-			style={{
-				position: "absolute",
-				left: `${xMin / 10}%`,
-				top: `${yMin / 10}%`,
-				width: `${(xMax - xMin) / 10}%`,
-				height: `${(yMax - yMin) / 10}%`,
-				background: "transparent",
-				boxShadow: `inset 0 0 0 2px ${color}`,
-				padding: 0,
-				cursor: "pointer",
-			}}
-		/>
-	)
-}
-
-// ─── Per-token popover ────────────────────────────────────────────────────────
-
-const TOKEN_COLOR = "rgb(59 130 246)" // blue-500
-
-function TokenOverlay({ token, index }: { token: PageToken; index: number }) {
-	const [yMin, xMin, yMax, xMax] = token.bbox
-	const displayText = token.text_corrected ?? token.text_raw
-
-	return (
-		<Popover key={index}>
-			<PopoverTrigger
-				aria-label={`Word: ${displayText}`}
-				style={{
-					position: "absolute",
-					left: `${xMin / 10}%`,
-					top: `${yMin / 10}%`,
-					width: `${(xMax - xMin) / 10}%`,
-					height: `${(yMax - yMin) / 10}%`,
-					background: "transparent",
-					border: "none",
-					padding: 0,
-					cursor: "pointer",
-				}}
-			/>
-
-			<PopoverContent side="right" sideOffset={8} className="w-72">
-				<PopoverHeader>
-					<span
-						className="inline-flex w-fit items-center rounded-full px-2 py-0.5 text-xs font-semibold text-white"
-						style={{ backgroundColor: TOKEN_COLOR }}
-					>
-						Word
-					</span>
-					<PopoverTitle className="mt-2 font-mono text-sm leading-snug wrap-break-word">
-						&ldquo;{displayText}&rdquo;
-					</PopoverTitle>
-				</PopoverHeader>
-
-				{token.text_corrected && token.text_corrected !== token.text_raw && (
-					<PopoverDescription className="rounded-md bg-blue-50 px-2.5 py-2 text-xs text-blue-800 dark:bg-blue-950/40 dark:text-blue-200">
-						OCR read: &ldquo;{token.text_raw}&rdquo;
-					</PopoverDescription>
-				)}
-
-				<div className="space-y-1 border-t pt-2 text-xs text-muted-foreground">
-					<div className="flex items-center justify-between">
-						<span>Location</span>
-						<span className="font-medium capitalize">
-							{rowLabel(yMin)} {colLabel(xMin)}
-						</span>
-					</div>
-					<div className="flex items-center justify-between">
-						<span>Coordinates</span>
-						<span className="font-mono tabular-nums">
-							y {yMin}–{yMax} · x {xMin}–{xMax}
-						</span>
-					</div>
-					{token.confidence !== null && (
-						<div className="flex items-center justify-between">
-							<span>Confidence</span>
-							<span className="font-mono tabular-nums">
-								{Math.round((token.confidence ?? 0) * 100)}%
-							</span>
-						</div>
-					)}
-				</div>
-			</PopoverContent>
-		</Popover>
-	)
-}
+const TRANSFORM_MIN_SCALE = 0.3
+const TRANSFORM_MAX_SCALE = 8
+const TRANSFORM_WHEEL = { step: 0.08, activationKeys: ["Control", "Meta"] }
+const TRANSFORM_PINCH = { step: 5 }
+const TRANSFORM_DOUBLE_CLICK = { mode: "reset" as const }
 
 // ─── Main viewer ──────────────────────────────────────────────────────────────
 
@@ -211,11 +78,11 @@ export function BoundingBoxViewer({
 	return (
 		<div className={cn("space-y-2", className)}>
 			<TransformWrapper
-				minScale={0.3}
-				maxScale={8}
-				wheel={{ step: 0.08, activationKeys: ["Control", "Meta"] }}
-				pinch={{ step: 5 }}
-				doubleClick={{ mode: "reset" }}
+				minScale={TRANSFORM_MIN_SCALE}
+				maxScale={TRANSFORM_MAX_SCALE}
+				wheel={TRANSFORM_WHEEL}
+				pinch={TRANSFORM_PINCH}
+				doubleClick={TRANSFORM_DOUBLE_CLICK}
 				limitToBounds={false}
 			>
 				{({ zoomIn, zoomOut, resetTransform }) => (

@@ -37,3 +37,12 @@ export const SUBJECT_VALUES = Object.keys(SUBJECT_LABELS) as Subject[]
 export const SUBJECTS: { value: Subject; label: string }[] = SUBJECT_VALUES.map(
 	(value) => ({ value, label: SUBJECT_LABELS[value] }),
 )
+
+export const EXAM_BOARDS = [
+	"AQA",
+	"OCR",
+	"Edexcel",
+	"WJEC",
+	"Cambridge",
+	"Other",
+] as const

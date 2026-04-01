@@ -26,8 +26,8 @@ import {
 	commitBatch,
 	getActiveBatchForPaper,
 	updateStagedScript,
-} from "@/lib/batch-actions"
-import type { ActiveBatchInfo } from "@/lib/batch-actions"
+} from "@/lib/batch/mutations"
+import type { ActiveBatchInfo } from "@/lib/batch/mutations"
 import { deleteExamPaper } from "@/lib/exam-paper/mutations"
 import type {
 	ExamPaperDetail,
@@ -54,115 +54,32 @@ import {
 	PenLine,
 	ScrollText,
 	Trash2,
-	Users,
 } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { parseAsString, parseAsStringEnum, useQueryState } from "nuqs"
 import { useState } from "react"
 import { toast } from "sonner"
-import { BatchIngestDialog } from "./batch-ingest-dialog"
 import { DocumentUploadCards } from "./document-upload-cards"
 import { EditableTitle } from "./editable-title"
+import {
+	TableRowDeleteButton,
+	capitalize,
+	originBadgeVariant,
+	originLabel,
+	schemeBadge,
+} from "./exam-paper-helpers"
 import { ExamPaperPaperView } from "./exam-paper-paper-view"
 import { useExamPaperLiveQueries } from "./hooks/use-exam-paper-live-queries"
-import {
-	useDeleteQuestion,
-	useLinkMarkScheme,
-} from "./hooks/use-exam-paper-mutations"
+import { useLinkMarkScheme } from "./hooks/use-exam-paper-mutations"
 import { useSimilarQuestions } from "./hooks/use-similar-questions"
 import { useUnlinkedSchemes } from "./hooks/use-unlinked-schemes"
 import { MarkingJobDialog } from "./marking-job-dialog"
 import { SubmissionGrid } from "./submission-grid"
-import { UploadStudentScriptDialog } from "./upload-student-script-dialog"
+import { UploadScriptsDialog } from "./upload-scripts-dialog"
 
 type SortKey = "number" | "marks" | "similarity"
 type SortDir = "asc" | "desc"
-
-function schemeBadge(status: string | null) {
-	if (!status) return <Badge variant="destructive">No scheme</Badge>
-	switch (status) {
-		case "linked":
-		case "auto_linked":
-			return <Badge variant="secondary">Has scheme</Badge>
-		case "unlinked":
-			return <Badge variant="destructive">Unlinked</Badge>
-		default:
-			return <Badge variant="outline">{status}</Badge>
-	}
-}
-
-function originBadgeVariant(origin: string) {
-	switch (origin) {
-		case "question_paper":
-			return "default" as const
-		case "mark_scheme":
-			return "secondary" as const
-		default:
-			return "outline" as const
-	}
-}
-
-function originLabel(origin: string) {
-	switch (origin) {
-		case "question_paper":
-			return "Question Paper"
-		case "mark_scheme":
-			return "Mark Scheme"
-		case "exemplar":
-			return "Exemplar"
-		case "manual":
-			return "Manual"
-		default:
-			return origin
-	}
-}
-
-function capitalize(s: string) {
-	return s.charAt(0).toUpperCase() + s.slice(1)
-}
-
-function TableRowDeleteButton({
-	questionId,
-	paperId,
-}: {
-	questionId: string
-	paperId: string
-}) {
-	const [confirmOpen, setConfirmOpen] = useState(false)
-	const { mutate: doDelete, isPending: deleting } = useDeleteQuestion(paperId)
-
-	return (
-		<>
-			<Button
-				size="sm"
-				variant="ghost"
-				className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
-				title="Delete question"
-				onClick={(e) => {
-					e.stopPropagation()
-					setConfirmOpen(true)
-				}}
-			>
-				<Trash2 className="h-3.5 w-3.5" />
-				<span className="sr-only">Delete question</span>
-			</Button>
-			<ConfirmDialog
-				open={confirmOpen}
-				onOpenChange={(next) => {
-					if (!deleting) setConfirmOpen(next)
-				}}
-				title="Delete this question?"
-				description="This will permanently remove the question, its mark scheme, and all associated data. This cannot be undone."
-				confirmLabel={deleting ? "Deleting…" : "Delete question"}
-				loading={deleting}
-				onConfirm={() =>
-					doDelete(questionId, { onSuccess: () => setConfirmOpen(false) })
-				}
-			/>
-		</>
-	)
-}
 
 export function ExamPaperPageShell({
 	paper: initialPaper,
@@ -216,9 +133,8 @@ export function ExamPaperPageShell({
 
 	const { data: unlinkedItems = [] } = useUnlinkedSchemes(paper.id)
 
-	// Upload student script + batch marking
-	const [uploadScriptOpen, setUploadScriptOpen] = useState(false)
-	const [batchOpen, setBatchOpen] = useState(false)
+	// Upload scripts (unified)
+	const [uploadOpen, setUploadOpen] = useState(false)
 	const [markingJobId, setMarkingJobId] = useQueryState("job", parseAsString)
 	const [committingBatch, setCommittingBatch] = useState(false)
 
@@ -1015,16 +931,6 @@ export function ExamPaperPageShell({
 				onConfirm={() => doDeletePaper()}
 			/>
 
-			<UploadStudentScriptDialog
-				examPaperId={paper.id}
-				open={uploadScriptOpen}
-				onOpenChange={setUploadScriptOpen}
-				onJobReady={(jobId) => {
-					setUploadScriptOpen(false)
-					setMarkingJobId(jobId)
-				}}
-			/>
-
 			<MarkingJobDialog
 				examPaperId={paper.id}
 				jobId={markingJobId}
@@ -1034,19 +940,19 @@ export function ExamPaperPageShell({
 				}}
 			/>
 
-			<BatchIngestDialog
+			<UploadScriptsDialog
 				examPaperId={paper.id}
-				open={batchOpen}
-				onOpenChange={setBatchOpen}
+				open={uploadOpen}
+				onOpenChange={setUploadOpen}
 				onBatchStarted={() => {
 					void refetchActiveBatch()
 					void setActiveTab("submissions")
 				}}
 			/>
 
-			{/* Floating action button — split: left = single script, right = batch */}
+			{/* Floating action button */}
 			<div
-				className="fixed bottom-6 right-6 z-50 flex items-center rounded-full shadow-lg"
+				className="fixed bottom-6 right-6 z-50"
 				title={
 					!readyForSubmissions
 						? totalQuestions === 0
@@ -1059,23 +965,12 @@ export function ExamPaperPageShell({
 			>
 				<button
 					type="button"
-					onClick={() => readyForSubmissions && setUploadScriptOpen(true)}
+					onClick={() => readyForSubmissions && setUploadOpen(true)}
 					disabled={!readyForSubmissions}
-					className="flex items-center gap-2 rounded-l-full bg-primary px-5 py-3.5 text-sm font-medium text-primary-foreground transition-all hover:bg-primary/90 hover:shadow-sm active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+					className="flex items-center gap-2 rounded-full bg-primary px-5 py-3.5 text-sm font-medium text-primary-foreground shadow-lg transition-all hover:bg-primary/90 hover:shadow-sm active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
 				>
 					<PenLine className="h-4 w-4" />
-					Mark paper
-				</button>
-				<div className="w-px self-stretch bg-primary-foreground/20" />
-				<button
-					type="button"
-					onClick={() => readyForSubmissions && setBatchOpen(true)}
-					disabled={!readyForSubmissions}
-					className="flex items-center rounded-r-full bg-primary px-3.5 py-3.5 text-primary-foreground transition-all hover:bg-primary/90 hover:shadow-sm active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
-					title="Upload class batch"
-				>
-					<Users className="h-4 w-4" />
-					<span className="sr-only">Upload class batch</span>
+					Upload scripts
 				</button>
 			</div>
 		</>

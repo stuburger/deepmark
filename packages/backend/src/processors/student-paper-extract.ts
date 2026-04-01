@@ -1,11 +1,7 @@
 import { db } from "@/db"
 import { createCancellationToken } from "@/lib/cancellation"
 import { runVisionOcr } from "@/lib/cloud-vision-ocr"
-import {
-	type PageMimeType,
-	type QuestionSeed,
-	extractStudentPaper,
-} from "@/lib/gemini-extract"
+import { type PageMimeType, extractStudentPaper } from "@/lib/gemini-extract"
 import { logger } from "@/lib/logger"
 import { getFileBase64, s3 } from "@/lib/s3"
 import {
@@ -13,6 +9,12 @@ import {
 	markJobFailed,
 	parseSqsJobId,
 } from "@/lib/sqs-job-runner"
+import {
+	type PageEntry,
+	isValidSubject,
+	loadQuestionSeeds,
+	parsePages,
+} from "@/lib/student-paper/question-seeds"
 import {
 	type VisionAttributeQuestion,
 	visionAttributeRegions,
@@ -30,122 +32,6 @@ import { Resource } from "sst"
 const TAG = "student-paper-extract"
 
 const sqs = new SQSClient({})
-
-type PageEntry = {
-	key: string
-	order: number
-	mime_type: string
-}
-
-const SUBJECT_VALUES = [
-	"biology",
-	"chemistry",
-	"physics",
-	"english",
-	"english_literature",
-	"mathematics",
-	"history",
-	"geography",
-	"computer_science",
-	"french",
-	"spanish",
-	"religious_studies",
-	"business",
-] as const
-
-function isValidSubject(s: string): s is Subject {
-	return (SUBJECT_VALUES as readonly string[]).includes(s)
-}
-
-/**
- * Validates and narrows the raw JSON pages field from a StudentPaperJob row.
- * Throws if the value is null, not an array, or contains entries with the
- * wrong shape — a malformed pages field is a data integrity error, not a
- * recoverable condition.
- */
-function parsePages(raw: unknown): PageEntry[] {
-	if (!Array.isArray(raw)) {
-		throw new Error(`job.pages is not an array (got ${typeof raw})`)
-	}
-	return raw.map((p: unknown, i: number) => {
-		if (
-			typeof p !== "object" ||
-			p === null ||
-			typeof (p as Record<string, unknown>).key !== "string" ||
-			typeof (p as Record<string, unknown>).order !== "number" ||
-			typeof (p as Record<string, unknown>).mime_type !== "string"
-		) {
-			throw new Error(
-				`job.pages[${i}] has unexpected shape: ${JSON.stringify(p)}`,
-			)
-		}
-		return p as PageEntry
-	})
-}
-
-/**
- * Fetches the minimal question data needed for seeded extraction — just the
- * id, canonical number, text, and type for each question on the paper.
- * Does not load mark schemes or other heavyweight relations.
- */
-async function loadQuestionSeeds(examPaperId: string): Promise<QuestionSeed[]> {
-	const sections = await db.examSection.findMany({
-		where: { exam_paper_id: examPaperId },
-		orderBy: { order: "asc" },
-		include: {
-			exam_section_questions: {
-				orderBy: { order: "asc" },
-				include: {
-					question: {
-						select: {
-							id: true,
-							question_number: true,
-							text: true,
-							question_type: true,
-						},
-					},
-				},
-			},
-		},
-	})
-
-	const seeds: QuestionSeed[] = []
-	for (const section of sections) {
-		for (const esq of section.exam_section_questions) {
-			const questionNumber = esq.question.question_number
-			if (!questionNumber) {
-				// Positional fallback so the question still participates in
-				// extraction and grading. The missing number is a data quality
-				// issue that should be fixed on the exam paper, not silently
-				// dropped from the student pipeline.
-				const fallback = String(seeds.length + 1)
-				logger.warn(
-					TAG,
-					"Question has no question_number — using positional fallback",
-					{
-						question_id: esq.question.id,
-						exam_paper_id: examPaperId,
-						fallback_number: fallback,
-					},
-				)
-				seeds.push({
-					question_id: esq.question.id,
-					question_number: fallback,
-					question_text: esq.question.text,
-					question_type: esq.question.question_type,
-				})
-				continue
-			}
-			seeds.push({
-				question_id: esq.question.id,
-				question_number: questionNumber,
-				question_text: esq.question.text,
-				question_type: esq.question.question_type,
-			})
-		}
-	}
-	return seeds
-}
 
 export async function handler(
 	event: SqsEvent,

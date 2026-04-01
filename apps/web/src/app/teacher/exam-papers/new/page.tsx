@@ -11,7 +11,6 @@ import {
 } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Spinner } from "@/components/ui/spinner"
 import { Switch } from "@/components/ui/switch"
 import { createExamPaperStandalone } from "@/lib/exam-paper/mutations"
 import {
@@ -22,15 +21,18 @@ import {
 	extractPdfMetadata,
 	requestMetadataUpload,
 } from "@/lib/pdf-metadata-actions"
-import { SUBJECTS, SUBJECT_VALUES, type Subject } from "@/lib/subjects"
-import { FileText, Sparkles, Upload } from "lucide-react"
+import {
+	EXAM_BOARDS,
+	SUBJECTS,
+	SUBJECT_VALUES,
+	type Subject,
+} from "@/lib/subjects"
+import { Sparkles } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { useRef, useState } from "react"
-
-// ─── Constants ────────────────────────────────────────────────────────────────
-
-const EXAM_BOARDS = ["AQA", "OCR", "Edexcel", "WJEC", "Cambridge", "Other"]
+import { useState } from "react"
+import { IdleDropZone } from "./idle-drop-zone"
+import { ProcessingCard, type ProcessingStage } from "./processing-card"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -39,10 +41,6 @@ type DocumentSlot = {
 	fileName: string
 	metadata: DetectedPdfMetadata
 }
-
-type ProcessingStage =
-	| { kind: "uploading"; fileName: string }
-	| { kind: "extracting"; fileName: string; s3Key: string }
 
 type Stage =
 	| { kind: "idle" }
@@ -62,8 +60,6 @@ type Stage =
 
 export default function NewExamPaperPage() {
 	const router = useRouter()
-	const fileInputRef = useRef<HTMLInputElement>(null)
-	const [isDragging, setIsDragging] = useState(false)
 	const [stage, setStage] = useState<Stage>({ kind: "idle" })
 
 	// Form state — shared across manual and AI paths
@@ -185,25 +181,6 @@ export default function NewExamPaperPage() {
 		})
 	}
 
-	// ── Drag handlers for idle zone ──
-
-	function handleIdleDragOver(e: React.DragEvent) {
-		e.preventDefault()
-		setIsDragging(true)
-	}
-
-	function handleIdleDragLeave(e: React.DragEvent) {
-		e.preventDefault()
-		setIsDragging(false)
-	}
-
-	function handleIdleDrop(e: React.DragEvent) {
-		e.preventDefault()
-		setIsDragging(false)
-		const f = e.dataTransfer.files[0]
-		if (f) processFirstFile(f)
-	}
-
 	// ── Submit ──
 
 	async function handleSubmit(e: React.FormEvent) {
@@ -307,94 +284,14 @@ export default function NewExamPaperPage() {
 
 			{/* ── Idle: single drop zone ─────────────────────────────────── */}
 			{stage.kind === "idle" && (
-				<Card>
-					<CardContent className="pt-6 pb-6">
-						<div
-							onDragOver={handleIdleDragOver}
-							onDragEnter={handleIdleDragOver}
-							onDragLeave={handleIdleDragLeave}
-							onDrop={handleIdleDrop}
-							onClick={() => fileInputRef.current?.click()}
-							className={`flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-12 text-center cursor-pointer transition-colors select-none ${
-								isDragging
-									? "border-primary bg-primary/5"
-									: "border-input hover:border-primary/50 hover:bg-muted/30"
-							}`}
-						>
-							<div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 mb-4">
-								<Upload className="h-7 w-7 text-primary" />
-							</div>
-							<p className="text-sm font-medium">
-								Drop your exam paper PDF here
-							</p>
-							<p className="text-xs text-muted-foreground mt-1">
-								or click to browse
-							</p>
-							<p className="text-xs text-muted-foreground mt-4 max-w-xs leading-relaxed">
-								Subject, board, year, marks, duration and document type will be
-								detected automatically
-							</p>
-						</div>
-						<input
-							ref={fileInputRef}
-							type="file"
-							accept=".pdf,application/pdf"
-							className="sr-only"
-							onChange={(e) => {
-								const f = e.target.files?.[0]
-								if (f) processFirstFile(f)
-							}}
-						/>
-						<p className="mt-4 text-center text-sm text-muted-foreground">
-							Creating a new paper from scratch?{" "}
-							<button
-								type="button"
-								onClick={startManual}
-								className="underline underline-offset-4 hover:text-foreground"
-							>
-								Fill in manually
-							</button>
-						</p>
-					</CardContent>
-				</Card>
+				<IdleDropZone
+					onFileSelected={processFirstFile}
+					onManual={startManual}
+				/>
 			)}
 
 			{/* ── Processing: first upload + extraction ─────────────────── */}
-			{stage.kind === "processing" && (
-				<Card>
-					<CardContent className="pt-6 pb-6">
-						<div className="flex flex-col items-center justify-center py-8 gap-5">
-							<div
-								className={`flex h-14 w-14 items-center justify-center rounded-full transition-colors ${
-									stage.sub.kind === "extracting" ? "bg-primary/10" : "bg-muted"
-								}`}
-							>
-								{stage.sub.kind === "extracting" ? (
-									<Sparkles className="h-7 w-7 text-primary" />
-								) : (
-									<FileText className="h-7 w-7 text-muted-foreground" />
-								)}
-							</div>
-							<div className="text-center space-y-1.5">
-								<p className="text-sm font-medium">{stage.sub.fileName}</p>
-								<div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
-									<Spinner className="h-4 w-4 shrink-0" />
-									<span>
-										{stage.sub.kind === "uploading"
-											? "Uploading…"
-											: "Detecting paper details…"}
-									</span>
-								</div>
-								{stage.sub.kind === "extracting" && (
-									<p className="text-xs text-muted-foreground">
-										Gemini is reading the cover page and header
-									</p>
-								)}
-							</div>
-						</div>
-					</CardContent>
-				</Card>
-			)}
+			{stage.kind === "processing" && <ProcessingCard sub={stage.sub} />}
 
 			{/* ── Error ─────────────────────────────────────────────────── */}
 			{stage.kind === "error" && (

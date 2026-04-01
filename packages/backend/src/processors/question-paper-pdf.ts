@@ -4,15 +4,23 @@ import {
 	createCancellationToken,
 } from "@/lib/cancellation"
 import { embedQuestionText } from "@/lib/google-generative-ai"
+import { linkJobQuestionsToExamPaper } from "@/lib/link-job-questions"
 import { logger } from "@/lib/logger"
 import { normalizeQuestionNumber } from "@/lib/normalize-question-number"
-import { GetObjectCommand, S3Client } from "@aws-sdk/client-s3"
-import { GoogleGenAI, Type } from "@google/genai"
+import { getPdfBase64, parseJobIdFromKey } from "@/lib/processor-s3"
+import { GoogleGenAI } from "@google/genai"
 import type { ScanStatus } from "@mcp-gcse/db"
 import { Resource } from "sst"
+import {
+	EXTRACT_METADATA_PROMPT,
+	EXTRACT_QUESTIONS_PROMPT,
+} from "./question-paper-pdf/prompts"
+import {
+	EXAM_PAPER_METADATA_SCHEMA,
+	QUESTION_PAPER_SCHEMA,
+} from "./question-paper-pdf/schema"
 
 const TAG = "question-paper-pdf"
-const s3 = new S3Client({})
 
 interface S3Record {
 	s3: { bucket: { name: string }; object: { key: string } }
@@ -25,90 +33,6 @@ interface SqsRecord {
 
 interface SqsEvent {
 	Records: SqsRecord[]
-}
-
-const QUESTION_PAPER_SCHEMA = {
-	type: Type.OBJECT,
-	properties: {
-		questions: {
-			type: Type.ARRAY,
-			items: {
-				type: Type.OBJECT,
-				properties: {
-					question_text: { type: Type.STRING },
-					question_type: {
-						type: Type.STRING,
-						description: "written | multiple_choice",
-					},
-					total_marks: { type: Type.INTEGER },
-					question_number: { type: Type.STRING },
-					options: {
-						type: Type.ARRAY,
-						nullable: true,
-						description:
-							"For multiple choice questions: the answer options. Only include when question_type is multiple_choice.",
-						items: {
-							type: Type.OBJECT,
-							properties: {
-								option_label: {
-									type: Type.STRING,
-									description: "The option label, e.g. A, B, C, D",
-								},
-								option_text: {
-									type: Type.STRING,
-									description: "The full text of this answer option",
-								},
-							},
-							required: ["option_label", "option_text"],
-						},
-					},
-				},
-				required: ["question_text", "total_marks"],
-			},
-		},
-	},
-	required: ["questions"],
-}
-
-const EXAM_PAPER_METADATA_SCHEMA = {
-	type: Type.OBJECT,
-	properties: {
-		title: { type: Type.STRING },
-		subject: { type: Type.STRING },
-		exam_board: { type: Type.STRING },
-		total_marks: { type: Type.INTEGER },
-		duration_minutes: { type: Type.INTEGER },
-		year: { type: Type.INTEGER, nullable: true },
-		paper_number: { type: Type.INTEGER, nullable: true },
-	},
-	required: [
-		"title",
-		"subject",
-		"exam_board",
-		"total_marks",
-		"duration_minutes",
-	],
-}
-
-function parseJobIdFromKey(key: string): string {
-	const decoded = decodeURIComponent(key)
-	const parts = decoded.split("/")
-	if (
-		parts.length < 4 ||
-		parts[0] !== "pdfs" ||
-		parts[1] !== "question-papers"
-	) {
-		throw new Error(`Unexpected question-paper S3 key format: ${key}`)
-	}
-	return parts[2] ?? ""
-}
-
-async function getPdfBase64(bucket: string, key: string): Promise<string> {
-	const cmd = new GetObjectCommand({ Bucket: bucket, Key: key })
-	const response = await s3.send(cmd)
-	const body = await response.Body?.transformToByteArray()
-	if (!body?.length) throw new Error("Empty S3 object")
-	return Buffer.from(body).toString("base64")
 }
 
 function embeddingToVectorStr(vec: number[]): string {
@@ -159,7 +83,7 @@ export async function handler(
 				}
 				bucket = s3Record.s3.bucket.name
 				key = decodeURIComponent(s3Record.s3.object.key)
-				jobId = parseJobIdFromKey(key)
+				jobId = parseJobIdFromKey(key, "question-papers")
 				logger.info(TAG, "Triggered by S3 event", { jobId, bucket, key })
 			}
 
@@ -229,21 +153,7 @@ export async function handler(
 										mimeType: "application/pdf",
 									},
 								},
-								{
-									text: `Extract all questions from this exam paper. Do not include mark scheme content or answers.
-
-IMPORTANT — Multiple Choice Questions (MCQ):
-Extract EACH numbered MCQ as a SEPARATE question entry — do NOT create a single entry for a whole section. For each MCQ:
-- question_text: the full question text (stem)
-- question_type: "multiple_choice"
-- question_number: the question number as a string (e.g. "1", "2")
-- total_marks: 1 (unless stated otherwise)
-- options: array of { option_label, option_text } for each answer option (A, B, C, D)
-
-GENERAL RULES:
-- Clean up all extracted text: ensure proper word spacing, correct punctuation, and proper line breaks. Fix any OCR artefacts such as run-together words or missing spaces.
-- For written questions provide: question_text (full text including sub-parts), question_type ("written"), total_marks, question_number if visible.`,
-								},
+								{ text: EXTRACT_QUESTIONS_PROMPT },
 							],
 						},
 					],
@@ -265,9 +175,7 @@ GENERAL RULES:
 										mimeType: "application/pdf",
 									},
 								},
-								{
-									text: "From the document header or cover, extract: title (exam paper title), subject, exam_board, total_marks, duration_minutes, year if visible, and paper_number if visible. Return only these fields.",
-								},
+								{ text: EXTRACT_METADATA_PROMPT },
 							],
 						},
 					],
@@ -414,6 +322,7 @@ GENERAL RULES:
 									(JSON.parse(record.body) as { Records?: S3Record[] })
 										.Records?.[0]?.s3?.object?.key) ??
 									"",
+								"question-papers",
 							)
 				if (jobId) {
 					await db.pdfIngestionJob.update({
@@ -431,66 +340,4 @@ GENERAL RULES:
 	}
 
 	return failures.length > 0 ? { batchItemFailures: failures } : {}
-}
-
-/**
- * Links all questions created by a job to the given exam paper's first section.
- * Creates the section if the paper has none yet.
- * Skips questions that are already linked to the section (idempotent).
- */
-async function linkJobQuestionsToExamPaper(
-	jobId: string,
-	examPaperId: string,
-	uploadedBy: string,
-): Promise<void> {
-	const questions = await db.question.findMany({
-		where: { source_pdf_ingestion_job_id: jobId },
-		orderBy: { created_at: "asc" },
-		select: { id: true },
-	})
-	if (questions.length === 0) return
-
-	let section = await db.examSection.findFirst({
-		where: { exam_paper_id: examPaperId },
-		orderBy: { order: "asc" },
-	})
-	if (!section) {
-		const paper = await db.examPaper.findUnique({
-			where: { id: examPaperId },
-			select: { total_marks: true },
-		})
-		section = await db.examSection.create({
-			data: {
-				exam_paper_id: examPaperId,
-				title: "Section 1",
-				total_marks: paper?.total_marks ?? 0,
-				order: 1,
-				created_by_id: uploadedBy,
-			},
-		})
-	}
-
-	const existingLinks = await db.examSectionQuestion.findMany({
-		where: { exam_section_id: section.id },
-		select: { question_id: true, order: true },
-		orderBy: { order: "asc" },
-	})
-	const existingQuestionIds = new Set(existingLinks.map((l) => l.question_id))
-	const maxOrder =
-		existingLinks.length > 0
-			? Math.max(...existingLinks.map((l) => l.order))
-			: 0
-
-	let orderOffset = maxOrder
-	for (const q of questions) {
-		if (existingQuestionIds.has(q.id)) continue
-		orderOffset++
-		await db.examSectionQuestion.create({
-			data: {
-				exam_section_id: section.id,
-				question_id: q.id,
-				order: orderOffset,
-			},
-		})
-	}
 }

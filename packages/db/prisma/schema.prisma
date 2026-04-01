@@ -127,6 +127,11 @@ enum StagedScriptStatus {
   excluded
 }
 
+enum ClassificationMode {
+  auto
+  per_file
+}
+
 model User {
   id         String   @id @default(cuid())
   email      String?  @unique
@@ -555,13 +560,14 @@ model MarkSchemeTestRun {
 }
 
 model BatchIngestJob {
-  id                   String        @id @default(cuid())
+  id                   String             @id @default(cuid())
   exam_paper_id        String
   uploaded_by          String
-  status               BatchStatus   @default(uploading)
-  review_mode          ReviewMode    @default(auto)
-  blank_page_mode      BlankPageMode @default(script_page)
-  pages_per_script     Int           @default(4)
+  status               BatchStatus        @default(uploading)
+  review_mode          ReviewMode         @default(auto)
+  blank_page_mode      BlankPageMode      @default(script_page)
+  pages_per_script     Int                @default(4)
+  classification_mode  ClassificationMode @default(auto)
   total_student_jobs   Int           @default(0)
   notification_sent_at DateTime?
   error                String?

@@ -20,7 +20,7 @@ import {
 import { CheckCircle2, Sparkles } from "lucide-react"
 import { useState } from "react"
 import { LorMarkSchemeEditForm } from "./lor-mark-scheme-edit-form"
-import { MarkSchemeEditForm } from "./mark-scheme-edit-form"
+import { MarkSchemeFormWithAutofill } from "./mark-scheme-form-with-autofill"
 
 type McqOption = { option_label: string; option_text: string }
 
@@ -322,95 +322,5 @@ export function MarkSchemeDialog(props: MarkSchemeDialogProps) {
 				</DialogContent>
 			</Dialog>
 		</div>
-	)
-}
-
-// ─── Inner form renderer (re-mounts on formKey change) ────────────────────────
-
-function MarkSchemeFormWithAutofill({
-	props,
-	autofillValues,
-	paperId,
-	onSuccess,
-}: {
-	props: CreateMcqProps | CreateWrittenProps | EditMcqProps | EditWrittenProps
-	autofillValues: AutofillValues | null
-	paperId?: string
-	onSuccess?: () => void
-}) {
-	const isMcq =
-		(props.mode === "create" && props.questionType === "multiple_choice") ||
-		(props.mode === "edit" && props.markingMethod === "deterministic")
-
-	if (props.mode === "create") {
-		if (isMcq) {
-			const autofill =
-				autofillValues?.marking_method === "deterministic"
-					? autofillValues
-					: null
-			return (
-				<MarkSchemeEditForm
-					questionId={props.questionId}
-					questionType="multiple_choice"
-					multipleChoiceOptions={
-						(props as CreateMcqProps).multipleChoiceOptions
-					}
-					initialDescription={autofill?.description}
-					initialCorrectOptionLabels={autofill?.correct_option_labels}
-					paperId={paperId}
-					onSuccess={onSuccess}
-				/>
-			)
-		}
-		const autofill =
-			autofillValues?.marking_method === "point_based" ? autofillValues : null
-		return (
-			<MarkSchemeEditForm
-				questionId={props.questionId}
-				initialDescription={autofill?.description}
-				initialGuidance={autofill?.guidance}
-				initialMarkPoints={autofill?.mark_points}
-				paperId={paperId}
-				onSuccess={onSuccess}
-			/>
-		)
-	}
-
-	// Edit mode
-	if (props.markingMethod === "deterministic") {
-		const autofill =
-			autofillValues?.marking_method === "deterministic" ? autofillValues : null
-		return (
-			<MarkSchemeEditForm
-				markSchemeId={props.markSchemeId}
-				markingMethod="deterministic"
-				questionType="multiple_choice"
-				multipleChoiceOptions={props.multipleChoiceOptions}
-				initialDescription={autofill?.description ?? props.initialDescription}
-				initialGuidance={props.initialGuidance}
-				initialCorrectOptionLabels={
-					autofill?.correct_option_labels ?? props.initialCorrectOptionLabels
-				}
-				paperId={paperId}
-				onSuccess={onSuccess}
-			/>
-		)
-	}
-
-	// point_based edit
-	const autofill =
-		autofillValues?.marking_method === "point_based" ? autofillValues : null
-	return (
-		<MarkSchemeEditForm
-			markSchemeId={(props as EditWrittenProps).markSchemeId}
-			markingMethod="point_based"
-			initialDescription={autofill?.description ?? props.initialDescription}
-			initialGuidance={autofill?.guidance ?? props.initialGuidance}
-			initialMarkPoints={
-				autofill?.mark_points ?? (props as EditWrittenProps).initialMarkPoints
-			}
-			paperId={paperId}
-			onSuccess={onSuccess}
-		/>
 	)
 }

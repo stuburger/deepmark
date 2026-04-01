@@ -14,6 +14,7 @@ import { SQSClient, SendMessageCommand } from "@aws-sdk/client-sqs"
 import type {
 	BatchStatus,
 	BlankPageMode,
+	ClassificationMode,
 	StagedScriptStatus,
 } from "@mcp-gcse/db"
 import { Resource } from "sst"
@@ -90,6 +91,7 @@ async function classifyBatch(batchJobId: string): Promise<void> {
 			review_mode: true,
 			blank_page_mode: true,
 			pages_per_script: true,
+			classification_mode: true,
 			exam_paper: {
 				select: {
 					id: true,
@@ -111,61 +113,106 @@ async function classifyBatch(batchJobId: string): Promise<void> {
 	logger.info(TAG, "Source files found", {
 		batchJobId,
 		count: sourceKeys.length,
+		classificationMode: batch.classification_mode,
 	})
 
 	const allStagedScripts: StagedScriptData[] = []
 	let totalPages = 0
 
-	for (const sourceKey of sourceKeys) {
-		const { scripts, pageCount } = await processSourceFile(
-			batchJobId,
-			sourceKey,
-			batch.blank_page_mode,
-		)
-		allStagedScripts.push(...scripts)
-		totalPages += pageCount
-	}
+	if (batch.classification_mode === ("per_file" as ClassificationMode)) {
+		for (const sourceKey of sourceKeys) {
+			const { scripts, pageCount } = await processSourceFilePerFile(
+				batchJobId,
+				sourceKey,
+				batch.pages_per_script,
+			)
+			allStagedScripts.push(...scripts)
+			totalPages += pageCount
+		}
 
-	await db.stagedScript.createMany({
-		data: allStagedScripts.map((s) => ({
-			batch_job_id: batchJobId,
-			page_keys: s.page_keys,
-			proposed_name: s.proposed_name,
-			confidence: s.confidence,
-			status: "proposed" as StagedScriptStatus,
-		})),
-	})
-
-	const hasUncertainPages = allStagedScripts.some((s) => s.hasUncertainPage)
-
-	const shouldAutoCommit =
-		batch.review_mode === "auto" &&
-		allStagedScripts.length > 0 &&
-		allStagedScripts.every((s) => s.confidence >= AUTO_COMMIT_THRESHOLD) &&
-		!hasUncertainPages &&
-		scriptCountIsPlausible(
-			allStagedScripts.length,
-			batch.pages_per_script,
-			totalPages,
-		)
-
-	if (shouldAutoCommit) {
-		logger.info(TAG, "Auto-committing batch", {
-			batchJobId,
-			scriptCount: allStagedScripts.length,
+		await db.stagedScript.createMany({
+			data: allStagedScripts.map((s) => ({
+				batch_job_id: batchJobId,
+				page_keys: s.page_keys,
+				proposed_name: s.proposed_name,
+				confidence: s.confidence,
+				// Oversized scripts need staging review; others are pre-confirmed
+				status: (s.hasUncertainPage
+					? "proposed"
+					: "confirmed") as StagedScriptStatus,
+			})),
 		})
-		await autoCommitBatch(batchJobId, batch.exam_paper)
+
+		const hasOversized = allStagedScripts.some((s) => s.hasUncertainPage)
+		const shouldAutoCommit =
+			batch.review_mode === "auto" &&
+			allStagedScripts.length > 0 &&
+			!hasOversized
+
+		if (shouldAutoCommit) {
+			logger.info(TAG, "Auto-committing per_file batch", {
+				batchJobId,
+				scriptCount: allStagedScripts.length,
+			})
+			await autoCommitBatch(batchJobId, batch.exam_paper)
+		} else {
+			await db.batchIngestJob.update({
+				where: { id: batchJobId },
+				data: { status: "staging" as BatchStatus },
+			})
+		}
 	} else {
-		await db.batchIngestJob.update({
-			where: { id: batchJobId },
-			data: { status: "staging" as BatchStatus },
+		for (const sourceKey of sourceKeys) {
+			const { scripts, pageCount } = await processSourceFile(
+				batchJobId,
+				sourceKey,
+				batch.blank_page_mode,
+			)
+			allStagedScripts.push(...scripts)
+			totalPages += pageCount
+		}
+
+		await db.stagedScript.createMany({
+			data: allStagedScripts.map((s) => ({
+				batch_job_id: batchJobId,
+				page_keys: s.page_keys,
+				proposed_name: s.proposed_name,
+				confidence: s.confidence,
+				status: "proposed" as StagedScriptStatus,
+			})),
 		})
+
+		const hasUncertainPages = allStagedScripts.some((s) => s.hasUncertainPage)
+
+		const shouldAutoCommit =
+			batch.review_mode === "auto" &&
+			allStagedScripts.length > 0 &&
+			allStagedScripts.every((s) => s.confidence >= AUTO_COMMIT_THRESHOLD) &&
+			!hasUncertainPages &&
+			scriptCountIsPlausible(
+				allStagedScripts.length,
+				batch.pages_per_script,
+				totalPages,
+			)
+
+		if (shouldAutoCommit) {
+			logger.info(TAG, "Auto-committing batch", {
+				batchJobId,
+				scriptCount: allStagedScripts.length,
+			})
+			await autoCommitBatch(batchJobId, batch.exam_paper)
+		} else {
+			await db.batchIngestJob.update({
+				where: { id: batchJobId },
+				data: { status: "staging" as BatchStatus },
+			})
+		}
 	}
 
 	logger.info(TAG, "Batch classification complete", {
 		batchJobId,
 		scriptCount: allStagedScripts.length,
-		autoCommitted: shouldAutoCommit,
+		classificationMode: batch.classification_mode,
 	})
 }
 
@@ -263,6 +310,79 @@ async function processSourceFile(
 		.filter((s) => s.page_keys.length > 0)
 
 	return { scripts, pageCount: pages.length }
+}
+
+// ─── Per-file mode: one StagedScript per source file, no Gemini calls ────────
+
+/**
+ * In per_file mode the user asserts that each uploaded file is a single
+ * student's script. We still extract PDF pages to JPEGs (so the staging
+ * preview and OCR pipeline work), but skip all boundary classification.
+ *
+ * An oversized script (page count > pages_per_script * 2) sets
+ * hasUncertainPage=true, which forces staging so the teacher can split it.
+ */
+async function processSourceFilePerFile(
+	batchJobId: string,
+	sourceKey: string,
+	pagesPerScript: number,
+): Promise<{ scripts: StagedScriptData[]; pageCount: number }> {
+	const mime = guessMime(sourceKey)
+
+	if (mime !== "application/pdf") {
+		return {
+			scripts: [
+				{
+					page_keys: [
+						{
+							s3_key: sourceKey,
+							order: 1,
+							mime_type: mime,
+							source_file: sourceKey,
+						},
+					],
+					proposed_name: null,
+					confidence: 1.0,
+					hasUncertainPage: false,
+				},
+			],
+			pageCount: 1,
+		}
+	}
+
+	const pdfBytes = await fetchS3Bytes(Resource.ScansBucket.name, sourceKey)
+	const pages = await extractPdfPages(pdfBytes, batchJobId, sourceKey)
+
+	const contentPages = pages.filter((p) => p.jpegKey !== null)
+
+	if (contentPages.length === 0) {
+		return { scripts: [], pageCount: pages.length }
+	}
+
+	const isOversized = contentPages.length > pagesPerScript * 2
+
+	const script: StagedScriptData = {
+		page_keys: contentPages.map((p, i) => ({
+			s3_key: p.jpegKey!,
+			order: i + 1,
+			mime_type: "image/jpeg",
+			source_file: sourceKey,
+		})),
+		proposed_name: null,
+		confidence: 1.0,
+		hasUncertainPage: isOversized,
+	}
+
+	if (isOversized) {
+		logger.warn(TAG, "Oversized script detected in per_file mode", {
+			batchJobId,
+			sourceKey,
+			pageCount: contentPages.length,
+			pagesPerScript,
+		})
+	}
+
+	return { scripts: [script], pageCount: pages.length }
 }
 
 // ─── Separator mode: split on blank pages ─────────────────────────────────────

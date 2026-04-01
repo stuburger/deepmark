@@ -25,22 +25,6 @@ export type GradingResult = {
 	answer_regions?: AnswerRegion[]
 }
 
-export type CreateStudentPaperJobResult =
-	| { ok: true; jobId: string }
-	| { ok: false; error: string }
-
-export type AddPageToJobResult =
-	| { ok: true; uploadUrl: string; key: string }
-	| { ok: false; error: string }
-
-export type RemovePageFromJobResult =
-	| { ok: true }
-	| { ok: false; error: string }
-
-export type ReorderPagesResult = { ok: true } | { ok: false; error: string }
-
-export type TriggerOcrResult = { ok: true } | { ok: false; error: string }
-
 export type TriggerGradingResult = { ok: true } | { ok: false; error: string }
 
 export type ExtractedAnswer = {

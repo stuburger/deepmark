@@ -78,50 +78,52 @@ New domain modules under `apps/web/src/lib/`:
 
 ---
 
-## Remaining (Tier 3 — Medium Priority)
+## Tier 3 — Completed
 
-### Processors (same schema/prompt/handler pattern)
+### Processors
 
-- [ ] `question-paper-pdf.ts` (~513 lines) — extract schema + prompts into `question-paper-pdf/` submodules
-- [ ] `student-paper-extract.ts` (~468 lines) — extract schema + prompts into `student-paper-extract/` submodules
-- [ ] `exemplar-pdf.ts` (~388 lines) — extract schema + prompts into `exemplar-pdf/` submodules
-- [ ] `student-paper-grade.ts` (~345 lines) — extract prompt builder + schema
+- [x] `question-paper-pdf.ts` — extracted `processors/question-paper-pdf/schema.ts` + `prompts.ts`; `linkJobQuestionsToExamPaper` promoted to shared `lib/link-job-questions.ts`
+- [x] `student-paper-extract.ts` — extracted `SUBJECT_VALUES`, `isValidSubject`, `parsePages`, `loadQuestionSeeds` → `lib/student-paper/question-seeds.ts`
+- [x] `exemplar-pdf.ts` — extracted `processors/exemplar-pdf/schema.ts` + `prompts.ts`
+- [x] `student-paper-grade.ts` — extracted `EXAMINER_SYSTEM_PROMPT` → `lib/student-paper/grader-config.ts`; `loadExamPaperForGrading` → `lib/student-paper/grade-queries.ts`
+- [x] `parseJobIdFromKey` + `getPdfBase64` duplication resolved → `lib/processor-s3.ts`
 
-### Frontend forms / dialogs (split form sections into child components)
+### Frontend forms / dialogs
 
-- [ ] `mark-scheme-edit-form.tsx` (~456 lines) — extract mark point rows, level table rows as child components
-- [ ] `lor-mark-scheme-edit-form.tsx` (~546 lines) — extract level descriptors table, caps section
-- [ ] `mark-scheme-dialog.tsx` (~416 lines) — extract inner form into a standalone component
-- [ ] `upload-student-script-dialog.tsx` (~364 lines) — extract file-drop zone and page list into subcomponents
-- [ ] `upload-client.tsx` (~383 lines) — extract upload step subcomponents
-- [ ] `new/page.tsx` (~585 lines) — extract wizard steps into step-specific components
+- [x] `mark-scheme-edit-form.tsx` — extracted `MarkPointRow` → `mark-point-row.tsx`
+- [x] `lor-mark-scheme-edit-form.tsx` — extracted `LevelBlock` → `level-block.tsx`, `CapBlock` → `cap-block.tsx`
+- [x] `mark-scheme-dialog.tsx` — extracted `MarkSchemeFormWithAutofill` → `mark-scheme-form-with-autofill.tsx`
+- [x] `upload-student-script-dialog.tsx` — extracted `StudentScriptPageRow` → `student-script-page-row.tsx`
+- [x] `upload-client.tsx` — extracted `ProcessingStatus` + `STATUS_STEPS` → `processing-status.tsx`; presigned upload → `lib/presigned-upload.ts`
+- [x] `new/page.tsx` — extracted `IdleDropZone` → `idle-drop-zone.tsx`, `ProcessingCard` → `processing-card.tsx`; `EXAM_BOARDS` → `lib/subjects.ts`
 
 ### Frontend shells / views
 
-- [ ] `exam-paper-stats-shell.tsx` (~511 lines) — extract stats cards and mutation triggers
-- [ ] `submission-grid.tsx` (~481 lines) — extract column definitions + sorting logic from rendering
-- [ ] `submission-view.tsx` (~376 lines) — extract toolbar and answer sections as components
-- [ ] `submission-toolbar.tsx` (~351 lines) — extract action groups
-- [ ] `job-status-client.tsx` (~552 lines) — extract `STATUS_CONFIG` map + status badge into separate module
+- [x] `exam-paper-stats-shell.tsx` — extracted `stats-config.ts`, `grade-distribution-chart.tsx`, `submission-tables.tsx`
+- [x] `submission-grid.tsx` — extracted `submission-grid-config.ts`, `script-card.tsx`, `view-toggle.tsx`
+- [x] `submission-view.tsx` — extracted `hooks/use-scroll-to-question.ts`, `scan-panel.tsx`, `results-panel.tsx`
+- [x] `job-status-client.tsx` — extracted `job-status-config.ts`, `hooks/use-job-poll.ts`, `mark-scheme-detail.tsx`, `questions-list.tsx`, `exemplars-list.tsx`
 
 ### Infrastructure / cross-cutting
 
-- [ ] `mcp-server.ts` (~409 lines) — split tool registration from tool implementation; one file per domain as tools grow
-- [ ] `auth.ts` (~305 lines) — review for policy/role-check logic mixed with session plumbing; split if found
-- [ ] `BoundingBoxViewer.tsx` (~393 lines) — extract geometry/math helpers from canvas rendering
+- [x] `mcp-server.ts` — extracted `create-mark-scheme` description → `tools/mark-schemes/create-mark-scheme-description.ts`
+- [x] `BoundingBoxViewer.tsx` — extracted geometry utils → `lib/bounding-box.ts`; `GradingAnnotationOverlay` and `TokenOverlay` → `BoundingBoxViewer/` subfolder
+- [ ] `auth.ts` — reviewed; ~71 lines, no meaningful split needed
+- [x] `submission-toolbar.tsx` — extracted `GroupToggle` + `ScoreBadge` → `submission-toolbar-controls.tsx`
 
 ---
 
-## Barrels to delete (after confirming zero remaining imports)
+## Barrels deleted
 
-- [ ] `apps/web/src/lib/dashboard-actions.ts`
-- [ ] `apps/web/src/lib/mark-actions.ts`
-- [ ] `apps/web/src/lib/pdf-ingestion-actions.ts`
+- [x] `apps/web/src/lib/dashboard-actions.ts` — deleted (zero remaining consumers)
+- [x] `apps/web/src/lib/mark-actions.ts` — deleted (zero remaining consumers)
+- [x] `apps/web/src/lib/pdf-ingestion-actions.ts` — deleted (zero remaining consumers)
 
 ---
 
 ## Cross-Cutting Improvements (any time)
 
-- [ ] Consolidate `lib/batch/` (frontend `batch-actions.ts` → `lib/batch/mutations.ts`)
+- [x] `lib/batch/mutations.ts` — all batch server actions moved from `batch-actions.ts`; 7 consumers updated; `batch-actions.ts` now thin re-export barrel
+- [x] `exam-paper-page-shell.tsx` — badge helpers + `TableRowDeleteButton` extracted → `exam-paper-helpers.tsx`
 - [ ] Establish a convention: prompts and schemas live in `*/prompts.ts` + `*/schema.ts` sibling files, never inline in handlers
 - [ ] Consider further domain folders in `lib/` as the app grows (e.g. `lib/student/`, `lib/exemplar/`)

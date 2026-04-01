@@ -1,0 +1,2 @@
+export const EXTRACT_EXEMPLARS_PROMPT =
+	"Extract all questions and their exemplar answers from this document. For each question provide question_text and an array of exemplars. Each exemplar has: level (1-4), is_fake_exemplar (boolean), answer_text, word_count (optional), why_criteria (array of strings explaining why this answer achieves this level), mark_band (optional), expected_score (optional)."

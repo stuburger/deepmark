@@ -7,18 +7,18 @@ import {
 	FieldGroup,
 	FieldLabel,
 } from "@/components/ui/field"
-import { Input } from "@/components/ui/input"
 import { Spinner } from "@/components/ui/spinner"
 import { Textarea } from "@/components/ui/textarea"
 import type { MarkSchemeInput } from "@/lib/mark-scheme/manual"
 import { createMarkScheme, updateMarkScheme } from "@/lib/mark-scheme/manual"
-import { CheckCircle2, Plus, Trash2 } from "lucide-react"
+import { CheckCircle2, Plus } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useState, useTransition } from "react"
 import {
 	useCreateMarkScheme,
 	useUpdateMarkScheme,
 } from "../../hooks/use-exam-paper-mutations"
+import { MarkPointRow } from "./mark-point-row"
 
 type MarkPointRow = { description: string; points: string }
 
@@ -351,38 +351,16 @@ export function MarkSchemeEditForm(props: Props) {
 						</FieldLabel>
 						<div className="space-y-2">
 							{markPoints.map((mp, i) => (
-								<div key={i} className="flex items-center gap-2">
-									<Input
-										value={mp.description}
-										onChange={(e) =>
-											updateMarkPoint(i, "description", e.target.value)
-										}
-										disabled={effectivelyPending}
-										placeholder={`Mark point ${i + 1}`}
-										className="flex-1 text-sm"
-									/>
-									<Input
-										type="number"
-										min={0}
-										value={mp.points}
-										onChange={(e) =>
-											updateMarkPoint(i, "points", e.target.value)
-										}
-										disabled={effectivelyPending}
-										className="w-16 text-sm"
-										aria-label="Points"
-									/>
-									<Button
-										type="button"
-										variant="ghost"
-										size="icon"
-										onClick={() => removeMarkPoint(i)}
-										disabled={effectivelyPending || markPoints.length <= 1}
-										className="shrink-0 text-muted-foreground hover:text-destructive"
-									>
-										<Trash2 className="h-4 w-4" />
-									</Button>
-								</div>
+								<MarkPointRow
+									key={i}
+									description={mp.description}
+									points={mp.points}
+									index={i}
+									disabled={effectivelyPending}
+									isOnly={markPoints.length <= 1}
+									onChange={(field, value) => updateMarkPoint(i, field, value)}
+									onRemove={() => removeMarkPoint(i)}
+								/>
 							))}
 						</div>
 						<Button

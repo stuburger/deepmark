@@ -1,11 +1,11 @@
 "use client"
 
-import type { BatchIngestJobData } from "@/lib/batch-actions"
+import type { BatchIngestJobData } from "@/lib/batch/mutations"
 import {
 	deleteStagedScript,
 	getStagedScriptPageUrls,
 	updateStagedScriptPageKeys,
-} from "@/lib/batch-actions"
+} from "@/lib/batch/mutations"
 import {
 	DndContext,
 	DragOverlay,
@@ -21,12 +21,16 @@ import type { PageKeyRaw } from "./dnd-script-card"
 import { DndScriptCard } from "./dnd-script-card"
 import type { PageItem } from "./staged-script-page-editor"
 import { PageCarousel } from "./staged-script-page-editor"
+import { OversizedScriptBanner } from "./upload-scripts-dialog"
 
 type StagedScriptCardProps = {
 	batchId: string
 	scripts: BatchIngestJobData["staged_scripts"]
+	pagesPerScript?: number
+	classificationMode?: string
 	onUpdateName: (scriptId: string, name: string) => void
 	onToggleExclude: (scriptId: string, currentStatus: string) => void
+	onSplitScript?: (scriptId: string, splitAfterIndex: number) => void
 	onDeleteScript?: (scriptId: string) => void
 }
 
@@ -44,8 +48,11 @@ type ActiveDragState = {
 export function StagedScriptReviewCards({
 	batchId,
 	scripts,
+	pagesPerScript,
+	classificationMode,
 	onUpdateName,
 	onToggleExclude,
+	onSplitScript,
 	onDeleteScript,
 }: StagedScriptCardProps) {
 	const [localScripts, setLocalScripts] = useState(scripts)
@@ -217,22 +224,39 @@ export function StagedScriptReviewCards({
 				onDragEnd={handleDragEnd}
 			>
 				<div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-					{localScripts.map((script) => (
-						<DndScriptCard
-							key={script.id}
-							script={script}
-							localNames={localNames}
-							urls={urls}
-							activeDragKey={activeDrag?.key ?? null}
-							onOpenCarousel={openCarousel}
-							onUpdateLocalName={(id, value) =>
-								setLocalNames((prev) => ({ ...prev, [id]: value }))
-							}
-							onUpdateName={onUpdateName}
-							onToggleExclude={onToggleExclude}
-							onDelete={handleDelete}
-						/>
-					))}
+					{localScripts.map((script) => {
+						const pageCount = (script.page_keys as PageKeyRaw[]).length
+						const isOversized =
+							classificationMode === "per_file" &&
+							pagesPerScript !== undefined &&
+							pageCount > pagesPerScript * 2
+
+						return (
+							<div key={script.id} className="flex flex-col gap-2">
+								{isOversized && onSplitScript && (
+									<OversizedScriptBanner
+										scriptId={script.id}
+										pageCount={pageCount}
+										pagesPerScript={pagesPerScript}
+										onSplit={onSplitScript}
+									/>
+								)}
+								<DndScriptCard
+									script={script}
+									localNames={localNames}
+									urls={urls}
+									activeDragKey={activeDrag?.key ?? null}
+									onOpenCarousel={openCarousel}
+									onUpdateLocalName={(id, value) =>
+										setLocalNames((prev) => ({ ...prev, [id]: value }))
+									}
+									onUpdateName={onUpdateName}
+									onToggleExclude={onToggleExclude}
+									onDelete={handleDelete}
+								/>
+							</div>
+						)
+					})}
 				</div>
 
 				<DragOverlay dropAnimation={null}>

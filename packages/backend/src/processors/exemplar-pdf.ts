@@ -4,15 +4,15 @@ import {
 	createCancellationToken,
 } from "@/lib/cancellation"
 import { logger } from "@/lib/logger"
+import { getPdfBase64, parseJobIdFromKey } from "@/lib/processor-s3"
 import { validateWithExemplars } from "@/services/validate-with-exemplars"
-import { GetObjectCommand, S3Client } from "@aws-sdk/client-s3"
-import { GoogleGenAI, Type } from "@google/genai"
+import { GoogleGenAI } from "@google/genai"
 import type { ScanStatus } from "@mcp-gcse/db"
 import { Resource } from "sst"
+import { EXTRACT_EXEMPLARS_PROMPT } from "./exemplar-pdf/prompts"
+import { EXEMPLAR_SCHEMA } from "./exemplar-pdf/schema"
 
 const TAG = "exemplar-pdf"
-
-const s3 = new S3Client({})
 
 interface S3Record {
 	s3: { bucket: { name: string }; object: { key: string } }
@@ -25,64 +25,6 @@ interface SqsRecord {
 
 interface SqsEvent {
 	Records: SqsRecord[]
-}
-
-const EXEMPLAR_SCHEMA = {
-	type: Type.OBJECT,
-	properties: {
-		questions: {
-			type: Type.ARRAY,
-			items: {
-				type: Type.OBJECT,
-				properties: {
-					question_text: { type: Type.STRING },
-					exemplars: {
-						type: Type.ARRAY,
-						items: {
-							type: Type.OBJECT,
-							properties: {
-								level: { type: Type.INTEGER },
-								is_fake_exemplar: { type: Type.BOOLEAN },
-								answer_text: { type: Type.STRING },
-								word_count: { type: Type.INTEGER },
-								why_criteria: {
-									type: Type.ARRAY,
-									items: { type: Type.STRING },
-								},
-								mark_band: { type: Type.STRING },
-								expected_score: { type: Type.INTEGER },
-							},
-							required: [
-								"level",
-								"is_fake_exemplar",
-								"answer_text",
-								"why_criteria",
-							],
-						},
-					},
-				},
-				required: ["question_text", "exemplars"],
-			},
-		},
-	},
-	required: ["questions"],
-}
-
-function parseJobIdFromKey(key: string): string {
-	const decoded = decodeURIComponent(key)
-	const parts = decoded.split("/")
-	if (parts.length < 4 || parts[0] !== "pdfs" || parts[1] !== "exemplars") {
-		throw new Error(`Unexpected exemplar S3 key format: ${key}`)
-	}
-	return parts[2] ?? ""
-}
-
-async function getPdfBase64(bucket: string, key: string): Promise<string> {
-	const cmd = new GetObjectCommand({ Bucket: bucket, Key: key })
-	const response = await s3.send(cmd)
-	const body = await response.Body?.transformToByteArray()
-	if (!body?.length) throw new Error("Empty S3 object")
-	return Buffer.from(body).toString("base64")
 }
 
 export async function handler(
@@ -129,7 +71,7 @@ export async function handler(
 				}
 				bucket = s3Record.s3.bucket.name
 				key = decodeURIComponent(s3Record.s3.object.key)
-				jobId = parseJobIdFromKey(key)
+				jobId = parseJobIdFromKey(key, "exemplars")
 				logger.info(TAG, "Triggered by S3 event", { jobId, bucket, key })
 			}
 
@@ -197,7 +139,7 @@ export async function handler(
 								},
 							},
 							{
-								text: "Extract all questions and their exemplar answers from this document. For each question provide question_text and an array of exemplars. Each exemplar has: level (1-4), is_fake_exemplar (boolean), answer_text, word_count (optional), why_criteria (array of strings explaining why this answer achieves this level), mark_band (optional), expected_score (optional).",
+								text: EXTRACT_EXEMPLARS_PROMPT,
 							},
 						],
 					},
@@ -368,6 +310,7 @@ export async function handler(
 									(JSON.parse(record.body) as { Records?: S3Record[] })
 										.Records?.[0]?.s3?.object?.key) ??
 									"",
+								"exemplars",
 							)
 				if (jobId) {
 					await db.pdfIngestionJob.update({

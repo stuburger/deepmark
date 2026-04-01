@@ -68,10 +68,7 @@ import { useRouter } from "next/navigation"
 import { parseAsString, parseAsStringEnum, useQueryState } from "nuqs"
 import { useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
-import {
-	BatchMarkingDialog,
-	StagedScriptReviewCards,
-} from "./batch-marking-dialog"
+import { BatchIngestDialog } from "./batch-ingest-dialog"
 import { DocumentUploadCards } from "./document-upload-cards"
 import { EditableTitle } from "./editable-title"
 import { ExamPaperPaperView } from "./exam-paper-paper-view"
@@ -218,6 +215,9 @@ export function ExamPaperPageShell({
 	const router = useRouter()
 	const queryClient = useQueryClient()
 
+	const [submissions, setSubmissions] =
+		useState<SubmissionHistoryItem[]>(initialSubmissions)
+
 	// Live exam paper data — seeded from SSR, kept fresh by mutations
 	const { data: paper } = useQuery({
 		queryKey: queryKeys.examPaper(initialPaper.id),
@@ -325,6 +325,24 @@ export function ExamPaperPageShell({
 	const [batchOpen, setBatchOpen] = useState(false)
 	const [markingJobId, setMarkingJobId] = useQueryState("job", parseAsString)
 	const [committingBatch, setCommittingBatch] = useState(false)
+
+	async function handleCommitAll() {
+		if (!activeBatch) return
+		setCommittingBatch(true)
+		const proposed = activeBatch.staged_scripts.filter(
+			(s) => s.status === "proposed",
+		)
+		for (const s of proposed) {
+			await updateStagedScript(s.id, { status: "confirmed" })
+		}
+		const r = await commitBatch(activeBatch.id)
+		setCommittingBatch(false)
+		if (!r.ok) {
+			toast.error(r.error)
+			return
+		}
+		void refetchActiveBatch()
+	}
 
 	const { data: activeBatch, refetch: refetchActiveBatch } =
 		useQuery<ActiveBatchInfo>({
@@ -542,9 +560,9 @@ export function ExamPaperPageShell({
 							{hasActiveBatch && (
 								<span className="ml-1.5 h-1.5 w-1.5 rounded-full bg-primary animate-pulse shrink-0" />
 							)}
-							{initialSubmissions.length > 0 && (
+							{submissions.length > 0 && (
 								<span className="ml-1.5 inline-flex items-center justify-center rounded-full bg-muted px-1.5 py-0.5 text-xs tabular-nums leading-none">
-									{initialSubmissions.length}
+									{submissions.length}
 								</span>
 							)}
 						</TabsTrigger>
@@ -884,126 +902,32 @@ export function ExamPaperPageShell({
 
 				{/* ── Submissions tab ── */}
 				<TabsContent value="submissions" className="space-y-6 mt-10">
-					{activeBatch?.status === "classifying" && (
-						<div className="flex items-center gap-3 rounded-lg border bg-muted/30 px-4 py-4">
-							<Loader2 className="h-5 w-5 animate-spin text-muted-foreground shrink-0" />
-							<p className="text-sm text-muted-foreground">
-								Analysing upload… scripts will appear here shortly.
-							</p>
-						</div>
-					)}
-
-					{activeBatch?.status === "staging" && (
-						<div className="space-y-4">
-							<div className="flex items-center justify-between gap-3">
-								<p className="text-sm font-medium">
-									Review detected scripts before marking
-								</p>
-								{activeBatch.staged_scripts.filter(
-									(s) => s.status !== "excluded",
-								).length > 0 && (
-									<Button
-										size="sm"
-										disabled={committingBatch}
-										onClick={async () => {
-											setCommittingBatch(true)
-											const proposed = activeBatch.staged_scripts.filter(
-												(s) => s.status === "proposed",
-											)
-											for (const s of proposed) {
-												await updateStagedScript(s.id, {
-													status: "confirmed",
-												})
-											}
-											const r = await commitBatch(activeBatch.id)
-											setCommittingBatch(false)
-											if (!r.ok) {
-												toast.error(r.error)
-												return
-											}
-											void refetchActiveBatch()
-										}}
-									>
-										{committingBatch ? (
-											<>
-												<Spinner className="h-3.5 w-3.5 mr-1.5" />
-												Starting…
-											</>
-										) : (
-											`Start marking ${activeBatch.staged_scripts.filter((s) => s.status !== "excluded").length} scripts`
-										)}
-									</Button>
-								)}
-							</div>
-
-							<StagedScriptReviewCards
-								batchId={activeBatch.id}
-								scripts={activeBatch.staged_scripts}
-								onUpdateName={async (id, name) => {
-									await updateStagedScript(id, { confirmedName: name })
-								}}
-								onToggleExclude={async (id, status) => {
-									await updateStagedScript(id, {
-										status: status === "excluded" ? "confirmed" : "excluded",
-									})
-									void refetchActiveBatch()
-								}}
-								onDeleteScript={() => void refetchActiveBatch()}
-							/>
-						</div>
-					)}
-
-					{activeBatch?.status === "marking" && (
-						<div className="rounded-lg border bg-muted/20 px-4 py-4 space-y-2">
-							<div className="flex items-center justify-between text-sm">
-								<span className="font-medium">
-									{
-										activeBatch.student_jobs.filter(
-											(j) => j.status === "ocr_complete",
-										).length
-									}{" "}
-									of {activeBatch.total_student_jobs} scripts marked
-								</span>
-								<span className="text-muted-foreground">
-									{activeBatch.total_student_jobs > 0
-										? Math.round(
-												(activeBatch.student_jobs.filter(
-													(j) => j.status === "ocr_complete",
-												).length /
-													activeBatch.total_student_jobs) *
-													100,
-											)
-										: 0}
-									%
-								</span>
-							</div>
-							<Progress
-								value={
-									activeBatch.total_student_jobs > 0
-										? (activeBatch.student_jobs.filter(
-												(j) => j.status === "ocr_complete",
-											).length /
-												activeBatch.total_student_jobs) *
-											100
-										: 0
-								}
-							/>
-						</div>
-					)}
-
-					{initialSubmissions.length > 0 ? (
+					{readyForSubmissions || activeBatch ? (
 						<SubmissionGrid
-							submissions={initialSubmissions}
+							submissions={submissions}
 							onView={(id) => setMarkingJobId(id)}
+							onDelete={(id) =>
+								setSubmissions((prev) => prev.filter((s) => s.id !== id))
+							}
+							activeBatch={activeBatch}
+							committingBatch={committingBatch}
+							onCommitAll={handleCommitAll}
+							onUpdateScriptName={async (id, name) => {
+								await updateStagedScript(id, { confirmedName: name })
+							}}
+							onToggleExclude={async (id, status) => {
+								await updateStagedScript(id, {
+									status: status === "excluded" ? "confirmed" : "excluded",
+								})
+								void refetchActiveBatch()
+							}}
+							onDeleteScript={() => void refetchActiveBatch()}
 						/>
 					) : (
-						!activeBatch &&
-						readyForSubmissions && (
-							<div className="rounded-lg border border-dashed py-16 text-center text-sm text-muted-foreground">
-								No submissions yet. Click &ldquo;Mark paper&rdquo; to mark your
-								first student script.
-							</div>
-						)
+						<div className="rounded-lg border border-dashed py-16 text-center text-sm text-muted-foreground">
+							No submissions yet. Click &ldquo;Mark paper&rdquo; to mark your
+							first student script.
+						</div>
 					)}
 				</TabsContent>
 
@@ -1238,10 +1162,14 @@ export function ExamPaperPageShell({
 				}}
 			/>
 
-			<BatchMarkingDialog
+			<BatchIngestDialog
 				examPaperId={paper.id}
 				open={batchOpen}
 				onOpenChange={setBatchOpen}
+				onBatchStarted={() => {
+					void refetchActiveBatch()
+					void setActiveTab("submissions")
+				}}
 			/>
 
 			{/* Floating action button — split: left = single script, right = batch */}
@@ -1251,7 +1179,9 @@ export function ExamPaperPageShell({
 					!readyForSubmissions
 						? totalQuestions === 0
 							? "Upload a question paper before marking"
-							: `${totalQuestions - questionsWithMarkScheme} question${totalQuestions - questionsWithMarkScheme === 1 ? "" : "s"} missing a mark scheme`
+							: `${totalQuestions - questionsWithMarkScheme} question${
+									totalQuestions - questionsWithMarkScheme === 1 ? "" : "s"
+								} missing a mark scheme`
 						: undefined
 				}
 			>

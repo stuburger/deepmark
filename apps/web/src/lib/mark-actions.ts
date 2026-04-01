@@ -782,6 +782,32 @@ export async function listMySubmissions(): Promise<ListMySubmissionsResult> {
 	}
 }
 
+// ─── Delete student paper job ─────────────────────────────────────────────────
+
+export type DeleteStudentPaperJobResult =
+	| { ok: true }
+	| { ok: false; error: string }
+
+export async function deleteStudentPaperJob(
+	jobId: string,
+): Promise<DeleteStudentPaperJobResult> {
+	const session = await auth()
+	if (!session) return { ok: false, error: "Not authenticated" }
+
+	const job = await db.studentPaperJob.findUnique({
+		where: { id: jobId },
+		select: { uploaded_by: true },
+	})
+
+	if (!job) return { ok: false, error: "Submission not found" }
+	if (job.uploaded_by !== session.userId)
+		return { ok: false, error: "Not authorised" }
+
+	await db.studentPaperJob.delete({ where: { id: jobId } })
+
+	return { ok: true }
+}
+
 // ─── Update extracted answer ──────────────────────────────────────────────────
 
 export type UpdateExtractedAnswerResult =

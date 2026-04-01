@@ -37,7 +37,7 @@ import {
 	XAxis,
 	YAxis,
 } from "recharts"
-import { BatchMarkingDialog } from "../../../exam-papers/[id]/batch-marking-dialog"
+import { BatchIngestDialog } from "../../../exam-papers/[id]/batch-ingest-dialog"
 
 const TERMINAL_STATUSES = new Set(["ocr_complete", "failed", "cancelled"])
 
@@ -501,7 +501,7 @@ export function ExamPaperStatsShell({
 				</Card>
 			)}
 
-			<BatchMarkingDialog
+			<BatchIngestDialog
 				examPaperId={examPaperId}
 				open={batchOpen}
 				onOpenChange={setBatchOpen}

@@ -42,7 +42,7 @@ describe("batch-classify Lambda", () => {
 		})
 
 		const result = await waitFor(async () => {
-			const b = await db.batchMarkingJob.findUnique({
+			const b = await db.batchIngestJob.findUnique({
 				where: { id: batchId },
 				include: { staged_scripts: true },
 			})
@@ -77,7 +77,7 @@ describe("batch-classify Lambda", () => {
 		})
 
 		const result = await waitFor(async () => {
-			const b = await db.batchMarkingJob.findUnique({
+			const b = await db.batchIngestJob.findUnique({
 				where: { id: batchId },
 				include: { staged_scripts: true },
 			})
@@ -113,7 +113,7 @@ describe("batch-classify Lambda", () => {
 		})
 
 		const result = await waitFor(async () => {
-			const b = await db.batchMarkingJob.findUnique({
+			const b = await db.batchIngestJob.findUnique({
 				where: { id: batchId },
 				include: { staged_scripts: true },
 			})
@@ -133,7 +133,7 @@ describe("batch-classify Lambda", () => {
 	})
 
 	it("auto-commits y10_scanpaper_3.pdf when review_mode = auto and all confidence >= 0.90", async () => {
-		const batch = await db.batchMarkingJob.create({
+		const batch = await db.batchIngestJob.create({
 			data: {
 				exam_paper_id: TEST_EXAM_PAPER_ID,
 				uploaded_by: TEST_USER_ID,
@@ -158,7 +158,7 @@ describe("batch-classify Lambda", () => {
 
 		const result = await waitFor(
 			async () => {
-				const b = await db.batchMarkingJob.findUnique({
+				const b = await db.batchIngestJob.findUnique({
 					where: { id: batchId },
 				})
 				if (
@@ -183,7 +183,7 @@ describe("batch-classify Lambda", () => {
 	})
 
 	it("stays in staging when review_mode = required regardless of confidence", async () => {
-		const batch = await db.batchMarkingJob.create({
+		const batch = await db.batchIngestJob.create({
 			data: {
 				exam_paper_id: TEST_EXAM_PAPER_ID,
 				uploaded_by: TEST_USER_ID,
@@ -205,7 +205,7 @@ describe("batch-classify Lambda", () => {
 		})
 
 		const result = await waitFor(async () => {
-			const b = await db.batchMarkingJob.findUnique({ where: { id: batchId } })
+			const b = await db.batchIngestJob.findUnique({ where: { id: batchId } })
 			if (
 				b?.status === "staging" ||
 				b?.status === "marking" ||
@@ -228,7 +228,7 @@ describe("blank page handling", () => {
 	})
 
 	it("separator mode: drops start/end blanks and detects 2 scripts in start-end-blank.pdf", async () => {
-		const batch = await db.batchMarkingJob.create({
+		const batch = await db.batchIngestJob.create({
 			data: {
 				exam_paper_id: TEST_EXAM_PAPER_ID,
 				uploaded_by: TEST_USER_ID,
@@ -254,7 +254,7 @@ describe("blank page handling", () => {
 
 		const result = await waitFor(
 			async () => {
-				const b = await db.batchMarkingJob.findUnique({
+				const b = await db.batchIngestJob.findUnique({
 					where: { id: batchId },
 					include: { staged_scripts: true },
 				})
@@ -275,7 +275,7 @@ describe("blank page handling", () => {
 	})
 
 	it("separator mode: no empty groups created from start-end-blank.pdf", async () => {
-		const batch = await db.batchMarkingJob.create({
+		const batch = await db.batchIngestJob.create({
 			data: {
 				exam_paper_id: TEST_EXAM_PAPER_ID,
 				uploaded_by: TEST_USER_ID,
@@ -301,7 +301,7 @@ describe("blank page handling", () => {
 
 		const result = await waitFor(
 			async () => {
-				const b = await db.batchMarkingJob.findUnique({
+				const b = await db.batchIngestJob.findUnique({
 					where: { id: batchId },
 					include: { staged_scripts: true },
 				})
@@ -325,7 +325,7 @@ describe("blank page handling", () => {
 	})
 
 	it("script_page mode: context pass detects 2 scripts in start-end-blank.pdf", async () => {
-		const batch = await db.batchMarkingJob.create({
+		const batch = await db.batchIngestJob.create({
 			data: {
 				exam_paper_id: TEST_EXAM_PAPER_ID,
 				uploaded_by: TEST_USER_ID,
@@ -351,7 +351,7 @@ describe("blank page handling", () => {
 
 		const result = await waitFor(
 			async () => {
-				const b = await db.batchMarkingJob.findUnique({
+				const b = await db.batchIngestJob.findUnique({
 					where: { id: batchId },
 					include: { staged_scripts: true },
 				})
@@ -372,7 +372,7 @@ describe("blank page handling", () => {
 	})
 
 	it("script_page mode: blank interior to single script stays as 1 script in random-blank.pdf", async () => {
-		const batch = await db.batchMarkingJob.create({
+		const batch = await db.batchIngestJob.create({
 			data: {
 				exam_paper_id: TEST_EXAM_PAPER_ID,
 				uploaded_by: TEST_USER_ID,
@@ -396,7 +396,7 @@ describe("blank page handling", () => {
 
 		const result = await waitFor(
 			async () => {
-				const b = await db.batchMarkingJob.findUnique({
+				const b = await db.batchIngestJob.findUnique({
 					where: { id: batchId },
 					include: { staged_scripts: true },
 				})
@@ -417,7 +417,7 @@ describe("blank page handling", () => {
 	})
 
 	it("separator mode: blank splits single script into 2 in random-blank.pdf", async () => {
-		const batch = await db.batchMarkingJob.create({
+		const batch = await db.batchIngestJob.create({
 			data: {
 				exam_paper_id: TEST_EXAM_PAPER_ID,
 				uploaded_by: TEST_USER_ID,
@@ -441,7 +441,7 @@ describe("blank page handling", () => {
 
 		const result = await waitFor(
 			async () => {
-				const b = await db.batchMarkingJob.findUnique({
+				const b = await db.batchIngestJob.findUnique({
 					where: { id: batchId },
 					include: { staged_scripts: true },
 				})

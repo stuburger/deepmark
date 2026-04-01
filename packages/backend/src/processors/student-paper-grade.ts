@@ -299,7 +299,7 @@ const TERMINAL_STATUSES = ["ocr_complete", "failed", "cancelled"]
 export async function checkAndNotifyBatchCompletion(
 	batchJobId: string,
 ): Promise<void> {
-	const batch = await db.batchMarkingJob.findUnique({
+	const batch = await db.batchIngestJob.findUnique({
 		where: { id: batchJobId },
 		select: {
 			id: true,
@@ -324,7 +324,7 @@ export async function checkAndNotifyBatchCompletion(
 	if (terminalCount < batch.total_student_jobs) return
 
 	const now = new Date()
-	const updated = await db.batchMarkingJob.updateMany({
+	const updated = await db.batchIngestJob.updateMany({
 		where: { id: batchJobId, notification_sent_at: null },
 		data: { status: "complete", notification_sent_at: now },
 	})

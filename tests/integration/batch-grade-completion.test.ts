@@ -27,7 +27,7 @@ describe("batch grade completion", () => {
 	})
 
 	it("sets batch status to complete when all child jobs are terminal", async () => {
-		const batch = await db.batchMarkingJob.create({
+		const batch = await db.batchIngestJob.create({
 			data: {
 				exam_paper_id: TEST_EXAM_PAPER_ID,
 				uploaded_by: TEST_USER_ID,
@@ -63,7 +63,7 @@ describe("batch grade completion", () => {
 
 		await checkAndNotifyBatchCompletion(batch.id)
 
-		const updated = await db.batchMarkingJob.findUniqueOrThrow({
+		const updated = await db.batchIngestJob.findUniqueOrThrow({
 			where: { id: batch.id },
 		})
 		expect(updated.status).toBe("complete")
@@ -71,7 +71,7 @@ describe("batch grade completion", () => {
 	})
 
 	it("sets notification_sent_at exactly once", async () => {
-		const batch = await db.batchMarkingJob.create({
+		const batch = await db.batchIngestJob.create({
 			data: {
 				exam_paper_id: TEST_EXAM_PAPER_ID,
 				uploaded_by: TEST_USER_ID,
@@ -94,12 +94,12 @@ describe("batch grade completion", () => {
 		})
 
 		await checkAndNotifyBatchCompletion(batch.id)
-		const first = await db.batchMarkingJob.findUniqueOrThrow({
+		const first = await db.batchIngestJob.findUniqueOrThrow({
 			where: { id: batch.id },
 		})
 
 		await checkAndNotifyBatchCompletion(batch.id)
-		const second = await db.batchMarkingJob.findUniqueOrThrow({
+		const second = await db.batchIngestJob.findUniqueOrThrow({
 			where: { id: batch.id },
 		})
 
@@ -107,7 +107,7 @@ describe("batch grade completion", () => {
 	})
 
 	it("does not complete when only some child jobs are terminal", async () => {
-		const batch = await db.batchMarkingJob.create({
+		const batch = await db.batchIngestJob.create({
 			data: {
 				exam_paper_id: TEST_EXAM_PAPER_ID,
 				uploaded_by: TEST_USER_ID,
@@ -142,7 +142,7 @@ describe("batch grade completion", () => {
 
 		await checkAndNotifyBatchCompletion(batch.id)
 
-		const updated = await db.batchMarkingJob.findUniqueOrThrow({
+		const updated = await db.batchIngestJob.findUniqueOrThrow({
 			where: { id: batch.id },
 		})
 		expect(updated.status).toBe("marking")
@@ -156,7 +156,7 @@ describe("batch grade completion", () => {
 		const mockFn = vi.mocked(sendBatchCompleteNotification)
 		mockFn.mockClear()
 
-		const batch = await db.batchMarkingJob.create({
+		const batch = await db.batchIngestJob.create({
 			data: {
 				exam_paper_id: TEST_EXAM_PAPER_ID,
 				uploaded_by: TEST_USER_ID,

@@ -79,7 +79,7 @@ export async function handler(
 				batchJobId,
 				error: errMsg,
 			})
-			await db.batchMarkingJob
+			await db.batchIngestJob
 				.update({
 					where: { id: batchJobId },
 					data: {
@@ -111,7 +111,7 @@ function parseBatchJobId(record: SqsRecord): string | null {
 async function classifyBatch(batchJobId: string): Promise<void> {
 	logger.info(TAG, "Starting batch classification", { batchJobId })
 
-	const batch = await db.batchMarkingJob.findUniqueOrThrow({
+	const batch = await db.batchIngestJob.findUniqueOrThrow({
 		where: { id: batchJobId },
 		select: {
 			id: true,
@@ -130,7 +130,7 @@ async function classifyBatch(batchJobId: string): Promise<void> {
 		},
 	})
 
-	await db.batchMarkingJob.update({
+	await db.batchIngestJob.update({
 		where: { id: batchJobId },
 		data: { status: "classifying" as BatchStatus },
 	})
@@ -184,7 +184,7 @@ async function classifyBatch(batchJobId: string): Promise<void> {
 		})
 		await autoCommitBatch(batchJobId, batch.exam_paper)
 	} else {
-		await db.batchMarkingJob.update({
+		await db.batchIngestJob.update({
 			where: { id: batchJobId },
 			data: { status: "staging" as BatchStatus },
 		})
@@ -807,7 +807,7 @@ async function autoCommitBatch(
 		year: number
 	},
 ): Promise<void> {
-	const batch = await db.batchMarkingJob.findUniqueOrThrow({
+	const batch = await db.batchIngestJob.findUniqueOrThrow({
 		where: { id: batchJobId },
 		select: { uploaded_by: true },
 	})
@@ -846,7 +846,7 @@ async function autoCommitBatch(
 		}),
 	)
 
-	await db.batchMarkingJob.update({
+	await db.batchIngestJob.update({
 		where: { id: batchJobId },
 		data: {
 			status: "marking" as BatchStatus,

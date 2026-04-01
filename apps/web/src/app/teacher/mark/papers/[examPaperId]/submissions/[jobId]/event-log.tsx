@@ -37,6 +37,11 @@ function eventIcon(type: JobEvent["type"]) {
 			return <MapPin className="h-3.5 w-3.5 text-teal-500" />
 		case "grading_complete":
 			return <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />
+		case "token_reconciliation_complete":
+			return <CheckCircle2 className="h-3.5 w-3.5 text-teal-500" />
+		case "enrich_started":
+		case "enrich_complete":
+			return <Zap className="h-3.5 w-3.5 text-purple-500" />
 		case "job_failed":
 			return <AlertCircle className="h-3.5 w-3.5 text-destructive" />
 	}
@@ -64,6 +69,12 @@ function eventLabel(event: JobEvent): string {
 			return `${event.questions_located} answer region${event.questions_located !== 1 ? "s" : ""} located`
 		case "grading_complete":
 			return `Marking complete · ${event.total_awarded}/${event.total_max}`
+		case "token_reconciliation_complete":
+			return `${event.tokens_corrected} token${event.tokens_corrected !== 1 ? "s" : ""} reconciled`
+		case "enrich_started":
+			return "Enrichment started"
+		case "enrich_complete":
+			return "Enrichment complete"
 		case "job_failed":
 			return `Failed during ${event.phase}: ${event.error}`
 	}

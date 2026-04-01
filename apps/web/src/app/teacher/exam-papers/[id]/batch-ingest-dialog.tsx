@@ -17,16 +17,16 @@ import { Spinner } from "@/components/ui/spinner"
 import {
 	addFileToBatch,
 	commitBatch,
-	createBatchMarkingJob,
+	createBatchIngestJob,
 	deleteStagedScript,
-	getBatchMarkingJob,
+	getBatchIngestJob,
 	getStagedScriptPageUrls,
 	triggerClassification,
 	updateBatchJobSettings,
 	updateStagedScript,
 	updateStagedScriptPageKeys,
 } from "@/lib/batch-actions"
-import type { BatchMarkingJobData } from "@/lib/batch-actions"
+import type { BatchIngestJobData } from "@/lib/batch-actions"
 import {
 	DndContext,
 	DragOverlay,
@@ -75,19 +75,21 @@ function confidenceLabel(confidence: number | null): string {
 	return (Math.round(confidence * 10) / 10).toFixed(1)
 }
 
-export function BatchMarkingDialog({
+export function BatchIngestDialog({
 	examPaperId,
 	open,
 	onOpenChange,
+	onBatchStarted,
 }: {
 	examPaperId: string
 	open: boolean
 	onOpenChange: (open: boolean) => void
+	onBatchStarted?: () => void
 }) {
 	const [phase, setPhase] = useState<Phase>("upload")
 	const [files, setFiles] = useState<FileItem[]>([])
 	const [batchJobId, setBatchJobId] = useState<string | null>(null)
-	const [batchData, setBatchData] = useState<BatchMarkingJobData | null>(null)
+	const [batchData, setBatchData] = useState<BatchIngestJobData | null>(null)
 	const [committing, setCommitting] = useState(false)
 	const [showAdvanced, setShowAdvanced] = useState(false)
 	const [autoCommit, setAutoCommit] = useState(false)
@@ -119,7 +121,7 @@ export function BatchMarkingDialog({
 	function startPolling(jobId: string) {
 		stopPolling()
 		pollRef.current = setInterval(async () => {
-			const result = await getBatchMarkingJob(jobId)
+			const result = await getBatchIngestJob(jobId)
 			if (!result.ok) return
 			setBatchData(result.batch)
 
@@ -163,7 +165,7 @@ export function BatchMarkingDialog({
 
 	async function ensureBatchJob(): Promise<string> {
 		if (batchJobId) return batchJobId
-		const result = await createBatchMarkingJob(
+		const result = await createBatchIngestJob(
 			examPaperId,
 			autoCommit ? "auto" : "required",
 			blankPageMode,
@@ -243,7 +245,8 @@ export function BatchMarkingDialog({
 			setPhase("upload")
 			return
 		}
-		startPolling(batchJobId)
+		onBatchStarted?.()
+		handleOpenChange(false)
 	}
 
 	// ── Staging phase ─────────────────────────────────────────────────────────
@@ -258,7 +261,7 @@ export function BatchMarkingDialog({
 			status: newStatus as "confirmed" | "excluded",
 		})
 		if (batchJobId) {
-			const result = await getBatchMarkingJob(batchJobId)
+			const result = await getBatchIngestJob(batchJobId)
 			if (result.ok) setBatchData(result.batch)
 		}
 	}
@@ -271,7 +274,7 @@ export function BatchMarkingDialog({
 		for (const script of proposed) {
 			await updateStagedScript(script.id, { status: "confirmed" })
 		}
-		const result = await getBatchMarkingJob(batchJobId)
+		const result = await getBatchIngestJob(batchJobId)
 		if (result.ok) setBatchData(result.batch)
 	}
 
@@ -589,7 +592,7 @@ export function BatchMarkingDialog({
 							onToggleExclude={handleToggleExclude}
 							onDeleteScript={async () => {
 								if (batchJobId) {
-									const result = await getBatchMarkingJob(batchJobId)
+									const result = await getBatchIngestJob(batchJobId)
 									if (result.ok) setBatchData(result.batch)
 								}
 							}}
@@ -709,7 +712,7 @@ export function BatchMarkingDialog({
 
 type StagedScriptCardProps = {
 	batchId: string
-	scripts: BatchMarkingJobData["staged_scripts"]
+	scripts: BatchIngestJobData["staged_scripts"]
 	onUpdateName: (scriptId: string, name: string) => void
 	onToggleExclude: (scriptId: string, currentStatus: string) => void
 	onDeleteScript?: (scriptId: string) => void
@@ -822,12 +825,12 @@ function DndScriptCard({
 	onToggleExclude,
 	onDelete,
 }: {
-	script: BatchMarkingJobData["staged_scripts"][number]
+	script: BatchIngestJobData["staged_scripts"][number]
 	localNames: Record<string, string>
 	urls: Record<string, string>
 	activeDragKey: string | null
 	onOpenCarousel: (
-		script: BatchMarkingJobData["staged_scripts"][number],
+		script: BatchIngestJobData["staged_scripts"][number],
 		idx: number,
 	) => void
 	onUpdateLocalName: (id: string, value: string) => void
@@ -992,7 +995,7 @@ export function StagedScriptReviewCards({
 	}, [batchId])
 
 	function openCarousel(
-		script: BatchMarkingJobData["staged_scripts"][number],
+		script: BatchIngestJobData["staged_scripts"][number],
 		startIndex: number,
 	) {
 		const pageKeys = (script.page_keys as PageKeyRaw[])
@@ -1099,7 +1102,7 @@ export function StagedScriptReviewCards({
 	}
 
 	async function persistPageKeys(
-		script: BatchMarkingJobData["staged_scripts"][number],
+		script: BatchIngestJobData["staged_scripts"][number],
 	) {
 		const r = await updateStagedScriptPageKeys(
 			script.id,

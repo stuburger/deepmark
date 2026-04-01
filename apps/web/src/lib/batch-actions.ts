@@ -30,18 +30,18 @@ type PageKey = {
 	source_file: string
 }
 
-// ─── createBatchMarkingJob ────────────────────────────────────────────────────
+// ─── createBatchIngestJob ─────────────────────────────────────────────────────
 
-export type CreateBatchMarkingJobResult =
+export type CreateBatchIngestJobResult =
 	| { ok: true; batchJobId: string }
 	| { ok: false; error: string }
 
-export async function createBatchMarkingJob(
+export async function createBatchIngestJob(
 	examPaperId: string,
 	reviewMode: ReviewMode = "auto",
 	blankPageMode: "script_page" | "separator" = "script_page",
 	pagesPerScript = 4,
-): Promise<CreateBatchMarkingJobResult> {
+): Promise<CreateBatchIngestJobResult> {
 	const session = await auth()
 	if (!session) return { ok: false, error: "Not authenticated" }
 
@@ -51,7 +51,7 @@ export async function createBatchMarkingJob(
 	})
 	if (!examPaper) return { ok: false, error: "Exam paper not found" }
 
-	const job = await db.batchMarkingJob.create({
+	const job = await db.batchIngestJob.create({
 		data: {
 			exam_paper_id: examPaperId,
 			uploaded_by: session.userId,
@@ -62,7 +62,7 @@ export async function createBatchMarkingJob(
 		},
 	})
 
-	log.info(TAG, "BatchMarkingJob created", {
+	log.info(TAG, "BatchIngestJob created", {
 		userId: session.userId,
 		batchJobId: job.id,
 	})
@@ -84,7 +84,7 @@ export async function addFileToBatch(
 	const session = await auth()
 	if (!session) return { ok: false, error: "Not authenticated" }
 
-	const batch = await db.batchMarkingJob.findFirst({
+	const batch = await db.batchIngestJob.findFirst({
 		where: { id: batchJobId, uploaded_by: session.userId },
 		select: { id: true },
 	})
@@ -118,14 +118,14 @@ export async function updateBatchJobSettings(
 	const session = await auth()
 	if (!session) return { ok: false, error: "Not authenticated" }
 
-	const batch = await db.batchMarkingJob.findFirst({
+	const batch = await db.batchIngestJob.findFirst({
 		where: { id: batchJobId, uploaded_by: session.userId, status: "uploading" },
 		select: { id: true },
 	})
 	if (!batch)
 		return { ok: false, error: "Batch job not found or already started" }
 
-	await db.batchMarkingJob.update({
+	await db.batchIngestJob.update({
 		where: { id: batchJobId },
 		data: {
 			...(settings.pagesPerScript !== undefined && {
@@ -155,7 +155,7 @@ export async function triggerClassification(
 	const session = await auth()
 	if (!session) return { ok: false, error: "Not authenticated" }
 
-	const batch = await db.batchMarkingJob.findFirst({
+	const batch = await db.batchIngestJob.findFirst({
 		where: { id: batchJobId, uploaded_by: session.userId },
 		select: { id: true },
 	})
@@ -176,9 +176,9 @@ export async function triggerClassification(
 	return { ok: true }
 }
 
-// ─── getBatchMarkingJob ───────────────────────────────────────────────────────
+// ─── getBatchIngestJob ────────────────────────────────────────────────────────
 
-export type BatchMarkingJobData = {
+export type BatchIngestJobData = {
 	id: string
 	status: BatchStatus
 	review_mode: ReviewMode
@@ -202,17 +202,17 @@ export type BatchMarkingJobData = {
 	}>
 }
 
-export type GetBatchMarkingJobResult =
-	| { ok: true; batch: BatchMarkingJobData }
+export type GetBatchIngestJobResult =
+	| { ok: true; batch: BatchIngestJobData }
 	| { ok: false; error: string }
 
-export async function getBatchMarkingJob(
+export async function getBatchIngestJob(
 	batchJobId: string,
-): Promise<GetBatchMarkingJobResult> {
+): Promise<GetBatchIngestJobResult> {
 	const session = await auth()
 	if (!session) return { ok: false, error: "Not authenticated" }
 
-	const batch = await db.batchMarkingJob.findFirst({
+	const batch = await db.batchIngestJob.findFirst({
 		where: { id: batchJobId, uploaded_by: session.userId },
 		include: {
 			staged_scripts: {
@@ -317,7 +317,7 @@ export async function commitBatchService(
 	batchJobId: string,
 	uploadedBy: string,
 ): Promise<CommitBatchResult> {
-	const batch = await db.batchMarkingJob.findFirst({
+	const batch = await db.batchIngestJob.findFirst({
 		where: { id: batchJobId, uploaded_by: uploadedBy },
 		include: {
 			staged_scripts: {
@@ -387,7 +387,7 @@ export async function commitBatchService(
 			),
 		)
 
-		await tx.batchMarkingJob.update({
+		await tx.batchIngestJob.update({
 			where: { id: batchJobId },
 			data: {
 				status: "marking" as BatchStatus,
@@ -422,8 +422,8 @@ export type ActiveBatchInfo = {
 	id: string
 	status: BatchStatus
 	total_student_jobs: number
-	staged_scripts: BatchMarkingJobData["staged_scripts"]
-	student_jobs: BatchMarkingJobData["student_jobs"]
+	staged_scripts: BatchIngestJobData["staged_scripts"]
+	student_jobs: BatchIngestJobData["student_jobs"]
 } | null
 
 export async function getActiveBatchForPaper(
@@ -434,7 +434,7 @@ export async function getActiveBatchForPaper(
 	const session = await auth()
 	if (!session) return { ok: false, error: "Not authenticated" }
 
-	const batch = await db.batchMarkingJob.findFirst({
+	const batch = await db.batchIngestJob.findFirst({
 		where: {
 			exam_paper_id: examPaperId,
 			uploaded_by: session.userId,
@@ -540,7 +540,7 @@ export async function getStagedScriptPageUrls(
 	const session = await auth()
 	if (!session) return { ok: false, error: "Not authenticated" }
 
-	const batch = await db.batchMarkingJob.findFirst({
+	const batch = await db.batchIngestJob.findFirst({
 		where: { id: batchJobId, uploaded_by: session.userId },
 		include: { staged_scripts: true },
 	})

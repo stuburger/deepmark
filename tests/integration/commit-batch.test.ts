@@ -29,7 +29,7 @@ describe("commitBatch", () => {
 	})
 
 	it("creates 1 StudentPaperJob from 1 confirmed StagedScript", async () => {
-		const batch = await db.batchMarkingJob.create({
+		const batch = await db.batchIngestJob.create({
 			data: {
 				exam_paper_id: TEST_EXAM_PAPER_ID,
 				uploaded_by: TEST_USER_ID,
@@ -79,7 +79,7 @@ describe("commitBatch", () => {
 	})
 
 	it("creates 2 StudentPaperJobs from 2 confirmed StagedScripts", async () => {
-		const batch = await db.batchMarkingJob.create({
+		const batch = await db.batchIngestJob.create({
 			data: {
 				exam_paper_id: TEST_EXAM_PAPER_ID,
 				uploaded_by: TEST_USER_ID,
@@ -151,8 +151,8 @@ describe("commitBatch", () => {
 		expect(jobs).toHaveLength(2)
 	})
 
-	it("sets total_student_jobs = N on BatchMarkingJob", async () => {
-		const batch = await db.batchMarkingJob.create({
+	it("sets total_student_jobs = N on BatchIngestJob", async () => {
+		const batch = await db.batchIngestJob.create({
 			data: {
 				exam_paper_id: TEST_EXAM_PAPER_ID,
 				uploaded_by: TEST_USER_ID,
@@ -188,7 +188,7 @@ describe("commitBatch", () => {
 
 		await commitBatchService(batchId, TEST_USER_ID)
 
-		const updated = await db.batchMarkingJob.findUniqueOrThrow({
+		const updated = await db.batchIngestJob.findUniqueOrThrow({
 			where: { id: batchId },
 		})
 		expect(updated.total_student_jobs).toBe(1)
@@ -196,7 +196,7 @@ describe("commitBatch", () => {
 	})
 
 	it("each StudentPaperJob.pages uses {key, order, mime_type} mapped from StagedScript.page_keys", async () => {
-		const batch = await db.batchMarkingJob.create({
+		const batch = await db.batchIngestJob.create({
 			data: {
 				exam_paper_id: TEST_EXAM_PAPER_ID,
 				uploaded_by: TEST_USER_ID,
@@ -242,7 +242,7 @@ describe("commitBatch", () => {
 	})
 
 	it("rejects commit if any StagedScript is still in proposed status", async () => {
-		const batch = await db.batchMarkingJob.create({
+		const batch = await db.batchIngestJob.create({
 			data: {
 				exam_paper_id: TEST_EXAM_PAPER_ID,
 				uploaded_by: TEST_USER_ID,

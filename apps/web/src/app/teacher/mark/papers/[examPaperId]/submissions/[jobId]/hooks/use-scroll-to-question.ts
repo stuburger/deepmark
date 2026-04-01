@@ -9,27 +9,33 @@ export function useScrollToQuestion() {
 
 	const scrollToQuestion = useCallback((questionNumber: string) => {
 		setActiveQuestionNumber(questionNumber)
-		// Find the panel root, then its ScrollArea viewport (the actual scrollable
-		// element). Both mobile and desktop layouts render DigitalPanelContent
-		// simultaneously (one is CSS-hidden), so querying within the panel
-		// guarantees we target the visible desktop element.
-		const panelRoot = document.querySelector(
-			"[data-results-panel]",
-		) as HTMLElement | null
-		if (!panelRoot) return
-		const viewport = panelRoot.querySelector(
-			"[data-slot='scroll-area-viewport']",
-		) as HTMLElement | null
-		const scrollEl = viewport ?? panelRoot
-		const el = scrollEl.querySelector(
-			`[id="question-${questionNumber}"]`,
-		) as HTMLElement | null
-		if (!el) return
-		const scrollRect = scrollEl.getBoundingClientRect()
-		const elRect = el.getBoundingClientRect()
-		scrollEl.scrollTo({
-			top: scrollEl.scrollTop + (elRect.top - scrollRect.top) - 16,
-			behavior: "smooth",
+		// Defer to the next paint so any tab-switch or layout change triggered
+		// by the caller has time to render before we measure the DOM.
+		requestAnimationFrame(() => {
+			// Both mobile and desktop layouts each render a [data-results-panel].
+			// Only the currently visible one has a non-zero bounding rect, so we
+			// skip panels that are CSS-hidden (display:none → height === 0).
+			const allPanels = document.querySelectorAll("[data-results-panel]")
+			const panelRoot = Array.from(allPanels).find(
+				(el) => (el as HTMLElement).getBoundingClientRect().height > 0,
+			) as HTMLElement | null
+			if (!panelRoot) return
+
+			const viewport = panelRoot.querySelector(
+				"[data-slot='scroll-area-viewport']",
+			) as HTMLElement | null
+			const scrollEl = viewport ?? panelRoot
+			const el = scrollEl.querySelector(
+				`[id="question-${questionNumber}"]`,
+			) as HTMLElement | null
+			if (!el) return
+
+			const scrollRect = scrollEl.getBoundingClientRect()
+			const elRect = el.getBoundingClientRect()
+			scrollEl.scrollTo({
+				top: scrollEl.scrollTop + (elRect.top - scrollRect.top) - 16,
+				behavior: "smooth",
+			})
 		})
 	}, [])
 

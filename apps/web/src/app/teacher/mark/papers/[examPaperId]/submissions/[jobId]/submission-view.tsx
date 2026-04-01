@@ -15,7 +15,7 @@ import type {
 } from "@/lib/marking/types"
 import { queryKeys } from "@/lib/query-keys"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
-import { useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { AnnotatedScanColumn } from "../../../../[jobId]/phases/results/annotated-scan-column"
 import type { MarkingPhase } from "../../../../[jobId]/shared/phase"
 import { derivePhase } from "../../../../[jobId]/shared/phase"
@@ -50,6 +50,25 @@ export function SubmissionView({
 	const [showOcr, setShowOcr] = useState(false)
 	const [showRegions, setShowRegions] = useState(true)
 	const { activeQuestionNumber, scrollToQuestion } = useScrollToQuestion()
+
+	const isTerminalPhase =
+		initialPhase === "completed" ||
+		initialPhase === "failed" ||
+		initialPhase === "cancelled"
+
+	const [mobileTab, setMobileTab] = useState(
+		isTerminalPhase ? "results" : "scan",
+	)
+
+	// When an annotation is clicked, switch the mobile tab to "results" so the
+	// card is in the DOM and visible before scrollToQuestion runs its rAF.
+	const handleAnnotationClick = useCallback(
+		(questionNumber: string) => {
+			setMobileTab("results")
+			scrollToQuestion(questionNumber)
+		},
+		[scrollToQuestion],
+	)
 
 	// Live job data — replaces useState(initialData) + useJobPoller
 	const { data: jobData } = useJobQuery(jobId, initialData)
@@ -119,13 +138,8 @@ export function SubmissionView({
 			{/* Mobile: scan/results tabs */}
 			<div className="flex-1 min-h-0 flex flex-col md:hidden">
 				<Tabs
-					defaultValue={
-						initialPhase === "completed" ||
-						initialPhase === "failed" ||
-						initialPhase === "cancelled"
-							? "results"
-							: "scan"
-					}
+					value={mobileTab}
+					onValueChange={setMobileTab}
 					className="h-full flex flex-col overflow-hidden gap-0"
 				>
 					<TabsList
@@ -147,7 +161,7 @@ export function SubmissionView({
 								showHighlights={showOcr}
 								showRegions={showRegions}
 								gradingResults={data.grading_results}
-								onAnnotationClick={scrollToQuestion}
+								onAnnotationClick={handleAnnotationClick}
 								debugMode={debugMode}
 							/>
 						</ScrollArea>
@@ -180,7 +194,7 @@ export function SubmissionView({
 						gradingResults={data.grading_results}
 						showOcr={showOcr}
 						showRegions={showRegions}
-						onAnnotationClick={scrollToQuestion}
+						onAnnotationClick={handleAnnotationClick}
 						debugMode={debugMode}
 					/>
 				</ResizablePanel>

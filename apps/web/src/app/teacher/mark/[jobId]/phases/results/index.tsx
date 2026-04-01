@@ -1,6 +1,6 @@
 "use client"
 
-import type { StudentPaperJobPayload } from "@/lib/mark-actions"
+import type { StudentPaperJobPayload } from "@/lib/marking/types"
 import { useState } from "react"
 import { GradingResultsPanel } from "./grading-results-panel"
 

@@ -1,16 +1,20 @@
 "use client"
 
+import type {
+	ExamPaperDetail,
+	UnlinkedMarkScheme,
+} from "@/lib/exam-paper/queries"
 import {
-	type ExamPaperDetail,
-	type MarkSchemeInput,
-	type UnlinkedMarkScheme,
 	type UpdateQuestionInput,
-	createMarkScheme,
 	deleteQuestion,
-	linkMarkSchemeToQuestion,
-	updateMarkScheme,
 	updateQuestion,
-} from "@/lib/dashboard-actions"
+} from "@/lib/exam-paper/questions"
+import { linkMarkSchemeToQuestion } from "@/lib/exam-paper/unlinked-schemes"
+import {
+	type MarkSchemeInput,
+	createMarkScheme,
+	updateMarkScheme,
+} from "@/lib/mark-scheme/manual"
 import { queryKeys } from "@/lib/query-keys"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"

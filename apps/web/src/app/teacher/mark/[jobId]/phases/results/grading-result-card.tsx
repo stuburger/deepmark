@@ -1,7 +1,7 @@
 "use client"
 
 import { Progress } from "@/components/ui/progress"
-import type { GradingResult } from "@/lib/mark-actions"
+import type { GradingResult } from "@/lib/marking/types"
 import { cn } from "@/lib/utils"
 import { ChevronDown } from "lucide-react"
 import { AnswerEditor } from "./answer-editor"

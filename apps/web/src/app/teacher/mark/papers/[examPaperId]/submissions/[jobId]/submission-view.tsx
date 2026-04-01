@@ -8,12 +8,12 @@ import {
 } from "@/components/ui/resizable"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { getJobPageTokens, getJobScanPageUrls } from "@/lib/mark-actions"
+import { getJobPageTokens, getJobScanPageUrls } from "@/lib/marking/queries"
 import type {
 	PageToken,
 	ScanPageUrl,
 	StudentPaperJobPayload,
-} from "@/lib/mark-actions"
+} from "@/lib/marking/types"
 import { queryKeys } from "@/lib/query-keys"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { Loader2 } from "lucide-react"

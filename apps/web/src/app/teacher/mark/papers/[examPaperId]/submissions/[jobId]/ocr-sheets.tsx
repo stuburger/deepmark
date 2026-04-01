@@ -7,7 +7,7 @@ import {
 	SheetTitle,
 	SheetTrigger,
 } from "@/components/ui/sheet"
-import type { ScanPageUrl } from "@/lib/mark-actions"
+import type { ScanPageUrl } from "@/lib/marking/types"
 import { FileText, StickyNote } from "lucide-react"
 import type { ReactElement, ReactNode } from "react"
 

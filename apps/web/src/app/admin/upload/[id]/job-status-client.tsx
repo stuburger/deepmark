@@ -25,7 +25,7 @@ import {
 	type JobQuestion,
 	type PdfIngestionJobDetail,
 	getPdfIngestionJobDetail,
-} from "@/lib/pdf-ingestion-actions"
+} from "@/lib/pdf-ingestion/job-lifecycle"
 import {
 	AlertCircle,
 	BookOpen,

@@ -1,7 +1,7 @@
 "use client"
 
 import { HandwritingAnalysisPanel } from "@/components/HandwritingAnalysisPanel"
-import type { ScanPageUrl } from "@/lib/mark-actions"
+import type { ScanPageUrl } from "@/lib/marking/types"
 import { type ReactNode, useState } from "react"
 import { ScanDocumentViewer } from "./scan-document-viewer"
 

@@ -1,0 +1,414 @@
+"use server"
+
+import type { HandwritingAnalysis, PageToken } from "@/lib/handwriting-types"
+import { GetObjectCommand, S3Client } from "@aws-sdk/client-s3"
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner"
+import { type JobEvent, createPrismaClient } from "@mcp-gcse/db"
+import { Resource } from "sst"
+import { auth } from "../auth"
+import { log } from "../logger"
+import type {
+	AnswerRegion,
+	ExtractedAnswer,
+	GetExamPaperStatsResult,
+	GetJobPageTokensResult,
+	GetJobScanPageUrlsResult,
+	GetStudentPaperJobResult,
+	GradingResult,
+	ListMySubmissionsResult,
+} from "./types"
+
+const TAG = "mark-actions"
+
+const bucketName = Resource.ScansBucket.name
+const s3 = new S3Client({})
+const db = createPrismaClient(Resource.NeonPostgres.databaseUrl)
+
+// ─── Region helpers ───────────────────────────────────────────────────────────
+
+type RegionRow = {
+	question_id: string
+	page_order: number
+	box: unknown
+	source: string | null
+}
+
+/**
+ * Builds a question_id → AnswerRegion[] map from rows in
+ * student_paper_answer_regions, then merges it into the raw grading results
+ * so all downstream components see the same shape as before.
+ */
+function mergeRegionsIntoResults(
+	rawResults: GradingResult[],
+	regionRows: RegionRow[],
+): GradingResult[] {
+	const byQuestion = new Map<string, AnswerRegion[]>()
+	for (const row of regionRows) {
+		const existing = byQuestion.get(row.question_id) ?? []
+		existing.push({
+			page: row.page_order,
+			box: row.box as [number, number, number, number],
+			source: row.source,
+		})
+		byQuestion.set(row.question_id, existing)
+	}
+	return rawResults.map((r) => ({
+		...r,
+		answer_regions: byQuestion.get(r.question_id) ?? [],
+	}))
+}
+
+export async function getStudentPaperJob(
+	jobId: string,
+): Promise<GetStudentPaperJobResult> {
+	const session = await auth()
+	if (!session) return { ok: false, error: "Not authenticated" }
+
+	const job = await db.studentPaperJob.findFirst({
+		where: { id: jobId, uploaded_by: session.userId },
+		include: {
+			exam_paper: { select: { id: true, title: true } },
+			answer_regions: {
+				select: {
+					question_id: true,
+					page_order: true,
+					box: true,
+					source: true,
+				},
+			},
+		},
+	})
+	if (!job) return { ok: false, error: "Job not found" }
+
+	type PageEntry = { key: string; order: number; mime_type: string }
+	type RawExtracted = {
+		student_name?: string | null
+		answers?: ExtractedAnswer[]
+	}
+
+	const pages = (job.pages ?? []) as PageEntry[]
+	const rawResults = (job.grading_results ?? []) as GradingResult[]
+	const gradingResults = mergeRegionsIntoResults(rawResults, job.answer_regions)
+	const totalAwarded = gradingResults.reduce((s, r) => s + r.awarded_score, 0)
+	const totalMax = gradingResults.reduce((s, r) => s + r.max_score, 0)
+	const rawExtracted = job.extracted_answers_raw as RawExtracted | null
+	const extractedAnswers = rawExtracted?.answers ?? null
+
+	return {
+		ok: true,
+		data: {
+			status: job.status,
+			error: job.error,
+			student_name: job.student_name,
+			student_id: job.student_id,
+			detected_subject: job.detected_subject,
+			pages_count: pages.length,
+			grading_results: gradingResults,
+			exam_paper_title: job.exam_paper?.title ?? null,
+			exam_paper_id: job.exam_paper_id,
+			total_awarded: totalAwarded,
+			total_max: totalMax,
+			created_at: job.created_at,
+			extracted_answers: extractedAnswers,
+			job_events: (job.job_events as JobEvent[] | null) ?? null,
+		},
+	}
+}
+
+// Keep legacy alias for existing result page compatibility
+export const getStudentPaperResult = getStudentPaperJob
+
+/**
+ * Fetches a student paper job while validating it belongs to the given exam paper.
+ * Used by the new /papers/[examPaperId]/submissions/[jobId] route to provide
+ * a security invariant that the job is from the expected paper context.
+ */
+export async function getStudentPaperJobForPaper(
+	examPaperId: string,
+	jobId: string,
+): Promise<GetStudentPaperJobResult> {
+	const session = await auth()
+	if (!session) return { ok: false, error: "Not authenticated" }
+
+	const job = await db.studentPaperJob.findFirst({
+		where: {
+			id: jobId,
+			exam_paper_id: examPaperId,
+			uploaded_by: session.userId,
+		},
+		include: {
+			exam_paper: { select: { id: true, title: true } },
+			answer_regions: {
+				select: {
+					question_id: true,
+					page_order: true,
+					box: true,
+					source: true,
+				},
+			},
+		},
+	})
+	if (!job) return { ok: false, error: "Job not found" }
+
+	type PageEntry = { key: string; order: number; mime_type: string }
+	type RawExtracted = {
+		student_name?: string | null
+		answers?: ExtractedAnswer[]
+	}
+
+	const pages = (job.pages ?? []) as PageEntry[]
+	const rawResults = (job.grading_results ?? []) as GradingResult[]
+	const gradingResults = mergeRegionsIntoResults(rawResults, job.answer_regions)
+	const totalAwarded = gradingResults.reduce((s, r) => s + r.awarded_score, 0)
+	const totalMax = gradingResults.reduce((s, r) => s + r.max_score, 0)
+	const rawExtracted = job.extracted_answers_raw as RawExtracted | null
+	const extractedAnswers = rawExtracted?.answers ?? null
+
+	return {
+		ok: true,
+		data: {
+			status: job.status,
+			error: job.error,
+			student_name: job.student_name,
+			student_id: job.student_id,
+			detected_subject: job.detected_subject,
+			pages_count: pages.length,
+			grading_results: gradingResults,
+			exam_paper_title: job.exam_paper?.title ?? null,
+			exam_paper_id: job.exam_paper_id,
+			total_awarded: totalAwarded,
+			total_max: totalMax,
+			created_at: job.created_at,
+			extracted_answers: extractedAnswers,
+			job_events: (job.job_events as JobEvent[] | null) ?? null,
+		},
+	}
+}
+
+/**
+ * Returns short-lived presigned GET URLs for every page uploaded to a job,
+ * merged with the stored per-page OCR analysis where available.
+ */
+export async function getJobScanPageUrls(
+	jobId: string,
+): Promise<GetJobScanPageUrlsResult> {
+	const session = await auth()
+	if (!session) return { ok: false, error: "Not authenticated" }
+
+	const job = await db.studentPaperJob.findFirst({
+		where: { id: jobId, uploaded_by: session.userId },
+		select: { pages: true, s3_bucket: true, page_analyses: true },
+	})
+	if (!job) return { ok: false, error: "Job not found" }
+
+	type PageEntry = { key: string; order: number; mime_type: string }
+	const pages = (job.pages ?? []) as PageEntry[]
+	if (pages.length === 0) return { ok: true, pages: [] }
+
+	type PageAnalysisEntry = {
+		page: number
+		transcript: string
+		observations: string[]
+	}
+	const analyses = (job.page_analyses ?? []) as PageAnalysisEntry[]
+	const analysisByPage = new Map(
+		analyses.map((a) => [
+			a.page,
+			{
+				transcript: a.transcript,
+				observations: a.observations,
+			} satisfies HandwritingAnalysis,
+		]),
+	)
+
+	const bucket = job.s3_bucket || bucketName
+
+	const resolved = await Promise.all(
+		pages
+			.slice()
+			.sort((a, b) => a.order - b.order)
+			.map(async (p) => {
+				const cmd = new GetObjectCommand({ Bucket: bucket, Key: p.key })
+				const url = await getSignedUrl(s3, cmd, { expiresIn: 3600 })
+				return {
+					order: p.order,
+					url,
+					mimeType: p.mime_type,
+					analysis: analysisByPage.get(p.order),
+				}
+			}),
+	)
+
+	return { ok: true, pages: resolved }
+}
+
+/**
+ * Returns all Cloud Vision word-level tokens for a job as a flat array,
+ * ordered by page_order → para_index → line_index → word_index.
+ * Callers filter by page_order as needed.
+ */
+export async function getJobPageTokens(
+	jobId: string,
+): Promise<GetJobPageTokensResult> {
+	const session = await auth()
+	if (!session) return { ok: false, error: "Not authenticated" }
+
+	const job = await db.studentPaperJob.findFirst({
+		where: { id: jobId, uploaded_by: session.userId },
+		select: { id: true },
+	})
+	if (!job) return { ok: false, error: "Job not found" }
+
+	const rows = await db.studentPaperPageToken.findMany({
+		where: { job_id: jobId },
+		orderBy: [
+			{ page_order: "asc" },
+			{ para_index: "asc" },
+			{ line_index: "asc" },
+			{ word_index: "asc" },
+		],
+		select: {
+			id: true,
+			page_order: true,
+			para_index: true,
+			line_index: true,
+			word_index: true,
+			text_raw: true,
+			text_corrected: true,
+			bbox: true,
+			confidence: true,
+		},
+	})
+
+	const tokens: PageToken[] = rows.map((row) => ({
+		id: row.id,
+		page_order: row.page_order,
+		para_index: row.para_index,
+		line_index: row.line_index,
+		word_index: row.word_index,
+		text_raw: row.text_raw,
+		text_corrected: row.text_corrected,
+		bbox: row.bbox as [number, number, number, number],
+		confidence: row.confidence,
+	}))
+
+	return { ok: true, tokens }
+}
+
+export async function listMySubmissions(): Promise<ListMySubmissionsResult> {
+	const session = await auth()
+	if (!session) return { ok: false, error: "Not authenticated" }
+
+	const jobs = await db.studentPaperJob.findMany({
+		where: { uploaded_by: session.userId },
+		orderBy: { created_at: "desc" },
+		include: { exam_paper: { select: { id: true, title: true } } },
+	})
+
+	return {
+		ok: true,
+		submissions: jobs.map((job) => {
+			const results = (job.grading_results ?? []) as GradingResult[]
+			return {
+				id: job.id,
+				student_name: job.student_name,
+				exam_paper_id: job.exam_paper_id,
+				exam_paper_title: job.exam_paper?.title ?? null,
+				detected_subject: job.detected_subject,
+				total_awarded: results.reduce((s, r) => s + r.awarded_score, 0),
+				total_max: results.reduce((s, r) => s + r.max_score, 0),
+				status: job.status,
+				created_at: job.created_at,
+			}
+		}),
+	}
+}
+
+export async function getExamPaperStats(
+	examPaperId: string,
+): Promise<GetExamPaperStatsResult> {
+	const session = await auth()
+	if (!session) return { ok: false, error: "Not authenticated" }
+
+	const jobs = await db.studentPaperJob.findMany({
+		where: {
+			uploaded_by: session.userId,
+			exam_paper_id: examPaperId,
+			status: "ocr_complete",
+		},
+		include: { exam_paper: { select: { title: true } } },
+	})
+
+	if (jobs.length === 0) {
+		const paper = await db.examPaper.findUnique({
+			where: { id: examPaperId },
+			select: { title: true },
+		})
+		return {
+			ok: true,
+			stats: {
+				exam_paper_id: examPaperId,
+				exam_paper_title: paper?.title ?? "Unknown",
+				submission_count: 0,
+				avg_total_percent: 0,
+				question_stats: [],
+			},
+		}
+	}
+
+	const allResults = jobs.flatMap(
+		(j) => (j.grading_results ?? []) as GradingResult[],
+	)
+
+	const byQuestion = new Map<string, GradingResult[]>()
+	for (const r of allResults) {
+		const existing = byQuestion.get(r.question_id) ?? []
+		existing.push(r)
+		byQuestion.set(r.question_id, existing)
+	}
+
+	const questionStats = []
+	for (const [questionId, results] of byQuestion) {
+		const first = results[0]
+		if (!first) continue
+		const avgAwarded =
+			results.reduce((s, r) => s + r.awarded_score, 0) / results.length
+		const avgPercent =
+			first.max_score > 0 ? Math.round((avgAwarded / first.max_score) * 100) : 0
+		questionStats.push({
+			question_id: questionId,
+			question_text: first.question_text,
+			question_number: first.question_number,
+			max_score: first.max_score,
+			avg_awarded: Math.round(avgAwarded * 10) / 10,
+			avg_percent: avgPercent,
+			submission_count: results.length,
+		})
+	}
+	questionStats.sort(
+		(a, b) =>
+			Number.parseInt(a.question_number) - Number.parseInt(b.question_number),
+	)
+
+	const allTotals = jobs.map((j) => {
+		const results = (j.grading_results ?? []) as GradingResult[]
+		const awarded = results.reduce((s, r) => s + r.awarded_score, 0)
+		const max = results.reduce((s, r) => s + r.max_score, 0)
+		return max > 0 ? (awarded / max) * 100 : 0
+	})
+	const avgTotalPercent =
+		allTotals.length > 0
+			? Math.round(allTotals.reduce((s, v) => s + v, 0) / allTotals.length)
+			: 0
+
+	return {
+		ok: true,
+		stats: {
+			exam_paper_id: examPaperId,
+			exam_paper_title: jobs[0]?.exam_paper?.title ?? "Unknown",
+			submission_count: jobs.length,
+			avg_total_percent: avgTotalPercent,
+			question_stats: questionStats,
+		},
+	}
+}

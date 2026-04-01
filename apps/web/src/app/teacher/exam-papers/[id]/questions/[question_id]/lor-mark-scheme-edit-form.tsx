@@ -14,7 +14,7 @@ import { Textarea } from "@/components/ui/textarea"
 import {
 	type MarkingRulesInput,
 	updateMarkScheme,
-} from "@/lib/dashboard-actions"
+} from "@/lib/mark-scheme/manual"
 import { CheckCircle2, Plus, Trash2 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useState, useTransition } from "react"

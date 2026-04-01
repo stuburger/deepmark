@@ -7,7 +7,7 @@ import {
 	TooltipProvider,
 	TooltipTrigger,
 } from "@/components/ui/tooltip"
-import type { ScanPageUrl, StudentPaperJobPayload } from "@/lib/mark-actions"
+import type { ScanPageUrl, StudentPaperJobPayload } from "@/lib/marking/types"
 import { cn } from "@/lib/utils"
 import {
 	ChevronRight,

@@ -6,7 +6,7 @@ import {
 	CardHeader,
 	CardTitle,
 } from "@/components/ui/card"
-import { getDashboardData } from "@/lib/dashboard-actions"
+import { getDashboardData } from "@/lib/admin/queries"
 import {
 	BookOpen,
 	CheckCircle2,

@@ -15,10 +15,8 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table"
-import {
-	type SubmissionHistoryItem,
-	listMySubmissions,
-} from "@/lib/mark-actions"
+import { listMySubmissions } from "@/lib/marking/queries"
+import type { SubmissionHistoryItem } from "@/lib/marking/types"
 import { PlusCircle } from "lucide-react"
 import Link from "next/link"
 

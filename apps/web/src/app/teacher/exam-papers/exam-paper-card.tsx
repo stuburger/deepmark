@@ -9,10 +9,8 @@ import {
 	CardTitle,
 } from "@/components/ui/card"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
-import {
-	type ExamPaperListItem,
-	deleteExamPaper,
-} from "@/lib/dashboard-actions"
+import { deleteExamPaper } from "@/lib/exam-paper/mutations"
+import type { ExamPaperListItem } from "@/lib/exam-paper/queries"
 import { SUBJECT_LABELS, type Subject } from "@/lib/subjects"
 import { useMutation } from "@tanstack/react-query"
 import { Clock, Globe, Layers, Lock, Trash2 } from "lucide-react"

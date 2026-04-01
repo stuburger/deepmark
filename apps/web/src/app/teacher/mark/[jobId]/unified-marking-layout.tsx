@@ -8,7 +8,7 @@ import {
 } from "@/components/ui/resizable"
 import { Separator } from "@/components/ui/separator"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import type { ScanPageUrl, StudentPaperJobPayload } from "@/lib/mark-actions"
+import type { ScanPageUrl, StudentPaperJobPayload } from "@/lib/marking/types"
 import { cn } from "@/lib/utils"
 import { PlusCircle, ScanText } from "lucide-react"
 import Link from "next/link"

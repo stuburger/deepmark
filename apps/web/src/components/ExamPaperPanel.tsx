@@ -1,4 +1,4 @@
-import type { ExtractedAnswer, GradingResult } from "@/lib/mark-actions"
+import type { ExtractedAnswer, GradingResult } from "@/lib/marking/types"
 import { cn } from "@/lib/utils"
 import { Loader2 } from "lucide-react"
 

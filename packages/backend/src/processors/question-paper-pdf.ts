@@ -5,6 +5,7 @@ import {
 } from "@/lib/cancellation"
 import { embedQuestionText } from "@/lib/google-generative-ai"
 import { logger } from "@/lib/logger"
+import { normalizeQuestionNumber } from "@/lib/normalize-question-number"
 import { GetObjectCommand, S3Client } from "@aws-sdk/client-s3"
 import { GoogleGenAI, Type } from "@google/genai"
 import type { ScanStatus } from "@mcp-gcse/db"
@@ -112,24 +113,6 @@ async function getPdfBase64(bucket: string, key: string): Promise<string> {
 
 function embeddingToVectorStr(vec: number[]): string {
 	return `[${vec.join(",")}]`
-}
-
-/**
- * Normalises a raw question number string to a compact canonical form.
- * Kept in sync with mark-scheme-pdf.ts normalizeQuestionNumber.
- *
- * Examples:
- *   "Question 1(a)(ii)" → "1aii"
- *   "Q3b"               → "3b"
- *   "2.b"               → "2b"
- */
-function normalizeQuestionNumber(raw: string): string {
-	return raw
-		.replace(/^(question|q)\s*/i, "")
-		.replace(/[()[\]{} ]/g, "")
-		.replace(/\.(?=[a-z])/gi, "")
-		.toLowerCase()
-		.trim()
 }
 
 export async function handler(

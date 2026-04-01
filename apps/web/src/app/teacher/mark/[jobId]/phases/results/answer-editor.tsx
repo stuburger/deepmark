@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
-import { updateExtractedAnswer } from "@/lib/mark-actions"
+import { updateExtractedAnswer } from "@/lib/marking/mutations"
 import { Loader2, Pencil } from "lucide-react"
 import { useState } from "react"
 

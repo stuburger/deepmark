@@ -1,60 +1,32 @@
-import { inflateSync } from "zlib"
 import { db } from "@/db"
-import { computeInkDensity } from "@/lib/blank-detection"
+import {
+	callClassifyBlankPage,
+	callClassifyPageBoundary,
+	callExtractNameFromPage,
+} from "@/lib/batch/classify-calls"
+import { extractPdfPages, fetchS3Bytes } from "@/lib/batch/pdf-pages"
+import type { PageData, PageGroup, StagedScriptData } from "@/lib/batch/types"
 import { logger } from "@/lib/logger"
 import { s3 } from "@/lib/s3"
 import type { SqsEvent, SqsRecord } from "@/lib/sqs-job-runner"
-import {
-	GetObjectCommand,
-	ListObjectsV2Command,
-	PutObjectCommand,
-} from "@aws-sdk/client-s3"
+import { ListObjectsV2Command } from "@aws-sdk/client-s3"
 import { SQSClient, SendMessageCommand } from "@aws-sdk/client-sqs"
-import { GoogleGenAI, type Part } from "@google/genai"
 import type {
 	BatchStatus,
 	BlankPageMode,
 	StagedScriptStatus,
 } from "@mcp-gcse/db"
-import { PDFDict, PDFDocument, PDFName, PDFRawStream, PDFRef } from "pdf-lib"
 import { Resource } from "sst"
 
 const TAG = "batch-classify"
 const sqs = new SQSClient({})
 const AUTO_COMMIT_THRESHOLD = 0.9
-const BLANK_THRESHOLD = 0.005
-
-// ─── Types ────────────────────────────────────────────────────────────────────
 
 type PageKey = {
 	s3_key: string
 	order: number
 	mime_type: string
 	source_file: string
-}
-
-/**
- * Represents a single page extracted from a source PDF.
- * jpegKey/jpegBuffer are null for blank pages (no image content).
- */
-type PageData = {
-	absoluteIndex: number
-	jpegKey: string | null
-	jpegBuffer: Buffer | null
-}
-
-type PageGroup = {
-	pages: PageData[]
-	proposedName: string | null
-	confidence: number
-	hasUncertainPage: boolean
-}
-
-type StagedScriptData = {
-	page_keys: PageKey[]
-	proposed_name: string | null
-	confidence: number
-	hasUncertainPage: boolean
 }
 
 // ─── Handler ──────────────────────────────────────────────────────────────────
@@ -293,127 +265,6 @@ async function processSourceFile(
 	return { scripts, pageCount: pages.length }
 }
 
-// ─── PDF page extraction (split + JPEG image extraction) ──────────────────────
-
-/**
- * Splits a multi-page PDF into individual pages, extracting the embedded JPEG
- * image from each page's XObject resources. Pages with no extractable JPEG
- * (or very low ink density) are treated as blank (jpegKey/jpegBuffer = null).
- */
-async function extractPdfPages(
-	pdfBytes: Uint8Array,
-	batchJobId: string,
-	sourceKey: string,
-): Promise<PageData[]> {
-	const pdfDoc = await PDFDocument.load(pdfBytes)
-	const pageCount = pdfDoc.getPageCount()
-	const sourceName =
-		sourceKey
-			.split("/")
-			.pop()
-			?.replace(/\.[^/.]+$/, "") ?? "page"
-
-	const pages = await Promise.all(
-		Array.from({ length: pageCount }, async (_, i) => {
-			const singlePage = await PDFDocument.create()
-			const [copiedPage] = await singlePage.copyPages(pdfDoc, [i])
-			singlePage.addPage(copiedPage!)
-			const singlePageBytes = await singlePage.save()
-
-			const jpegBytes = await extractJpegFromPdfPage(singlePageBytes)
-			if (!jpegBytes) {
-				return {
-					absoluteIndex: i,
-					jpegKey: null,
-					jpegBuffer: null,
-				} satisfies PageData
-			}
-
-			const density = await computeInkDensity(jpegBytes)
-			if (density < BLANK_THRESHOLD) {
-				return {
-					absoluteIndex: i,
-					jpegKey: null,
-					jpegBuffer: null,
-				} satisfies PageData
-			}
-
-			const jpegKey = `batches/${batchJobId}/pages/${sourceName}-${String(i + 1).padStart(3, "0")}.jpg`
-			await s3.send(
-				new PutObjectCommand({
-					Bucket: Resource.ScansBucket.name,
-					Key: jpegKey,
-					Body: jpegBytes,
-					ContentType: "image/jpeg",
-				}),
-			)
-
-			return {
-				absoluteIndex: i,
-				jpegKey,
-				jpegBuffer: jpegBytes,
-			} satisfies PageData
-		}),
-	)
-
-	return pages
-}
-
-/**
- * Extracts the first JPEG image from a single-page PDF's XObject resources.
- * Handles both /DCTDecode and [ /FlateDecode /DCTDecode ] filter chains.
- * Returns null if no JPEG image is found (blank/non-image page).
- */
-async function extractJpegFromPdfPage(
-	pdfBytes: Uint8Array,
-): Promise<Buffer | null> {
-	let pdfDoc: PDFDocument
-	try {
-		pdfDoc = await PDFDocument.load(pdfBytes)
-	} catch {
-		return null
-	}
-
-	const page = pdfDoc.getPage(0)
-	const resources = page.node.Resources()
-	if (!resources) return null
-
-	const xObjRef = resources.get(PDFName.of("XObject"))
-	if (!xObjRef) return null
-
-	const xObjDictRaw =
-		xObjRef instanceof PDFRef ? pdfDoc.context.lookup(xObjRef) : xObjRef
-	if (!(xObjDictRaw instanceof PDFDict)) return null
-
-	for (const [, valueRef] of xObjDictRaw.entries()) {
-		const rawObj =
-			valueRef instanceof PDFRef ? pdfDoc.context.lookup(valueRef) : valueRef
-		if (!(rawObj instanceof PDFRawStream)) continue
-
-		const stream = rawObj as PDFRawStream
-		const subtypeObj = stream.dict.get(PDFName.of("Subtype"))
-		if (!subtypeObj || subtypeObj.toString() !== "/Image") continue
-
-		const filterObj = stream.dict.get(PDFName.of("Filter"))
-		const filterStr = filterObj?.toString() ?? ""
-
-		if (filterStr === "/DCTDecode") {
-			return Buffer.from(stream.contents)
-		}
-
-		// Handle [ /FlateDecode /DCTDecode ] — zlib-wrapped JPEG
-		if (filterStr.includes("DCTDecode") && filterStr.includes("FlateDecode")) {
-			try {
-				return inflateSync(Buffer.from(stream.contents))
-			} catch {
-				return null
-			}
-		}
-	}
-
-	return null
-}
-
 // ─── Separator mode: split on blank pages ─────────────────────────────────────
 
 function classifyBoundariesSeparatorMode(
@@ -595,142 +446,6 @@ async function classifyBoundariesScriptPageMode(
 	return groups
 }
 
-// ─── Gemini: page boundary classifier ────────────────────────────────────────
-
-async function callClassifyPageBoundary(
-	prevPage: PageData | null,
-	currentPage: PageData,
-): Promise<{ isScriptStart: boolean | null; confidence: number }> {
-	const ai = new GoogleGenAI({ apiKey: Resource.GeminiApiKey.value })
-
-	const parts: Part[] = []
-
-	if (prevPage?.jpegBuffer) {
-		parts.push({
-			inlineData: {
-				mimeType: "image/jpeg",
-				data: prevPage.jpegBuffer.toString("base64"),
-			},
-		})
-	}
-
-	if (currentPage.jpegBuffer) {
-		parts.push({
-			inlineData: {
-				mimeType: "image/jpeg",
-				data: currentPage.jpegBuffer.toString("base64"),
-			},
-		})
-	}
-
-	const contextDesc = prevPage?.jpegBuffer
-		? "The FIRST image is the PREVIOUS page; the SECOND image is the CURRENT page."
-		: "The image is the CURRENT page (no previous page context)."
-
-	parts.push({
-		text: `You are analysing scanned student exam scripts.
-${contextDesc}
-Determine whether the CURRENT page is the FIRST page of a NEW student's exam script.
-Structural cues for a new script start: different student name or header at the top, question numbers resetting to the first question, a new paper title or section header, visibly different handwriting style.
-Return ONLY valid JSON with no markdown or explanation:
-{"isScriptStart":true,"confidence":0.95}`,
-	})
-
-	try {
-		const response = await ai.models.generateContent({
-			model: "gemini-2.5-flash",
-			contents: [{ role: "user", parts }],
-		})
-
-		const rawText = response.candidates?.[0]?.content?.parts?.[0]?.text ?? ""
-		const jsonStr = extractJsonFromResponse(rawText)
-		if (!jsonStr) return { isScriptStart: null, confidence: 0.5 }
-		const parsed = JSON.parse(jsonStr) as {
-			isScriptStart: boolean
-			confidence: number
-		}
-
-		return {
-			isScriptStart:
-				typeof parsed.isScriptStart === "boolean" ? parsed.isScriptStart : null,
-			confidence:
-				typeof parsed.confidence === "number"
-					? Math.min(1, Math.max(0, parsed.confidence))
-					: 0.5,
-		}
-	} catch {
-		return { isScriptStart: null, confidence: 0.0 }
-	}
-}
-
-// ─── Gemini: blank page context classifier ────────────────────────────────────
-
-async function callClassifyBlankPage(
-	prevPage: PageData | null,
-	nextPage: PageData | null,
-): Promise<"separator" | "script_page" | "artifact"> {
-	const ai = new GoogleGenAI({ apiKey: Resource.GeminiApiKey.value })
-
-	const parts: Part[] = []
-
-	if (prevPage?.jpegBuffer) {
-		parts.push({
-			inlineData: {
-				mimeType: "image/jpeg",
-				data: prevPage.jpegBuffer.toString("base64"),
-			},
-		})
-	}
-	if (nextPage?.jpegBuffer) {
-		parts.push({
-			inlineData: {
-				mimeType: "image/jpeg",
-				data: nextPage.jpegBuffer.toString("base64"),
-			},
-		})
-	}
-
-	const contextDesc =
-		prevPage?.jpegBuffer && nextPage?.jpegBuffer
-			? "The first image is the page BEFORE the blank; the second image is the page AFTER."
-			: prevPage?.jpegBuffer
-				? "The image is the page BEFORE the blank (nothing follows)."
-				: nextPage?.jpegBuffer
-					? "The image is the page AFTER the blank (nothing precedes)."
-					: "No surrounding pages available."
-
-	parts.push({
-		text: `You are analysing scanned student exam scripts. A blank/near-blank page has been detected.
-${contextDesc}
-Classify the blank page as exactly one of:
-- "separator": a deliberate blank page inserted between two different student scripts
-- "script_page": a blank answer page belonging to a student (e.g. a page they left unanswered)
-- "artifact": scanner noise, accidental blank, or cover page
-Return ONLY valid JSON with no markdown:
-{"classification":"separator"}`,
-	})
-
-	try {
-		const response = await ai.models.generateContent({
-			model: "gemini-2.5-flash",
-			contents: [{ role: "user", parts }],
-		})
-
-		const rawText = response.candidates?.[0]?.content?.parts?.[0]?.text ?? ""
-		const jsonStr = extractJsonFromResponse(rawText)
-		if (!jsonStr) return "artifact"
-		const parsed = JSON.parse(jsonStr) as { classification: string }
-		const c = parsed.classification
-
-		if (c === "separator" || c === "script_page" || c === "artifact") {
-			return c
-		}
-		return "artifact"
-	} catch {
-		return "artifact"
-	}
-}
-
 // ─── Name extraction ──────────────────────────────────────────────────────────
 
 async function extractNames(groups: PageGroup[]): Promise<void> {
@@ -746,53 +461,6 @@ async function extractNames(groups: PageGroup[]): Promise<void> {
 
 	for (let i = 0; i < groups.length; i++) {
 		groups[i]!.proposedName = results[i]?.name ?? null
-	}
-}
-
-async function callExtractNameFromPage(
-	jpegBuffer: Buffer,
-): Promise<{ name: string | null; confidence: number }> {
-	const ai = new GoogleGenAI({ apiKey: Resource.GeminiApiKey.value })
-
-	try {
-		const response = await ai.models.generateContent({
-			model: "gemini-2.5-flash",
-			contents: [
-				{
-					role: "user",
-					parts: [
-						{
-							inlineData: {
-								mimeType: "image/jpeg",
-								data: jpegBuffer.toString("base64"),
-							},
-						},
-						{
-							text: 'Extract the student name from this exam script page if legible. Return ONLY valid JSON with no markdown: {"name":"<name>","confidence":0.95} — use null for name if not readable.',
-						},
-					],
-				},
-			],
-		})
-
-		const rawText = response.candidates?.[0]?.content?.parts?.[0]?.text ?? ""
-		const jsonStr = extractJsonFromResponse(rawText)
-		if (!jsonStr) return { name: null, confidence: 0.0 }
-		const parsed = JSON.parse(jsonStr) as {
-			name: string | null
-			confidence: number
-		}
-
-		return {
-			name:
-				typeof parsed.name === "string" && parsed.name.trim()
-					? parsed.name.trim()
-					: null,
-			confidence:
-				typeof parsed.confidence === "number" ? parsed.confidence : 0.5,
-		}
-	} catch {
-		return { name: null, confidence: 0.0 }
 	}
 }
 
@@ -895,25 +563,6 @@ async function runBatch<T, R>(
 		results.push(...chunkResults)
 	}
 	return results
-}
-
-async function fetchS3Bytes(bucket: string, key: string): Promise<Uint8Array> {
-	const cmd = new GetObjectCommand({ Bucket: bucket, Key: key })
-	const response = await s3.send(cmd)
-	const arr = await response.Body?.transformToByteArray()
-	if (!arr?.length) throw new Error(`Empty S3 object: ${key}`)
-	return arr
-}
-
-/**
- * Extracts the first JSON object from a Gemini response string.
- * Handles thinking-model output that may include preamble text or reasoning.
- */
-function extractJsonFromResponse(rawText: string): string | null {
-	const start = rawText.indexOf("{")
-	const end = rawText.lastIndexOf("}")
-	if (start === -1 || end === -1 || end < start) return null
-	return rawText.slice(start, end + 1)
 }
 
 function guessMime(key: string): string {

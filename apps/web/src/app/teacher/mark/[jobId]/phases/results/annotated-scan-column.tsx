@@ -4,7 +4,7 @@ import {
 	BoundingBoxViewer,
 	type GradingAnnotation,
 } from "@/components/BoundingBoxViewer"
-import type { GradingResult, PageToken, ScanPageUrl } from "@/lib/mark-actions"
+import type { GradingResult, PageToken, ScanPageUrl } from "@/lib/marking/types"
 
 /**
  * Lightweight clickable region overlay for pages that have no OCR analysis.

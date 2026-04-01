@@ -18,7 +18,7 @@ import {
 import {
 	type PdfIngestionJobListItem,
 	listPdfIngestionJobs,
-} from "@/lib/pdf-ingestion-actions"
+} from "@/lib/pdf-ingestion/job-lifecycle"
 import { PlusCircle } from "lucide-react"
 import Link from "next/link"
 import { DownloadButton } from "./_components/download-button"

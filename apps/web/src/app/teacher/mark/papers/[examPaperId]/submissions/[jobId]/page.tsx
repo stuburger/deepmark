@@ -2,7 +2,7 @@ import {
 	getJobPageTokens,
 	getJobScanPageUrls,
 	getStudentPaperJobForPaper,
-} from "@/lib/mark-actions"
+} from "@/lib/marking/queries"
 import { notFound } from "next/navigation"
 import { derivePhase } from "../../../../[jobId]/shared/phase"
 import { SubmissionView } from "./submission-view"

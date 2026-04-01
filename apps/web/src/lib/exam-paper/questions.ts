@@ -1,0 +1,379 @@
+"use server"
+
+import { createPrismaClient } from "@mcp-gcse/db"
+import { Resource } from "sst"
+import { auth } from "../auth"
+import { embedText } from "../embeddings"
+import { log } from "../logger"
+
+const TAG = "exam-paper/questions"
+const db = createPrismaClient(Resource.NeonPostgres.databaseUrl)
+
+// ─── Question detail ──────────────────────────────────────────────────────────
+
+export type QuestionMarkScheme = {
+	id: string
+	description: string | null
+	guidance: string | null
+	points_total: number
+	marking_method: string
+	mark_points: unknown
+	marking_rules: unknown
+	link_status: string
+	correct_option_labels: string[]
+}
+
+export type MultipleChoiceOption = {
+	option_label: string
+	option_text: string
+}
+
+export type QuestionDetail = {
+	id: string
+	text: string
+	question_type: string
+	origin: string
+	topic: string
+	subject: string
+	points: number | null
+	question_number: string | null
+	created_at: Date
+	source_pdf_ingestion_job_id: string | null
+	multiple_choice_options: MultipleChoiceOption[]
+	mark_schemes: QuestionMarkScheme[]
+}
+
+export type GetQuestionDetailResult =
+	| { ok: true; question: QuestionDetail }
+	| { ok: false; error: string }
+
+export async function getQuestionDetail(
+	questionId: string,
+): Promise<GetQuestionDetailResult> {
+	try {
+		const question = await db.question.findUnique({
+			where: { id: questionId },
+			select: {
+				id: true,
+				text: true,
+				question_type: true,
+				origin: true,
+				topic: true,
+				subject: true,
+				points: true,
+				created_at: true,
+				source_pdf_ingestion_job_id: true,
+				question_number: true,
+				multiple_choice_options: true,
+				mark_schemes: {
+					orderBy: { created_at: "asc" },
+					select: {
+						id: true,
+						description: true,
+						guidance: true,
+						points_total: true,
+						marking_method: true,
+						mark_points: true,
+						marking_rules: true,
+						link_status: true,
+						correct_option_labels: true,
+					},
+				},
+			},
+		})
+		if (!question) return { ok: false, error: "Question not found" }
+
+		const rawOptions = Array.isArray(question.multiple_choice_options)
+			? (question.multiple_choice_options as MultipleChoiceOption[])
+			: []
+
+		return {
+			ok: true,
+			question: {
+				id: question.id,
+				text: question.text,
+				question_type: question.question_type,
+				origin: question.origin,
+				topic: question.topic,
+				subject: question.subject,
+				points: question.points,
+				created_at: question.created_at,
+				source_pdf_ingestion_job_id: question.source_pdf_ingestion_job_id,
+				question_number: question.question_number,
+				multiple_choice_options: rawOptions,
+				mark_schemes: question.mark_schemes.map((ms) => ({
+					id: ms.id,
+					// Normalize the string "null" that Gemini sometimes writes into the description field
+					description:
+						ms.description === "null" || !ms.description
+							? null
+							: ms.description,
+					guidance: ms.guidance,
+					points_total: ms.points_total,
+					marking_method: ms.marking_method,
+					mark_points: ms.mark_points,
+					marking_rules: ms.marking_rules,
+					link_status: ms.link_status,
+					correct_option_labels: ms.correct_option_labels,
+				})),
+			},
+		}
+	} catch {
+		return { ok: false, error: "Failed to load question" }
+	}
+}
+
+// ─── Update question ──────────────────────────────────────────────────────────
+
+export type UpdateQuestionInput = {
+	text?: string
+	points?: number | null
+	question_number?: string | null
+}
+
+export type UpdateQuestionResult =
+	| { ok: true; embeddingUpdated: boolean }
+	| { ok: false; error: string }
+
+/**
+ * Updates question text and/or marks. When text changes, regenerates the
+ * embedding via Gemini so semantic search and mark-scheme matching stay accurate.
+ */
+export async function updateQuestion(
+	questionId: string,
+	input: UpdateQuestionInput,
+): Promise<UpdateQuestionResult> {
+	const session = await auth()
+	if (!session) return { ok: false, error: "Not authenticated" }
+
+	const trimmedText = input.text?.trim()
+	if (trimmedText !== undefined && trimmedText === "") {
+		return { ok: false, error: "Question text cannot be empty" }
+	}
+
+	log.info(TAG, "updateQuestion called", {
+		userId: session.userId,
+		questionId,
+		hasText: trimmedText !== undefined,
+		hasPoints: input.points !== undefined,
+	})
+
+	try {
+		const existing = await db.question.findUnique({
+			where: { id: questionId },
+			select: { text: true },
+		})
+		if (!existing) return { ok: false, error: "Question not found" }
+
+		const textChanged =
+			trimmedText !== undefined && trimmedText !== existing.text
+
+		await db.question.update({
+			where: { id: questionId },
+			data: {
+				...(trimmedText !== undefined ? { text: trimmedText } : {}),
+				...(input.points !== undefined ? { points: input.points } : {}),
+				...(input.question_number !== undefined
+					? { question_number: input.question_number || null }
+					: {}),
+			},
+		})
+
+		let embeddingUpdated = false
+
+		if (textChanged && trimmedText) {
+			const values = await embedText(trimmedText)
+			if (values) {
+				const vecStr = `[${values.join(",")}]`
+				await db.$executeRaw`
+					UPDATE questions SET embedding = (${vecStr}::text)::vector WHERE id = ${questionId}
+				`
+				embeddingUpdated = true
+				log.info(TAG, "Embedding regenerated", { questionId })
+			}
+		}
+
+		log.info(TAG, "Question updated", {
+			userId: session.userId,
+			questionId,
+			textChanged,
+			embeddingUpdated,
+		})
+
+		return { ok: true, embeddingUpdated }
+	} catch (err) {
+		log.error(TAG, "updateQuestion failed", {
+			userId: session.userId,
+			questionId,
+			error: String(err),
+		})
+		return { ok: false, error: "Failed to update question" }
+	}
+}
+
+// ─── Delete question ──────────────────────────────────────────────────────────
+
+export type DeleteQuestionResult = { ok: true } | { ok: false; error: string }
+
+/**
+ * Fully deletes a question and all associated data in a transaction.
+ *
+ * Cascade order (child-first to avoid FK violations):
+ *  1. MarkSchemeTestRun → MarkScheme
+ *  2. ExemplarAnswer linked to question or its mark schemes
+ *  3. MarkScheme
+ *  4. QuestionBankItem
+ *  5. MarkingResult → Answer
+ *  6. ExamSectionQuestion
+ *  7. Question
+ */
+export async function deleteQuestion(
+	questionId: string,
+): Promise<DeleteQuestionResult> {
+	const session = await auth()
+	if (!session) return { ok: false, error: "Not authenticated" }
+
+	log.info(TAG, "deleteQuestion called", { userId: session.userId, questionId })
+
+	try {
+		await db.$transaction(async (tx) => {
+			const markSchemes = await tx.markScheme.findMany({
+				where: { question_id: questionId },
+				select: { id: true },
+			})
+			const markSchemeIds = markSchemes.map((ms) => ms.id)
+
+			const answers = await tx.answer.findMany({
+				where: { question_id: questionId },
+				select: { id: true },
+			})
+			const answerIds = answers.map((a) => a.id)
+
+			await tx.markSchemeTestRun.deleteMany({
+				where: { mark_scheme_id: { in: markSchemeIds } },
+			})
+
+			await tx.exemplarAnswer.deleteMany({
+				where: {
+					OR: [
+						{ mark_scheme_id: { in: markSchemeIds } },
+						{ question_id: questionId },
+					],
+				},
+			})
+
+			await tx.markScheme.deleteMany({
+				where: { question_id: questionId },
+			})
+
+			await tx.questionBankItem.deleteMany({
+				where: { question_id: questionId },
+			})
+
+			await tx.markingResult.deleteMany({
+				where: { answer_id: { in: answerIds } },
+			})
+
+			await tx.answer.deleteMany({
+				where: { question_id: questionId },
+			})
+
+			await tx.examSectionQuestion.deleteMany({
+				where: { question_id: questionId },
+			})
+
+			await tx.question.delete({ where: { id: questionId } })
+		})
+
+		log.info(TAG, "Question deleted", { userId: session.userId, questionId })
+		return { ok: true }
+	} catch (err) {
+		log.error(TAG, "deleteQuestion failed", {
+			userId: session.userId,
+			questionId,
+			error: String(err),
+		})
+		return { ok: false, error: "Failed to delete question" }
+	}
+}
+
+// ─── Reorder ──────────────────────────────────────────────────────────────────
+
+export type ReorderResult = { ok: true } | { ok: false; error: string }
+
+export async function reorderQuestionsInSection(
+	sectionId: string,
+	orderedQuestionIds: string[],
+): Promise<ReorderResult> {
+	const session = await auth()
+	if (!session) return { ok: false, error: "Not authenticated" }
+	try {
+		const n = orderedQuestionIds.length
+		// Two-phase update to avoid unique constraint violations on (exam_section_id, order):
+		// Phase 1 sets orders to a safe high range (n+1..2n), Phase 2 sets final values (1..n).
+		await db.$transaction(async (tx) => {
+			await Promise.all(
+				orderedQuestionIds.map((questionId, index) =>
+					tx.examSectionQuestion.update({
+						where: {
+							exam_section_id_question_id: {
+								exam_section_id: sectionId,
+								question_id: questionId,
+							},
+						},
+						data: { order: n + index + 1 },
+					}),
+				),
+			)
+			await Promise.all(
+				orderedQuestionIds.map((questionId, index) =>
+					tx.examSectionQuestion.update({
+						where: {
+							exam_section_id_question_id: {
+								exam_section_id: sectionId,
+								question_id: questionId,
+							},
+						},
+						data: { order: index + 1 },
+					}),
+				),
+			)
+		})
+		return { ok: true }
+	} catch (e) {
+		console.error(e)
+		return { ok: false, error: "Failed to reorder questions" }
+	}
+}
+
+export async function reorderSections(
+	examPaperId: string,
+	orderedSectionIds: string[],
+): Promise<ReorderResult> {
+	const session = await auth()
+	if (!session) return { ok: false, error: "Not authenticated" }
+	try {
+		const n = orderedSectionIds.length
+		await db.$transaction(async (tx) => {
+			await Promise.all(
+				orderedSectionIds.map((sectionId, index) =>
+					tx.examSection.update({
+						where: { id: sectionId },
+						data: { order: n + index + 1 },
+					}),
+				),
+			)
+			await Promise.all(
+				orderedSectionIds.map((sectionId, index) =>
+					tx.examSection.update({
+						where: { id: sectionId },
+						data: { order: index + 1 },
+					}),
+				),
+			)
+		})
+		return { ok: true }
+	} catch {
+		return { ok: false, error: "Failed to reorder sections" }
+	}
+}

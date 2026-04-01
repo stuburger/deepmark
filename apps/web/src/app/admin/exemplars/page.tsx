@@ -18,7 +18,7 @@ import {
 	type ExemplarAnswerListItem,
 	type ExemplarValidationStats,
 	listExemplarAnswers,
-} from "@/lib/dashboard-actions"
+} from "@/lib/admin/queries"
 import Link from "next/link"
 
 type BadgeVariant = "default" | "secondary" | "destructive" | "outline"

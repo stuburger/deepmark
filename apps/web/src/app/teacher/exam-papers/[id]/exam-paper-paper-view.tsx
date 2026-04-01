@@ -11,14 +11,14 @@ import type {
 	ExamPaperDetail,
 	ExamPaperQuestion,
 	ExamPaperSection,
-	MarkingRulesInput,
-	QuestionDetail,
-} from "@/lib/dashboard-actions"
+} from "@/lib/exam-paper/queries"
+import type { QuestionDetail } from "@/lib/exam-paper/questions"
 import {
 	getQuestionDetail,
 	reorderQuestionsInSection,
 	reorderSections,
-} from "@/lib/dashboard-actions"
+} from "@/lib/exam-paper/questions"
+import type { MarkingRulesInput } from "@/lib/mark-scheme/manual"
 import { queryKeys } from "@/lib/query-keys"
 import { cn } from "@/lib/utils"
 import {

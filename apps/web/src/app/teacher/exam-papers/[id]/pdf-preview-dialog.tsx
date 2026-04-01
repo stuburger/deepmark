@@ -9,11 +9,11 @@ import {
 	DialogTrigger,
 } from "@/components/ui/dialog"
 import { Spinner } from "@/components/ui/spinner"
+import { getPdfIngestionJobDownloadUrl } from "@/lib/pdf-ingestion/job-lifecycle"
 import {
 	type PdfDocument,
 	getPdfDocumentsForPaper,
-	getPdfIngestionJobDownloadUrl,
-} from "@/lib/pdf-ingestion-actions"
+} from "@/lib/pdf-ingestion/queries"
 import { FileText } from "lucide-react"
 import { useEffect, useState } from "react"
 

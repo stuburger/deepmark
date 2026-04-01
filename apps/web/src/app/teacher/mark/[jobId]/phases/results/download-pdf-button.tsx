@@ -1,7 +1,7 @@
 "use client"
 
 import { Button } from "@/components/ui/button"
-import type { StudentPaperResultPayload } from "@/lib/mark-actions"
+import type { StudentPaperResultPayload } from "@/lib/marking/types"
 import { Download, Loader2 } from "lucide-react"
 import { useState } from "react"
 

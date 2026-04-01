@@ -1,5 +1,5 @@
 import { buttonVariants } from "@/components/ui/button-variants"
-import type { StudentPaperJobPayload } from "@/lib/mark-actions"
+import type { StudentPaperJobPayload } from "@/lib/marking/types"
 import { AlertCircle } from "lucide-react"
 import Link from "next/link"
 

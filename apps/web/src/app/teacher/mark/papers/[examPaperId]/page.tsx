@@ -1,4 +1,4 @@
-import { getExamPaperStats, listMySubmissions } from "@/lib/mark-actions"
+import { getExamPaperStats, listMySubmissions } from "@/lib/marking/queries"
 import { notFound } from "next/navigation"
 import { ExamPaperStatsShell } from "./exam-paper-stats-shell"
 

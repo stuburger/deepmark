@@ -1,4 +1,4 @@
-import type { StudentPaperJobPayload } from "@/lib/mark-actions"
+import type { StudentPaperJobPayload } from "@/lib/marking/types"
 
 export type MarkingPhase =
 	| "scan_processing" // pending / processing / text_extracted (grading queued)

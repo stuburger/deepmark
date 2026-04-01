@@ -8,13 +8,15 @@ import {
 	CardHeader,
 	CardTitle,
 } from "@/components/ui/card"
+import { createExamPaperFromJob } from "@/lib/pdf-ingestion/exam-paper"
 import {
-	type PdfDocumentType,
-	createExamPaperFromJob,
-	createPdfIngestionUpload,
 	getPdfIngestionJobStatus,
 	retriggerPdfIngestionJob,
-} from "@/lib/pdf-ingestion-actions"
+} from "@/lib/pdf-ingestion/job-lifecycle"
+import {
+	type PdfDocumentType,
+	createPdfIngestionUpload,
+} from "@/lib/pdf-ingestion/upload"
 import { SUBJECTS, SUBJECT_VALUES, type Subject } from "@/lib/subjects"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"

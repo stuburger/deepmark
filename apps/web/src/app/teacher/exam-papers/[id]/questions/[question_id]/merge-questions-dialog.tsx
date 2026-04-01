@@ -9,7 +9,7 @@ import {
 	DialogTitle,
 } from "@/components/ui/dialog"
 import { Spinner } from "@/components/ui/spinner"
-import { consolidateQuestions } from "@/lib/dashboard-actions"
+import { consolidateQuestions } from "@/lib/exam-paper/similarity"
 import { useRouter } from "next/navigation"
 import { useState } from "react"
 

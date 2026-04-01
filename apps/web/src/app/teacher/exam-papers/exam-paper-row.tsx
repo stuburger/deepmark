@@ -3,10 +3,8 @@
 import { Badge } from "@/components/ui/badge"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { TableCell, TableRow } from "@/components/ui/table"
-import {
-	type ExamPaperListItem,
-	deleteExamPaper,
-} from "@/lib/dashboard-actions"
+import { deleteExamPaper } from "@/lib/exam-paper/mutations"
+import type { ExamPaperListItem } from "@/lib/exam-paper/queries"
 import { useMutation } from "@tanstack/react-query"
 import { Globe, Lock, Trash2 } from "lucide-react"
 import Link from "next/link"

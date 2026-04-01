@@ -14,7 +14,7 @@ import {
 	createStudentPaperJob,
 	reorderPages,
 	triggerOcr,
-} from "@/lib/mark-actions"
+} from "@/lib/marking/mutations"
 import { convertPdfToJpegs } from "@/lib/pdf-to-jpeg"
 import { ArrowDown, ArrowUp, FileText, Trash2, Upload } from "lucide-react"
 import { useRouter } from "next/navigation"

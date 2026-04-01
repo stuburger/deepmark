@@ -4,7 +4,7 @@ import {
 	ExamPaperPanel,
 	LiveMarkingExamPaperPanel,
 } from "@/components/ExamPaperPanel"
-import type { StudentPaperJobPayload } from "@/lib/mark-actions"
+import type { StudentPaperJobPayload } from "@/lib/marking/types"
 import { useJobQuery } from "../shared/use-job-query"
 
 const TERMINAL_STATUSES = new Set(["ocr_complete", "failed", "cancelled"])

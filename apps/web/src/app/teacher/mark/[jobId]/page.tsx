@@ -1,4 +1,4 @@
-import { getStudentPaperResult } from "@/lib/mark-actions"
+import { getStudentPaperResult } from "@/lib/marking/queries"
 import { notFound, redirect } from "next/navigation"
 
 export default async function MarkResultPage({

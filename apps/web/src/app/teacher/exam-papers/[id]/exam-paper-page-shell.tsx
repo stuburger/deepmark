@@ -28,25 +28,18 @@ import {
 	updateStagedScript,
 } from "@/lib/batch-actions"
 import type { ActiveBatchInfo } from "@/lib/batch-actions"
+import { deleteExamPaper } from "@/lib/exam-paper/mutations"
 import type {
 	ExamPaperDetail,
-	SimilarPair,
 	UnlinkedMarkScheme,
-} from "@/lib/dashboard-actions"
-import {
-	deleteExamPaper,
-	getExamPaperDetail,
-	getSimilarQuestionsForPaper,
-	getUnlinkedMarkSchemes,
-} from "@/lib/dashboard-actions"
-import type { ExamPaperStats, SubmissionHistoryItem } from "@/lib/mark-actions"
-import { getExamPaperStats } from "@/lib/mark-actions"
+} from "@/lib/exam-paper/queries"
+import type { ExamPaperStats, SubmissionHistoryItem } from "@/lib/marking/types"
 import type {
 	ActiveExamPaperIngestionJob,
 	PdfDocument,
-} from "@/lib/pdf-ingestion-actions"
-import { getExamPaperIngestionLiveState } from "@/lib/pdf-ingestion-actions"
+} from "@/lib/pdf-ingestion/queries"
 import { queryKeys } from "@/lib/query-keys"
+import { naturalCompare } from "@/lib/utils"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import {
 	AlertTriangle,
@@ -66,51 +59,25 @@ import {
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { parseAsString, parseAsStringEnum, useQueryState } from "nuqs"
-import { useEffect, useRef, useState } from "react"
+import { useState } from "react"
 import { toast } from "sonner"
 import { BatchIngestDialog } from "./batch-ingest-dialog"
 import { DocumentUploadCards } from "./document-upload-cards"
 import { EditableTitle } from "./editable-title"
 import { ExamPaperPaperView } from "./exam-paper-paper-view"
+import { useExamPaperLiveQueries } from "./hooks/use-exam-paper-live-queries"
 import {
 	useDeleteQuestion,
 	useLinkMarkScheme,
 } from "./hooks/use-exam-paper-mutations"
+import { useSimilarQuestions } from "./hooks/use-similar-questions"
+import { useUnlinkedSchemes } from "./hooks/use-unlinked-schemes"
 import { MarkingJobDialog } from "./marking-job-dialog"
 import { SubmissionGrid } from "./submission-grid"
 import { UploadStudentScriptDialog } from "./upload-student-script-dialog"
 
-const TERMINAL = new Set(["ocr_complete", "failed", "cancelled"])
-const POLL_MS = 3000
-
 type SortKey = "number" | "marks" | "similarity"
 type SortDir = "asc" | "desc"
-
-/**
- * Natural-sort comparison for question numbers like "1a", "2bii", "10".
- * Numbers within the string are compared numerically; letters lexicographically.
- */
-function naturalCompare(a: string | null, b: string | null): number {
-	if (a === null && b === null) return 0
-	if (a === null) return 1
-	if (b === null) return -1
-	const re = /(\d+)|(\D+)/g
-	const partsA = [...a.matchAll(re)].map((m) => m[0])
-	const partsB = [...b.matchAll(re)].map((m) => m[0])
-	for (let i = 0; i < Math.max(partsA.length, partsB.length); i++) {
-		const pa = partsA[i] ?? ""
-		const pb = partsB[i] ?? ""
-		const na = Number(pa)
-		const nb = Number(pb)
-		if (!isNaN(na) && !isNaN(nb)) {
-			if (na !== nb) return na - nb
-		} else {
-			if (pa < pb) return -1
-			if (pa > pb) return 1
-		}
-	}
-	return 0
-}
 
 function schemeBadge(status: string | null) {
 	if (!status) return <Badge variant="destructive">No scheme</Badge>
@@ -218,92 +185,28 @@ export function ExamPaperPageShell({
 	const [submissions, setSubmissions] =
 		useState<SubmissionHistoryItem[]>(initialSubmissions)
 
-	// Live exam paper data — seeded from SSR, kept fresh by mutations
-	const { data: paper } = useQuery({
-		queryKey: queryKeys.examPaper(initialPaper.id),
-		queryFn: async () => {
-			const r = await getExamPaperDetail(initialPaper.id)
-			if (!r.ok) throw new Error(r.error)
-			return r.paper
-		},
-		initialData: initialPaper,
-	})
+	// Tab navigation — synced with ?tab= search param via nuqs (needed here before hooks)
+	const [activeTab, setActiveTab] = useQueryState(
+		"tab",
+		parseAsStringEnum(["paper", "submissions", "analytics"]).withDefault(
+			"paper",
+		),
+	)
 
-	// Ingestion live state (active jobs + completed docs) — polls while jobs are active
-	const prevJobStatusesRef = useRef<Record<string, string>>({})
-	const { data: liveState } = useQuery({
-		queryKey: queryKeys.examPaperLiveState(paper.id),
-		queryFn: async () => {
-			const r = await getExamPaperIngestionLiveState(paper.id)
-			if (!r.ok) throw new Error(r.error)
-			return r
-		},
-		initialData: initialLiveState,
-		refetchInterval: (q) => {
-			const jobs = q.state.data?.jobs ?? []
-			return jobs.some((j) => !TERMINAL.has(j.status)) ? POLL_MS : false
-		},
-	})
-
-	// liveState is always defined — initialData guarantees it
-	const jobs = liveState.jobs
-	const completedDocs = liveState.documents
-
-	// When ingestion jobs complete, invalidate paper data + related queries
-	useEffect(() => {
-		const currentIds = new Set(jobs.map((j) => j.id))
-		let shouldRefresh = false
-
-		for (const [id, prevStatus] of Object.entries(prevJobStatusesRef.current)) {
-			if (!currentIds.has(id) && !TERMINAL.has(prevStatus)) {
-				shouldRefresh = true
-				break
-			}
-		}
-
-		for (const job of jobs) {
-			const prev = prevJobStatusesRef.current[job.id]
-			if (
-				prev !== undefined &&
-				prev !== job.status &&
-				TERMINAL.has(job.status)
-			) {
-				shouldRefresh = true
-			}
-			prevJobStatusesRef.current[job.id] = job.status
-		}
-
-		for (const id of Object.keys(prevJobStatusesRef.current)) {
-			if (!currentIds.has(id)) {
-				delete prevJobStatusesRef.current[id]
-			}
-		}
-
-		if (shouldRefresh) {
-			void queryClient.invalidateQueries({
-				queryKey: queryKeys.examPaper(paper.id),
-			})
-			void queryClient.invalidateQueries({
-				queryKey: queryKeys.similarQuestions(paper.id),
-			})
-			void queryClient.invalidateQueries({
-				queryKey: queryKeys.unlinkedMarkSchemes(paper.id),
-			})
-		}
-	}, [jobs, paper.id, queryClient])
+	// Live exam paper data, ingestion state, and analytics
+	const { paper, jobs, completedDocs, analyticsStats, analyticsLoading } =
+		useExamPaperLiveQueries({
+			initialPaper,
+			initialLiveState,
+			initialAnalytics,
+			activeTab,
+		})
 
 	// Similarity / duplicate detection
 	const [duplicateBannerDismissed, setDuplicateBannerDismissed] =
 		useState(false)
 
-	const { data: similarPairs = [] } = useQuery<SimilarPair[]>({
-		queryKey: queryKeys.similarQuestions(paper.id),
-		queryFn: async () => {
-			const r = await getSimilarQuestionsForPaper(paper.id)
-			if (!r.ok) return []
-			return r.pairs
-		},
-	})
+	const { data: similarPairs = [] } = useSimilarQuestions(paper.id)
 
 	// Unlinked mark schemes
 	const [linkingItem, setLinkingItem] = useState<UnlinkedMarkScheme | null>(
@@ -311,14 +214,7 @@ export function ExamPaperPageShell({
 	)
 	const [linkingTargetId, setLinkingTargetId] = useState<string>("")
 
-	const { data: unlinkedItems = [] } = useQuery<UnlinkedMarkScheme[]>({
-		queryKey: queryKeys.unlinkedMarkSchemes(paper.id),
-		queryFn: async () => {
-			const r = await getUnlinkedMarkSchemes(paper.id)
-			if (!r.ok) return []
-			return r.items
-		},
-	})
+	const { data: unlinkedItems = [] } = useUnlinkedSchemes(paper.id)
 
 	// Upload student script + batch marking
 	const [uploadScriptOpen, setUploadScriptOpen] = useState(false)
@@ -388,33 +284,9 @@ export function ExamPaperPageShell({
 	// View toggle
 	const [view, setView] = useState<"table" | "paper">("paper")
 
-	// Tab navigation — synced with ?tab= search param via nuqs
-	const [activeTab, setActiveTab] = useQueryState(
-		"tab",
-		parseAsStringEnum(["paper", "submissions", "analytics"]).withDefault(
-			"paper",
-		),
-	)
-
 	function handleTabChange(tab: "paper" | "submissions" | "analytics") {
 		setActiveTab(tab)
 	}
-
-	// Analytics — seeded from SSR, refetches once on first tab activation if stale.
-	// initialData is undefined (not null) when the SSR fetch failed so the query
-	// still enters a loading state rather than showing an empty result.
-	const { data: analyticsStats, isLoading: analyticsLoading } =
-		useQuery<ExamPaperStats | null>({
-			queryKey: queryKeys.examPaperStats(paper.id),
-			queryFn: async () => {
-				const r = await getExamPaperStats(paper.id)
-				if (!r.ok) return null
-				return r.stats
-			},
-			initialData: initialAnalytics ?? undefined,
-			enabled: initialAnalytics != null || activeTab === "analytics",
-			staleTime: 60 * 1000,
-		})
 
 	// Link mark scheme mutation — uses optimistic hook
 	const { mutate: doLinkMarkScheme, isPending: linkingBusy } =

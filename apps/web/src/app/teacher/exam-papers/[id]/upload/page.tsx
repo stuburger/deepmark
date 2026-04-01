@@ -1,4 +1,4 @@
-import { getExamPaperDetail } from "@/lib/dashboard-actions"
+import { getExamPaperDetail } from "@/lib/exam-paper/queries"
 import { notFound } from "next/navigation"
 import { LinkedPdfUploadClient } from "./upload-client"
 

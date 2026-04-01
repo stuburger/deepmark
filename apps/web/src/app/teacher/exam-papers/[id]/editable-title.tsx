@@ -1,6 +1,6 @@
 "use client"
 
-import { updateExamPaperTitle } from "@/lib/dashboard-actions"
+import { updateExamPaperTitle } from "@/lib/exam-paper/mutations"
 import { queryKeys } from "@/lib/query-keys"
 import { useQueryClient } from "@tanstack/react-query"
 import { useRef, useState } from "react"

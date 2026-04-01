@@ -3,7 +3,7 @@
 import {
 	getVapidPublicKey,
 	registerPushSubscription,
-} from "@/lib/batch-actions"
+} from "@/lib/notifications/push"
 import { useEffect } from "react"
 
 function urlBase64ToUint8Array(base64String: string): ArrayBuffer {

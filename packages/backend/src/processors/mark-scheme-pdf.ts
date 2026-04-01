@@ -6,16 +6,27 @@ import {
 import { defaultChatModel, embedQuestionText } from "@/lib/google-generative-ai"
 import { logger } from "@/lib/logger"
 import { GetObjectCommand, S3Client } from "@aws-sdk/client-s3"
-import { GoogleGenAI, Type } from "@google/genai"
+import { GoogleGenAI } from "@google/genai"
 import type { ScanStatus } from "@mcp-gcse/db"
-import {
-	Grader,
-	type QuestionWithMarkScheme,
-	parseMarkPointsFromPrisma,
-	probeBoundaries,
-	runAdversarialLoop,
-} from "@mcp-gcse/shared"
+import { Grader, probeBoundaries, runAdversarialLoop } from "@mcp-gcse/shared"
 import { Resource } from "sst"
+import {
+	buildQuestionWithMarkScheme,
+	linkJobQuestionsToExamPaper,
+} from "./mark-scheme-pdf/linking"
+import {
+	buildExistingQuestionsBlock,
+	buildExtractionPrompt,
+} from "./mark-scheme-pdf/prompts"
+import {
+	embeddingToVectorStr,
+	fetchExistingQuestionsForJob,
+	findMatchingQuestionId,
+} from "./mark-scheme-pdf/queries"
+import {
+	EXAM_PAPER_METADATA_SCHEMA,
+	MARK_SCHEME_SCHEMA,
+} from "./mark-scheme-pdf/schema"
 
 const TAG = "mark-scheme-pdf"
 
@@ -32,157 +43,6 @@ interface SqsRecord {
 
 interface SqsEvent {
 	Records: SqsRecord[]
-}
-
-const MARK_SCHEME_SCHEMA = {
-	type: Type.OBJECT,
-	properties: {
-		questions: {
-			type: Type.ARRAY,
-			items: {
-				type: Type.OBJECT,
-				properties: {
-					question_text: { type: Type.STRING },
-					question_type: { type: Type.STRING },
-					total_marks: { type: Type.INTEGER },
-					ao_allocations: {
-						type: Type.ARRAY,
-						nullable: true,
-						description:
-							"AO codes and mark values from the 'Marks for this question:' header line. Include ONLY codes explicitly printed in the document — do NOT infer or add codes not present.",
-						items: {
-							type: Type.OBJECT,
-							properties: {
-								ao_code: {
-									type: Type.STRING,
-									description:
-										"The AO code exactly as printed, e.g. AO1, AO2, AO3",
-								},
-								marks: {
-									type: Type.INTEGER,
-									description: "Number of marks allocated to this AO",
-								},
-							},
-							required: ["ao_code", "marks"],
-						},
-					},
-					mark_points: {
-						type: Type.ARRAY,
-						items: {
-							type: Type.OBJECT,
-							properties: {
-								description: { type: Type.STRING },
-								criteria: { type: Type.STRING },
-								points: { type: Type.INTEGER },
-							},
-							required: ["description", "criteria", "points"],
-						},
-					},
-					acceptable_answers: {
-						type: Type.ARRAY,
-						items: { type: Type.STRING },
-					},
-					guidance: { type: Type.STRING },
-					question_number: { type: Type.STRING },
-					correct_option: { type: Type.STRING },
-					options: {
-						type: Type.ARRAY,
-						nullable: true,
-						description:
-							"For multiple choice questions: the answer options (A, B, C, D). Only include when question_type is multiple_choice.",
-						items: {
-							type: Type.OBJECT,
-							properties: {
-								option_label: {
-									type: Type.STRING,
-									description: "The option label, e.g. A, B, C, D",
-								},
-								option_text: {
-									type: Type.STRING,
-									description: "The full text of this answer option",
-								},
-							},
-							required: ["option_label", "option_text"],
-						},
-					},
-					marking_method: {
-						type: Type.STRING,
-						nullable: true,
-						description: "multiple_choice | level_of_response | point_based",
-					},
-					command_word: { type: Type.STRING, nullable: true },
-					items_required: { type: Type.INTEGER, nullable: true },
-					levels: {
-						type: Type.ARRAY,
-						nullable: true,
-						items: {
-							type: Type.OBJECT,
-							properties: {
-								level: { type: Type.INTEGER },
-								mark_range: {
-									type: Type.ARRAY,
-									items: { type: Type.INTEGER },
-								},
-								descriptor: { type: Type.STRING },
-								ao_requirements: {
-									type: Type.ARRAY,
-									items: { type: Type.STRING },
-									nullable: true,
-								},
-							},
-							required: ["level", "mark_range", "descriptor"],
-						},
-					},
-					caps: {
-						type: Type.ARRAY,
-						nullable: true,
-						items: {
-							type: Type.OBJECT,
-							properties: {
-								condition: { type: Type.STRING },
-								max_level: { type: Type.INTEGER, nullable: true },
-								max_mark: { type: Type.INTEGER, nullable: true },
-								reason: { type: Type.STRING },
-							},
-							required: ["condition", "reason"],
-						},
-					},
-					matched_question_id: {
-						type: Type.STRING,
-						nullable: true,
-						description:
-							"The id of the matching question from the EXISTING QUESTIONS list provided in the prompt, or null if no match was found. Only set this when you are confident the question numbers and/or content match.",
-					},
-				},
-				required: [
-					"question_text",
-					"question_type",
-					"total_marks",
-					"mark_points",
-				],
-			},
-		},
-	},
-	required: ["questions"],
-}
-
-const EXAM_PAPER_METADATA_SCHEMA = {
-	type: Type.OBJECT,
-	properties: {
-		title: { type: Type.STRING },
-		subject: { type: Type.STRING },
-		exam_board: { type: Type.STRING },
-		total_marks: { type: Type.INTEGER },
-		duration_minutes: { type: Type.INTEGER },
-		year: { type: Type.INTEGER, nullable: true },
-	},
-	required: [
-		"title",
-		"subject",
-		"exam_board",
-		"total_marks",
-		"duration_minutes",
-	],
 }
 
 function formatAoAllocations(
@@ -212,96 +72,8 @@ async function getPdfBase64(bucket: string, key: string): Promise<string> {
 	return Buffer.from(body).toString("base64")
 }
 
-function embeddingToVectorStr(vec: number[]): string {
-	return `[${vec.join(",")}]`
-}
-
-/**
- * Normalises a raw question number string to a compact canonical form
- * suitable for exact-match lookups.
- *
- * Examples:
- *   "Question 1(a)(ii)" → "1aii"
- *   "Q3b"               → "3b"
- *   "2.b"               → "2b"
- *   "1 a"               → "1a"
- */
-export function normalizeQuestionNumber(raw: string): string {
-	return raw
-		.replace(/^(question|q)\s*/i, "") // strip leading Q / Question
-		.replace(/[()[\]{} ]/g, "") // remove brackets and spaces
-		.replace(/\.(?=[a-z])/gi, "") // remove dot before letter (2.b → 2b)
-		.toLowerCase()
-		.trim()
-}
-
-/**
- * Finds a matching question in the given exam paper using two strategies:
- *
- * 1. Exact question-number match (scoped to the paper) — most reliable.
- * 2. Embedding cosine similarity (scoped to the paper, threshold < 0.2).
- *
- * Falls back to exam_board scope only when no examPaperId is provided
- * (standalone uploads not linked to a paper).
- */
-async function findMatchingQuestionId(
-	examPaperId: string | null,
-	examBoard: string,
-	questionNumber: string | null,
-	embeddingVec: number[],
-): Promise<string | null> {
-	// Strategy 1: exact question number match within the paper
-	if (examPaperId && questionNumber) {
-		const rows = await db.$queryRaw<{ id: string }[]>`
-			SELECT q.id FROM questions q
-			JOIN exam_section_questions esq ON esq.question_id = q.id
-			JOIN exam_sections es ON es.id = esq.exam_section_id
-			WHERE es.exam_paper_id = ${examPaperId}
-			AND q.question_number = ${questionNumber}
-			LIMIT 1
-		`
-		if (rows[0]) {
-			return rows[0].id
-		}
-	}
-
-	// Strategy 2: embedding similarity scoped to the paper (or exam_board fallback)
-	const vecStr = embeddingToVectorStr(embeddingVec)
-
-	let rows: { id: string }[]
-	if (examPaperId) {
-		rows = await db.$queryRaw<{ id: string }[]>`
-			SELECT q.id FROM questions q
-			JOIN exam_section_questions esq ON esq.question_id = q.id
-			JOIN exam_sections es ON es.id = esq.exam_section_id
-			WHERE es.exam_paper_id = ${examPaperId}
-			AND q.embedding IS NOT NULL
-			ORDER BY q.embedding <=> (${vecStr}::text)::vector
-			LIMIT 1
-		`
-	} else {
-		rows = await db.$queryRaw<{ id: string }[]>`
-			SELECT q.id FROM questions q
-			JOIN pdf_ingestion_jobs pij ON q.source_pdf_ingestion_job_id = pij.id
-			WHERE pij.exam_board = ${examBoard}
-			AND q.embedding IS NOT NULL
-			ORDER BY q.embedding <=> (${vecStr}::text)::vector
-			LIMIT 1
-		`
-	}
-
-	const row = rows[0]
-	if (!row) return null
-
-	const withDistance = await db.$queryRaw<{ id: string; dist: number }[]>`
-		SELECT q.id, (q.embedding <=> (${vecStr}::text)::vector) as dist
-		FROM questions q
-		WHERE q.id = ${row.id}
-	`
-	const d = withDistance[0]?.dist
-	if (d == null || Number(d) >= 0.2) return null
-	return row.id
-}
+import { normalizeQuestionNumber } from "@/lib/normalize-question-number"
+export { normalizeQuestionNumber }
 
 export async function handler(
 	event: SqsEvent,
@@ -394,52 +166,14 @@ export async function handler(
 			const uploadedBy = job.uploaded_by
 			const autoCreateExamPaper = job.auto_create_exam_paper
 
-			// Fetch questions already on the paper (or recent question_paper uploads for this
-			// exam_board) so Gemini can map mark scheme entries directly to existing questions
-			// rather than creating duplicates.
-			type ExistingQuestionContext = {
-				id: string
-				question_number: string | null
-				text: string
-				question_type: string
-			}
-			let existingQuestionsForContext: ExistingQuestionContext[] = []
-			if (job.exam_paper_id) {
-				existingQuestionsForContext = await db.$queryRaw<
-					ExistingQuestionContext[]
-				>`
-			SELECT q.id, q.question_number, q.text, q.question_type
-			FROM questions q
-			JOIN exam_section_questions esq ON esq.question_id = q.id
-			JOIN exam_sections es ON es.id = esq.exam_section_id
-			WHERE es.exam_paper_id = ${job.exam_paper_id}
-			ORDER BY esq.order
-		`
-			} else {
-				existingQuestionsForContext = await db.$queryRaw<
-					ExistingQuestionContext[]
-				>`
-			SELECT DISTINCT ON (q.question_number) q.id, q.question_number, q.text, q.question_type
-			FROM questions q
-			JOIN pdf_ingestion_jobs pij ON q.source_pdf_ingestion_job_id = pij.id
-			WHERE pij.exam_board = ${examBoard}
-			AND q.origin = 'question_paper'
-			ORDER BY q.question_number, pij.created_at DESC
-			LIMIT 60
-		`
-			}
+			const existingQuestionsForContext = await fetchExistingQuestionsForJob(
+				job.exam_paper_id,
+				examBoard,
+			)
 
-			const existingQuestionsBlock =
-				existingQuestionsForContext.length > 0
-					? `\n\nEXISTING QUESTIONS (for matched_question_id lookup ONLY):\n${existingQuestionsForContext
-							.map(
-								(eq) =>
-									`- id: "${eq.id}" | question_number: "${eq.question_number ?? "?"}" | text: "${eq.text.slice(0, 300)}"`,
-							)
-							.join(
-								"\n",
-							)}\n\nMATCHING INSTRUCTIONS — READ CAREFULLY:\n- For EACH extracted mark scheme entry, check whether it corresponds to one of the EXISTING QUESTIONS above (match primarily by question_number, and secondarily by content). If a match is found, set matched_question_id to that question's id. If no match is found, set matched_question_id to null.\n- CRITICAL: The existing questions list is ONLY used to populate matched_question_id. You MUST extract ALL other fields (question_text, question_type, correct_option, mark_points, marking_method, etc.) EXCLUSIVELY from the mark scheme PDF document. Do NOT use the existing questions list to influence any other field. An MCQ entry that shows only "1 C" in the PDF must still be extracted as question_type "multiple_choice" with correct_option "C" — even if the matched existing question has a long written text.`
-					: ""
+			const existingQuestionsBlock = buildExistingQuestionsBlock(
+				existingQuestionsForContext,
+			)
 
 			logger.info(TAG, "Calling Gemini for mark scheme + metadata extraction", {
 				jobId,
@@ -459,39 +193,7 @@ export async function handler(
 										mimeType: "application/pdf",
 									},
 								},
-								{
-									text: `Extract all questions and their mark scheme details from this document.
-
-IMPORTANT — Multiple Choice Questions (MCQ):
-Mark schemes for MCQ sections often show a table or list like "1 C  2 A  3 D ...". You MUST extract EACH numbered MCQ as a SEPARATE question entry — do NOT create a single entry for the whole MCQ section. For each MCQ entry:
-- question_text: the actual question text if visible; if only a question number and correct option are shown (no question text in the mark scheme), set question_text to "Question [number]" as a placeholder
-- question_type: "multiple_choice"
-- question_number: the question number as a string (e.g. "1", "2", "15")
-- correct_option: the correct option label (e.g. "C", "A", "D")
-- total_marks: 1 (unless stated otherwise)
-- marking_method: "multiple_choice"
-- options: include the A/B/C/D options if the question text is visible in this document; omit if only the answer is shown
-
-GENERAL RULES:
-- Clean up all extracted text: ensure proper spacing between words, correct punctuation, and proper line breaks. Fix any OCR artefacts such as run-together words or missing spaces.
-- For each written question provide: question_text, question_type ("written"), total_marks, ao_allocations if present, mark_points (array of { description, criteria, points }), acceptable_answers if listed, guidance, question_number.
-- Detect marking_method: "multiple_choice" for MCQ, "level_of_response" if the mark scheme uses level descriptors with mark ranges (e.g. Level 1: 1–3 marks), or "point_based" for individual mark point criteria.
-- If level_of_response: extract command_word if given, items_required if given, levels (array of { level, mark_range [min, max], descriptor, ao_requirements? }), and caps if any (array of { condition, max_level or max_mark, reason }).
-
-MARK POINTS, GUIDANCE AND TOTAL MARKS — CRITICAL RULES:
-- total_marks MUST match the mark allocation explicitly stated in the document (e.g. "(2 marks)" in the question or the sum of AO marks in the header). Never default to 1 when the document says otherwise.
-- guidance MUST be populated whenever the mark scheme provides a list of acceptable answers or example responses. Copy the FULL "Answers may include" / "Possible answers" list verbatim into guidance, including any worked examples or developed answer examples.
-- mark_points MUST be genuinely descriptive — never use vague placeholders like "Identification of a correct way" or "Correct answer". The criteria field must contain the actual acceptable content from the mark scheme:
-  * For "1 mark for each correct [item] up to N marks" patterns: create N mark points each worth 1 mark. Set criteria to the specific list of acceptable answers from the document (e.g. "Acceptable: Mystery shoppers / Customer service surveys / Number of repeat sales / Amount of returned products / Volume of complaints / Quality control checks / Quality assurance / TQM").
-  * For "1 mark identify + 1 mark develop/explain" patterns: create 2 separate mark points. First point: description="Identify [the concept]", criteria=the full list of valid identifications from the document. Second point: description="Development / explanation", criteria="Award 1 mark for a linked explanation or consequence that develops the identified point (e.g. 'which means the exact requirements of customers can be met')".
-  * For calculation questions: description="Correct calculation method", criteria="Show the exact working required (e.g. step-by-step calculation shown in the mark scheme)".
-  * Always copy the specific example answers, bullet-point lists, and any worked examples from the document into the criteria or guidance fields — never summarise or omit them.
-
-AO BREAKDOWN — CRITICAL RULES:
-- AQA mark schemes print a "Marks for this question:" header above the level table, e.g. "AO2 – 3 marks    AO3 – 6 marks". Extract ONLY the AO codes and mark values stated in that line as ao_allocations.
-- For level_of_response questions, the right-hand column of each level's bullet points is labelled with an AO code (e.g. AO3, AO2). Copy these labels verbatim into ao_requirements for each level — include ONLY the codes that appear in the document for that level.
-- NEVER invent or infer AO codes that are not explicitly printed in the mark scheme. AQA GCSE Business papers typically use only AO2 and AO3; do not add AO1 or AO4 unless they are literally present in the document.${existingQuestionsBlock}`,
-								},
+								{ text: buildExtractionPrompt(existingQuestionsBlock) },
 							],
 						},
 					],
@@ -1032,118 +734,4 @@ AO BREAKDOWN — CRITICAL RULES:
 	}
 
 	return failures.length > 0 ? { batchItemFailures: failures } : {}
-}
-
-function buildQuestionWithMarkScheme(
-	questionId: string,
-	questionText: string,
-	topic: string,
-	questionType: string,
-	markPointsPrisma: Array<{
-		point_number: number
-		description: string
-		points: number
-		criteria: string
-	}>,
-	totalPoints: number,
-	guidance: string | undefined,
-	rubric: string,
-	correctOptionLabels: string[],
-	markingMethod?: "deterministic" | "point_based" | "level_of_response",
-	markingRules?: {
-		command_word?: string
-		items_required?: number
-		levels: Array<{
-			level: number
-			mark_range: [number, number]
-			descriptor: string
-			ao_requirements?: string[]
-		}>
-		caps?: Array<{
-			condition: string
-			max_level?: number
-			max_mark?: number
-			reason: string
-		}>
-	} | null,
-): QuestionWithMarkScheme {
-	const markPoints = parseMarkPointsFromPrisma(markPointsPrisma)
-	return {
-		id: questionId,
-		questionType:
-			questionType === "multiple_choice" ? "multiple_choice" : "written",
-		questionText,
-		topic,
-		rubric,
-		guidance: guidance ?? null,
-		totalPoints,
-		markPoints,
-		correctOptionLabels:
-			correctOptionLabels.length > 0 ? correctOptionLabels : undefined,
-		availableOptions: undefined,
-		markingMethod: markingMethod ?? undefined,
-		markingRules: markingRules ?? undefined,
-	}
-}
-
-/**
- * Links all questions created by a job to the given exam paper's first section.
- * Creates the section if the paper has none yet.
- * Skips questions already linked to avoid unique constraint violations (idempotent).
- */
-async function linkJobQuestionsToExamPaper(
-	jobId: string,
-	examPaperId: string,
-	uploadedBy: string,
-): Promise<void> {
-	const questions = await db.question.findMany({
-		where: { source_pdf_ingestion_job_id: jobId },
-		orderBy: { created_at: "asc" },
-		select: { id: true },
-	})
-	if (questions.length === 0) return
-
-	let section = await db.examSection.findFirst({
-		where: { exam_paper_id: examPaperId },
-		orderBy: { order: "asc" },
-	})
-	if (!section) {
-		const paper = await db.examPaper.findUnique({
-			where: { id: examPaperId },
-			select: { total_marks: true },
-		})
-		section = await db.examSection.create({
-			data: {
-				exam_paper_id: examPaperId,
-				title: "Section 1",
-				total_marks: paper?.total_marks ?? 0,
-				order: 1,
-				created_by_id: uploadedBy,
-			},
-		})
-	}
-
-	const existingLinks = await db.examSectionQuestion.findMany({
-		where: { exam_section_id: section.id },
-		select: { question_id: true, order: true },
-		orderBy: { order: "asc" },
-	})
-	const existingQuestionIds = new Set(existingLinks.map((l) => l.question_id))
-	const maxOrder =
-		existingLinks.length > 0
-			? Math.max(...existingLinks.map((l) => l.order))
-			: 0
-
-	let orderOffset = maxOrder
-	for (const q of questions) {
-		if (existingQuestionIds.has(q.id)) continue
-		orderOffset++
-		await db.examSectionQuestion.create({
-			data: {
-				exam_section_id: section.id,
-				question_id: q.id,
-				order: orderOffset,
-			},
-		})
-	}
 }

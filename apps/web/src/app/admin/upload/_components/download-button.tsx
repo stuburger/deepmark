@@ -1,7 +1,7 @@
 "use client"
 
 import { Button } from "@/components/ui/button"
-import { getPdfIngestionJobDownloadUrl } from "@/lib/pdf-ingestion-actions"
+import { getPdfIngestionJobDownloadUrl } from "@/lib/pdf-ingestion/job-lifecycle"
 import { Download } from "lucide-react"
 import { useState } from "react"
 

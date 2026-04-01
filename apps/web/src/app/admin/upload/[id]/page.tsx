@@ -1,4 +1,4 @@
-import { getPdfIngestionJobDetail } from "@/lib/pdf-ingestion-actions"
+import { getPdfIngestionJobDetail } from "@/lib/pdf-ingestion/job-lifecycle"
 import { notFound } from "next/navigation"
 import { JobStatusPage } from "./job-status-client"
 

@@ -1,6 +1,6 @@
 "use client"
 
-import type { StudentPaperJobPayload } from "@/lib/mark-actions"
+import type { StudentPaperJobPayload } from "@/lib/marking/types"
 import { CancelledPanel } from "./phases/cancelled"
 import { FailedPanel } from "./phases/failed"
 import { MarkingInProgressPanel } from "./phases/marking-in-progress"

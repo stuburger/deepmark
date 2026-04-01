@@ -15,15 +15,13 @@ import {
 } from "@/components/ui/table"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import type { ActiveBatchInfo } from "@/lib/batch-actions"
-import {
-	type SubmissionHistoryItem,
-	deleteStudentPaperJob,
-} from "@/lib/mark-actions"
+import { deleteStudentPaperJob } from "@/lib/marking/mutations"
+import type { SubmissionHistoryItem } from "@/lib/marking/types"
 import { LayoutGrid, List, Loader2, Trash2 } from "lucide-react"
 import { parseAsStringEnum, useQueryState } from "nuqs"
 import { useState } from "react"
 import { toast } from "sonner"
-import { StagedScriptReviewCards } from "./batch-ingest-dialog"
+import { StagedScriptReviewCards } from "./staged-script-review-cards"
 
 function formatDate(date: Date) {
 	return new Intl.DateTimeFormat("en-GB", {

@@ -14,7 +14,7 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table"
-import { type QuestionListItem, listQuestions } from "@/lib/dashboard-actions"
+import { type QuestionListItem, listQuestions } from "@/lib/admin/queries"
 
 type BadgeVariant = "default" | "secondary" | "destructive" | "outline"
 

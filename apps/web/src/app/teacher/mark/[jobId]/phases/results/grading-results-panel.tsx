@@ -6,7 +6,7 @@ import { Progress } from "@/components/ui/progress"
 import type {
 	GradingResult,
 	StudentPaperResultPayload,
-} from "@/lib/mark-actions"
+} from "@/lib/marking/types"
 import { GradingResultCard } from "./grading-result-card"
 
 function scoreBadgeVariant(

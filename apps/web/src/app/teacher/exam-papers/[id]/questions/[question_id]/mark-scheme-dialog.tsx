@@ -16,7 +16,7 @@ import {
 	type MarkingRulesInput,
 	createMarkScheme,
 	updateMarkScheme,
-} from "@/lib/dashboard-actions"
+} from "@/lib/mark-scheme/manual"
 import { CheckCircle2, Sparkles } from "lucide-react"
 import { useState } from "react"
 import { LorMarkSchemeEditForm } from "./lor-mark-scheme-edit-form"

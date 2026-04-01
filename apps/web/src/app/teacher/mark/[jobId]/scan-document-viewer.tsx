@@ -1,7 +1,7 @@
 "use client"
 
 import { BoundingBoxViewer } from "@/components/BoundingBoxViewer"
-import type { ScanPageUrl } from "@/lib/mark-actions"
+import type { ScanPageUrl } from "@/lib/marking/types"
 import { ChevronLeft, ChevronRight, FileText } from "lucide-react"
 import { useState } from "react"
 

@@ -1,11 +1,8 @@
 "use client"
 
-import type { BatchIngestJobData } from "@/lib/batch/mutations"
-import {
-	deleteStagedScript,
-	getStagedScriptPageUrls,
-	updateStagedScriptPageKeys,
-} from "@/lib/batch/mutations"
+import { deleteStagedScript, updateStagedScriptPageKeys } from "@/lib/batch/mutations"
+import { getStagedScriptPageUrls } from "@/lib/batch/queries"
+import type { BatchIngestJobData } from "@/lib/batch/types"
 import {
 	DndContext,
 	DragOverlay,

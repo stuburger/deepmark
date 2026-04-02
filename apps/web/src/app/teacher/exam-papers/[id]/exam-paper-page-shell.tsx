@@ -5,12 +5,9 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import {
-	commitBatch,
-	getActiveBatchForPaper,
-	updateStagedScript,
-} from "@/lib/batch/mutations"
-import type { ActiveBatchInfo } from "@/lib/batch/mutations"
+import { commitBatch, updateStagedScript } from "@/lib/batch/mutations"
+import { getActiveBatchForPaper } from "@/lib/batch/queries"
+import type { ActiveBatchInfo } from "@/lib/batch/types"
 import { deleteExamPaper } from "@/lib/exam-paper/mutations"
 import type {
 	ExamPaperDetail,

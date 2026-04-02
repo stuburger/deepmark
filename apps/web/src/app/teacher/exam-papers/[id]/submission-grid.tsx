@@ -14,7 +14,7 @@ import {
 	TableRow,
 } from "@/components/ui/table"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import type { ActiveBatchInfo } from "@/lib/batch/mutations"
+import type { ActiveBatchInfo } from "@/lib/batch/types"
 import { deleteStudentPaperJob } from "@/lib/marking/mutations"
 import type { SubmissionHistoryItem } from "@/lib/marking/types"
 import { Loader2, Trash2 } from "lucide-react"

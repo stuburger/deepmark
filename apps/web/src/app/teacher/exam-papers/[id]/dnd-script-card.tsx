@@ -3,7 +3,7 @@
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import type { BatchIngestJobData } from "@/lib/batch/mutations"
+import type { BatchIngestJobData } from "@/lib/batch/types"
 import { useDroppable } from "@dnd-kit/core"
 import { Trash2, X } from "lucide-react"
 import { DraggablePageThumb } from "./draggable-page-thumb"

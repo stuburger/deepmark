@@ -18,8 +18,8 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table"
-import { getActiveBatchForPaper } from "@/lib/batch/mutations"
-import type { ActiveBatchInfo } from "@/lib/batch/mutations"
+import { getActiveBatchForPaper } from "@/lib/batch/queries"
+import type { ActiveBatchInfo } from "@/lib/batch/types"
 import { getExamPaperStats, listMySubmissions } from "@/lib/marking/queries"
 import type { ExamPaperStats, SubmissionHistoryItem } from "@/lib/marking/types"
 import { queryKeys } from "@/lib/query-keys"

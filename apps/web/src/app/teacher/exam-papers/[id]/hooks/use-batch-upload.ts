@@ -2,13 +2,13 @@ import {
 	addFileToBatch,
 	commitBatch,
 	createBatchIngestJob,
-	getBatchIngestJob,
 	splitStagedScript,
 	triggerClassification,
 	updateBatchJobSettings,
 	updateStagedScript,
 } from "@/lib/batch/mutations"
-import type { BatchIngestJobData } from "@/lib/batch/mutations"
+import { getBatchIngestJob } from "@/lib/batch/queries"
+import type { BatchIngestJobData } from "@/lib/batch/types"
 import { useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 

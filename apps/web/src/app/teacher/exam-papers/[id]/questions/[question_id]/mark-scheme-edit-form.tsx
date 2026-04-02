@@ -11,264 +11,172 @@ import { Spinner } from "@/components/ui/spinner"
 import { Textarea } from "@/components/ui/textarea"
 import type { MarkSchemeInput } from "@/lib/mark-scheme/manual"
 import { createMarkScheme, updateMarkScheme } from "@/lib/mark-scheme/manual"
+import { zodResolver } from "@hookform/resolvers/zod"
 import { CheckCircle2, Plus } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useState, useTransition } from "react"
+import { useFieldArray, useForm } from "react-hook-form"
+import { z } from "zod/v4"
 import {
 	useCreateMarkScheme,
 	useUpdateMarkScheme,
 } from "../../hooks/use-exam-paper-mutations"
 import { MarkPointRow } from "./mark-point-row"
 
-type MarkPointRow = { description: string; points: string }
+// ── Schemas ─────────────────────────────────────────────────────────────────
+
+const mcqFormSchema = z.object({
+	description: z.string().min(1, "Description is required"),
+	guidance: z.string(),
+	correctLabels: z
+		.array(z.string())
+		.min(1, "Select at least one correct answer"),
+})
+
+const writtenFormSchema = z.object({
+	description: z.string().min(1, "Description is required"),
+	guidance: z.string(),
+	markPoints: z
+		.array(
+			z.object({
+				description: z.string().min(1, "Mark point description is required"),
+				points: z.number().int().min(0, "Must be non-negative"),
+			}),
+		)
+		.min(1, "At least one mark point is required"),
+})
+
+type McqFormValues = z.infer<typeof mcqFormSchema>
+type WrittenFormValues = z.infer<typeof writtenFormSchema>
+
+// ── Props ───────────────────────────────────────────────────────────────────
 
 type McqOption = { option_label: string; option_text: string }
 
-// ---- shared base fields ----
-type BaseCreate = {
-	markSchemeId?: never
-	questionId: string
-}
-type BaseEdit = {
-	questionId?: never
-	markSchemeId: string
-	initialDescription: string
-	initialGuidance: string
-	markingMethod: string
-}
-
-// ---- MCQ variants (question_type === "multiple_choice") ----
-type McqCreate = BaseCreate & {
+type McqProps = {
 	questionType: "multiple_choice"
 	multipleChoiceOptions: McqOption[]
-	initialDescription?: string
-	initialGuidance?: string
-	initialCorrectOptionLabels?: string[]
-	initialMarkPoints?: never
-}
-type McqEdit = BaseEdit & {
-	questionType: "multiple_choice"
-	multipleChoiceOptions: McqOption[]
-	initialCorrectOptionLabels: string[]
-	initialMarkPoints?: never
-}
+	onSuccess?: () => void
+	paperId?: string
+} & (
+	| {
+			markSchemeId?: never
+			questionId: string
+			initialDescription?: string
+			initialGuidance?: string
+			initialCorrectOptionLabels?: string[]
+	  }
+	| {
+			questionId?: never
+			markSchemeId: string
+			markingMethod: string
+			initialDescription: string
+			initialGuidance: string
+			initialCorrectOptionLabels: string[]
+	  }
+)
 
-// ---- Written variants ----
-type WrittenCreate = BaseCreate & {
+type WrittenProps = {
 	questionType?: "written" | string
-	multipleChoiceOptions?: never
-	initialDescription?: string
-	initialGuidance?: string
-	initialCorrectOptionLabels?: never
+	onSuccess?: () => void
+	paperId?: string
+} & (
+	| {
+			markSchemeId?: never
+			questionId: string
+			initialDescription?: string
+			initialGuidance?: string
+			initialMarkPoints?: Array<{ description: string; points: number }>
+	  }
+	| {
+			questionId?: never
+			markSchemeId: string
+			markingMethod: string
+			initialDescription: string
+			initialGuidance: string
+			initialMarkPoints: Array<{ description: string; points: number }>
+	  }
+)
+
+// Keep the union export for external consumers (mark-scheme-form-with-autofill)
+type McqCreate = McqProps & { markSchemeId?: never; questionId: string }
+type McqEdit = McqProps & { questionId?: never; markSchemeId: string }
+type WrittenCreate = WrittenProps & { markSchemeId?: never; questionId: string }
+type WrittenEdit = WrittenProps & { questionId?: never; markSchemeId: string }
+
+export type Props = (McqCreate | McqEdit | WrittenCreate | WrittenEdit) & {
+	multipleChoiceOptions?: McqOption[]
+	initialCorrectOptionLabels?: string[]
 	initialMarkPoints?: Array<{ description: string; points: number }>
 }
-type WrittenEdit = BaseEdit & {
-	questionType?: "written" | string
-	multipleChoiceOptions?: never
-	initialCorrectOptionLabels?: never
-	initialMarkPoints: Array<{ description: string; points: number }>
-}
 
-type Props = (McqCreate | McqEdit | WrittenCreate | WrittenEdit) & {
-	onSuccess?: () => void
-	/** When provided, enables optimistic cache updates on the exam paper query. */
+// ── Shared submit logic ─────────────────────────────────────────────────────
+
+function useMarkSchemeSubmit({
+	markSchemeId,
+	questionId,
+	paperId,
+	onSuccess,
+}: {
+	markSchemeId?: string
+	questionId?: string
 	paperId?: string
-}
-
-export function MarkSchemeEditForm(props: Props) {
-	const isEdit = props.markSchemeId !== undefined
-	const isMcq = props.questionType === "multiple_choice"
+	onSuccess?: () => void
+}) {
+	const isEdit = markSchemeId !== undefined
 	const router = useRouter()
 	const [isPending, startTransition] = useTransition()
-
-	// Optimistic hooks — active only when paperId is known (exam paper context)
-	const createHook = useCreateMarkScheme(props.paperId ?? "")
-	const updateHook = useUpdateMarkScheme(props.paperId ?? "")
-
-	const [description, setDescription] = useState(() => {
-		if (isEdit) return props.initialDescription
-		return (props as McqCreate | WrittenCreate).initialDescription ?? ""
-	})
-	const [guidance, setGuidance] = useState(() => {
-		if (isEdit) return props.initialGuidance
-		return (props as McqCreate | WrittenCreate).initialGuidance ?? ""
-	})
-
-	// MCQ state — which option labels are ticked as correct
-	const [correctLabels, setCorrectLabels] = useState<string[]>(() => {
-		if (isMcq && isEdit) {
-			return (props as McqEdit).initialCorrectOptionLabels ?? []
-		}
-		if (isMcq && !isEdit) {
-			return (props as McqCreate).initialCorrectOptionLabels ?? []
-		}
-		return []
-	})
-
-	// Point-based state
-	const [markPoints, setMarkPoints] = useState<MarkPointRow[]>(() => {
-		if (!isMcq && isEdit) {
-			const init = (props as WrittenEdit).initialMarkPoints
-			if (init && init.length > 0) {
-				return init.map((mp) => ({
-					description: mp.description,
-					points: String(mp.points),
-				}))
-			}
-		}
-		if (!isMcq && !isEdit) {
-			const init = (props as WrittenCreate).initialMarkPoints
-			if (init && init.length > 0) {
-				return init.map((mp) => ({
-					description: mp.description,
-					points: String(mp.points),
-				}))
-			}
-		}
-		return [{ description: "", points: "1" }]
-	})
-
-	const [error, setError] = useState<string | null>(null)
 	const [saved, setSaved] = useState(false)
+	const [submitError, setSubmitError] = useState<string | null>(null)
 
-	const isHookPending = createHook.isPending || updateHook.isPending
-	const effectivelyPending = isPending || isHookPending
+	const createHook = useCreateMarkScheme(paperId ?? "")
+	const updateHook = useUpdateMarkScheme(paperId ?? "")
+	const effectivelyPending =
+		isPending || createHook.isPending || updateHook.isPending
 
-	// For written edit: only show mark points if the existing method is point_based
-	const showMarkPoints =
-		!isMcq &&
-		(!isEdit ||
-			(props as WrittenEdit & BaseEdit).markingMethod === "point_based")
-
-	const totalPoints = markPoints.reduce((sum, mp) => {
-		const n = Number.parseInt(mp.points, 10)
-		return sum + (Number.isNaN(n) ? 0 : n)
-	}, 0)
-
-	function toggleCorrectLabel(label: string) {
-		setCorrectLabels((prev) =>
-			prev.includes(label) ? prev.filter((l) => l !== label) : [...prev, label],
-		)
-		setSaved(false)
-	}
-
-	function addMarkPoint() {
-		setMarkPoints((prev) => [...prev, { description: "", points: "1" }])
-		setSaved(false)
-	}
-
-	function removeMarkPoint(index: number) {
-		setMarkPoints((prev) => prev.filter((_, i) => i !== index))
-		setSaved(false)
-	}
-
-	function updateMarkPoint(
-		index: number,
-		field: "description" | "points",
-		value: string,
-	) {
-		setMarkPoints((prev) =>
-			prev.map((mp, i) => (i === index ? { ...mp, [field]: value } : mp)),
-		)
-		setSaved(false)
-	}
-
-	function handleSubmit(e: React.FormEvent) {
-		e.preventDefault()
-		setError(null)
+	function submit(input: MarkSchemeInput) {
+		setSubmitError(null)
 		setSaved(false)
 
-		const trimmedDescription = description.trim()
-		if (!trimmedDescription) {
-			setError("Description is required")
-			return
-		}
-
-		if (isMcq) {
-			if (correctLabels.length === 0) {
-				setError("Select at least one correct answer")
-				return
-			}
-		} else if (showMarkPoints) {
-			for (const mp of markPoints) {
-				if (!mp.description.trim()) {
-					setError("All mark points must have a description")
-					return
-				}
-				const pts = Number.parseInt(mp.points, 10)
-				if (Number.isNaN(pts) || pts < 0) {
-					setError("Mark point values must be non-negative numbers")
-					return
-				}
-			}
-		}
-
-		const baseInput = {
-			description: trimmedDescription,
-			guidance: guidance.trim() || null,
-		}
-
-		const input: MarkSchemeInput = isMcq
-			? {
-					...baseInput,
-					marking_method: "deterministic" as const,
-					correct_option_labels: correctLabels,
-				}
-			: {
-					...baseInput,
-					marking_method: "point_based" as const,
-					mark_points: showMarkPoints
-						? markPoints.map((mp) => ({
-								description: mp.description.trim(),
-								points: Number.parseInt(mp.points, 10),
-							}))
-						: [],
-				}
-
-		if (props.paperId) {
-			// Use optimistic mutation hooks in exam paper context
-			if (isEdit) {
+		if (paperId) {
+			if (isEdit && markSchemeId) {
 				updateHook.mutate(
-					{
-						markSchemeId: props.markSchemeId,
-						questionId: "",
-						input,
-					},
+					{ markSchemeId, questionId: "", input },
 					{
 						onSuccess: () => {
 							setSaved(true)
-							props.onSuccess?.()
+							onSuccess?.()
 						},
-						onError: (err) => setError(err.message),
+						onError: (err) => setSubmitError(err.message),
 					},
 				)
-			} else {
+			} else if (questionId) {
 				createHook.mutate(
-					{ questionId: props.questionId, input },
+					{ questionId, input },
 					{
 						onSuccess: () => {
 							setSaved(true)
-							props.onSuccess?.()
+							onSuccess?.()
 						},
-						onError: (err) => setError(err.message),
+						onError: (err) => setSubmitError(err.message),
 					},
 				)
 			}
 		} else {
-			// Standalone page fallback — no cache to update
 			startTransition(async () => {
-				const result = isEdit
-					? await updateMarkScheme(props.markSchemeId, input)
-					: await createMarkScheme(props.questionId, input)
-
+				const result =
+					isEdit && markSchemeId
+						? await updateMarkScheme(markSchemeId, input)
+						: questionId
+							? await createMarkScheme(questionId, input)
+							: { ok: false as const, error: "Missing question or mark scheme ID" }
 				if (!result.ok) {
-					setError(result.error)
+					setSubmitError(result.error)
 					return
 				}
-
 				setSaved(true)
-				if (props.onSuccess) {
-					props.onSuccess()
+				if (onSuccess) {
+					onSuccess()
 				} else {
 					router.refresh()
 				}
@@ -276,71 +184,189 @@ export function MarkSchemeEditForm(props: Props) {
 		}
 	}
 
+	return { submit, saved, setSaved, submitError, effectivelyPending, isEdit }
+}
+
+// ── Exported component ──────────────────────────────────────────────────────
+
+export function MarkSchemeEditForm(props: Props) {
+	if (props.questionType === "multiple_choice") {
+		return <McqForm {...props} />
+	}
+	return <WrittenForm {...props} />
+}
+
+// ── MCQ form ────────────────────────────────────────────────────────────────
+
+function McqForm(props: Props) {
+	const { submit, saved, setSaved, submitError, effectivelyPending, isEdit } =
+		useMarkSchemeSubmit(props)
+
+	const form = useForm<McqFormValues>({
+		resolver: zodResolver(mcqFormSchema),
+		defaultValues: {
+			description: props.initialDescription ?? "",
+			guidance: props.initialGuidance ?? "",
+			correctLabels: props.initialCorrectOptionLabels ?? [],
+		},
+	})
+
+	function toggleCorrectLabel(label: string) {
+		const current = form.getValues("correctLabels")
+		const next = current.includes(label)
+			? current.filter((l) => l !== label)
+			: [...current, label]
+		form.setValue("correctLabels", next, { shouldValidate: true })
+		setSaved(false)
+	}
+
+	function onSubmit(values: McqFormValues) {
+		submit({
+			marking_method: "deterministic",
+			description: values.description.trim(),
+			guidance: values.guidance.trim() || null,
+			correct_option_labels: values.correctLabels,
+		})
+	}
+
+	const options = props.multipleChoiceOptions ?? []
+
 	return (
-		<form onSubmit={handleSubmit}>
+		<form onSubmit={form.handleSubmit(onSubmit)}>
 			<FieldGroup>
 				<Field>
 					<FieldLabel>Description</FieldLabel>
 					<Textarea
-						value={description}
-						onChange={(e) => {
-							setDescription(e.target.value)
-							setSaved(false)
-						}}
+						{...form.register("description", {
+							onChange: () => setSaved(false),
+						})}
 						rows={3}
 						disabled={effectivelyPending}
-						placeholder={
-							isMcq
-								? "e.g. The correct answer is B."
-								: "Describe what a correct answer should include…"
-						}
+						placeholder="e.g. The correct answer is B."
 						className="resize-y text-sm"
 					/>
 					<FieldError>
-						{error?.includes("Description") ? error : null}
+						{form.formState.errors.description?.message}
 					</FieldError>
 				</Field>
 
-				{/* MCQ: correct answer picker */}
-				{isMcq && (
-					<Field>
-						<FieldLabel>Correct answer(s)</FieldLabel>
-						<div className="space-y-2">
-							{(props as McqCreate | McqEdit).multipleChoiceOptions.map(
-								(opt) => {
-									const checked = correctLabels.includes(opt.option_label)
-									return (
-										<label
-											key={opt.option_label}
-											className={`flex cursor-pointer items-start gap-3 rounded-lg border px-3 py-2.5 transition-colors ${
-												checked
-													? "border-green-500/60 bg-green-500/5"
-													: "hover:bg-muted/50"
-											}`}
-										>
-											<input
-												type="checkbox"
-												checked={checked}
-												onChange={() => toggleCorrectLabel(opt.option_label)}
-												disabled={effectivelyPending}
-												className="mt-0.5 accent-primary"
-											/>
-											<span className="shrink-0 font-mono font-medium text-sm w-4">
-												{opt.option_label}
-											</span>
-											<span className="text-sm">{opt.option_text}</span>
-										</label>
-									)
-								},
-							)}
-						</div>
-						<FieldError>
-							{error?.includes("correct answer") ? error : null}
-						</FieldError>
-					</Field>
-				)}
+				<Field>
+					<FieldLabel>Correct answer(s)</FieldLabel>
+					<div className="space-y-2">
+						{options.map((opt) => {
+							const checked = form
+								.watch("correctLabels")
+								.includes(opt.option_label)
+							return (
+								<label
+									key={opt.option_label}
+									className={`flex cursor-pointer items-start gap-3 rounded-lg border px-3 py-2.5 transition-colors ${
+										checked
+											? "border-green-500/60 bg-green-500/5"
+											: "hover:bg-muted/50"
+									}`}
+								>
+									<input
+										type="checkbox"
+										checked={checked}
+										onChange={() => toggleCorrectLabel(opt.option_label)}
+										disabled={effectivelyPending}
+										className="mt-0.5 accent-primary"
+									/>
+									<span className="shrink-0 font-mono font-medium text-sm w-4">
+										{opt.option_label}
+									</span>
+									<span className="text-sm">{opt.option_text}</span>
+								</label>
+							)
+						})}
+					</div>
+					<FieldError>
+						{form.formState.errors.correctLabels?.message}
+					</FieldError>
+				</Field>
 
-				{/* Written: point-based mark points */}
+				<GuidanceField
+					register={form.register}
+					disabled={effectivelyPending}
+					onDirty={() => setSaved(false)}
+				/>
+			</FieldGroup>
+
+			{submitError && (
+				<p className="mt-3 text-sm text-destructive">{submitError}</p>
+			)}
+			<SaveButton pending={effectivelyPending} saved={saved} isEdit={isEdit} />
+		</form>
+	)
+}
+
+// ── Written form ────────────────────────────────────────────────────────────
+
+function WrittenForm(props: Props) {
+	const { submit, saved, setSaved, submitError, effectivelyPending, isEdit } =
+		useMarkSchemeSubmit(props)
+
+	const showMarkPoints =
+		!isEdit || ("markingMethod" in props && props.markingMethod === "point_based")
+
+	const form = useForm<WrittenFormValues>({
+		resolver: zodResolver(writtenFormSchema),
+		defaultValues: {
+			description: props.initialDescription ?? "",
+			guidance: props.initialGuidance ?? "",
+			markPoints: (() => {
+				const init = props.initialMarkPoints
+				if (init && init.length > 0) return init
+				return [{ description: "", points: 1 }]
+			})(),
+		},
+	})
+
+	const markPointFields = useFieldArray({
+		control: form.control,
+		name: "markPoints",
+	})
+
+	const watchedPoints = form.watch("markPoints")
+	const totalPoints = watchedPoints.reduce(
+		(sum, mp) => sum + (mp.points || 0),
+		0,
+	)
+
+	function onSubmit(values: WrittenFormValues) {
+		submit({
+			marking_method: "point_based",
+			description: values.description.trim(),
+			guidance: values.guidance.trim() || null,
+			mark_points: showMarkPoints
+				? values.markPoints.map((mp) => ({
+						description: mp.description.trim(),
+						points: mp.points,
+					}))
+				: [],
+		})
+	}
+
+	return (
+		<form onSubmit={form.handleSubmit(onSubmit)}>
+			<FieldGroup>
+				<Field>
+					<FieldLabel>Description</FieldLabel>
+					<Textarea
+						{...form.register("description", {
+							onChange: () => setSaved(false),
+						})}
+						rows={3}
+						disabled={effectivelyPending}
+						placeholder="Describe what a correct answer should include…"
+						className="resize-y text-sm"
+					/>
+					<FieldError>
+						{form.formState.errors.description?.message}
+					</FieldError>
+				</Field>
+
 				{showMarkPoints && (
 					<Field>
 						<FieldLabel>
@@ -350,16 +376,29 @@ export function MarkSchemeEditForm(props: Props) {
 							</span>
 						</FieldLabel>
 						<div className="space-y-2">
-							{markPoints.map((mp, i) => (
+							{markPointFields.fields.map((field, i) => (
 								<MarkPointRow
-									key={i}
-									description={mp.description}
-									points={mp.points}
+									key={field.id}
+									description={watchedPoints[i]?.description ?? ""}
+									points={String(watchedPoints[i]?.points ?? 1)}
 									index={i}
 									disabled={effectivelyPending}
-									isOnly={markPoints.length <= 1}
-									onChange={(field, value) => updateMarkPoint(i, field, value)}
-									onRemove={() => removeMarkPoint(i)}
+									isOnly={markPointFields.fields.length <= 1}
+									onChange={(f, value) => {
+										if (f === "points") {
+											form.setValue(
+												`markPoints.${i}.points`,
+												Number.parseInt(value, 10) || 0,
+											)
+										} else {
+											form.setValue(`markPoints.${i}.description`, value)
+										}
+										setSaved(false)
+									}}
+									onRemove={() => {
+										markPointFields.remove(i)
+										setSaved(false)
+									}}
 								/>
 							))}
 						</div>
@@ -367,7 +406,10 @@ export function MarkSchemeEditForm(props: Props) {
 							type="button"
 							variant="outline"
 							size="sm"
-							onClick={addMarkPoint}
+							onClick={() => {
+								markPointFields.append({ description: "", points: 1 })
+								setSaved(false)
+							}}
 							disabled={effectivelyPending}
 							className="mt-2"
 						>
@@ -375,60 +417,89 @@ export function MarkSchemeEditForm(props: Props) {
 							Add mark point
 						</Button>
 						<FieldError>
-							{error?.includes("mark point") ? error : null}
+							{form.formState.errors.markPoints?.message}
 						</FieldError>
 					</Field>
 				)}
 
-				<Field>
-					<FieldLabel>
-						Guidance
-						<span className="ml-1 text-xs font-normal text-muted-foreground">
-							(optional)
-						</span>
-					</FieldLabel>
-					<Textarea
-						value={guidance}
-						onChange={(e) => {
-							setGuidance(e.target.value)
-							setSaved(false)
-						}}
-						rows={2}
-						disabled={effectivelyPending}
-						placeholder="Additional guidance for markers…"
-						className="resize-y text-sm"
-					/>
-				</Field>
+				<GuidanceField
+					register={form.register}
+					disabled={effectivelyPending}
+					onDirty={() => setSaved(false)}
+				/>
 			</FieldGroup>
 
-			{error &&
-				!error.includes("Description") &&
-				!error.includes("mark point") &&
-				!error.includes("correct answer") && (
-					<p className="mt-3 text-sm text-destructive">{error}</p>
-				)}
-
-			<div className="mt-4 flex items-center gap-3">
-				<Button type="submit" size="sm" disabled={effectivelyPending}>
-					{effectivelyPending ? (
-						<>
-							<Spinner className="h-3.5 w-3.5 mr-1.5" />
-							Saving…
-						</>
-					) : isEdit ? (
-						"Save changes"
-					) : (
-						"Create mark scheme"
-					)}
-				</Button>
-
-				{saved && (
-					<span className="flex items-center gap-1.5 text-sm text-green-600 dark:text-green-400">
-						<CheckCircle2 className="h-4 w-4" />
-						Saved
-					</span>
-				)}
-			</div>
+			{submitError && (
+				<p className="mt-3 text-sm text-destructive">{submitError}</p>
+			)}
+			<SaveButton
+				pending={effectivelyPending}
+				saved={saved}
+				isEdit={isEdit}
+			/>
 		</form>
+	)
+}
+
+// ── Shared UI pieces ────────────────────────────────────────────────────────
+
+function GuidanceField({
+	register,
+	disabled,
+	onDirty,
+}: {
+	register: (name: "guidance", opts?: { onChange: () => void }) => object
+	disabled: boolean
+	onDirty: () => void
+}) {
+	return (
+		<Field>
+			<FieldLabel>
+				Guidance
+				<span className="ml-1 text-xs font-normal text-muted-foreground">
+					(optional)
+				</span>
+			</FieldLabel>
+			<Textarea
+				{...register("guidance", { onChange: onDirty })}
+				rows={2}
+				disabled={disabled}
+				placeholder="Additional guidance for markers…"
+				className="resize-y text-sm"
+			/>
+		</Field>
+	)
+}
+
+function SaveButton({
+	pending,
+	saved,
+	isEdit,
+}: {
+	pending: boolean
+	saved: boolean
+	isEdit: boolean
+}) {
+	return (
+		<div className="mt-4 flex items-center gap-3">
+			<Button type="submit" size="sm" disabled={pending}>
+				{pending ? (
+					<>
+						<Spinner className="h-3.5 w-3.5 mr-1.5" />
+						Saving…
+					</>
+				) : isEdit ? (
+					"Save changes"
+				) : (
+					"Create mark scheme"
+				)}
+			</Button>
+			{saved && (
+				<span className="flex items-center gap-1.5 text-sm text-green-600 dark:text-green-400">
+					<CheckCircle2 className="h-4 w-4" />
+					Saved
+				</span>
+			)}
+		</div>
 	)
 }

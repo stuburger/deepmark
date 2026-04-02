@@ -15,34 +15,65 @@ import {
 	type MarkingRulesInput,
 	updateMarkScheme,
 } from "@/lib/mark-scheme/manual"
+import { zodResolver } from "@hookform/resolvers/zod"
 import { CheckCircle2, Plus } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useState, useTransition } from "react"
+import { useFieldArray, useForm } from "react-hook-form"
+import { z } from "zod/v4"
 import { useUpdateMarkScheme } from "../../hooks/use-exam-paper-mutations"
 import { CapBlock } from "./cap-block"
 import { LevelBlock } from "./level-block"
 
-type LevelRow = {
-	level: string
-	minMark: string
-	maxMark: string
-	descriptor: string
-	aoRequirementsText: string
-}
+// ── Schema ──────────────────────────────────────────────────────────────────
 
-type CapRow = {
-	condition: string
-	maxLevel: string
-	maxMark: string
-	reason: string
-}
+const levelSchema = z.object({
+	level: z.number().int().min(1, "Level must be at least 1"),
+	minMark: z.number().int().min(0, "Min mark must be non-negative"),
+	maxMark: z.number().int().min(0, "Max mark must be non-negative"),
+	descriptor: z.string().min(1, "Descriptor is required"),
+	aoRequirementsText: z.string(),
+})
+
+const capSchema = z
+	.object({
+		condition: z.string().min(1, "Condition is required"),
+		maxLevel: z.string(),
+		maxMark: z.string(),
+		reason: z.string().min(1, "Reason is required"),
+	})
+	.refine((cap) => cap.maxLevel.trim() !== "" || cap.maxMark.trim() !== "", {
+		message: "Each cap needs a max level or max mark",
+	})
+	.refine(
+		(cap) => !(cap.maxLevel.trim() !== "" && cap.maxMark.trim() !== ""),
+		{ message: "Use either max level or max mark, not both" },
+	)
+
+const formSchema = z
+	.object({
+		description: z.string().min(1, "Description is required"),
+		guidance: z.string(),
+		commandWord: z.string(),
+		itemsRequired: z.string(),
+		levels: z.array(levelSchema).min(1, "At least one level is required"),
+		caps: z.array(capSchema),
+	})
+	.refine(
+		(data) =>
+			data.levels.every((l) => l.minMark <= l.maxMark),
+		{ message: "Min mark must not exceed max mark", path: ["levels"] },
+	)
+
+type FormValues = z.infer<typeof formSchema>
+
+// ── Props ───────────────────────────────────────────────────────────────────
 
 type Props = {
 	markSchemeId: string
 	initialDescription: string
 	initialGuidance: string
 	onSuccess?: () => void
-	/** When provided, enables optimistic cache updates on the exam paper query. */
 	paperId?: string
 	initialMarkingRules: {
 		command_word?: string
@@ -62,6 +93,8 @@ type Props = {
 	} | null
 }
 
+// ── Component ───────────────────────────────────────────────────────────────
+
 export function LorMarkSchemeEditForm({
 	markSchemeId,
 	initialDescription,
@@ -73,207 +106,96 @@ export function LorMarkSchemeEditForm({
 	const router = useRouter()
 	const [isPending, startTransition] = useTransition()
 	const updateHook = useUpdateMarkScheme(paperId ?? "")
-
-	const [description, setDescription] = useState(initialDescription)
-	const [guidance, setGuidance] = useState(initialGuidance)
-	const [commandWord, setCommandWord] = useState(
-		initialMarkingRules?.command_word ?? "",
-	)
-	const [itemsRequired, setItemsRequired] = useState(
-		initialMarkingRules?.items_required != null
-			? String(initialMarkingRules.items_required)
-			: "",
-	)
-	const [levels, setLevels] = useState<LevelRow[]>(() => {
-		const initialLevels = initialMarkingRules?.levels ?? []
-		if (initialLevels.length > 0) {
-			return initialLevels.map((level) => ({
-				level: String(level.level),
-				minMark: String(level.mark_range[0]),
-				maxMark: String(level.mark_range[1]),
-				descriptor: level.descriptor,
-				aoRequirementsText: (level.ao_requirements ?? []).join("\n"),
-			}))
-		}
-		return [
-			{
-				level: "1",
-				minMark: "1",
-				maxMark: "1",
-				descriptor: "",
-				aoRequirementsText: "",
-			},
-		]
-	})
-	const [caps, setCaps] = useState<CapRow[]>(() => {
-		const initialCaps = initialMarkingRules?.caps ?? []
-		return initialCaps.map((cap) => ({
-			condition: cap.condition,
-			maxLevel: cap.max_level != null ? String(cap.max_level) : "",
-			maxMark: cap.max_mark != null ? String(cap.max_mark) : "",
-			reason: cap.reason,
-		}))
-	})
-
-	const [error, setError] = useState<string | null>(null)
 	const [saved, setSaved] = useState(false)
+	const [submitError, setSubmitError] = useState<string | null>(null)
 	const effectivelyPending = isPending || updateHook.isPending
 
-	function updateLevel(index: number, key: keyof LevelRow, value: string) {
-		setLevels((prev) =>
-			prev.map((row, i) => (i === index ? { ...row, [key]: value } : row)),
-		)
+	const form = useForm<FormValues>({
+		resolver: zodResolver(formSchema),
+		defaultValues: {
+			description: initialDescription,
+			guidance: initialGuidance,
+			commandWord: initialMarkingRules?.command_word ?? "",
+			itemsRequired:
+				initialMarkingRules?.items_required != null
+					? String(initialMarkingRules.items_required)
+					: "",
+			levels: (() => {
+				const init = initialMarkingRules?.levels ?? []
+				if (init.length > 0) {
+					return init.map((l) => ({
+						level: l.level,
+						minMark: l.mark_range[0],
+						maxMark: l.mark_range[1],
+						descriptor: l.descriptor,
+						aoRequirementsText: (l.ao_requirements ?? []).join("\n"),
+					}))
+				}
+				return [
+					{
+						level: 1,
+						minMark: 1,
+						maxMark: 1,
+						descriptor: "",
+						aoRequirementsText: "",
+					},
+				]
+			})(),
+			caps: (initialMarkingRules?.caps ?? []).map((cap) => ({
+				condition: cap.condition,
+				maxLevel: cap.max_level != null ? String(cap.max_level) : "",
+				maxMark: cap.max_mark != null ? String(cap.max_mark) : "",
+				reason: cap.reason,
+			})),
+		},
+	})
+
+	const levelFields = useFieldArray({ control: form.control, name: "levels" })
+	const capFields = useFieldArray({ control: form.control, name: "caps" })
+
+	function onSubmit(values: FormValues) {
+		setSubmitError(null)
 		setSaved(false)
-	}
-
-	function addLevel() {
-		setLevels((prev) => [
-			...prev,
-			{
-				level: String(prev.length + 1),
-				minMark: "",
-				maxMark: "",
-				descriptor: "",
-				aoRequirementsText: "",
-			},
-		])
-		setSaved(false)
-	}
-
-	function removeLevel(index: number) {
-		setLevels((prev) => prev.filter((_, i) => i !== index))
-		setSaved(false)
-	}
-
-	function updateCap(index: number, key: keyof CapRow, value: string) {
-		setCaps((prev) =>
-			prev.map((row, i) => (i === index ? { ...row, [key]: value } : row)),
-		)
-		setSaved(false)
-	}
-
-	function addCap() {
-		setCaps((prev) => [
-			...prev,
-			{ condition: "", maxLevel: "", maxMark: "", reason: "" },
-		])
-		setSaved(false)
-	}
-
-	function removeCap(index: number) {
-		setCaps((prev) => prev.filter((_, i) => i !== index))
-		setSaved(false)
-	}
-
-	function handleSubmit(e: React.FormEvent) {
-		e.preventDefault()
-		setError(null)
-		setSaved(false)
-
-		const trimmedDescription = description.trim()
-		if (!trimmedDescription) {
-			setError("Description is required")
-			return
-		}
-
-		if (levels.length === 0) {
-			setError("At least one level descriptor is required")
-			return
-		}
 
 		const parsedItemsRequired =
-			itemsRequired.trim() === ""
+			values.itemsRequired.trim() === ""
 				? undefined
-				: Number.parseInt(itemsRequired, 10)
-		if (
-			parsedItemsRequired != null &&
-			(Number.isNaN(parsedItemsRequired) || parsedItemsRequired < 0)
-		) {
-			setError("Items required must be a non-negative number")
-			return
-		}
+				: Number.parseInt(values.itemsRequired, 10)
 
-		const parsedLevels = []
-		for (const row of levels) {
-			const levelNum = Number.parseInt(row.level, 10)
-			const min = Number.parseInt(row.minMark, 10)
-			const max = Number.parseInt(row.maxMark, 10)
-			const descriptor = row.descriptor.trim()
-
-			if (
-				Number.isNaN(levelNum) ||
-				Number.isNaN(min) ||
-				Number.isNaN(max) ||
-				!descriptor
-			) {
-				setError("Each level needs a level number, mark range, and descriptor")
-				return
-			}
-			if (levelNum < 1 || min < 0 || max < 0 || min > max) {
-				setError("Level numbers and mark ranges are invalid")
-				return
-			}
-
+		const parsedLevels = values.levels.map((row) => {
 			const aoRequirements = row.aoRequirementsText
 				.split("\n")
 				.map((item) => item.trim())
 				.filter(Boolean)
+			return {
+				level: row.level,
+				mark_range: [row.minMark, row.maxMark] as [number, number],
+				descriptor: row.descriptor.trim(),
+				...(aoRequirements.length > 0 ? { ao_requirements: aoRequirements } : {}),
+			}
+		})
 
-			parsedLevels.push({
-				level: levelNum,
-				mark_range: [min, max] as [number, number],
-				descriptor,
-				...(aoRequirements.length > 0
-					? { ao_requirements: aoRequirements }
-					: {}),
-			})
-		}
-
-		const parsedCaps = []
-		for (const cap of caps) {
-			const condition = cap.condition.trim()
-			const reason = cap.reason.trim()
+		const parsedCaps = values.caps.map((cap) => {
 			const maxLevel =
 				cap.maxLevel.trim() === ""
 					? undefined
 					: Number.parseInt(cap.maxLevel, 10)
 			const maxMark =
-				cap.maxMark.trim() === "" ? undefined : Number.parseInt(cap.maxMark, 10)
-
-			if (!condition || !reason) {
-				setError("Each cap needs both a condition and reason")
-				return
-			}
-			if (maxLevel == null && maxMark == null) {
-				setError("Each cap needs a max level or max mark")
-				return
-			}
-			if (maxLevel != null && maxMark != null) {
-				setError("Use either max level or max mark for each cap, not both")
-				return
-			}
-			if ((maxLevel != null && Number.isNaN(maxLevel)) || maxLevel === 0) {
-				setError("Cap max level must be a positive number")
-				return
-			}
-			if (
-				(maxMark != null && Number.isNaN(maxMark)) ||
-				(maxMark != null && maxMark < 0)
-			) {
-				setError("Cap max mark must be a non-negative number")
-				return
-			}
-
-			parsedCaps.push({
-				condition,
-				reason,
+				cap.maxMark.trim() === ""
+					? undefined
+					: Number.parseInt(cap.maxMark, 10)
+			return {
+				condition: cap.condition.trim(),
+				reason: cap.reason.trim(),
 				...(maxLevel != null ? { max_level: maxLevel } : {}),
 				...(maxMark != null ? { max_mark: maxMark } : {}),
-			})
-		}
+			}
+		})
 
 		const markingRules: MarkingRulesInput = {
-			...(commandWord.trim() ? { command_word: commandWord.trim() } : {}),
+			...(values.commandWord.trim()
+				? { command_word: values.commandWord.trim() }
+				: {}),
 			...(parsedItemsRequired != null
 				? { items_required: parsedItemsRequired }
 				: {}),
@@ -283,8 +205,8 @@ export function LorMarkSchemeEditForm({
 
 		const input = {
 			marking_method: "level_of_response" as const,
-			description: trimmedDescription,
-			guidance: guidance.trim() || null,
+			description: values.description.trim(),
+			guidance: values.guidance.trim() || null,
 			marking_rules: markingRules,
 		}
 
@@ -296,14 +218,14 @@ export function LorMarkSchemeEditForm({
 						setSaved(true)
 						onSuccess?.()
 					},
-					onError: (err) => setError(err.message),
+					onError: (err) => setSubmitError(err.message),
 				},
 			)
 		} else {
 			startTransition(async () => {
 				const result = await updateMarkScheme(markSchemeId, input)
 				if (!result.ok) {
-					setError(result.error)
+					setSubmitError(result.error)
 					return
 				}
 				setSaved(true)
@@ -317,47 +239,50 @@ export function LorMarkSchemeEditForm({
 	}
 
 	return (
-		<form onSubmit={handleSubmit}>
+		<form onSubmit={form.handleSubmit(onSubmit)}>
 			<FieldGroup>
 				<Field>
 					<FieldLabel>Description</FieldLabel>
 					<Textarea
-						value={description}
-						onChange={(e) => {
-							setDescription(e.target.value)
-							setSaved(false)
-						}}
+						{...form.register("description")}
 						rows={3}
 						disabled={effectivelyPending}
 						className="resize-y text-sm"
+						onChange={(e) => {
+							form.register("description").onChange(e)
+							setSaved(false)
+						}}
 					/>
+					<FieldError>
+						{form.formState.errors.description?.message}
+					</FieldError>
 				</Field>
 
 				<div className="grid grid-cols-2 gap-4">
 					<Field>
 						<FieldLabel>Command word</FieldLabel>
 						<Input
-							value={commandWord}
-							onChange={(e) => {
-								setCommandWord(e.target.value)
-								setSaved(false)
-							}}
+							{...form.register("commandWord")}
 							disabled={effectivelyPending}
 							placeholder="e.g. Explain"
+							onChange={(e) => {
+								form.register("commandWord").onChange(e)
+								setSaved(false)
+							}}
 						/>
 					</Field>
 					<Field>
 						<FieldLabel>Items required</FieldLabel>
 						<Input
+							{...form.register("itemsRequired")}
 							type="number"
 							min={0}
-							value={itemsRequired}
-							onChange={(e) => {
-								setItemsRequired(e.target.value)
-								setSaved(false)
-							}}
 							disabled={effectivelyPending}
 							placeholder="optional"
+							onChange={(e) => {
+								form.register("itemsRequired").onChange(e)
+								setSaved(false)
+							}}
 						/>
 					</Field>
 				</div>
@@ -368,15 +293,45 @@ export function LorMarkSchemeEditForm({
 						Define mark bands and descriptors used by the LOR marker.
 					</FieldDescription>
 					<div className="space-y-3">
-						{levels.map((row, i) => (
+						{levelFields.fields.map((field, i) => (
 							<LevelBlock
-								key={i}
-								row={row}
+								key={field.id}
+								row={{
+									level: String(form.watch(`levels.${i}.level`)),
+									minMark: String(form.watch(`levels.${i}.minMark`)),
+									maxMark: String(form.watch(`levels.${i}.maxMark`)),
+									descriptor: form.watch(`levels.${i}.descriptor`),
+									aoRequirementsText: form.watch(
+										`levels.${i}.aoRequirementsText`,
+									),
+								}}
 								index={i}
 								disabled={effectivelyPending}
-								isOnly={levels.length <= 1}
-								onChange={(key, value) => updateLevel(i, key, value)}
-								onRemove={() => removeLevel(i)}
+								isOnly={levelFields.fields.length <= 1}
+								onChange={(key, value) => {
+									switch (key) {
+										case "level":
+											form.setValue(`levels.${i}.level`, Number.parseInt(value, 10) || 0)
+											break
+										case "minMark":
+											form.setValue(`levels.${i}.minMark`, Number.parseInt(value, 10) || 0)
+											break
+										case "maxMark":
+											form.setValue(`levels.${i}.maxMark`, Number.parseInt(value, 10) || 0)
+											break
+										case "descriptor":
+											form.setValue(`levels.${i}.descriptor`, value)
+											break
+										case "aoRequirementsText":
+											form.setValue(`levels.${i}.aoRequirementsText`, value)
+											break
+									}
+									setSaved(false)
+								}}
+								onRemove={() => {
+									levelFields.remove(i)
+									setSaved(false)
+								}}
 							/>
 						))}
 					</div>
@@ -384,26 +339,49 @@ export function LorMarkSchemeEditForm({
 						type="button"
 						variant="outline"
 						size="sm"
-						onClick={addLevel}
+						onClick={() => {
+							levelFields.append({
+								level: levelFields.fields.length + 1,
+								minMark: 0,
+								maxMark: 0,
+								descriptor: "",
+								aoRequirementsText: "",
+							})
+							setSaved(false)
+						}}
 						disabled={effectivelyPending}
 						className="mt-2"
 					>
 						<Plus className="h-3.5 w-3.5 mr-1.5" />
 						Add level
 					</Button>
+					<FieldError>
+						{form.formState.errors.levels?.message}
+					</FieldError>
 				</Field>
 
 				<Field>
 					<FieldLabel>Caps (optional)</FieldLabel>
 					<div className="space-y-3">
-						{caps.map((cap, i) => (
+						{capFields.fields.map((field, i) => (
 							<CapBlock
-								key={i}
-								cap={cap}
+								key={field.id}
+								cap={{
+									condition: form.watch(`caps.${i}.condition`),
+									maxLevel: form.watch(`caps.${i}.maxLevel`),
+									maxMark: form.watch(`caps.${i}.maxMark`),
+									reason: form.watch(`caps.${i}.reason`),
+								}}
 								index={i}
 								disabled={effectivelyPending}
-								onChange={(key, value) => updateCap(i, key, value)}
-								onRemove={() => removeCap(i)}
+								onChange={(key, value) => {
+									form.setValue(`caps.${i}.${key}`, value)
+									setSaved(false)
+								}}
+								onRemove={() => {
+									capFields.remove(i)
+									setSaved(false)
+								}}
 							/>
 						))}
 					</div>
@@ -411,7 +389,15 @@ export function LorMarkSchemeEditForm({
 						type="button"
 						variant="outline"
 						size="sm"
-						onClick={addCap}
+						onClick={() => {
+							capFields.append({
+								condition: "",
+								maxLevel: "",
+								maxMark: "",
+								reason: "",
+							})
+							setSaved(false)
+						}}
 						disabled={effectivelyPending}
 						className="mt-2"
 					>
@@ -428,20 +414,22 @@ export function LorMarkSchemeEditForm({
 						</span>
 					</FieldLabel>
 					<Textarea
-						value={guidance}
-						onChange={(e) => {
-							setGuidance(e.target.value)
-							setSaved(false)
-						}}
+						{...form.register("guidance")}
 						rows={2}
 						disabled={effectivelyPending}
 						placeholder="Additional guidance for markers…"
 						className="resize-y text-sm"
+						onChange={(e) => {
+							form.register("guidance").onChange(e)
+							setSaved(false)
+						}}
 					/>
 				</Field>
-
-				<FieldError>{error}</FieldError>
 			</FieldGroup>
+
+			{submitError && (
+				<p className="mt-3 text-sm text-destructive">{submitError}</p>
+			)}
 
 			<div className="mt-4 flex items-center gap-3">
 				<Button type="submit" size="sm" disabled={effectivelyPending}>

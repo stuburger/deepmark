@@ -1,29 +1,17 @@
 "use client"
 
 import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { Progress } from "@/components/ui/progress"
 import { Spinner } from "@/components/ui/spinner"
-import {
-	Table,
-	TableBody,
-	TableCell,
-	TableHead,
-	TableHeader,
-	TableRow,
-} from "@/components/ui/table"
 import type { ActiveBatchInfo } from "@/lib/batch/types"
 import { deleteStudentPaperJob } from "@/lib/marking/mutations"
 import type { SubmissionHistoryItem } from "@/lib/marking/types"
-import { Loader2, Trash2 } from "lucide-react"
-import { parseAsStringEnum, useQueryState } from "nuqs"
+import { Loader2 } from "lucide-react"
 import { useState } from "react"
 import { toast } from "sonner"
 import { ScriptCard } from "./script-card"
 import { StagedScriptReviewCards } from "./staged-script-review-cards"
-import { formatDate, scoreColour, statusLabel } from "./submission-grid-config"
-import { ViewToggle } from "./view-toggle"
 
 export function SubmissionGrid({
 	submissions,
@@ -46,10 +34,6 @@ export function SubmissionGrid({
 	onToggleExclude?: (id: string, status: string) => Promise<void>
 	onDeleteScript?: () => void
 }) {
-	const [subView, setSubView] = useQueryState(
-		"submissions_view",
-		parseAsStringEnum(["grid", "table"]).withDefault("grid"),
-	)
 	const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
 	const [deleting, setDeleting] = useState(false)
 
@@ -72,18 +56,6 @@ export function SubmissionGrid({
 
 	return (
 		<div className="space-y-4">
-			{/* Header row: count + view toggle */}
-			<div className="flex items-center justify-between gap-4">
-				<p className="text-sm text-muted-foreground">
-					{submissions.length === 0
-						? "No submissions yet."
-						: `${submissions.length} submission${submissions.length !== 1 ? "s" : ""}`}
-				</p>
-				{submissions.length > 0 && (
-					<ViewToggle value={subView} onChange={setSubView} />
-				)}
-			</div>
-
 			{/* Active batch status — classifying */}
 			{activeBatch?.status === "classifying" && (
 				<div className="flex items-center gap-3 rounded-lg border bg-muted/30 px-4 py-4">
@@ -176,94 +148,17 @@ export function SubmissionGrid({
 				</div>
 			)}
 
-			{subView === "grid" ? (
-				<div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-					{submissions.map((sub) => (
-						<ScriptCard
-							key={sub.id}
-							sub={sub}
-							onView={() => onView(sub.id)}
-							onDeleteRequest={() => setPendingDeleteId(sub.id)}
-						/>
-					))}
-				</div>
-			) : (
-				submissions.length > 0 && (
-					<Card>
-						<CardContent className="pt-4">
-							<Table>
-								<TableHeader>
-									<TableRow>
-										<TableHead>Student</TableHead>
-										<TableHead>Score</TableHead>
-										<TableHead>Date</TableHead>
-										<TableHead className="w-20" />
-									</TableRow>
-								</TableHeader>
-								<TableBody>
-									{submissions.map((sub) => {
-										const pct =
-											sub.total_max > 0
-												? Math.round(
-														(sub.total_awarded / sub.total_max) * 100,
-													)
-												: null
-										const colours = scoreColour(pct)
-										return (
-											<TableRow key={sub.id} className="group">
-												<TableCell className="text-sm">
-													{sub.student_name ?? (
-														<span className="text-muted-foreground italic">
-															Unnamed
-														</span>
-													)}
-												</TableCell>
-												<TableCell>
-													{pct !== null ? (
-														<span
-															className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums ${colours?.chip}`}
-														>
-															{sub.total_awarded}/{sub.total_max} · {pct}%
-														</span>
-													) : (
-														<span className="text-xs text-muted-foreground capitalize">
-															{statusLabel(sub.status)}
-														</span>
-													)}
-												</TableCell>
-												<TableCell className="text-xs text-muted-foreground tabular-nums">
-													{formatDate(sub.created_at)}
-												</TableCell>
-												<TableCell>
-													<div className="flex items-center justify-end gap-2">
-														<button
-															type="button"
-															onClick={() => onView(sub.id)}
-															className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-														>
-															View
-														</button>
-														<Button
-															size="sm"
-															variant="ghost"
-															className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
-															title="Delete submission"
-															onClick={() => setPendingDeleteId(sub.id)}
-														>
-															<Trash2 className="h-3.5 w-3.5" />
-															<span className="sr-only">Delete submission</span>
-														</Button>
-													</div>
-												</TableCell>
-											</TableRow>
-										)
-									})}
-								</TableBody>
-							</Table>
-						</CardContent>
-					</Card>
-				)
-			)}
+			{/* Card grid */}
+			<div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+				{submissions.map((sub) => (
+					<ScriptCard
+						key={sub.id}
+						sub={sub}
+						onView={() => onView(sub.id)}
+						onDeleteRequest={() => setPendingDeleteId(sub.id)}
+					/>
+				))}
+			</div>
 
 			<ConfirmDialog
 				open={pendingDeleteId !== null}

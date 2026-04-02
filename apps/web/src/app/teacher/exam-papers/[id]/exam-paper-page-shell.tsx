@@ -39,8 +39,10 @@ import { LinkMarkSchemeDialog } from "./link-mark-scheme-dialog"
 import { MarkingJobDialog } from "./marking-job-dialog"
 import { SubmissionGrid } from "./submission-grid"
 import { TERMINAL_STATUSES } from "./submission-grid-config"
+import { SubmissionTable } from "./submission-table"
 import { UnlinkedSchemesPanel } from "./unlinked-schemes-panel"
 import { UploadScriptsDialog } from "./upload-scripts-dialog"
+import { ViewToggle } from "./view-toggle"
 
 export function ExamPaperPageShell({
 	paper: initialPaper,
@@ -72,6 +74,12 @@ export function ExamPaperPageShell({
 			"backlog",
 			"analytics",
 		]).withDefault("paper"),
+	)
+
+	// Grid vs table view for submissions/backlog
+	const [subView, setSubView] = useQueryState(
+		"submissions_view",
+		parseAsStringEnum(["grid", "table"]).withDefault("grid"),
 	)
 
 	// Live exam paper data, ingestion state, and analytics
@@ -354,13 +362,34 @@ export function ExamPaperPageShell({
 				{/* ── Submissions tab (complete only) ── */}
 				<TabsContent value="submissions" className="space-y-6 mt-10">
 					{completeSubmissions.length > 0 ? (
-						<SubmissionGrid
-							submissions={completeSubmissions}
-							onView={(id) => setMarkingJobId(id)}
-							onDelete={(id) =>
-								setSubmissions((prev) => prev.filter((s) => s.id !== id))
-							}
-						/>
+						<>
+							<SubmissionsHeader
+								count={completeSubmissions.length}
+								view={subView}
+								onViewChange={setSubView}
+							/>
+							{subView === "grid" ? (
+								<SubmissionGrid
+									submissions={completeSubmissions}
+									onView={(id) => setMarkingJobId(id)}
+									onDelete={(id) =>
+										setSubmissions((prev) =>
+											prev.filter((s) => s.id !== id),
+										)
+									}
+								/>
+							) : (
+								<SubmissionTable
+									submissions={completeSubmissions}
+									onView={(id) => setMarkingJobId(id)}
+									onDeleteRequest={(id) =>
+										setSubmissions((prev) =>
+											prev.filter((s) => s.id !== id),
+										)
+									}
+								/>
+							)}
+						</>
 					) : (
 						<div className="rounded-lg border border-dashed py-16 text-center text-sm text-muted-foreground">
 							No completed submissions yet. Marked scripts will appear here.
@@ -371,26 +400,48 @@ export function ExamPaperPageShell({
 				{/* ── Backlog tab (in-progress + staging) ── */}
 				<TabsContent value="backlog" className="space-y-6 mt-10">
 					{readyForSubmissions || activeBatch ? (
-						<SubmissionGrid
-							submissions={backlogSubmissions}
-							onView={(id) => setMarkingJobId(id)}
-							onDelete={(id) =>
-								setSubmissions((prev) => prev.filter((s) => s.id !== id))
-							}
-							activeBatch={activeBatch}
-							committingBatch={committingBatch}
-							onCommitAll={handleCommitAll}
-							onUpdateScriptName={async (id, name) => {
-								await updateStagedScript(id, { confirmedName: name })
-							}}
-							onToggleExclude={async (id, status) => {
-								await updateStagedScript(id, {
-									status: status === "excluded" ? "confirmed" : "excluded",
-								})
-								void refetchActiveBatch()
-							}}
-							onDeleteScript={() => void refetchActiveBatch()}
-						/>
+						<>
+							<SubmissionsHeader
+								count={backlogSubmissions.length}
+								view={subView}
+								onViewChange={setSubView}
+							/>
+							{subView === "grid" ? (
+								<SubmissionGrid
+									submissions={backlogSubmissions}
+									onView={(id) => setMarkingJobId(id)}
+									onDelete={(id) =>
+										setSubmissions((prev) =>
+											prev.filter((s) => s.id !== id),
+										)
+									}
+									activeBatch={activeBatch}
+									committingBatch={committingBatch}
+									onCommitAll={handleCommitAll}
+									onUpdateScriptName={async (id, name) => {
+										await updateStagedScript(id, { confirmedName: name })
+									}}
+									onToggleExclude={async (id, status) => {
+										await updateStagedScript(id, {
+											status:
+												status === "excluded" ? "confirmed" : "excluded",
+										})
+										void refetchActiveBatch()
+									}}
+									onDeleteScript={() => void refetchActiveBatch()}
+								/>
+							) : (
+								<SubmissionTable
+									submissions={backlogSubmissions}
+									onView={(id) => setMarkingJobId(id)}
+									onDeleteRequest={(id) =>
+										setSubmissions((prev) =>
+											prev.filter((s) => s.id !== id),
+										)
+									}
+								/>
+							)}
+						</>
 					) : (
 						<div className="rounded-lg border border-dashed py-16 text-center text-sm text-muted-foreground">
 							No submissions yet. Click &ldquo;Upload scripts&rdquo; to mark
@@ -525,6 +576,27 @@ function ReadinessStrip({
 					Exemplars (optional)
 				</span>
 			</div>
+		</div>
+	)
+}
+
+function SubmissionsHeader({
+	count,
+	view,
+	onViewChange,
+}: {
+	count: number
+	view: "grid" | "table"
+	onViewChange: (v: "grid" | "table") => void
+}) {
+	return (
+		<div className="flex items-center justify-between gap-4">
+			<p className="text-sm text-muted-foreground">
+				{count === 0
+					? "No submissions yet."
+					: `${count} submission${count !== 1 ? "s" : ""}`}
+			</p>
+			{count > 0 && <ViewToggle value={view} onChange={onViewChange} />}
 		</div>
 	)
 }

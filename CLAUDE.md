@@ -171,6 +171,82 @@ if (!result.ok) {
 toast.success("Done.")
 ```
 
+### Forms
+
+Forms use **react-hook-form** with **zod** for validation (`zodResolver`). Every form component follows the same contract:
+
+```tsx
+type Props = {
+  initialValue: FormValues   // always required — creation uses empty/zero values
+  onSubmit: (values: FormValues) => Promise<void> | void
+}
+```
+
+- **Creation** callers pass zeroed-out defaults: empty strings, `0`, empty arrays.
+- **Edit** callers load values from the DB and pass them in directly.
+
+This keeps forms pure and reusable — they know nothing about whether they're creating or editing.
+
+```tsx
+// Schema and types live inside the form file
+const markSchemeSchema = z.object({
+  description: z.string().min(1, "Description is required"),
+  guidance: z.string(),
+  markPoints: z.array(
+    z.object({
+      description: z.string().min(1, "Required"),
+      points: z.number().int().min(0),
+    })
+  ).min(1, "At least one mark point is required"),
+})
+
+type MarkSchemeFormValues = z.infer<typeof markSchemeSchema>
+
+// Empty value for creation
+export const EMPTY_MARK_SCHEME: MarkSchemeFormValues = {
+  description: "",
+  guidance: "",
+  markPoints: [{ description: "", points: 1 }],
+}
+
+// The form component
+export function MarkSchemeForm({ initialValue, onSubmit }: Props) {
+  const form = useForm<MarkSchemeFormValues>({
+    resolver: zodResolver(markSchemeSchema),
+    defaultValues: initialValue,
+  })
+
+  return (
+    <form onSubmit={form.handleSubmit(onSubmit)}>
+      {/* fields */}
+    </form>
+  )
+}
+```
+
+**Validation errors** (field-level, from Zod) are displayed inline using the `Field` / `FieldError` / `FieldLabel` components from `@/components/ui/field`.
+
+**Server errors** (from a failed server action) are always shown as a Sonner toast — never stored in state and rendered as JSX. The `onSubmit` prop is the right boundary:
+
+```tsx
+// In the parent — not inside the form
+async function handleSubmit(values: MarkSchemeFormValues) {
+  const result = await createMarkScheme(values)
+  if (!result.ok) {
+    toast.error(result.error)   // server error → toast
+    return
+  }
+  toast.success("Mark scheme saved")
+  onClose()
+}
+
+<MarkSchemeForm initialValue={EMPTY_MARK_SCHEME} onSubmit={handleSubmit} />
+```
+
+The form itself never calls server actions directly. The parent wires `onSubmit` to the mutation/server action and owns the success/error side-effects.
+
+---
+
 ### URL State — nuqs
 
 Use `nuqs` for any client state that lives in a URL search parameter. The `NuqsAdapter` is mounted in `providers.tsx`.
@@ -213,6 +289,47 @@ lib/
 - Types live in `types.ts` within the domain folder, not scattered across files.
 - Prompts and LLM schemas live in `processors/<name>/prompts.ts` + `schema.ts` sibling files, never inline in handlers.
 - Do not create barrel re-export files. Import directly from domain modules.
+
+### Tables, Grids & Dialogs — Always Extracted
+
+Tables, data grids, and dialogs are **never inlined** inside a higher-level page shell or parent component. Each gets its own file.
+
+```
+app/teacher/exam-papers/[id]/
+  exam-paper-page-shell.tsx     # orchestrates layout only
+  submission-grid.tsx           # owns the grid/table for submissions
+  link-mark-scheme-dialog.tsx   # owns the dialog for linking a mark scheme
+  marking-job-dialog.tsx        # owns the dialog for starting a marking job
+```
+
+A page shell should compose these components, not contain their markup:
+
+```tsx
+// ✅ Shell composes extracted components
+return (
+  <>
+    <SubmissionGrid submissions={submissions} paperId={paperId} />
+    <LinkMarkSchemeDialog open={linkOpen} onOpenChange={setLinkOpen} />
+  </>
+)
+
+// ❌ Never inline table rows or dialog content directly in the shell
+return (
+  <Dialog>
+    <DialogContent>
+      <Table>
+        <TableBody>
+          {submissions.map((s) => <TableRow key={s.id}>...</TableRow>)}
+        </TableBody>
+      </Table>
+    </DialogContent>
+  </Dialog>
+)
+```
+
+The extracted component owns everything about that table or dialog: its columns/rows, internal state (sorting, selection), loading/empty states, and the actions it exposes. The parent only passes data in and callbacks out.
+
+---
 
 ### Component Colocation
 

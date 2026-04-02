@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/dialog"
 import { Spinner } from "@/components/ui/spinner"
 import { Textarea } from "@/components/ui/textarea"
-import { type EvalResult, evaluateStudentAnswer } from "@/lib/eval-actions"
+import { type EvalResult, evaluateStudentAnswer } from "@/lib/marking/evaluation"
 import { CheckCircle2, FlaskConical, XCircle } from "lucide-react"
 import { useState } from "react"
 

@@ -11,7 +11,7 @@ import {
 	DialogTrigger,
 } from "@/components/ui/dialog"
 import { Spinner } from "@/components/ui/spinner"
-import { autofillMarkScheme } from "@/lib/autofill-mark-scheme-actions"
+import { autofillMarkScheme } from "@/lib/mark-scheme/autofill"
 import {
 	type MarkingRulesInput,
 	createMarkScheme,

@@ -11,8 +11,8 @@ import { GoogleGenAI, Type } from "@google/genai"
 import { createPrismaClient } from "@mcp-gcse/db"
 import type { Subject } from "@mcp-gcse/db"
 import { Resource } from "sst"
-import { auth } from "./auth"
-import { log } from "./logger"
+import { auth } from "../auth"
+import { log } from "../logger"
 
 const db = createPrismaClient(Resource.NeonPostgres.databaseUrl)
 

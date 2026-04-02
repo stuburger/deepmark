@@ -4,15 +4,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
-import {
-	Dialog,
-	DialogContent,
-	DialogDescription,
-	DialogHeader,
-	DialogTitle,
-} from "@/components/ui/dialog"
 import { Progress } from "@/components/ui/progress"
-import { Spinner } from "@/components/ui/spinner"
 import {
 	Table,
 	TableBody,
@@ -74,6 +66,7 @@ import { useExamPaperLiveQueries } from "./hooks/use-exam-paper-live-queries"
 import { useLinkMarkScheme } from "./hooks/use-exam-paper-mutations"
 import { useSimilarQuestions } from "./hooks/use-similar-questions"
 import { useUnlinkedSchemes } from "./hooks/use-unlinked-schemes"
+import { LinkMarkSchemeDialog } from "./link-mark-scheme-dialog"
 import { MarkingJobDialog } from "./marking-job-dialog"
 import { SubmissionGrid } from "./submission-grid"
 import { UploadScriptsDialog } from "./upload-scripts-dialog"
@@ -826,100 +819,15 @@ export function ExamPaperPageShell({
 			</Tabs>
 
 			{/* Link mark scheme dialog */}
-			<Dialog
-				open={linkingItem !== null}
-				onOpenChange={(open) => {
-					if (!linkingBusy) {
-						setLinkingItem(open ? linkingItem : null)
-					}
-				}}
-			>
-				<DialogContent className="max-w-md">
-					<DialogHeader>
-						<DialogTitle>Link mark scheme to question</DialogTitle>
-						<DialogDescription>
-							Choose which question in this paper should receive this mark
-							scheme. Only questions without a mark scheme are shown.
-						</DialogDescription>
-					</DialogHeader>
-					<div className="space-y-3">
-						<div className="space-y-1.5 max-h-64 overflow-y-auto">
-							{paper.questions
-								.filter((q) => q.mark_scheme_status === null)
-								.map((q) => (
-									<label
-										key={q.id}
-										className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors ${
-											linkingTargetId === q.id
-												? "border-primary bg-primary/5"
-												: "hover:bg-muted/50"
-										}`}
-									>
-										<input
-											type="radio"
-											name="link-target"
-											value={q.id}
-											checked={linkingTargetId === q.id}
-											onChange={() => setLinkingTargetId(q.id)}
-											className="mt-0.5"
-											disabled={linkingBusy}
-										/>
-										<div className="min-w-0">
-											{q.question_number && (
-												<p className="text-xs text-muted-foreground">
-													Q{q.question_number}
-												</p>
-											)}
-											<p className="text-sm line-clamp-2">{q.text}</p>
-										</div>
-									</label>
-								))}
-							{paper.questions.filter((q) => q.mark_scheme_status === null)
-								.length === 0 && (
-								<p className="text-sm text-muted-foreground py-4 text-center">
-									All questions already have a mark scheme.
-								</p>
-							)}
-						</div>
-						<div className="flex gap-2 justify-end">
-							<Button
-								variant="outline"
-								disabled={linkingBusy}
-								onClick={() => setLinkingItem(null)}
-							>
-								Cancel
-							</Button>
-							<Button
-								disabled={!linkingTargetId || linkingBusy}
-								onClick={() => {
-									if (!linkingItem || !linkingTargetId) return
-									doLinkMarkScheme(
-										{
-											ghostQuestionId: linkingItem.ghostQuestionId,
-											targetQuestionId: linkingTargetId,
-										},
-										{
-											onSuccess: () => {
-												setLinkingItem(null)
-												setLinkingTargetId("")
-											},
-										},
-									)
-								}}
-							>
-								{linkingBusy ? (
-									<>
-										<Spinner className="h-3.5 w-3.5 mr-1.5" />
-										Linking…
-									</>
-								) : (
-									"Link mark scheme"
-								)}
-							</Button>
-						</div>
-					</div>
-				</DialogContent>
-			</Dialog>
+			<LinkMarkSchemeDialog
+				linkingItem={linkingItem}
+				setLinkingItem={setLinkingItem}
+				linkingTargetId={linkingTargetId}
+				setLinkingTargetId={setLinkingTargetId}
+				linkingBusy={linkingBusy}
+				doLinkMarkScheme={doLinkMarkScheme}
+				questions={paper.questions}
+			/>
 
 			<ConfirmDialog
 				open={deleteDialogOpen}

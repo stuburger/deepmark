@@ -20,7 +20,7 @@ import {
 	createExamPaperWithMultipleIngestions,
 	extractPdfMetadata,
 	requestMetadataUpload,
-} from "@/lib/pdf-metadata-actions"
+} from "@/lib/pdf-ingestion/metadata"
 import {
 	EXAM_BOARDS,
 	SUBJECTS,

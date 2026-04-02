@@ -13,8 +13,8 @@ import {
 	parseMarkingRulesFromPrisma,
 } from "@mcp-gcse/shared"
 import { Resource } from "sst"
-import { auth } from "./auth"
-import { log } from "./logger"
+import { auth } from "../auth"
+import { log } from "../logger"
 
 const TAG = "eval-actions"
 const db = createPrismaClient(Resource.NeonPostgres.databaseUrl)

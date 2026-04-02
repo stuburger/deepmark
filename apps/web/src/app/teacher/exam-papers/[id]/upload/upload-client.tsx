@@ -119,7 +119,7 @@ export function LinkedPdfUploadClient({
 				return
 			}
 			await putToPresignedUrl(result.url, file)
-			router.push(`/admin/upload/${result.jobId}`)
+			setJobId(result.jobId)
 		} catch {
 			setError("Upload failed. Please try again.")
 		} finally {

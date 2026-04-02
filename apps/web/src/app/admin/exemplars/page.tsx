@@ -19,7 +19,6 @@ import {
 	type ExemplarValidationStats,
 	listExemplarAnswers,
 } from "@/lib/admin/queries"
-import Link from "next/link"
 
 type BadgeVariant = "default" | "secondary" | "destructive" | "outline"
 
@@ -137,12 +136,9 @@ function ExemplarRow({ exemplar }: { exemplar: ExemplarAnswerListItem }) {
 				<ValidationBadge validation={exemplar.validation} />
 			</TableCell>
 			<TableCell>
-				<Link
-					href={`/admin/upload/${exemplar.pdf_ingestion_job_id}`}
-					className="text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground whitespace-nowrap"
-				>
-					View job
-				</Link>
+				<span className="text-xs text-muted-foreground whitespace-nowrap">
+					{exemplar.pdf_ingestion_job_id?.slice(0, 8) ?? "—"}
+				</span>
 			</TableCell>
 			<TableCell className="text-muted-foreground whitespace-nowrap">
 				{formatDate(exemplar.created_at)}

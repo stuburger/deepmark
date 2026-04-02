@@ -38,6 +38,7 @@ import { useUnlinkedSchemes } from "./hooks/use-unlinked-schemes"
 import { LinkMarkSchemeDialog } from "./link-mark-scheme-dialog"
 import { MarkingJobDialog } from "./marking-job-dialog"
 import { SubmissionGrid } from "./submission-grid"
+import { TERMINAL_STATUSES } from "./submission-grid-config"
 import { UnlinkedSchemesPanel } from "./unlinked-schemes-panel"
 import { UploadScriptsDialog } from "./upload-scripts-dialog"
 
@@ -65,9 +66,12 @@ export function ExamPaperPageShell({
 	// Tab navigation — synced with ?tab= search param via nuqs
 	const [activeTab, setActiveTab] = useQueryState(
 		"tab",
-		parseAsStringEnum(["paper", "submissions", "analytics"]).withDefault(
+		parseAsStringEnum([
 			"paper",
-		),
+			"submissions",
+			"backlog",
+			"analytics",
+		]).withDefault("paper"),
 	)
 
 	// Live exam paper data, ingestion state, and analytics
@@ -170,6 +174,18 @@ export function ExamPaperPageShell({
 
 	const readyForSubmissions = hasQuestionPaper && allQuestionsHaveMarkSchemes
 
+	// Split submissions into complete vs backlog for the two tabs
+	const completeSubmissions = submissions.filter((s) =>
+		TERMINAL_STATUSES.has(s.status),
+	)
+	const backlogSubmissions = submissions.filter(
+		(s) => !TERMINAL_STATUSES.has(s.status),
+	)
+	const backlogBadgeCount =
+		activeBatch?.status === "staging"
+			? activeBatch.staged_scripts.filter((s) => s.status !== "excluded").length
+			: backlogSubmissions.length
+
 	const tabTriggerClass =
 		"rounded-none px-4 h-full after:bg-primary data-active:text-primary data-active:bg-transparent data-active:shadow-none"
 
@@ -178,7 +194,9 @@ export function ExamPaperPageShell({
 			<Tabs
 				value={activeTab}
 				onValueChange={(v) =>
-					setActiveTab(v as "paper" | "submissions" | "analytics")
+					setActiveTab(
+						v as "paper" | "submissions" | "backlog" | "analytics",
+					)
 				}
 				className="gap-0"
 			>
@@ -234,12 +252,20 @@ export function ExamPaperPageShell({
 						</TabsTrigger>
 						<TabsTrigger value="submissions" className={tabTriggerClass}>
 							Submissions
+							{completeSubmissions.length > 0 && (
+								<span className="ml-1.5 inline-flex items-center justify-center rounded-full bg-muted px-1.5 py-0.5 text-xs tabular-nums leading-none">
+									{completeSubmissions.length}
+								</span>
+							)}
+						</TabsTrigger>
+						<TabsTrigger value="backlog" className={tabTriggerClass}>
+							Backlog
 							{hasActiveBatch && (
 								<span className="ml-1.5 h-1.5 w-1.5 rounded-full bg-primary animate-pulse shrink-0" />
 							)}
-							{submissions.length > 0 && (
+							{backlogBadgeCount > 0 && (
 								<span className="ml-1.5 inline-flex items-center justify-center rounded-full bg-muted px-1.5 py-0.5 text-xs tabular-nums leading-none">
-									{submissions.length}
+									{backlogBadgeCount}
 								</span>
 							)}
 						</TabsTrigger>
@@ -325,11 +351,28 @@ export function ExamPaperPageShell({
 					/>
 				</TabsContent>
 
-				{/* ── Submissions tab ── */}
+				{/* ── Submissions tab (complete only) ── */}
 				<TabsContent value="submissions" className="space-y-6 mt-10">
+					{completeSubmissions.length > 0 ? (
+						<SubmissionGrid
+							submissions={completeSubmissions}
+							onView={(id) => setMarkingJobId(id)}
+							onDelete={(id) =>
+								setSubmissions((prev) => prev.filter((s) => s.id !== id))
+							}
+						/>
+					) : (
+						<div className="rounded-lg border border-dashed py-16 text-center text-sm text-muted-foreground">
+							No completed submissions yet. Marked scripts will appear here.
+						</div>
+					)}
+				</TabsContent>
+
+				{/* ── Backlog tab (in-progress + staging) ── */}
+				<TabsContent value="backlog" className="space-y-6 mt-10">
 					{readyForSubmissions || activeBatch ? (
 						<SubmissionGrid
-							submissions={submissions}
+							submissions={backlogSubmissions}
 							onView={(id) => setMarkingJobId(id)}
 							onDelete={(id) =>
 								setSubmissions((prev) => prev.filter((s) => s.id !== id))
@@ -350,8 +393,8 @@ export function ExamPaperPageShell({
 						/>
 					) : (
 						<div className="rounded-lg border border-dashed py-16 text-center text-sm text-muted-foreground">
-							No submissions yet. Click &ldquo;Mark paper&rdquo; to mark your
-							first student script.
+							No submissions yet. Click &ldquo;Upload scripts&rdquo; to mark
+							your first student script.
 						</div>
 					)}
 				</TabsContent>
@@ -401,7 +444,7 @@ export function ExamPaperPageShell({
 				onOpenChange={setUploadOpen}
 				onBatchStarted={() => {
 					void refetchActiveBatch()
-					void setActiveTab("submissions")
+					void setActiveTab("backlog")
 				}}
 			/>
 

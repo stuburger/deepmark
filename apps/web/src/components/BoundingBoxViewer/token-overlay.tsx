@@ -13,8 +13,8 @@ import {
 	bboxToPercentStyle,
 	colLabel,
 	rowLabel,
-} from "@/lib/bounding-box"
-import type { PageToken } from "@/lib/handwriting-types"
+} from "@/lib/marking/bounding-box"
+import type { PageToken } from "@/lib/marking/types"
 
 export function TokenOverlay({
 	token,

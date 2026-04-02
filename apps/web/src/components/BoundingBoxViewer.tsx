@@ -7,8 +7,8 @@ import {
 	type GradingAnnotation,
 	TOKEN_COLOR,
 	annotationColor,
-} from "@/lib/bounding-box"
-import type { HandwritingAnalysis, PageToken } from "@/lib/handwriting-types"
+} from "@/lib/marking/bounding-box"
+import type { HandwritingAnalysis, PageToken } from "@/lib/marking/types"
 import { cn } from "@/lib/utils"
 import { Minus, Plus, RotateCcw } from "lucide-react"
 import { useState } from "react"

@@ -1,6 +1,6 @@
 "use client"
 
-import type { GradedAnswerOnPage } from "@/lib/handwriting-types"
+import type { GradedAnswerOnPage } from "@/lib/marking/types"
 import { useMemo } from "react"
 
 export type AnswerAnchor = Pick<

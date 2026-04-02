@@ -1,7 +1,7 @@
 "use client"
 
 import { useAnswerRegionLayout } from "@/hooks/use-answer-region-layout"
-import type { GradedAnswerOnPage, GradedPage } from "@/lib/handwriting-types"
+import type { GradedAnswerOnPage, GradedPage } from "@/lib/marking/types"
 import { cn } from "@/lib/utils"
 import { useState } from "react"
 import { MarkingFeedbackThread } from "./MarkingFeedbackThread"

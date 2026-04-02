@@ -4,7 +4,7 @@ import {
 	type GradingAnnotation,
 	annotationColor,
 	bboxToPercentStyle,
-} from "@/lib/bounding-box"
+} from "@/lib/marking/bounding-box"
 
 export function GradingAnnotationOverlay({
 	annotation,

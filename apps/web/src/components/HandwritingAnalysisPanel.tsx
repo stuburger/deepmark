@@ -5,7 +5,7 @@ import {
 	PopoverContent,
 	PopoverTrigger,
 } from "@/components/ui/popover"
-import type { HandwritingAnalysis } from "@/lib/handwriting-types"
+import type { HandwritingAnalysis } from "@/lib/marking/types"
 import { FileText, StickyNote } from "lucide-react"
 
 type Props = {

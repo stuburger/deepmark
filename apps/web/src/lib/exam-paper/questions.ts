@@ -5,43 +5,23 @@ import { Resource } from "sst"
 import { auth } from "../auth"
 import { embedText } from "../embeddings"
 import { log } from "../logger"
+import type {
+	MultipleChoiceOption,
+	QuestionDetail,
+	QuestionMarkScheme,
+	UpdateQuestionInput,
+} from "./types"
+export type {
+	MultipleChoiceOption,
+	QuestionDetail,
+	QuestionMarkScheme,
+	UpdateQuestionInput,
+} from "./types"
 
 const TAG = "exam-paper/questions"
 const db = createPrismaClient(Resource.NeonPostgres.databaseUrl)
 
 // ─── Question detail ──────────────────────────────────────────────────────────
-
-export type QuestionMarkScheme = {
-	id: string
-	description: string | null
-	guidance: string | null
-	points_total: number
-	marking_method: string
-	mark_points: unknown
-	marking_rules: unknown
-	link_status: string
-	correct_option_labels: string[]
-}
-
-export type MultipleChoiceOption = {
-	option_label: string
-	option_text: string
-}
-
-export type QuestionDetail = {
-	id: string
-	text: string
-	question_type: string
-	origin: string
-	topic: string
-	subject: string
-	points: number | null
-	question_number: string | null
-	created_at: Date
-	source_pdf_ingestion_job_id: string | null
-	multiple_choice_options: MultipleChoiceOption[]
-	mark_schemes: QuestionMarkScheme[]
-}
 
 export type GetQuestionDetailResult =
 	| { ok: true; question: QuestionDetail }
@@ -124,12 +104,6 @@ export async function getQuestionDetail(
 }
 
 // ─── Update question ──────────────────────────────────────────────────────────
-
-export type UpdateQuestionInput = {
-	text?: string
-	points?: number | null
-	question_number?: string | null
-}
 
 export type UpdateQuestionResult =
 	| { ok: true; embeddingUpdated: boolean }

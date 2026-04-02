@@ -13,7 +13,8 @@ const bucketName = Resource.ScansBucket.name
 const s3 = new S3Client({})
 const db = createPrismaClient(Resource.NeonPostgres.databaseUrl)
 
-export type PdfDocumentType = "mark_scheme" | "exemplar" | "question_paper"
+import type { PdfDocumentType } from "./types"
+export type { PdfDocumentType } from "./types"
 
 export type CreatePdfIngestionUploadResult =
 	| { ok: true; jobId: string; url: string }

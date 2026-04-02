@@ -4,29 +4,29 @@ import { createPrismaClient } from "@mcp-gcse/db"
 import { Resource } from "sst"
 import { auth } from "../auth"
 import { log } from "../logger"
+import type {
+	CatalogExamPaper,
+	ExamPaperDetail,
+	ExamPaperListItem,
+	ExamPaperQuestion,
+	ExamPaperSection,
+	SimilarPair,
+	UnlinkedMarkScheme,
+} from "./types"
+export type {
+	CatalogExamPaper,
+	ExamPaperDetail,
+	ExamPaperListItem,
+	ExamPaperQuestion,
+	ExamPaperSection,
+	SimilarPair,
+	UnlinkedMarkScheme,
+} from "./types"
 
 const TAG = "exam-paper/queries"
 const db = createPrismaClient(Resource.NeonPostgres.databaseUrl)
 
 // ─── Exam paper list ──────────────────────────────────────────────────────────
-
-export type ExamPaperListItem = {
-	id: string
-	title: string
-	subject: string
-	exam_board: string | null
-	year: number
-	paper_number: number | null
-	total_marks: number
-	duration_minutes: number
-	is_active: boolean
-	is_public: boolean
-	created_at: Date
-	_count: {
-		sections: number
-		pdf_ingestion_jobs: number
-	}
-}
 
 export type ListExamPapersResult =
 	| { ok: true; papers: ExamPaperListItem[] }
@@ -68,47 +68,6 @@ export async function listExamPapers(options?: {
 }
 
 // ─── Exam paper detail ────────────────────────────────────────────────────────
-
-export type ExamPaperQuestion = {
-	id: string
-	text: string
-	question_type: string
-	points: number | null
-	origin: string
-	mark_scheme_count: number
-	mark_scheme_status: string | null
-	mark_scheme_id: string | null
-	mark_scheme_description: string | null
-	mark_scheme_correct_option_labels: string[]
-	mark_scheme_points_total: number | null
-	order: number
-	exam_section_id: string
-	section_title: string
-	question_number: string | null
-	multiple_choice_options: { option_label: string; option_text: string }[]
-}
-
-export type ExamPaperSection = {
-	id: string
-	title: string
-}
-
-export type ExamPaperDetail = {
-	id: string
-	title: string
-	subject: string
-	exam_board: string | null
-	year: number
-	paper_number: number | null
-	total_marks: number
-	duration_minutes: number
-	is_active: boolean
-	is_public: boolean
-	created_at: Date
-	sections: ExamPaperSection[]
-	questions: ExamPaperQuestion[]
-	section_count: number
-}
 
 export type GetExamPaperDetailResult =
 	| { ok: true; paper: ExamPaperDetail }
@@ -218,18 +177,6 @@ export async function getExamPaperDetail(
 
 // ─── Public catalog ───────────────────────────────────────────────────────────
 
-export type CatalogExamPaper = {
-	id: string
-	title: string
-	subject: string
-	exam_board: string | null
-	year: number
-	paper_number: number | null
-	total_marks: number
-	question_count: number
-	has_mark_scheme: boolean
-}
-
 export type ListCatalogExamPapersResult =
 	| { ok: true; papers: CatalogExamPaper[] }
 	| { ok: false; error: string }
@@ -289,15 +236,6 @@ export async function listCatalogExamPapers(): Promise<ListCatalogExamPapersResu
 }
 
 // ─── Unlinked mark schemes ────────────────────────────────────────────────────
-
-export type UnlinkedMarkScheme = {
-	markSchemeId: string
-	markSchemeDescription: string | null
-	pointsTotal: number
-	ghostQuestionId: string
-	ghostQuestionText: string
-	ghostQuestionNumber: string | null
-}
 
 export type GetUnlinkedMarkSchemesResult =
 	| { ok: true; items: UnlinkedMarkScheme[] }
@@ -366,12 +304,6 @@ export async function getUnlinkedMarkSchemes(
 }
 
 // ─── Similarity ───────────────────────────────────────────────────────────────
-
-export type SimilarPair = {
-	questionId: string
-	similarToId: string
-	distance: number
-}
 
 export type GetSimilarQuestionsForPaperResult =
 	| { ok: true; pairs: SimilarPair[] }

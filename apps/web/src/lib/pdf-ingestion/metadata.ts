@@ -78,18 +78,8 @@ const METADATA_SCHEMA = {
 	],
 }
 
-export type PdfDocumentType = "mark_scheme" | "question_paper" | "exemplar"
-
-export type DetectedPdfMetadata = {
-	title: string
-	subject: string
-	exam_board: string
-	year: number | null
-	paper_number: number | null
-	total_marks: number
-	duration_minutes: number
-	document_type: PdfDocumentType
-}
+import type { DetectedPdfMetadata, IngestionSlot, PdfDocumentType } from "./types"
+export type { DetectedPdfMetadata, IngestionSlot, PdfDocumentType } from "./types"
 
 export type RequestMetadataUploadResult =
 	| { ok: true; url: string; s3Key: string }
@@ -225,14 +215,6 @@ export async function extractPdfMetadata(
 		})
 		return { ok: false, error: "Failed to extract metadata from PDF" }
 	}
-}
-
-export type IngestionSlot = {
-	/** The temp S3 key returned by requestMetadataUpload + extractPdfMetadata. */
-	s3MetadataKey: string
-	document_type: PdfDocumentType
-	/** Defaults to false — can be very expensive. Only meaningful for mark_scheme. */
-	run_adversarial_loop?: boolean
 }
 
 export type CreateExamPaperWithIngestionInput = {

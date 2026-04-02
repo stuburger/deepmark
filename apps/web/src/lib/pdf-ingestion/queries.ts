@@ -4,26 +4,15 @@ import { createPrismaClient } from "@mcp-gcse/db"
 import { Resource } from "sst"
 import { auth } from "../auth"
 import { log } from "../logger"
+import type { ActiveExamPaperIngestionJob, PdfDocument } from "./types"
+export type { ActiveExamPaperIngestionJob, PdfDocument } from "./types"
 
 const TAG = "pdf-ingestion-actions"
 const db = createPrismaClient(Resource.NeonPostgres.databaseUrl)
 
-export type ActiveExamPaperIngestionJob = {
-	id: string
-	document_type: string
-	status: string
-	error: string | null
-}
-
 export type GetActiveIngestionJobsForExamPaperResult =
 	| { ok: true; jobs: ActiveExamPaperIngestionJob[] }
 	| { ok: false; error: string }
-
-export type PdfDocument = {
-	id: string
-	document_type: string
-	processed_at: Date | null
-}
 
 export type GetPdfDocumentsForPaperResult =
 	| { ok: true; documents: PdfDocument[] }

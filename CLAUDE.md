@@ -350,6 +350,60 @@ Extract sub-components and hooks into sibling files rather than growing a single
 
 ---
 
+### Code Quality — Campsite Rule
+
+Leave every file cleaner than you found it. This does not mean a full refactor on every pass — it means: fix the obvious thing, rename the unclear variable, extract the inline type that has grown a name. Small, consistent improvements compound.
+
+**Tight scope** — every function, class, and component should do one thing. If you find yourself writing "and" in a description of what something does, split it.
+
+**No `any`** — `any` is never acceptable. Use `unknown` when the type is genuinely unknown and narrow it explicitly, or model the type properly with Zod/TypeScript.
+
+```ts
+// ❌
+function process(data: any) { ... }
+
+// ✅ Unknown input — narrow before use
+function process(data: unknown) {
+  const parsed = mySchema.parse(data)
+  ...
+}
+```
+
+**Prefer Zod over type-casting** — when data crosses a boundary (API response, form input, queue payload, URL param), parse it with a Zod schema. Do not cast with `as`. A parse failure is a loud, traceable error; a bad cast is a silent bug.
+
+```ts
+// ❌ Trusting the shape without verification
+const payload = event.body as JobPayload
+
+// ✅ Parse and validate at the boundary
+const payload = jobPayloadSchema.parse(JSON.parse(event.body))
+```
+
+**Named types over inline types** — give types a name when they represent a concept. Reserve inline types for genuinely trivial one-offs (a two-field internal helper that never leaves the function).
+
+```ts
+// ❌ Inline type — hard to reuse, hard to name in error messages
+function render(config: { title: string; maxMarks: number; isPublic: boolean }) { ... }
+
+// ✅ Named type
+type QuestionConfig = {
+  title: string
+  maxMarks: number
+  isPublic: boolean
+}
+function render(config: QuestionConfig) { ... }
+```
+
+**Sanitize inputs** — trim strings and normalise casing at the boundary (server action or form `onSubmit`) before writing to the DB or passing to the LLM. Never trust raw user input downstream.
+
+```ts
+function sanitiseMarkPoint(raw: string): string {
+  return raw.trim().replace(/\s+/g, " ")
+}
+```
+
+---
+
 ### Explicit Data Flow & Pure Functions
 
 Data flows down via props; events flow up via callbacks. Avoid implicit shared mutable state.

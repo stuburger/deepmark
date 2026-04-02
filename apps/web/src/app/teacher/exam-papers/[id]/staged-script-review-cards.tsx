@@ -19,9 +19,9 @@ import { useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 import type { PageKeyRaw } from "./dnd-script-card"
 import { DndScriptCard } from "./dnd-script-card"
+import { OversizedScriptBanner } from "./oversized-script-banner"
 import type { PageItem } from "./staged-script-page-editor"
 import { PageCarousel } from "./staged-script-page-editor"
-import { OversizedScriptBanner } from "./upload-scripts-dialog"
 
 type StagedScriptCardProps = {
 	batchId: string

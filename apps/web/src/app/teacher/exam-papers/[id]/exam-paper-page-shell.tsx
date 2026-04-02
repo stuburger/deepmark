@@ -2,17 +2,8 @@
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
-import { Progress } from "@/components/ui/progress"
-import {
-	Table,
-	TableBody,
-	TableCell,
-	TableHead,
-	TableHeader,
-	TableRow,
-} from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
 	commitBatch,
@@ -31,22 +22,8 @@ import type {
 	PdfDocument,
 } from "@/lib/pdf-ingestion/queries"
 import { queryKeys } from "@/lib/query-keys"
-import { naturalCompare } from "@/lib/utils"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import {
-	AlertTriangle,
-	ArrowUpDown,
-	ChevronDown,
-	ChevronUp,
-	Globe,
-	LayoutList,
-	Link2,
-	Loader2,
-	Lock,
-	PenLine,
-	ScrollText,
-	Trash2,
-} from "lucide-react"
+import { AlertTriangle, Globe, Lock, PenLine, Trash2 } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { parseAsString, parseAsStringEnum, useQueryState } from "nuqs"
@@ -54,14 +31,9 @@ import { useState } from "react"
 import { toast } from "sonner"
 import { DocumentUploadCards } from "./document-upload-cards"
 import { EditableTitle } from "./editable-title"
-import {
-	TableRowDeleteButton,
-	capitalize,
-	originBadgeVariant,
-	originLabel,
-	schemeBadge,
-} from "./exam-paper-helpers"
-import { ExamPaperPaperView } from "./exam-paper-paper-view"
+import { ExamPaperAnalyticsTab } from "./exam-paper-analytics-tab"
+import { capitalize } from "./exam-paper-helpers"
+import { ExamPaperQuestionsCard } from "./exam-paper-questions-card"
 import { useExamPaperLiveQueries } from "./hooks/use-exam-paper-live-queries"
 import { useLinkMarkScheme } from "./hooks/use-exam-paper-mutations"
 import { useSimilarQuestions } from "./hooks/use-similar-questions"
@@ -69,10 +41,8 @@ import { useUnlinkedSchemes } from "./hooks/use-unlinked-schemes"
 import { LinkMarkSchemeDialog } from "./link-mark-scheme-dialog"
 import { MarkingJobDialog } from "./marking-job-dialog"
 import { SubmissionGrid } from "./submission-grid"
+import { UnlinkedSchemesPanel } from "./unlinked-schemes-panel"
 import { UploadScriptsDialog } from "./upload-scripts-dialog"
-
-type SortKey = "number" | "marks" | "similarity"
-type SortDir = "asc" | "desc"
 
 export function ExamPaperPageShell({
 	paper: initialPaper,
@@ -95,7 +65,7 @@ export function ExamPaperPageShell({
 	const [submissions, setSubmissions] =
 		useState<SubmissionHistoryItem[]>(initialSubmissions)
 
-	// Tab navigation — synced with ?tab= search param via nuqs (needed here before hooks)
+	// Tab navigation — synced with ?tab= search param via nuqs
 	const [activeTab, setActiveTab] = useQueryState(
 		"tab",
 		parseAsStringEnum(["paper", "submissions", "analytics"]).withDefault(
@@ -115,7 +85,6 @@ export function ExamPaperPageShell({
 	// Similarity / duplicate detection
 	const [duplicateBannerDismissed, setDuplicateBannerDismissed] =
 		useState(false)
-
 	const { data: similarPairs = [] } = useSimilarQuestions(paper.id)
 
 	// Unlinked mark schemes
@@ -123,13 +92,29 @@ export function ExamPaperPageShell({
 		null,
 	)
 	const [linkingTargetId, setLinkingTargetId] = useState<string>("")
-
 	const { data: unlinkedItems = [] } = useUnlinkedSchemes(paper.id)
 
-	// Upload scripts (unified)
+	// Upload scripts
 	const [uploadOpen, setUploadOpen] = useState(false)
 	const [markingJobId, setMarkingJobId] = useQueryState("job", parseAsString)
 	const [committingBatch, setCommittingBatch] = useState(false)
+
+	// Active batch
+	const { data: activeBatch, refetch: refetchActiveBatch } =
+		useQuery<ActiveBatchInfo>({
+			queryKey: ["activeBatch", paper.id],
+			queryFn: async () => {
+				const r = await getActiveBatchForPaper(paper.id)
+				return r.ok ? r.batch : null
+			},
+			refetchInterval: (q) => {
+				const b = q.state.data
+				return b?.status === "classifying" || b?.status === "marking"
+					? 3000
+					: false
+			},
+		})
+	const hasActiveBatch = activeBatch?.status === "marking"
 
 	async function handleCommitAll() {
 		if (!activeBatch) return
@@ -149,31 +134,11 @@ export function ExamPaperPageShell({
 		void refetchActiveBatch()
 	}
 
-	const { data: activeBatch, refetch: refetchActiveBatch } =
-		useQuery<ActiveBatchInfo>({
-			queryKey: ["activeBatch", paper.id],
-			queryFn: async () => {
-				const r = await getActiveBatchForPaper(paper.id)
-				return r.ok ? r.batch : null
-			},
-			refetchInterval: (q) => {
-				const b = q.state.data
-				return b?.status === "classifying" || b?.status === "marking"
-					? 3000
-					: false
-			},
-		})
-
-	const hasActiveBatch = activeBatch?.status === "marking"
-
 	// Delete exam paper
 	const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
 	const { mutate: doDeletePaper, isPending: deleting } = useMutation({
 		mutationFn: () => deleteExamPaper(paper.id),
-		onMutate: () => {
-			// Close the dialog immediately so the user sees instant feedback
-			setDeleteDialogOpen(false)
-		},
+		onMutate: () => setDeleteDialogOpen(false),
 		onSuccess: (result) => {
 			if (!result.ok) {
 				toast.error(result.error)
@@ -184,43 +149,14 @@ export function ExamPaperPageShell({
 		onError: () => toast.error("Failed to delete exam paper"),
 	})
 
-	// Sort state
-	const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({
-		key: "number",
-		dir: "asc",
-	})
-
-	// View toggle
-	const [view, setView] = useState<"table" | "paper">("paper")
-
-	function handleTabChange(tab: "paper" | "submissions" | "analytics") {
-		setActiveTab(tab)
-	}
-
-	// Link mark scheme mutation — uses optimistic hook
+	// Link mark scheme mutation
 	const { mutate: doLinkMarkScheme, isPending: linkingBusy } =
 		useLinkMarkScheme(paper.id)
 
-	function toggleSort(key: SortKey) {
-		setSort((prev) =>
-			prev.key === key
-				? { key, dir: prev.dir === "asc" ? "desc" : "asc" }
-				: { key, dir: "asc" },
-		)
-	}
-
-	// Build a set of question IDs that have at least one similar pair
-	const duplicateIds = new Set(
-		similarPairs.flatMap((p) => [p.questionId, p.similarToId]),
-	)
-
-	const hasQuestionPaperDocument = completedDocs.some(
-		(d) => d.document_type === "question_paper",
-	)
-	const hasQuestionPaperQuestions = paper.questions.some(
-		(q) => q.origin === "question_paper",
-	)
-	const hasQuestionPaper = hasQuestionPaperDocument || hasQuestionPaperQuestions
+	// Derived readiness state
+	const hasQuestionPaper =
+		completedDocs.some((d) => d.document_type === "question_paper") ||
+		paper.questions.some((q) => q.origin === "question_paper")
 
 	const totalQuestions = paper.questions.length
 	const questionsWithMarkScheme = paper.questions.filter(
@@ -231,62 +167,26 @@ export function ExamPaperPageShell({
 	const allQuestionsHaveMarkSchemes =
 		totalQuestions > 0 && questionsWithMarkScheme === totalQuestions
 
-	const hasExemplarDocument = completedDocs.some(
-		(d) => d.document_type === "exemplar",
-	)
-	const hasExemplarQuestions = paper.questions.some(
-		(q) => q.origin === "exemplar",
-	)
-	const hasExemplar = hasExemplarDocument || hasExemplarQuestions
+	const hasExemplar =
+		completedDocs.some((d) => d.document_type === "exemplar") ||
+		paper.questions.some((q) => q.origin === "exemplar")
 
 	const readyForSubmissions = hasQuestionPaper && allQuestionsHaveMarkSchemes
-
-	// Sort questions client-side
-	const sortedQuestions = [...paper.questions].sort((a, b) => {
-		let cmp = 0
-		if (sort.key === "number") {
-			cmp = naturalCompare(a.question_number, b.question_number)
-			if (cmp === 0) cmp = a.order - b.order
-		} else if (sort.key === "marks") {
-			const pa = a.points ?? -1
-			const pb = b.points ?? -1
-			cmp = pa - pb
-		} else if (sort.key === "similarity") {
-			const aDup = duplicateIds.has(a.id) ? 0 : 1
-			const bDup = duplicateIds.has(b.id) ? 0 : 1
-			cmp = aDup - bDup
-			if (cmp === 0) {
-				const aPairId =
-					similarPairs.find(
-						(p) => p.questionId === a.id || p.similarToId === a.id,
-					)?.questionId ?? ""
-				const bPairId =
-					similarPairs.find(
-						(p) => p.questionId === b.id || p.similarToId === b.id,
-					)?.questionId ?? ""
-				cmp = aPairId.localeCompare(bPairId)
-			}
-			if (cmp === 0) cmp = naturalCompare(a.question_number, b.question_number)
-		}
-		return sort.dir === "asc" ? cmp : -cmp
-	})
 
 	const tabTriggerClass =
 		"rounded-none px-4 h-full after:bg-primary data-active:text-primary data-active:bg-transparent data-active:shadow-none"
 
 	return (
 		<>
-			{/* Tabs */}
 			<Tabs
 				value={activeTab}
 				onValueChange={(v) =>
-					handleTabChange(v as "paper" | "submissions" | "analytics")
+					setActiveTab(v as "paper" | "submissions" | "analytics")
 				}
 				className="gap-0"
 			>
 				{/* Sticky frosted-glass header: title + tabs bar */}
 				<div className="sticky top-0 z-10 -mx-6 -mt-6 px-6 pt-6 pb-2 backdrop-blur-xl bg-background/60 border-b">
-					{/* Title row */}
 					<div className="pb-4">
 						<Link
 							href="/teacher/exam-papers"
@@ -328,7 +228,6 @@ export function ExamPaperPageShell({
 							</div>
 						</div>
 					</div>
-					{/* Tabs bar */}
 					<TabsList
 						variant="line"
 						className="w-auto rounded-none h-10 gap-0 p-0"
@@ -358,55 +257,13 @@ export function ExamPaperPageShell({
 					<Card>
 						<CardContent className="pt-4 space-y-4">
 							{/* Readiness strip */}
-							<div className="flex items-center gap-3 rounded-lg border px-3 py-2 text-xs text-muted-foreground">
-								<div className="flex flex-1 flex-wrap items-center gap-x-4 gap-y-1">
-									<span
-										className={`flex items-center gap-1.5 ${
-											hasQuestionPaper
-												? "text-green-600 dark:text-green-400"
-												: "text-amber-600 dark:text-amber-400"
-										}`}
-									>
-										<span
-											className={`h-1.5 w-1.5 shrink-0 rounded-full ${
-												hasQuestionPaper ? "bg-green-500" : "bg-amber-500"
-											}`}
-										/>
-										Question paper
-									</span>
-									<span
-										className={`flex items-center gap-1.5 ${
-											allQuestionsHaveMarkSchemes
-												? "text-green-600 dark:text-green-400"
-												: "text-amber-600 dark:text-amber-400"
-										}`}
-									>
-										<span
-											className={`h-1.5 w-1.5 shrink-0 rounded-full ${
-												allQuestionsHaveMarkSchemes
-													? "bg-green-500"
-													: "bg-amber-500"
-											}`}
-										/>
-										Mark schemes
-										{!allQuestionsHaveMarkSchemes && totalQuestions > 0 && (
-											<span className="tabular-nums">
-												({questionsWithMarkScheme}/{totalQuestions})
-											</span>
-										)}
-									</span>
-									<span className="flex items-center gap-1.5">
-										<span
-											className={`h-1.5 w-1.5 shrink-0 rounded-full ${
-												hasExemplar ? "bg-green-500" : "bg-muted-foreground/40"
-											}`}
-										/>
-										Exemplars (optional)
-									</span>
-								</div>
-							</div>
-
-							{/* Document upload cards */}
+							<ReadinessStrip
+								hasQuestionPaper={hasQuestionPaper}
+								allQuestionsHaveMarkSchemes={allQuestionsHaveMarkSchemes}
+								questionsWithMarkScheme={questionsWithMarkScheme}
+								totalQuestions={totalQuestions}
+								hasExemplar={hasExemplar}
+							/>
 							<DocumentUploadCards
 								examPaperId={paper.id}
 								completedDocs={completedDocs}
@@ -444,15 +301,8 @@ export function ExamPaperPageShell({
 							<span className="flex-1 text-amber-800 dark:text-amber-200">
 								{similarPairs.length} potential duplicate question
 								{similarPairs.length !== 1 ? "s" : ""} detected — rows marked
-								with a dot may need review.{" "}
-								<button
-									type="button"
-									className="underline underline-offset-2"
-									onClick={() => setSort({ key: "similarity", dir: "asc" })}
-								>
-									Sort by similarity
-								</button>{" "}
-								to group them.
+								with a dot may need review. Sort by the similarity column to
+								group them.
 							</span>
 							<button
 								type="button"
@@ -464,221 +314,18 @@ export function ExamPaperPageShell({
 						</div>
 					)}
 
-					{/* Unlinked mark schemes panel */}
-					{unlinkedItems.length > 0 && (
-						<div className="rounded-lg border border-destructive/40 bg-destructive/5 p-3 space-y-3">
-							<div className="flex items-center gap-2">
-								<AlertTriangle className="h-4 w-4 shrink-0 text-destructive" />
-								<p className="text-sm font-medium text-destructive">
-									{unlinkedItems.length} unlinked mark scheme
-									{unlinkedItems.length !== 1 ? "s" : ""} — created during
-									ingestion but not matched to a question
-								</p>
-							</div>
-							<div className="space-y-2">
-								{unlinkedItems.map((item) => (
-									<div
-										key={item.markSchemeId}
-										className="flex items-start justify-between gap-3 rounded-md bg-background border px-3 py-2.5"
-									>
-										<div className="min-w-0 flex-1">
-											{item.ghostQuestionNumber && (
-												<p className="text-xs text-muted-foreground mb-0.5">
-													Extracted as Q{item.ghostQuestionNumber}
-												</p>
-											)}
-											<p
-												className="text-sm truncate"
-												title={item.ghostQuestionText}
-											>
-												{item.ghostQuestionText}
-											</p>
-											{item.markSchemeDescription && (
-												<p
-													className="text-xs text-muted-foreground truncate mt-0.5"
-													title={item.markSchemeDescription}
-												>
-													Mark scheme: {item.markSchemeDescription}
-												</p>
-											)}
-											<p className="text-xs text-muted-foreground">
-												{item.pointsTotal} mark
-												{item.pointsTotal !== 1 ? "s" : ""}
-											</p>
-										</div>
-										<Button
-											size="sm"
-											variant="outline"
-											className="shrink-0"
-											onClick={() => {
-												setLinkingItem(item)
-												setLinkingTargetId("")
-											}}
-										>
-											<Link2 className="h-3.5 w-3.5 mr-1.5" />
-											Link to question
-										</Button>
-									</div>
-								))}
-							</div>
-						</div>
-					)}
+					<UnlinkedSchemesPanel
+						items={unlinkedItems}
+						onLink={(item) => {
+							setLinkingItem(item)
+							setLinkingTargetId("")
+						}}
+					/>
 
-					{/* Questions */}
-					<Card>
-						<CardHeader>
-							<div className="flex items-start justify-between gap-3">
-								<div className="flex items-center gap-1 rounded-md border p-0.5 shrink-0">
-									<button
-										type="button"
-										title="Exam paper view"
-										onClick={() => setView("paper")}
-										className={`flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-medium transition-colors ${
-											view === "paper"
-												? "bg-background shadow-sm text-foreground"
-												: "text-muted-foreground hover:text-foreground"
-										}`}
-									>
-										<ScrollText className="h-3.5 w-3.5" />
-										Paper
-									</button>
-									<button
-										type="button"
-										title="Table view"
-										onClick={() => setView("table")}
-										className={`flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-medium transition-colors ${
-											view === "table"
-												? "bg-background shadow-sm text-foreground"
-												: "text-muted-foreground hover:text-foreground"
-										}`}
-									>
-										<LayoutList className="h-3.5 w-3.5" />
-										Table
-									</button>
-								</div>
-							</div>
-						</CardHeader>
-						<CardContent>
-							{view === "paper" ? (
-								<ExamPaperPaperView paper={paper} paperId={paper.id} />
-							) : paper.questions.length === 0 ? (
-								<div className="py-8 text-center text-sm text-muted-foreground">
-									No questions yet. Upload a question paper or mark scheme PDF
-									to populate this paper.
-								</div>
-							) : (
-								<Table>
-									<TableHeader>
-										<TableRow>
-											<TableHead className="w-16">
-												<button
-													type="button"
-													className="flex items-center gap-1 text-xs font-medium hover:text-foreground"
-													onClick={() => toggleSort("number")}
-												>
-													#
-													{sort.key === "number" ? (
-														sort.dir === "asc" ? (
-															<ChevronUp className="h-3 w-3" />
-														) : (
-															<ChevronDown className="h-3 w-3" />
-														)
-													) : (
-														<ArrowUpDown className="h-3 w-3 opacity-40" />
-													)}
-												</button>
-											</TableHead>
-											<TableHead>Section</TableHead>
-											<TableHead>Question</TableHead>
-											<TableHead>Source</TableHead>
-											<TableHead>
-												<button
-													type="button"
-													className="flex items-center gap-1 text-xs font-medium hover:text-foreground"
-													onClick={() => toggleSort("marks")}
-												>
-													Marks
-													{sort.key === "marks" ? (
-														sort.dir === "asc" ? (
-															<ChevronUp className="h-3 w-3" />
-														) : (
-															<ChevronDown className="h-3 w-3" />
-														)
-													) : (
-														<ArrowUpDown className="h-3 w-3 opacity-40" />
-													)}
-												</button>
-											</TableHead>
-											<TableHead>Mark scheme</TableHead>
-											<TableHead className="w-8">
-												<button
-													type="button"
-													className="flex items-center gap-1 text-xs font-medium hover:text-foreground"
-													onClick={() => toggleSort("similarity")}
-													title="Sort by similarity to group potential duplicates"
-												>
-													<ArrowUpDown
-														className={`h-3 w-3 ${
-															sort.key === "similarity" ? "" : "opacity-40"
-														}`}
-													/>
-												</button>
-											</TableHead>
-											<TableHead className="w-10" />
-										</TableRow>
-									</TableHeader>
-									<TableBody>
-										{sortedQuestions.map((q) => {
-											const isDuplicate = duplicateIds.has(q.id)
-											return (
-												<TableRow key={q.id} className="group">
-													<TableCell className="text-muted-foreground">
-														<div className="flex items-center gap-1.5">
-															{isDuplicate && (
-																<span
-																	className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500"
-																	title="Potential duplicate"
-																/>
-															)}
-															<span className="tabular-nums">
-																{q.question_number ?? q.order}
-															</span>
-														</div>
-													</TableCell>
-													<TableCell className="text-muted-foreground text-xs">
-														{q.section_title}
-													</TableCell>
-													<TableCell className="max-w-xs">
-														<p className="truncate text-sm" title={q.text}>
-															{q.text}
-														</p>
-													</TableCell>
-													<TableCell>
-														<Badge variant={originBadgeVariant(q.origin)}>
-															{originLabel(q.origin)}
-														</Badge>
-													</TableCell>
-													<TableCell>{q.points ?? "—"}</TableCell>
-													<TableCell>
-														{schemeBadge(q.mark_scheme_status)}
-													</TableCell>
-													<TableCell />
-													<TableCell>
-														<div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
-															<TableRowDeleteButton
-																questionId={q.id}
-																paperId={paper.id}
-															/>
-														</div>
-													</TableCell>
-												</TableRow>
-											)
-										})}
-									</TableBody>
-								</Table>
-							)}
-						</CardContent>
-					</Card>
+					<ExamPaperQuestionsCard
+						paper={paper}
+						similarPairs={similarPairs}
+					/>
 				</TabsContent>
 
 				{/* ── Submissions tab ── */}
@@ -714,111 +361,14 @@ export function ExamPaperPageShell({
 
 				{/* ── Analytics tab ── */}
 				<TabsContent value="analytics" className="space-y-6 mt-10">
-					{analyticsLoading ? (
-						<div className="flex items-center justify-center py-16">
-							<Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-						</div>
-					) : !analyticsStats || analyticsStats.submission_count === 0 ? (
-						<div className="rounded-lg border border-dashed py-16 text-center text-sm text-muted-foreground">
-							No completed submissions yet. Analytics will appear here once
-							student scripts have been marked.
-						</div>
-					) : (
-						<>
-							<div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-								<Card>
-									<CardContent className="pt-4">
-										<p className="text-2xl font-bold">
-											{analyticsStats.submission_count}
-										</p>
-										<p className="text-xs text-muted-foreground">
-											Papers marked
-										</p>
-									</CardContent>
-								</Card>
-								<Card>
-									<CardContent className="pt-4">
-										<p className="text-2xl font-bold">
-											{analyticsStats.avg_total_percent}%
-										</p>
-										<p className="text-xs text-muted-foreground">
-											Average score
-										</p>
-									</CardContent>
-								</Card>
-							</div>
-
-							{analyticsStats.question_stats.length > 0 && (
-								<Card>
-									<CardHeader>
-										<h3 className="text-sm font-semibold">
-											Per-question averages
-										</h3>
-										<p className="text-xs text-muted-foreground">
-											How students performed on each question.
-										</p>
-									</CardHeader>
-									<CardContent>
-										<Table>
-											<TableHeader>
-												<TableRow>
-													<TableHead className="w-12">#</TableHead>
-													<TableHead>Question</TableHead>
-													<TableHead className="w-28 text-right">
-														Avg score
-													</TableHead>
-													<TableHead className="w-32">Performance</TableHead>
-												</TableRow>
-											</TableHeader>
-											<TableBody>
-												{analyticsStats.question_stats.map((q) => {
-													const colour =
-														q.avg_percent >= 70
-															? "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300"
-															: q.avg_percent >= 40
-																? "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
-																: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300"
-													return (
-														<TableRow key={q.question_id}>
-															<TableCell className="text-muted-foreground font-mono text-xs">
-																Q{q.question_number}
-															</TableCell>
-															<TableCell>
-																<p
-																	className="text-sm truncate max-w-sm"
-																	title={q.question_text}
-																>
-																	{q.question_text}
-																</p>
-															</TableCell>
-															<TableCell className="text-right tabular-nums">
-																<span
-																	className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums ${colour}`}
-																>
-																	{q.avg_awarded}/{q.max_score} ({q.avg_percent}
-																	%)
-																</span>
-															</TableCell>
-															<TableCell>
-																<Progress
-																	value={q.avg_percent}
-																	className="h-2"
-																/>
-															</TableCell>
-														</TableRow>
-													)
-												})}
-											</TableBody>
-										</Table>
-									</CardContent>
-								</Card>
-							)}
-						</>
-					)}
+					<ExamPaperAnalyticsTab
+						stats={analyticsStats ?? null}
+						loading={analyticsLoading}
+					/>
 				</TabsContent>
 			</Tabs>
 
-			{/* Link mark scheme dialog */}
+			{/* Dialogs */}
 			<LinkMarkSchemeDialog
 				linkingItem={linkingItem}
 				setLinkingItem={setLinkingItem}
@@ -882,5 +432,84 @@ export function ExamPaperPageShell({
 				</button>
 			</div>
 		</>
+	)
+}
+
+// ── Readiness strip ─────────────────────────────────────────────────────────
+
+function ReadinessStrip({
+	hasQuestionPaper,
+	allQuestionsHaveMarkSchemes,
+	questionsWithMarkScheme,
+	totalQuestions,
+	hasExemplar,
+}: {
+	hasQuestionPaper: boolean
+	allQuestionsHaveMarkSchemes: boolean
+	questionsWithMarkScheme: number
+	totalQuestions: number
+	hasExemplar: boolean
+}) {
+	return (
+		<div className="flex items-center gap-3 rounded-lg border px-3 py-2 text-xs text-muted-foreground">
+			<div className="flex flex-1 flex-wrap items-center gap-x-4 gap-y-1">
+				<ReadinessIndicator
+					ready={hasQuestionPaper}
+					label="Question paper"
+				/>
+				<span
+					className={`flex items-center gap-1.5 ${
+						allQuestionsHaveMarkSchemes
+							? "text-green-600 dark:text-green-400"
+							: "text-amber-600 dark:text-amber-400"
+					}`}
+				>
+					<span
+						className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+							allQuestionsHaveMarkSchemes ? "bg-green-500" : "bg-amber-500"
+						}`}
+					/>
+					Mark schemes
+					{!allQuestionsHaveMarkSchemes && totalQuestions > 0 && (
+						<span className="tabular-nums">
+							({questionsWithMarkScheme}/{totalQuestions})
+						</span>
+					)}
+				</span>
+				<span className="flex items-center gap-1.5">
+					<span
+						className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+							hasExemplar ? "bg-green-500" : "bg-muted-foreground/40"
+						}`}
+					/>
+					Exemplars (optional)
+				</span>
+			</div>
+		</div>
+	)
+}
+
+function ReadinessIndicator({
+	ready,
+	label,
+}: {
+	ready: boolean
+	label: string
+}) {
+	return (
+		<span
+			className={`flex items-center gap-1.5 ${
+				ready
+					? "text-green-600 dark:text-green-400"
+					: "text-amber-600 dark:text-amber-400"
+			}`}
+		>
+			<span
+				className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+					ready ? "bg-green-500" : "bg-amber-500"
+				}`}
+			/>
+			{label}
+		</span>
 	)
 }

@@ -70,6 +70,79 @@ Currently deployed to **us-east-1**. Planned migration to **eu-west-2** (London)
 
 ## Key Conventions
 
+### UI Components — shadcn/ui First
+
+Always reach for a shadcn/ui component before writing a custom one. The component registry is defined in `apps/web/components.json`. Check `apps/web/src/components/ui/` before building anything from scratch — Button, Dialog, Table, Tabs, Badge, Card, Progress, Toast, etc. are all available.
+
+When a shadcn component doesn't exist yet, add it with:
+
+```bash
+bunx shadcn@latest add <component-name>
+```
+
+Only build a custom component when shadcn genuinely cannot cover the use case (e.g. drag-and-drop canvas, bounding box overlay).
+
+---
+
+### State Management
+
+**Minimise `useState`.** Before reaching for local state, ask:
+
+- Can this be derived from props or existing query data? → compute it inline, no state needed.
+- Does it belong in the URL? → use `nuqs`.
+- Does it come from the server? → use React Query.
+- Is it purely ephemeral UI (open/closed, hover)? → `useState` is fine.
+
+Prefer derived values over synchronised state:
+
+```tsx
+// ❌ Redundant state — derived from existing data
+const [totalMarks, setTotalMarks] = useState(0)
+useEffect(() => setTotalMarks(results.reduce(...)), [results])
+
+// ✅ Computed inline
+const totalMarks = results.reduce((sum, r) => sum + r.awarded_score, 0)
+```
+
+---
+
+### Data Fetching — React Query + Server Actions
+
+Use TanStack Query (`useQuery`, `useMutation`) for all client-side data fetching. Server actions are the fetch/mutate functions — pass them directly as the query/mutation function.
+
+**Optimistic updates are the default for mutations that change visible state.** Use `useMutation` with `onMutate` / `onError` / `onSettled` to apply the change instantly and roll back on failure.
+
+```tsx
+const queryClient = useQueryClient()
+
+const mutation = useMutation({
+  mutationFn: updateStagedScript,
+  onMutate: async (variables) => {
+    await queryClient.cancelQueries({ queryKey: queryKeys.batch(paperId) })
+    const previous = queryClient.getQueryData(queryKeys.batch(paperId))
+    queryClient.setQueryData(queryKeys.batch(paperId), (old) => applyOptimisticUpdate(old, variables))
+    return { previous }
+  },
+  onError: (_err, _vars, context) => {
+    queryClient.setQueryData(queryKeys.batch(paperId), context?.previous)
+    toast.error("Failed to update script")
+  },
+  onSettled: () => {
+    queryClient.invalidateQueries({ queryKey: queryKeys.batch(paperId) })
+  },
+})
+```
+
+Query keys live in `apps/web/src/lib/query-keys.ts` — always use them, never inline strings.
+
+**UX requirements for every mutation:**
+- Immediate optimistic feedback where the data is visible in the UI.
+- `toast.error(result.error)` on failure (see error handling below).
+- `toast.success(...)` for non-obvious confirmations (deletes, submits).
+- Loading spinners only for operations with no optimistic path (e.g. file uploads, long async jobs).
+
+---
+
 ### Server Actions — Result Pattern
 
 All server actions return a discriminated union. Never throw to the client.
@@ -156,7 +229,72 @@ app/teacher/exam-papers/[id]/
   dnd-script-card.tsx
 ```
 
-Extract sub-components and hooks into sibling files rather than growing a single file past ~300 lines.
+Extract sub-components and hooks into sibling files rather than growing a single file past **~400 lines**. When a file approaches that limit, look for the natural seams: a self-contained visual block, a reusable hook, a group of helper functions — and split along those lines.
+
+---
+
+### Explicit Data Flow & Pure Functions
+
+Data flows down via props; events flow up via callbacks. Avoid implicit shared mutable state.
+
+**Pure functions are the default for all logic.** A function that takes inputs and returns outputs with no side effects is easy to test, easy to trace, and safe to call from anywhere.
+
+```ts
+// ✅ Pure — same input always produces same output, no side effects
+function computePercentage(awarded: number, max: number): number {
+  if (max === 0) return 0
+  return Math.round((awarded / max) * 100)
+}
+
+// ❌ Impure — reads external state, harder to test
+function computePercentage(): number {
+  return Math.round((store.awarded / store.max) * 100)
+}
+```
+
+Side effects (fetching, writing, toasts) belong at the boundary — in event handlers, `useMutation` callbacks, or server actions — not buried inside rendering logic or utility functions.
+
+---
+
+### Programming Style — Pragmatic OOP + Functional
+
+The codebase uses a deliberate mix:
+
+**Pure functions** for logic, transformations, formatters, and helpers. These should be the majority of the code. Prefer immutable data — never mutate arrays or objects in place.
+
+```ts
+// ✅ Immutable update
+const updated = scripts.map((s) => s.id === id ? { ...s, name } : s)
+
+// ❌ Mutation
+scripts.find((s) => s.id === id)!.name = name
+```
+
+**Classes** for domain objects that carry both data and behaviour, especially in `packages/shared`. The `MarkerOrchestrator`, `Grader`, `DeterministicMarker`, `LlmMarker`, and `LevelOfResponseMarker` are all classes because they encapsulate strategy logic, hold injected dependencies, and have a clear lifecycle. Follow this pattern when a concept has identity, internal state, or pluggable behaviour.
+
+```ts
+// ✅ Class for a domain object with injected behaviour
+class LlmMarker implements Marker {
+  constructor(private grader: Grader) {}
+  canMark(q: QuestionWithMarkScheme) { return q.markingMethod === "point_based" }
+  async mark(q, answer) { ... }
+}
+
+// ✅ Pure function for a transformation
+function normaliseQuestionNumber(raw: string): string { ... }
+```
+
+Do not use classes merely to group functions — a module (file) does that job better. Classes are for objects.
+
+---
+
+### Domain-Driven Design
+
+Think in terms of domains: `exam-paper`, `marking`, `pdf-ingestion`, `batch`, `student`, `mark-scheme`. Each domain owns its types, queries, mutations, and helpers. Code that spans domains lives in `lib/` at the appropriate level.
+
+When a concept grows complex enough to warrant its own behaviour (validation, transformation, comparison), extract it as a domain class or a dedicated module rather than spreading that logic across components.
+
+Ask: *if this domain concept changed, how many files would I need to touch?* A good domain boundary means the answer is "one folder".
 
 ---
 

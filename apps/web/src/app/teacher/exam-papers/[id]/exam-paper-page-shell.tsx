@@ -26,6 +26,7 @@ import { useRouter } from "next/navigation"
 import { parseAsString, parseAsStringEnum, useQueryState } from "nuqs"
 import { useState } from "react"
 import { toast } from "sonner"
+import { BatchStagingPanel } from "./batch-staging-panel"
 import { DocumentUploadCards } from "./document-upload-cards"
 import { EditableTitle } from "./editable-title"
 import { ExamPaperAnalyticsTab } from "./exam-paper-analytics-tab"
@@ -76,10 +77,16 @@ export function ExamPaperPageShell({
 		]).withDefault("paper"),
 	)
 
-	// Grid vs table view for submissions/backlog
+	// Grid vs table view for submissions
 	const [subView, setSubView] = useQueryState(
 		"submissions_view",
 		parseAsStringEnum(["grid", "table"]).withDefault("grid"),
+	)
+
+	// List vs grid view for backlog staged scripts
+	const [backlogView, setBacklogView] = useQueryState(
+		"backlog_view",
+		parseAsStringEnum(["list", "grid"]).withDefault("list"),
 	)
 
 	// Live exam paper data, ingestion state, and analytics
@@ -202,9 +209,7 @@ export function ExamPaperPageShell({
 			<Tabs
 				value={activeTab}
 				onValueChange={(v) =>
-					setActiveTab(
-						v as "paper" | "submissions" | "backlog" | "analytics",
-					)
+					setActiveTab(v as "paper" | "submissions" | "backlog" | "analytics")
 				}
 				className="gap-0"
 			>
@@ -353,10 +358,7 @@ export function ExamPaperPageShell({
 						}}
 					/>
 
-					<ExamPaperQuestionsCard
-						paper={paper}
-						similarPairs={similarPairs}
-					/>
+					<ExamPaperQuestionsCard paper={paper} similarPairs={similarPairs} />
 				</TabsContent>
 
 				{/* ── Submissions tab (complete only) ── */}
@@ -373,9 +375,7 @@ export function ExamPaperPageShell({
 									submissions={completeSubmissions}
 									onView={(id) => setMarkingJobId(id)}
 									onDelete={(id) =>
-										setSubmissions((prev) =>
-											prev.filter((s) => s.id !== id),
-										)
+										setSubmissions((prev) => prev.filter((s) => s.id !== id))
 									}
 								/>
 							) : (
@@ -383,9 +383,7 @@ export function ExamPaperPageShell({
 									submissions={completeSubmissions}
 									onView={(id) => setMarkingJobId(id)}
 									onDeleteRequest={(id) =>
-										setSubmissions((prev) =>
-											prev.filter((s) => s.id !== id),
-										)
+										setSubmissions((prev) => prev.filter((s) => s.id !== id))
 									}
 								/>
 							)}
@@ -401,45 +399,55 @@ export function ExamPaperPageShell({
 				<TabsContent value="backlog" className="space-y-6 mt-10">
 					{readyForSubmissions || activeBatch ? (
 						<>
-							<SubmissionsHeader
-								count={backlogSubmissions.length}
-								view={subView}
-								onViewChange={setSubView}
+							{/* Active batch pipeline (classifying → staging → marking) */}
+							<BatchStagingPanel
+								activeBatch={activeBatch}
+								committingBatch={committingBatch}
+								viewMode={backlogView}
+								onViewModeChange={setBacklogView}
+								onCommitAll={handleCommitAll}
+								onUpdateScriptName={async (id, name) => {
+									await updateStagedScript(id, { confirmedName: name })
+								}}
+								onToggleExclude={async (id, status) => {
+									await updateStagedScript(id, {
+										status: status === "excluded" ? "confirmed" : "excluded",
+									})
+									void refetchActiveBatch()
+								}}
+								onDeleteScript={() => void refetchActiveBatch()}
 							/>
-							{subView === "grid" ? (
-								<SubmissionGrid
-									submissions={backlogSubmissions}
-									onView={(id) => setMarkingJobId(id)}
-									onDelete={(id) =>
-										setSubmissions((prev) =>
-											prev.filter((s) => s.id !== id),
-										)
-									}
-									activeBatch={activeBatch}
-									committingBatch={committingBatch}
-									onCommitAll={handleCommitAll}
-									onUpdateScriptName={async (id, name) => {
-										await updateStagedScript(id, { confirmedName: name })
-									}}
-									onToggleExclude={async (id, status) => {
-										await updateStagedScript(id, {
-											status:
-												status === "excluded" ? "confirmed" : "excluded",
-										})
-										void refetchActiveBatch()
-									}}
-									onDeleteScript={() => void refetchActiveBatch()}
-								/>
-							) : (
-								<SubmissionTable
-									submissions={backlogSubmissions}
-									onView={(id) => setMarkingJobId(id)}
-									onDeleteRequest={(id) =>
-										setSubmissions((prev) =>
-											prev.filter((s) => s.id !== id),
-										)
-									}
-								/>
+
+							{/* In-progress marking jobs */}
+							{backlogSubmissions.length > 0 && (
+								<>
+									<SubmissionsHeader
+										count={backlogSubmissions.length}
+										view={subView}
+										onViewChange={setSubView}
+									/>
+									{subView === "grid" ? (
+										<SubmissionGrid
+											submissions={backlogSubmissions}
+											onView={(id) => setMarkingJobId(id)}
+											onDelete={(id) =>
+												setSubmissions((prev) =>
+													prev.filter((s) => s.id !== id),
+												)
+											}
+										/>
+									) : (
+										<SubmissionTable
+											submissions={backlogSubmissions}
+											onView={(id) => setMarkingJobId(id)}
+											onDeleteRequest={(id) =>
+												setSubmissions((prev) =>
+													prev.filter((s) => s.id !== id),
+												)
+											}
+										/>
+									)}
+								</>
 							)}
 						</>
 					) : (
@@ -544,10 +552,7 @@ function ReadinessStrip({
 	return (
 		<div className="flex items-center gap-3 rounded-lg border px-3 py-2 text-xs text-muted-foreground">
 			<div className="flex flex-1 flex-wrap items-center gap-x-4 gap-y-1">
-				<ReadinessIndicator
-					ready={hasQuestionPaper}
-					label="Question paper"
-				/>
+				<ReadinessIndicator ready={hasQuestionPaper} label="Question paper" />
 				<span
 					className={`flex items-center gap-1.5 ${
 						allQuestionsHaveMarkSchemes

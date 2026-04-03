@@ -1,37 +1,51 @@
 "use client"
 
-import { LayoutGrid, List } from "lucide-react"
+import { LayoutGrid, List, Rows3 } from "lucide-react"
+import type { ReactNode } from "react"
 
-export function ViewToggle({
+type ViewOption = {
+	value: string
+	icon: ReactNode
+	label: string
+}
+
+const ICONS: Record<string, ReactNode> = {
+	grid: <LayoutGrid className="h-4 w-4" />,
+	table: <List className="h-4 w-4" />,
+	list: <Rows3 className="h-4 w-4" />,
+}
+
+export function ViewToggle<T extends string>({
 	value,
 	onChange,
-}: { value: "grid" | "table"; onChange: (v: "grid" | "table") => void }) {
+	options,
+}: {
+	value: T
+	onChange: (v: T) => void
+	options?: ViewOption[]
+}) {
+	const items: ViewOption[] = options ?? [
+		{ value: "grid", icon: ICONS.grid, label: "Grid view" },
+		{ value: "table", icon: ICONS.table, label: "Table view" },
+	]
+
 	return (
 		<div className="flex items-center gap-0.5 rounded-md border p-0.5">
-			<button
-				type="button"
-				onClick={() => onChange("grid")}
-				className={`rounded p-1 transition-colors ${
-					value === "grid"
-						? "bg-muted text-foreground"
-						: "text-muted-foreground hover:text-foreground"
-				}`}
-				aria-label="Grid view"
-			>
-				<LayoutGrid className="h-4 w-4" />
-			</button>
-			<button
-				type="button"
-				onClick={() => onChange("table")}
-				className={`rounded p-1 transition-colors ${
-					value === "table"
-						? "bg-muted text-foreground"
-						: "text-muted-foreground hover:text-foreground"
-				}`}
-				aria-label="Table view"
-			>
-				<List className="h-4 w-4" />
-			</button>
+			{items.map((opt) => (
+				<button
+					key={opt.value}
+					type="button"
+					onClick={() => onChange(opt.value as T)}
+					className={`rounded p-1 transition-colors ${
+						value === opt.value
+							? "bg-muted text-foreground"
+							: "text-muted-foreground hover:text-foreground"
+					}`}
+					aria-label={opt.label}
+				>
+					{opt.icon ?? ICONS[opt.value]}
+				</button>
+			))}
 		</div>
 	)
 }

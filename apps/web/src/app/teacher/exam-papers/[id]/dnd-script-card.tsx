@@ -8,13 +8,6 @@ import { useDroppable } from "@dnd-kit/core"
 import { Trash2, X } from "lucide-react"
 import { DraggablePageThumb } from "./draggable-page-thumb"
 
-export type PageKeyRaw = {
-	s3_key: string
-	order: number
-	mime_type: string
-	source_file: string
-}
-
 function confidenceColor(confidence: number | null): string {
 	if (confidence === null) return "secondary"
 	if (confidence >= 0.9) return "default"
@@ -53,9 +46,7 @@ export function DndScriptCard({
 }) {
 	const { setNodeRef, isOver } = useDroppable({ id: script.id })
 
-	const pageKeys = (script.page_keys as PageKeyRaw[])
-		.slice()
-		.sort((a, b) => a.order - b.order)
+	const pageKeys = script.page_keys.slice().sort((a, b) => a.order - b.order)
 
 	const isDraggingOtherSource =
 		activeDragKey !== null &&

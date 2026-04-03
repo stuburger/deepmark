@@ -1,14 +1,17 @@
-import type {
-	BatchStatus,
-	ClassificationMode,
-	ReviewMode,
-} from "@mcp-gcse/db"
+import type { BatchStatus, ClassificationMode, ReviewMode } from "@mcp-gcse/db"
+import { z } from "zod"
 
-export type PageKey = {
-	s3_key: string
-	order: number
-	mime_type: string
-	source_file: string
+export const pageKeySchema = z.object({
+	s3_key: z.string(),
+	order: z.number(),
+	mime_type: z.string(),
+	source_file: z.string(),
+})
+
+export type PageKey = z.infer<typeof pageKeySchema>
+
+export function parsePageKeys(raw: unknown): PageKey[] {
+	return z.array(pageKeySchema).parse(raw)
 }
 
 export type BatchIngestJobData = {

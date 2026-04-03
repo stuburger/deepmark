@@ -1,23 +1,12 @@
 "use client"
 
-import { deleteStagedScript, updateStagedScriptPageKeys } from "@/lib/batch/mutations"
-import { getStagedScriptPageUrls } from "@/lib/batch/queries"
 import type { BatchIngestJobData } from "@/lib/batch/types"
-import {
-	DndContext,
-	DragOverlay,
-	PointerSensor,
-	useSensor,
-	useSensors,
-} from "@dnd-kit/core"
+import { DndContext, DragOverlay } from "@dnd-kit/core"
 import type { DragEndEvent, DragStartEvent } from "@dnd-kit/core"
 import { arrayMove } from "@dnd-kit/sortable"
-import { useEffect, useRef, useState } from "react"
-import { toast } from "sonner"
-import type { PageKeyRaw } from "./dnd-script-card"
 import { DndScriptCard } from "./dnd-script-card"
+import { useStagedScriptsState } from "./hooks/use-staged-scripts-state"
 import { OversizedScriptBanner } from "./oversized-script-banner"
-import type { PageItem } from "./staged-script-page-editor"
 import { PageCarousel } from "./staged-script-page-editor"
 
 type StagedScriptCardProps = {
@@ -31,17 +20,6 @@ type StagedScriptCardProps = {
 	onDeleteScript?: (scriptId: string) => void
 }
 
-type CarouselState = {
-	pages: PageItem[]
-	index: number
-	scriptName: string
-}
-
-type ActiveDragState = {
-	key: string
-	url: string
-}
-
 export function StagedScriptReviewCards({
 	batchId,
 	scripts,
@@ -52,52 +30,22 @@ export function StagedScriptReviewCards({
 	onSplitScript,
 	onDeleteScript,
 }: StagedScriptCardProps) {
-	const [localScripts, setLocalScripts] = useState(scripts)
-	const [localNames, setLocalNames] = useState<Record<string, string>>(() =>
-		Object.fromEntries(
-			scripts.map((s) => [s.id, s.confirmed_name ?? s.proposed_name ?? ""]),
-		),
-	)
-	const [urls, setUrls] = useState<Record<string, string>>({})
-	const [activeDrag, setActiveDrag] = useState<ActiveDragState | null>(null)
-	const [carousel, setCarousel] = useState<CarouselState | null>(null)
-	const isDraggingRef = useRef(false)
-
-	const sensors = useSensors(
-		useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-	)
-
-	// Sync local scripts from updated props (e.g. after parent refetch), skip mid-drag
-	useEffect(() => {
-		if (!isDraggingRef.current) {
-			setLocalScripts(scripts)
-		}
-	}, [scripts])
-
-	// Load presigned GET URLs for all pages in the batch once
-	useEffect(() => {
-		getStagedScriptPageUrls(batchId).then((r) => {
-			if (r.ok) setUrls(r.urls)
-		})
-	}, [batchId])
-
-	function openCarousel(
-		script: BatchIngestJobData["staged_scripts"][number],
-		startIndex: number,
-	) {
-		const pageKeys = (script.page_keys as PageKeyRaw[])
-			.slice()
-			.sort((a, b) => a.order - b.order)
-		const pages: PageItem[] = pageKeys.map((pk) => ({
-			key: pk.s3_key,
-			url: urls[pk.s3_key] ?? "",
-			order: pk.order,
-			mimeType: pk.mime_type,
-			sourceFile: pk.source_file,
-		}))
-		const name = localNames[script.id] ?? script.proposed_name ?? ""
-		setCarousel({ pages, index: startIndex, scriptName: name })
-	}
+	const {
+		localScripts,
+		setLocalScripts,
+		localNames,
+		setLocalNames,
+		urls,
+		activeDrag,
+		setActiveDrag,
+		carousel,
+		setCarousel,
+		isDraggingRef,
+		sensors,
+		openCarousel,
+		persistPageKeys,
+		handleDelete,
+	} = useStagedScriptsState(batchId, scripts, onDeleteScript)
 
 	// ── DnD handlers ──────────────────────────────────────────────────────────
 
@@ -117,16 +65,16 @@ export function StagedScriptReviewCards({
 		const overId = over.id as string
 
 		const sourceScript = localScripts.find((s) =>
-			(s.page_keys as PageKeyRaw[]).some((pk) => pk.s3_key === dragKey),
+			s.page_keys.some((pk) => pk.s3_key === dragKey),
 		)
 		if (!sourceScript) return
 
 		const overIsPage = localScripts.some((s) =>
-			(s.page_keys as PageKeyRaw[]).some((pk) => pk.s3_key === overId),
+			s.page_keys.some((pk) => pk.s3_key === overId),
 		)
 		const targetScript = overIsPage
 			? localScripts.find((s) =>
-					(s.page_keys as PageKeyRaw[]).some((pk) => pk.s3_key === overId),
+					s.page_keys.some((pk) => pk.s3_key === overId),
 				)!
 			: (localScripts.find((s) => s.id === overId) ?? null)
 
@@ -134,7 +82,7 @@ export function StagedScriptReviewCards({
 
 		// ── Same script: reorder ───────────────────────────────────────────────
 		if (sourceScript.id === targetScript.id) {
-			const pages = sourceScript.page_keys as PageKeyRaw[]
+			const pages = sourceScript.page_keys
 			const oldIdx = pages.findIndex((pk) => pk.s3_key === dragKey)
 			const newIdx = pages.findIndex((pk) => pk.s3_key === overId)
 			if (oldIdx === -1 || newIdx === -1 || oldIdx === newIdx) return
@@ -151,14 +99,14 @@ export function StagedScriptReviewCards({
 		}
 
 		// ── Cross-script: remove from source, insert into target ──────────────
-		const draggedPage = (sourceScript.page_keys as PageKeyRaw[]).find(
+		const draggedPage = sourceScript.page_keys.find(
 			(pk) => pk.s3_key === dragKey,
 		)!
-		const newSourcePages = (sourceScript.page_keys as PageKeyRaw[])
+		const newSourcePages = sourceScript.page_keys
 			.filter((pk) => pk.s3_key !== dragKey)
 			.map((pk, i) => ({ ...pk, order: i + 1 }))
 
-		const targetPages = [...(targetScript.page_keys as PageKeyRaw[])]
+		const targetPages = [...targetScript.page_keys]
 		if (overIsPage) {
 			const insertAt = targetPages.findIndex((pk) => pk.s3_key === overId)
 			targetPages.splice(
@@ -188,31 +136,6 @@ export function StagedScriptReviewCards({
 		void persistPageKeys(updatedTarget)
 	}
 
-	async function persistPageKeys(
-		script: BatchIngestJobData["staged_scripts"][number],
-	) {
-		const r = await updateStagedScriptPageKeys(
-			script.id,
-			script.page_keys as PageKeyRaw[],
-		)
-		if (!r.ok) toast.error(r.error)
-	}
-
-	async function handleDelete(scriptId: string) {
-		const r = await deleteStagedScript(scriptId)
-		if (!r.ok) {
-			toast.error(r.error)
-			return
-		}
-		setLocalScripts((prev) => prev.filter((s) => s.id !== scriptId))
-		setLocalNames((prev) => {
-			const next = { ...prev }
-			delete next[scriptId]
-			return next
-		})
-		onDeleteScript?.(scriptId)
-	}
-
 	return (
 		<>
 			<DndContext
@@ -222,7 +145,7 @@ export function StagedScriptReviewCards({
 			>
 				<div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
 					{localScripts.map((script) => {
-						const pageCount = (script.page_keys as PageKeyRaw[]).length
+						const pageCount = script.page_keys.length
 						const isOversized =
 							classificationMode === "per_file" &&
 							pagesPerScript !== undefined &&

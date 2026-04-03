@@ -6,10 +6,10 @@ import type { BatchStatus } from "@mcp-gcse/db"
 import { createPrismaClient } from "@mcp-gcse/db"
 import { Resource } from "sst"
 import { auth } from "../auth"
-import type {
-	ActiveBatchInfo,
-	BatchIngestJobData,
-	PageKey,
+import {
+	type ActiveBatchInfo,
+	type BatchIngestJobData,
+	parsePageKeys,
 } from "./types"
 
 const bucketName = Resource.ScansBucket.name
@@ -60,7 +60,7 @@ export async function getBatchIngestJob(
 			error: batch.error,
 			staged_scripts: batch.staged_scripts.map((s) => ({
 				id: s.id,
-				page_keys: s.page_keys as PageKey[],
+				page_keys: parsePageKeys(s.page_keys),
 				proposed_name: s.proposed_name,
 				confirmed_name: s.confirmed_name,
 				confidence: s.confidence,
@@ -119,7 +119,7 @@ export async function getActiveBatchForPaper(
 			total_student_jobs: batch.total_student_jobs,
 			staged_scripts: batch.staged_scripts.map((s) => ({
 				id: s.id,
-				page_keys: s.page_keys as PageKey[],
+				page_keys: parsePageKeys(s.page_keys),
 				proposed_name: s.proposed_name,
 				confirmed_name: s.confirmed_name,
 				confidence: s.confidence,
@@ -153,7 +153,7 @@ export async function getStagedScriptPageUrls(
 	if (!batch) return { ok: false, error: "Batch not found" }
 
 	const allKeys = batch.staged_scripts.flatMap((s) =>
-		(s.page_keys as PageKey[]).map((pk) => pk.s3_key),
+		parsePageKeys(s.page_keys).map((pk) => pk.s3_key),
 	)
 
 	const unique = [...new Set(allKeys)]

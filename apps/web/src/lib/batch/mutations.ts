@@ -12,7 +12,7 @@ import {
 import { Resource } from "sst"
 import { auth } from "../auth"
 import { log } from "../logger"
-import type { PageKey } from "./types"
+import { type PageKey, parsePageKeys } from "./types"
 
 const TAG = "batch/mutations"
 
@@ -265,7 +265,7 @@ export async function commitBatchService(
 	const createdJobs = await db.$transaction(async (tx) => {
 		const jobs = await Promise.all(
 			confirmedScripts.map((script) => {
-				const pageKeys = script.page_keys as PageKey[]
+				const pageKeys = parsePageKeys(script.page_keys)
 				return tx.studentPaperJob.create({
 					data: {
 						s3_key: pageKeys[0]?.s3_key ?? "",
@@ -401,7 +401,7 @@ export async function splitStagedScript(
 		return { ok: false, error: "Staged script not found" }
 	}
 
-	const pageKeys = script.page_keys as PageKey[]
+	const pageKeys = parsePageKeys(script.page_keys)
 	if (splitAfterIndex < 0 || splitAfterIndex >= pageKeys.length - 1) {
 		return { ok: false, error: "Invalid split index" }
 	}

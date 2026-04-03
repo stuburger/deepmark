@@ -10,7 +10,7 @@ export const isPermanentStage = ["development", "production"].includes(
 
 // Single Route53 hosted zone for getdeepmark.com
 // TODO: Set this to the actual Route53 hosted zone ID after domain setup
-export const HOSTED_ZONE_ID = "Z0948185177S09YB0TEHQ"
+export const HOSTED_ZONE_ID = "Z1039796VEIQXWRMZ4EY"
 
 // Domain configuration — single zone, subdomain per stage
 // Production: getdeepmark.com

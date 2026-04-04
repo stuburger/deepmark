@@ -2,13 +2,15 @@
 
 import { Badge } from "@/components/ui/badge"
 import { motion } from "framer-motion"
-import { FileText, LockOpen } from "lucide-react"
+import { FileText, Undo2 } from "lucide-react"
 
 type ListViewLockedStackProps = {
 	pageKeys: Array<{ s3_key: string; order: number }>
 	urls: Record<string, string>
 	onUnlock: () => void
 	onOpenCarousel: () => void
+	showUndo?: boolean
+	showPageCount?: boolean
 }
 
 const MAX_VISIBLE_PAGES = 5
@@ -18,6 +20,8 @@ export function ListViewLockedStack({
 	urls,
 	onUnlock,
 	onOpenCarousel,
+	showUndo = true,
+	showPageCount = true,
 }: ListViewLockedStackProps) {
 	const sorted = pageKeys.slice().sort((a, b) => a.order - b.order)
 	const visible = sorted.slice(0, MAX_VISIBLE_PAGES)
@@ -87,22 +91,26 @@ export function ListViewLockedStack({
 			</button>
 
 			{/* Page count badge */}
-			<Badge
-				variant="secondary"
-				className="absolute bottom-3 right-3 pointer-events-none tabular-nums"
-			>
-				{total} {total === 1 ? "page" : "pages"}
-			</Badge>
+			{showPageCount && (
+				<Badge
+					variant="secondary"
+					className="absolute bottom-3 right-3 pointer-events-none tabular-nums"
+				>
+					{total} {total === 1 ? "page" : "pages"}
+				</Badge>
+			)}
 
-			{/* Unlock button — visible on hover */}
-			<button
-				type="button"
-				onClick={onUnlock}
-				className="absolute top-3 right-3 flex items-center gap-1.5 rounded-md bg-background/90 backdrop-blur border px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity shadow-sm"
-			>
-				<LockOpen className="h-3.5 w-3.5" />
-				Unlock
-			</button>
+			{/* Undo button — visible on hover */}
+			{showUndo && (
+				<button
+					type="button"
+					onClick={onUnlock}
+					className="absolute top-3 right-3 flex items-center gap-1.5 rounded-md bg-background/90 backdrop-blur border px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity shadow-sm"
+				>
+					<Undo2 className="h-3.5 w-3.5" />
+					Undo
+				</button>
+			)}
 		</motion.div>
 	)
 }

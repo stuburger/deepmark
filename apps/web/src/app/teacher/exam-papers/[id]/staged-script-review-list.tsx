@@ -4,6 +4,7 @@ import type { BatchIngestJobData } from "@/lib/batch/types"
 import { DndContext, DragOverlay, closestCenter } from "@dnd-kit/core"
 import type { DragEndEvent, DragOverEvent, DragStartEvent } from "@dnd-kit/core"
 import { arrayMove } from "@dnd-kit/sortable"
+import { AnimatePresence, motion } from "framer-motion"
 import { FileText } from "lucide-react"
 import { useCallback, useRef, useState } from "react"
 import { useStagedScriptsState } from "./hooks/use-staged-scripts-state"
@@ -46,35 +47,48 @@ export function StagedScriptReviewList({
 		sensors,
 		openCarousel,
 		persistPageKeys,
-		handleDelete: baseHandleDelete,
+		handleDelete,
 	} = useStagedScriptsState(batchId, scripts, onDeleteScript)
 
-	const [lockedScripts, setLockedScripts] = useState<Set<string>>(new Set())
+	// IDs of scripts optimistically removed from the list (flying to tray)
+	const [optimisticConfirmedIds, setOptimisticConfirmedIds] = useState<
+		Set<string>
+	>(new Set())
 
-	// Snapshot of localScripts when drag starts, for rollback on cancel
 	const dragSnapshotRef = useRef<BatchIngestJobData["staged_scripts"] | null>(
 		null,
 	)
 
-	function handleDelete(scriptId: string) {
-		setLockedScripts((prev) => {
-			const next = new Set(prev)
-			next.delete(scriptId)
-			return next
-		})
-		void baseHandleDelete(scriptId)
+	function handleDeletePage(pageKey: string) {
+		const sourceScript = localScripts.find((s) =>
+			s.page_keys.some((pk) => pk.s3_key === pageKey),
+		)
+		if (!sourceScript) return
+
+		const newPages = sourceScript.page_keys
+			.filter((pk) => pk.s3_key !== pageKey)
+			.map((pk, i) => ({ ...pk, order: i + 1 }))
+
+		const updated = { ...sourceScript, page_keys: newPages }
+		setLocalScripts((prev) =>
+			prev.map((s) => (s.id === sourceScript.id ? updated : s)),
+		)
+		void persistPageKeys(updated)
 	}
 
-	function toggleLock(scriptId: string) {
-		setLockedScripts((prev) => {
-			const next = new Set(prev)
-			if (next.has(scriptId)) {
+	function handleToggleInclude(scriptId: string, currentStatus: string) {
+		// Optimistically hide the script immediately so the exit animation fires
+		// before the server round-trip + refetch completes
+		if (currentStatus !== "confirmed") {
+			setOptimisticConfirmedIds((prev) => new Set([...prev, scriptId]))
+		} else {
+			setOptimisticConfirmedIds((prev) => {
+				const next = new Set(prev)
 				next.delete(scriptId)
-			} else {
-				next.add(scriptId)
-			}
-			return next
-		})
+				return next
+			})
+		}
+		onToggleExclude(scriptId, currentStatus)
 	}
 
 	// ── DnD handlers ──────────────────────────────────────────────────────────
@@ -102,7 +116,6 @@ export function StagedScriptReviewList({
 				const sourceScript = findScriptByPageKey(dragKey, prev)
 				if (!sourceScript) return prev
 
-				// Determine target: is overId a page key or a script id?
 				const overIsPage = prev.some((s) =>
 					s.page_keys.some((pk) => pk.s3_key === overId),
 				)
@@ -111,13 +124,9 @@ export function StagedScriptReviewList({
 					: (prev.find((s) => s.id === overId) ?? null)
 
 				if (!targetScript) return prev
-				// Skip if target is locked
-				if (lockedScripts.has(targetScript.id)) return prev
-
-				// Same script reorder — handled by onDragEnd, skip here for sortable
+				if (targetScript.status === "confirmed") return prev
 				if (sourceScript.id === targetScript.id) return prev
 
-				// Cross-container: move page from source to target
 				const draggedPage = sourceScript.page_keys.find(
 					(pk) => pk.s3_key === dragKey,
 				)
@@ -152,7 +161,7 @@ export function StagedScriptReviewList({
 				})
 			})
 		},
-		[lockedScripts, setLocalScripts],
+		[setLocalScripts],
 	)
 
 	function handleDragEnd(event: DragEndEvent) {
@@ -161,7 +170,6 @@ export function StagedScriptReviewList({
 		setActiveDrag(null)
 
 		if (!over) {
-			// Cancelled — revert to snapshot
 			if (dragSnapshotRef.current) {
 				setLocalScripts(dragSnapshotRef.current)
 			}
@@ -172,14 +180,12 @@ export function StagedScriptReviewList({
 		const dragKey = active.id as string
 		const overId = over.id as string
 
-		// Find the current source script (may have moved during onDragOver)
 		const sourceScript = findScriptByPageKey(dragKey, localScripts)
 		if (!sourceScript) {
 			dragSnapshotRef.current = null
 			return
 		}
 
-		// Same-script reorder (onDragOver doesn't handle this)
 		const overIsPageInSame = sourceScript.page_keys.some(
 			(pk) => pk.s3_key === overId,
 		)
@@ -202,8 +208,6 @@ export function StagedScriptReviewList({
 			}
 		}
 
-		// Cross-container moves were already applied in onDragOver.
-		// Persist all scripts that changed vs the snapshot.
 		const snapshot = dragSnapshotRef.current
 		if (snapshot) {
 			for (const current of localScripts) {
@@ -221,6 +225,10 @@ export function StagedScriptReviewList({
 
 	// ── Render ────────────────────────────────────────────────────────────────
 
+	const visibleScripts = localScripts.filter(
+		(s) => !optimisticConfirmedIds.has(s.id),
+	)
+
 	return (
 		<>
 			<DndContext
@@ -230,27 +238,43 @@ export function StagedScriptReviewList({
 				onDragOver={handleDragOver}
 				onDragEnd={handleDragEnd}
 			>
-				<div className="space-y-8">
-					{localScripts.map((script) => (
-						<ListViewScriptSection
-							key={script.id}
-							script={script}
-							localName={localNames[script.id] ?? ""}
-							urls={urls}
-							isLocked={lockedScripts.has(script.id)}
-							onToggleLock={() => toggleLock(script.id)}
-							onOpenCarousel={openCarousel}
-							onUpdateLocalName={(value) =>
-								setLocalNames((prev) => ({
-									...prev,
-									[script.id]: value,
-								}))
-							}
-							onUpdateName={(name) => onUpdateName(script.id, name)}
-							onToggleExclude={() => onToggleExclude(script.id, script.status)}
-							onDelete={() => handleDelete(script.id)}
-						/>
-					))}
+				<div className="space-y-12">
+					<AnimatePresence mode="popLayout">
+						{visibleScripts.map((script) => (
+							<motion.div
+								key={script.id}
+								layout
+								initial={{ opacity: 0, y: 8 }}
+								animate={{ opacity: 1, y: 0 }}
+								exit={{
+									opacity: 0,
+									x: 180,
+									y: 0,
+									scale: 0.75,
+									transition: { duration: 0.28, ease: "easeIn" },
+								}}
+							>
+								<ListViewScriptSection
+									script={script}
+									localName={localNames[script.id] ?? ""}
+									urls={urls}
+									onOpenCarousel={openCarousel}
+									onUpdateLocalName={(value) =>
+										setLocalNames((prev) => ({
+											...prev,
+											[script.id]: value,
+										}))
+									}
+									onUpdateName={(name) => onUpdateName(script.id, name)}
+									onToggleInclude={() =>
+										handleToggleInclude(script.id, script.status)
+									}
+									onDelete={() => handleDelete(script.id)}
+									onDeletePage={handleDeletePage}
+								/>
+							</motion.div>
+						))}
+					</AnimatePresence>
 				</div>
 
 				<DragOverlay dropAnimation={null}>
@@ -272,7 +296,6 @@ export function StagedScriptReviewList({
 				</DragOverlay>
 			</DndContext>
 
-			{/* Page carousel */}
 			{carousel && (
 				<PageCarousel
 					pages={carousel.pages}

@@ -1,10 +1,9 @@
 "use client"
 
-import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
-import { Spinner } from "@/components/ui/spinner"
 import type { ActiveBatchInfo } from "@/lib/batch/types"
 import { LayoutGrid, Loader2, Rows3 } from "lucide-react"
+import { PaperTrayPanel } from "./paper-tray-panel"
 import { StagedScriptReviewCards } from "./staged-script-review-cards"
 import { StagedScriptReviewList } from "./staged-script-review-list"
 import { ViewToggle } from "./view-toggle"
@@ -53,66 +52,76 @@ export function BatchStagingPanel({
 	}
 
 	if (activeBatch.status === "staging") {
-		const nonExcludedCount = activeBatch.staged_scripts.filter(
-			(s) => s.status !== "excluded",
-		).length
+		const confirmedScripts = activeBatch.staged_scripts.filter(
+			(s) => s.status === "confirmed",
+		)
+		const pendingScripts = activeBatch.staged_scripts.filter(
+			(s) => s.status !== "confirmed",
+		)
 
 		return (
 			<div className="space-y-4">
-				<div className="flex items-center justify-between gap-3">
-					<div className="flex items-center gap-3">
-						<p className="text-sm font-medium">
-							Review detected scripts before marking
-						</p>
-						<ViewToggle
-							value={viewMode}
-							onChange={onViewModeChange}
-							options={BACKLOG_VIEW_OPTIONS}
-						/>
-					</div>
-					{nonExcludedCount > 0 && (
-						<Button
-							size="sm"
-							disabled={committingBatch}
-							onClick={() => onCommitAll()}
-						>
-							{committingBatch ? (
-								<>
-									<Spinner className="h-3.5 w-3.5 mr-1.5" />
-									Starting…
-								</>
-							) : (
-								`Start marking ${nonExcludedCount} scripts`
-							)}
-						</Button>
-					)}
+				{/* Header: label + view toggle */}
+				<div className="flex items-center gap-3">
+					<p className="text-sm font-medium text-muted-foreground">
+						Review each script, then include it in the marking run
+					</p>
+					<ViewToggle
+						value={viewMode}
+						onChange={onViewModeChange}
+						options={BACKLOG_VIEW_OPTIONS}
+					/>
 				</div>
 
-				{viewMode === "list" ? (
-					<StagedScriptReviewList
-						batchId={activeBatch.id}
-						scripts={activeBatch.staged_scripts}
-						onUpdateName={async (id, name) => {
-							await onUpdateScriptName(id, name)
-						}}
-						onToggleExclude={async (id, status) => {
-							await onToggleExclude(id, status)
-						}}
-						onDeleteScript={() => onDeleteScript()}
-					/>
-				) : (
-					<StagedScriptReviewCards
-						batchId={activeBatch.id}
-						scripts={activeBatch.staged_scripts}
-						onUpdateName={async (id, name) => {
-							await onUpdateScriptName(id, name)
-						}}
-						onToggleExclude={async (id, status) => {
-							await onToggleExclude(id, status)
-						}}
-						onDeleteScript={() => onDeleteScript()}
-					/>
-				)}
+				{/* Two-column equal split */}
+				<div className="grid grid-cols-2 gap-8 items-start">
+					{/* LEFT: scripts to review */}
+					<div>
+						{pendingScripts.length === 0 ? (
+							<div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed py-16 text-center">
+								<p className="text-sm font-medium">All scripts confirmed</p>
+								<p className="text-xs text-muted-foreground">
+									Click &ldquo;Start marking&rdquo; on the right to begin
+								</p>
+							</div>
+						) : viewMode === "list" ? (
+							<StagedScriptReviewList
+								batchId={activeBatch.id}
+								scripts={pendingScripts}
+								onUpdateName={async (id, name) => {
+									await onUpdateScriptName(id, name)
+								}}
+								onToggleExclude={async (id, status) => {
+									await onToggleExclude(id, status)
+								}}
+								onDeleteScript={() => onDeleteScript()}
+							/>
+						) : (
+							<StagedScriptReviewCards
+								batchId={activeBatch.id}
+								scripts={pendingScripts}
+								onUpdateName={async (id, name) => {
+									await onUpdateScriptName(id, name)
+								}}
+								onToggleExclude={async (id, status) => {
+									await onToggleExclude(id, status)
+								}}
+								onDeleteScript={() => onDeleteScript()}
+							/>
+						)}
+					</div>
+
+					{/* RIGHT: confirmed scripts */}
+					<div>
+						<PaperTrayPanel
+							batchId={activeBatch.id}
+							confirmedScripts={confirmedScripts}
+							committingBatch={committingBatch}
+							onCommitAll={onCommitAll}
+							onToggleExclude={onToggleExclude}
+						/>
+					</div>
+				</div>
 			</div>
 		)
 	}

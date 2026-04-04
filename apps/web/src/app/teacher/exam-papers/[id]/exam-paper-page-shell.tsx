@@ -135,12 +135,6 @@ export function ExamPaperPageShell({
 	async function handleCommitAll() {
 		if (!activeBatch) return
 		setCommittingBatch(true)
-		const proposed = activeBatch.staged_scripts.filter(
-			(s) => s.status === "proposed",
-		)
-		for (const s of proposed) {
-			await updateStagedScript(s.id, { status: "confirmed" })
-		}
 		const r = await commitBatch(activeBatch.id)
 		setCommittingBatch(false)
 		if (!r.ok) {
@@ -198,7 +192,7 @@ export function ExamPaperPageShell({
 	)
 	const backlogBadgeCount =
 		activeBatch?.status === "staging"
-			? activeBatch.staged_scripts.filter((s) => s.status !== "excluded").length
+			? activeBatch.staged_scripts.length
 			: backlogSubmissions.length
 
 	const tabTriggerClass =
@@ -411,7 +405,7 @@ export function ExamPaperPageShell({
 								}}
 								onToggleExclude={async (id, status) => {
 									await updateStagedScript(id, {
-										status: status === "excluded" ? "confirmed" : "excluded",
+										status: status === "confirmed" ? "excluded" : "confirmed",
 									})
 									void refetchActiveBatch()
 								}}

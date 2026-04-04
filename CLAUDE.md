@@ -1,5 +1,16 @@
 # DeepMark — CLAUDE.md
 
+## Team & Access Control
+
+At the start of every conversation, ask who is using Claude Code. Adapt scope accordingly:
+
+- **Stuart Bourhill** — Project owner, full-stack developer. Full access to all packages, infra, and config. No restrictions.
+- **Geoff Waugh** — Frontend contributor. Restrict all file edits to `apps/web/` only. Do not modify files in `packages/`, `infra/`, or root config files (`sst.config.ts`, `package.json`, etc.). If Geoff's request requires changes outside `apps/web/`, explain what's needed and suggest he asks Stuart.
+
+If the user doesn't identify themselves, ask before proceeding with any edits.
+
+---
+
 ## What is DeepMark?
 
 DeepMark is an AI-powered marking tool for teachers, primarily targeting the UK GCSE market. It lets teachers scan student exam scripts and receive fast, accurate, examiner-quality marking feedback — reducing the manual burden of marking while maintaining the rigour teachers expect.
@@ -27,7 +38,7 @@ DeepMark is an AI-powered marking tool for teachers, primarily targeting the UK 
 ## Monorepo Structure
 
 ```
-mcp-gcse/
+deepmark/
 ├── apps/
 │   └── web/                  # Next.js 14 app (App Router)
 │       └── src/
@@ -38,7 +49,7 @@ mcp-gcse/
 │   ├── backend/              # AWS Lambda processors + MCP server + API
 │   ├── db/                   # Prisma schema + generated client
 │   └── shared/               # Marking engine (MarkerOrchestrator, Grader, etc.)
-├── infra/                    # SST v3 infrastructure (AWS + Neon)
+├── infra/                    # SST v4 infrastructure (AWS + Neon)
 └── sst.config.ts
 ```
 
@@ -54,7 +65,7 @@ mcp-gcse/
 | State / URL | TanStack Query, nuqs (URL state) |
 | Backend (web) | Next.js Server Actions (`"use server"`) |
 | Backend (async) | AWS Lambda via SQS queues |
-| Infrastructure | SST v3 (Ion / Pulumi) on AWS |
+| Infrastructure | SST v4 (Ion / Pulumi) on AWS |
 | Database | Neon (serverless Postgres) via Prisma ORM |
 | AI | Google Gemini (`@ai-sdk/google`, `gemini-2.5-flash`) |
 | OCR | Google Cloud Vision API |
@@ -64,7 +75,7 @@ mcp-gcse/
 
 ### AWS Region
 
-Currently deployed to **us-east-1**. Planned migration to **eu-west-2** (London).
+Deployed to **eu-west-2** (London) on the `deepmark` AWS profile.
 
 ---
 
@@ -511,7 +522,7 @@ All heavy lifting runs in Lambda functions triggered by SQS queues, defined in `
 
 ---
 
-## Infrastructure (SST v3)
+## Infrastructure (SST v4)
 
 - **`sst.config.ts`** — app entry, imports `infra/` modules.
 - **`infra/config.ts`** — secrets (Gemini API key, etc.) and domain config.
@@ -560,7 +571,9 @@ Register in `mcp-server.ts` via `server.registerTool(...)`.
 ## Commands
 
 ```bash
-bun dev              # SST dev mode (Next.js + Lambda local)
+AWS_PROFILE=deepmark npx sst dev          # SST dev mode (Next.js + Lambda local)
+AWS_PROFILE=deepmark npx sst deploy --stage=production    # Deploy production
+AWS_PROFILE=deepmark npx sst deploy --stage=development   # Deploy development
 bun build            # Turborepo full build
 bun typecheck        # Type-check all packages
 bun check            # Biome lint + format check

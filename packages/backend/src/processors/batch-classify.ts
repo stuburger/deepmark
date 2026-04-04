@@ -136,10 +136,7 @@ async function classifyBatch(batchJobId: string): Promise<void> {
 				page_keys: s.page_keys,
 				proposed_name: s.proposed_name,
 				confidence: s.confidence,
-				// Oversized scripts need staging review; others are pre-confirmed
-				status: (s.hasUncertainPage
-					? "proposed"
-					: "confirmed") as StagedScriptStatus,
+				status: "excluded" as StagedScriptStatus,
 			})),
 		})
 
@@ -178,7 +175,7 @@ async function classifyBatch(batchJobId: string): Promise<void> {
 				page_keys: s.page_keys,
 				proposed_name: s.proposed_name,
 				confidence: s.confidence,
-				status: "proposed" as StagedScriptStatus,
+				status: "excluded" as StagedScriptStatus,
 			})),
 		})
 
@@ -601,11 +598,11 @@ async function autoCommitBatch(
 	})
 
 	const stagedScripts = await db.stagedScript.findMany({
-		where: { batch_job_id: batchJobId, status: "proposed" },
+		where: { batch_job_id: batchJobId, status: "excluded" },
 	})
 
 	await db.stagedScript.updateMany({
-		where: { batch_job_id: batchJobId, status: "proposed" },
+		where: { batch_job_id: batchJobId, status: "excluded" },
 		data: { status: "confirmed" as StagedScriptStatus },
 	})
 

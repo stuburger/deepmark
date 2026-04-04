@@ -183,7 +183,7 @@ export async function updateStagedScript(
 	scriptId: string,
 	updates: {
 		confirmedName?: string
-		status?: "proposed" | "confirmed" | "excluded"
+		status?: "confirmed" | "excluded"
 	},
 ): Promise<UpdateStagedScriptResult> {
 	const session = await auth()
@@ -245,16 +245,6 @@ export async function commitBatchService(
 	})
 
 	if (!batch) return { ok: false, error: "Batch job not found" }
-
-	const unconfirmed = await db.stagedScript.count({
-		where: { batch_job_id: batchJobId, status: "proposed" },
-	})
-	if (unconfirmed > 0) {
-		return {
-			ok: false,
-			error: `${unconfirmed} script${unconfirmed === 1 ? "" : "s"} still need review before committing`,
-		}
-	}
 
 	const confirmedScripts = batch.staged_scripts
 
@@ -420,7 +410,7 @@ export async function splitStagedScript(
 		data: {
 			batch_job_id: script.batch_job_id,
 			page_keys: secondHalf as never,
-			status: "proposed" as const,
+			status: "excluded" as const,
 		},
 	})
 

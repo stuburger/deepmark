@@ -66,7 +66,7 @@ export function MarkingJobDialog({
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent className="sm:max-w-[98vw] h-[98vh] p-0 overflow-hidden">
+			<DialogContent className="!top-0 !left-0 !translate-x-0 !translate-y-0 !max-w-none !w-screen !h-screen !rounded-none p-0 overflow-hidden ring-0">
 				{isLoading || !jobData || !jobId ? (
 					<div className="flex h-full items-center justify-center">
 						<Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />

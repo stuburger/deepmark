@@ -236,44 +236,63 @@ export async function retriggerGrading(
 }
 
 /**
- * Resets the job back to OCR pending, clearing all extracted and graded data.
- * The existing page uploads are kept so the OCR processor can re-read them.
+ * Creates a new job from the same pages as the given job, then marks the old
+ * job as superseded. Jobs are immutable — re-scanning always produces a new
+ * record so the original result is preserved as history.
  */
 export async function retriggerOcr(jobId: string): Promise<RetriggerOcrResult> {
 	const session = await auth()
 	if (!session) return { ok: false, error: "Not authenticated" }
 
-	const job = await db.studentPaperJob.findFirst({
+	const oldJob = await db.studentPaperJob.findFirst({
 		where: { id: jobId, uploaded_by: session.userId },
 	})
-	if (!job) return { ok: false, error: "Job not found" }
+	if (!oldJob) return { ok: false, error: "Job not found" }
 
 	type PageEntry = { key: string; order: number; mime_type: string }
-	const pages = (job.pages ?? []) as PageEntry[]
+	const pages = (oldJob.pages ?? []) as PageEntry[]
 	if (pages.length === 0)
 		return { ok: false, error: "No pages uploaded — cannot re-scan" }
 
-	await db.studentPaperJob.update({
-		where: { id: jobId },
-		data: {
-			status: "pending",
-			extracted_answers_raw: Prisma.JsonNull,
-			grading_results: [],
-			student_name: null,
-			detected_subject: null,
-			error: null,
-		},
+	const newJob = await db.$transaction(async (tx) => {
+		const created = await tx.studentPaperJob.create({
+			data: {
+				s3_key: oldJob.s3_key,
+				s3_bucket: oldJob.s3_bucket,
+				status: "pending",
+				uploaded_by: oldJob.uploaded_by,
+				exam_paper_id: oldJob.exam_paper_id,
+				exam_board: oldJob.exam_board,
+				subject: oldJob.subject,
+				year: oldJob.year,
+				pages: oldJob.pages as never,
+				student_name: oldJob.student_name,
+				batch_job_id: oldJob.batch_job_id,
+				staged_script_id: oldJob.staged_script_id,
+			},
+		})
+
+		await tx.studentPaperJob.update({
+			where: { id: jobId },
+			data: { superseded_at: new Date() },
+		})
+
+		return created
 	})
 
 	await sqs.send(
 		new SendMessageCommand({
 			QueueUrl: Resource.StudentPaperOcrQueue.url,
-			MessageBody: JSON.stringify({ job_id: jobId }),
+			MessageBody: JSON.stringify({ job_id: newJob.id }),
 		}),
 	)
 
-	log.info(TAG, "Re-OCR triggered", { userId: session.userId, jobId })
-	return { ok: true }
+	log.info(TAG, "Re-OCR triggered — new job created", {
+		userId: session.userId,
+		oldJobId: jobId,
+		newJobId: newJob.id,
+	})
+	return { ok: true, newJobId: newJob.id }
 }
 
 // ─── Enrichment (Annotations) ────────────────────────────────────────────────

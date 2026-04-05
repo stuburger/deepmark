@@ -273,18 +273,10 @@ export async function commitBatchService(
 						})) as never,
 						student_name: script.confirmed_name ?? script.proposed_name,
 						batch_job_id: batchJobId,
+						staged_script_id: script.id,
 					},
 				})
 			}),
-		)
-
-		await Promise.all(
-			confirmedScripts.map((script, i) =>
-				tx.stagedScript.update({
-					where: { id: script.id },
-					data: { student_job_id: jobs[i]!.id },
-				}),
-			),
 		)
 
 		await tx.batchIngestJob.update({

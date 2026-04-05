@@ -10,17 +10,17 @@ export async function sendBatchCompleteNotification(
 	examPaperTitle: string,
 	studentCount: number,
 ): Promise<void> {
-	webPush.setVapidDetails(
-		"mailto:noreply@deepmark.app",
-		Resource.VapidPublicKey.value,
-		Resource.VapidPrivateKey.value,
-	)
-
 	const subscriptions = await db.userPushSubscription.findMany({
 		where: { user_id: uploadedBy },
 	})
 
 	if (subscriptions.length === 0) return
+
+	webPush.setVapidDetails(
+		"mailto:noreply@deepmark.app",
+		Resource.VapidPublicKey.value,
+		Resource.VapidPrivateKey.value,
+	)
 
 	const payload = JSON.stringify({
 		title: "Batch marking complete",

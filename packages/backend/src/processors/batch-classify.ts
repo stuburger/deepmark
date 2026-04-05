@@ -626,6 +626,7 @@ async function autoCommitBatch(
 					})) as never,
 					student_name: script.proposed_name,
 					batch_job_id: batchJobId,
+					staged_script_id: script.id,
 				},
 			})
 		}),
@@ -639,13 +640,7 @@ async function autoCommitBatch(
 		},
 	})
 
-	for (let i = 0; i < createdJobs.length; i++) {
-		const job = createdJobs[i]!
-		const script = stagedScripts[i]!
-		await db.stagedScript.update({
-			where: { id: script.id },
-			data: { student_job_id: job.id },
-		})
+	for (const job of createdJobs) {
 		await sqs.send(
 			new SendMessageCommand({
 				QueueUrl: Resource.StudentPaperOcrQueue.url,

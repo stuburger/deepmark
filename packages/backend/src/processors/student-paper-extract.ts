@@ -61,7 +61,6 @@ export async function handler(
 			await db.studentPaperJob.update({
 				where: { id: jobId },
 				data: {
-					attempt_count: { increment: 1 },
 					status: "processing" as ScanStatus,
 					error: null,
 				},

@@ -109,7 +109,11 @@ export type ChainPayload = {
 	phrase: string
 }
 
-export type AnnotationPayload = MarkPayload | TagPayload | CommentPayload | ChainPayload
+export type AnnotationPayload =
+	| MarkPayload
+	| TagPayload
+	| CommentPayload
+	| ChainPayload
 
 export type StudentPaperAnnotation = {
 	id: string
@@ -127,7 +131,9 @@ export type GetJobAnnotationsResult =
 	| { ok: true; annotations: StudentPaperAnnotation[] }
 	| { ok: false; error: string }
 
-export type TriggerEnrichmentResult = { ok: true } | { ok: false; error: string }
+export type TriggerEnrichmentResult =
+	| { ok: true }
+	| { ok: false; error: string }
 
 // ─── Grading types ───────────────────────────────────────────────────────────
 
@@ -226,7 +232,9 @@ export type UpdateExtractedAnswerResult =
 
 export type RetriggerGradingResult = { ok: true } | { ok: false; error: string }
 
-export type RetriggerOcrResult = { ok: true } | { ok: false; error: string }
+export type RetriggerOcrResult =
+	| { ok: true; newJobId: string }
+	| { ok: false; error: string }
 
 export type QuestionStat = {
 	question_id: string

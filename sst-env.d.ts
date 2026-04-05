@@ -83,6 +83,10 @@ declare module "sst" {
       "name": string
       "type": "sst.aws.Bucket"
     }
+    "StudentPaperDLQ": {
+      "type": "sst.aws.Queue"
+      "url": string
+    }
     "StudentPaperEnrichQueue": {
       "type": "sst.aws.Queue"
       "url": string

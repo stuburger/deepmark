@@ -145,7 +145,7 @@ export function UnifiedMarkingLayout({
 
 					{data.pages_count > 0 &&
 						(phase === "scan_processing" || phase === "failed") && (
-							<ReScanButton jobId={jobId} />
+							<ReScanButton jobId={jobId} examPaperId={data.exam_paper_id} />
 						)}
 				</div>
 			</div>

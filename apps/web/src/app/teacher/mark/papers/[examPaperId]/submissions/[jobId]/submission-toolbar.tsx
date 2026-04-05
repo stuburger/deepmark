@@ -301,7 +301,7 @@ export function SubmissionToolbar({
 
 				{data.pages_count > 0 &&
 					(phase === "scan_processing" || phase === "failed") && (
-						<ReScanButton jobId={jobId} />
+						<ReScanButton jobId={jobId} examPaperId={examPaperId} />
 					)}
 			</div>
 		</TooltipProvider>

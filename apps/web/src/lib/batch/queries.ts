@@ -35,11 +35,13 @@ export async function getBatchIngestJob(
 				orderBy: { created_at: "asc" },
 			},
 			student_jobs: {
+				where: { superseded_at: null },
 				select: {
 					id: true,
 					status: true,
 					student_name: true,
 					grading_results: true,
+					staged_script_id: true,
 				},
 			},
 		},
@@ -65,13 +67,13 @@ export async function getBatchIngestJob(
 				confirmed_name: s.confirmed_name,
 				confidence: s.confidence,
 				status: s.status,
-				student_job_id: s.student_job_id,
 			})),
 			student_jobs: batch.student_jobs.map((j) => ({
 				id: j.id,
 				status: j.status,
 				student_name: j.student_name,
 				grading_results: j.grading_results,
+				staged_script_id: j.staged_script_id,
 			})),
 		},
 	}
@@ -97,11 +99,13 @@ export async function getActiveBatchForPaper(
 		include: {
 			staged_scripts: { orderBy: { created_at: "asc" } },
 			student_jobs: {
+				where: { superseded_at: null },
 				select: {
 					id: true,
 					status: true,
 					student_name: true,
 					grading_results: true,
+					staged_script_id: true,
 				},
 			},
 		},
@@ -124,13 +128,13 @@ export async function getActiveBatchForPaper(
 				confirmed_name: s.confirmed_name,
 				confidence: s.confidence,
 				status: s.status,
-				student_job_id: s.student_job_id,
 			})),
 			student_jobs: batch.student_jobs.map((j) => ({
 				id: j.id,
 				status: j.status,
 				student_name: j.student_name,
 				grading_results: j.grading_results,
+				staged_script_id: j.staged_script_id,
 			})),
 		},
 	}

@@ -162,7 +162,6 @@ async function markJobAsProcessing(jobId: string): Promise<void> {
 	await db.studentPaperJob.update({
 		where: { id: jobId },
 		data: {
-			attempt_count: { increment: 1 },
 			status: "processing" as ScanStatus,
 			error: null,
 		},
@@ -296,10 +295,17 @@ export async function checkAndNotifyBatchCompletion(
 		studentCount: batch.total_student_jobs,
 	})
 
-	await sendBatchCompleteNotification(
-		batchJobId,
-		batch.uploaded_by,
-		batch.exam_paper.title,
-		batch.total_student_jobs,
-	)
+	try {
+		await sendBatchCompleteNotification(
+			batchJobId,
+			batch.uploaded_by,
+			batch.exam_paper.title,
+			batch.total_student_jobs,
+		)
+	} catch (err) {
+		logger.error(TAG, "Push notification failed — batch still complete", {
+			batchJobId,
+			error: err instanceof Error ? err.message : String(err),
+		})
+	}
 }

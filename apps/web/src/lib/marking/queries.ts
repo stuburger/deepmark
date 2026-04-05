@@ -1,12 +1,13 @@
 "use server"
 
-import type { HandwritingAnalysis, PageToken } from "./types"
 import { GetObjectCommand, S3Client } from "@aws-sdk/client-s3"
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner"
 import { type JobEvent, createPrismaClient } from "@mcp-gcse/db"
+import { parseAnnotationPayload } from "@mcp-gcse/shared"
 import { Resource } from "sst"
 import { auth } from "../auth"
 import { log } from "../logger"
+import type { HandwritingAnalysis, PageToken } from "./types"
 import type {
 	AnnotationPayload,
 	AnswerRegion,
@@ -21,7 +22,6 @@ import type {
 	OverlayType,
 	StudentPaperAnnotation,
 } from "./types"
-import { parseAnnotationPayload } from "@mcp-gcse/shared"
 
 const TAG = "mark-actions"
 
@@ -307,7 +307,7 @@ export async function listMySubmissions(): Promise<ListMySubmissionsResult> {
 	if (!session) return { ok: false, error: "Not authenticated" }
 
 	const jobs = await db.studentPaperJob.findMany({
-		where: { uploaded_by: session.userId },
+		where: { uploaded_by: session.userId, superseded_at: null },
 		orderBy: { created_at: "desc" },
 		include: { exam_paper: { select: { id: true, title: true } } },
 	})
@@ -342,6 +342,7 @@ export async function getExamPaperStats(
 			uploaded_by: session.userId,
 			exam_paper_id: examPaperId,
 			status: "ocr_complete",
+			superseded_at: null,
 		},
 		include: { exam_paper: { select: { title: true } } },
 	})

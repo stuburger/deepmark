@@ -4,11 +4,11 @@ import { scansBucket } from "./storage"
 
 export const vapidPublicKey = new sst.Secret(
 	"VapidPublicKey",
-	"BIe7yQ7YXA0TuJu7Ay03GkTcb_jkJE3o43civiMveCY9XKeZo4MeGouO-JADVIvew4Py3n13n-V0ZhYAlm8t0IE",
+	"BCFcD8zrMJzK4lMxhj6vEG_jBuxsqT1b7qo0i3NoTJWCm4yGH1OFN2L0sRTRP5YR-LCScli9ltW_SqZCysXSvFk",
 )
 export const vapidPrivateKey = new sst.Secret(
 	"VapidPrivateKey",
-	"MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQg_Gxr7I5Bc4OshZBjlNvTUTLFIDq6zzxfvoWanSj3ttWhRANCAASHu8kO2FwNE7ibuwMtNxpE3G_45CRN6ON3Ir4jL3gmPVynmaODHhqLjviQA1SL3sOD8t59d5_ldGYWAJZvLdCB",
+	"5UFLD1r3EJ8yyPi3SKLU7fX8KCcNUbUMvbxIvK5rmtY",
 )
 
 export const markSchemePdfQueue = new sst.aws.Queue("MarkSchemePdfQueue", {
@@ -23,21 +23,33 @@ export const questionPaperQueue = new sst.aws.Queue("QuestionPaperQueue", {
 	visibilityTimeout: "10 minutes",
 })
 
+// Shared DLQ for student paper pipeline — catches messages that fail after max retries
+// across OCR, grading, and enrichment queues. Generic handler inspects job state to
+// determine which phase failed and marks the job accordingly.
+const studentPaperDlq = new sst.aws.Queue("StudentPaperDLQ", {
+	visibilityTimeout: "1 minute",
+})
+
 // OCR queue: manually triggered by server action after teacher finalises upload
 export const studentPaperOcrQueue = new sst.aws.Queue("StudentPaperOcrQueue", {
 	visibilityTimeout: "10 minutes",
+	dlq: { queue: studentPaperDlq.arn, retry: 2 },
 })
 
 // Grading queue: manually triggered by server action after teacher selects exam paper
 export const studentPaperQueue = new sst.aws.Queue("StudentPaperQueue", {
 	visibilityTimeout: "10 minutes",
+	dlq: { queue: studentPaperDlq.arn, retry: 2 },
 })
 
 // Enrich queue: automatically triggered by student-paper-grade once grading completes.
-// Reserved for the annotation rendering stage (embedding feedback on scanned scripts).
+// Generates inline annotations on scanned scripts using mark scheme + grading results.
 export const studentPaperEnrichQueue = new sst.aws.Queue(
 	"StudentPaperEnrichQueue",
-	{ visibilityTimeout: "10 minutes" },
+	{
+		visibilityTimeout: "10 minutes",
+		dlq: { queue: studentPaperDlq.arn, retry: 2 },
+	},
 )
 
 scansBucket.notify({
@@ -165,12 +177,19 @@ studentPaperQueue.subscribe({
 })
 
 // Triggered automatically by student-paper-grade once grading completes.
-// Stub: logs enrich_started and enrich_complete events.
-// Future work: annotation rendering — embed per-question feedback inline on the
-// student's scanned script using word-level bboxes and answer region hulls.
+// Generates inline annotations for each graded question using mark scheme context,
+// grading results, and OCR tokens. Annotations are anchored to specific token spans.
 studentPaperEnrichQueue.subscribe({
 	handler: "packages/backend/src/processors/student-paper-enrich.handler",
 	link: [neonPostgres, geminiApiKey, scansBucket],
 	timeout: "10 minutes",
 	memory: "1 GB",
+})
+
+// DLQ handler: when any student paper pipeline stage fails after max retries,
+// mark the job as failed so the UI shows a clear error state.
+studentPaperDlq.subscribe({
+	handler: "packages/backend/src/processors/student-paper-dlq.handler",
+	link: [neonPostgres],
+	timeout: "30 seconds",
 })

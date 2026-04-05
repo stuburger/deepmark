@@ -30,13 +30,14 @@ export type BatchIngestJobData = {
 		confirmed_name: string | null
 		confidence: number | null
 		status: string
-		student_job_id: string | null
 	}>
 	student_jobs: Array<{
 		id: string
 		status: string
 		student_name: string | null
 		grading_results: unknown
+		/** Links back to the staged script this job was created from. */
+		staged_script_id: string | null
 	}>
 }
 

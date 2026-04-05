@@ -1,6 +1,9 @@
 "use client"
 
-import type { StudentPaperJobPayload } from "@/lib/marking/types"
+import type {
+	StudentPaperAnnotation,
+	StudentPaperJobPayload,
+} from "@/lib/marking/types"
 import { useState } from "react"
 import { GradingResultsPanel } from "./grading-results-panel"
 
@@ -13,10 +16,12 @@ export function MarkingResults({
 	jobId,
 	data,
 	activeQuestionNumber,
+	annotations = [],
 }: {
 	jobId: string
 	data: StudentPaperJobPayload
 	activeQuestionNumber?: string | null
+	annotations?: StudentPaperAnnotation[]
 }) {
 	const [answers, setAnswers] = useState<Record<string, string>>(
 		Object.fromEntries(
@@ -33,6 +38,7 @@ export function MarkingResults({
 			onAnswerSaved={(id, text) =>
 				setAnswers((prev) => ({ ...prev, [id]: text }))
 			}
+			annotations={annotations}
 		/>
 	)
 }

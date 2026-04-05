@@ -64,6 +64,73 @@ export type AnswerRegion = {
 	source: string | null
 }
 
+export type LoRSummary = {
+	_v: 1
+	whatWentWell: string[]
+	whatDidntGoWell: string[]
+	finalJudgement: {
+		level: number
+		mark: string
+		justification: string[]
+	}
+	aoBreakdown: Array<{
+		ao: string
+		strength: "strong" | "developing" | "weak" | "absent"
+		evidence?: string
+	}>
+}
+
+// ─── Annotation types ────────────────────────────────────────────────────────
+
+export type OverlayType = "mark" | "tag" | "comment" | "chain"
+
+export type MarkPayload = {
+	_v: 1
+	signal: "tick" | "cross" | "underline" | "double_underline" | "box" | "circle"
+	label?: string
+}
+
+export type TagPayload = {
+	_v: 1
+	category: string
+	display: string
+	awarded: boolean
+	quality: "strong" | "partial" | "incorrect" | "valid"
+}
+
+export type CommentPayload = {
+	_v: 1
+	text: string
+}
+
+export type ChainPayload = {
+	_v: 1
+	chainType: "reasoning" | "evaluation" | "judgement"
+	phrase: string
+}
+
+export type AnnotationPayload = MarkPayload | TagPayload | CommentPayload | ChainPayload
+
+export type StudentPaperAnnotation = {
+	id: string
+	job_id: string
+	question_id: string
+	page_order: number
+	overlay_type: OverlayType
+	sentiment: string | null
+	payload: AnnotationPayload
+	bbox: [number, number, number, number]
+	parent_annotation_id: string | null
+}
+
+export type GetJobAnnotationsResult =
+	| { ok: true; annotations: StudentPaperAnnotation[] }
+	| { ok: false; error: string }
+
+export type TriggerEnrichmentResult = { ok: true } | { ok: false; error: string }
+
+// ─── Grading types ───────────────────────────────────────────────────────────
+
 export type GradingResult = {
 	question_id: string
 	question_text: string
@@ -74,6 +141,7 @@ export type GradingResult = {
 	llm_reasoning: string
 	feedback_summary: string
 	level_awarded?: number
+	lor_summary?: LoRSummary
 	/** Spatial regions on the scan where this answer was written. Empty for older jobs. */
 	answer_regions?: AnswerRegion[]
 }
@@ -100,6 +168,7 @@ export type StudentPaperJobPayload = {
 	created_at: Date
 	extracted_answers: ExtractedAnswer[] | null
 	job_events: JobEvent[] | null
+	enrichment_status: string | null
 }
 
 export type GetStudentPaperJobResult =

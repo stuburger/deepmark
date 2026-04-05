@@ -4,6 +4,7 @@ import { getFileBase64 } from "@/lib/s3"
 import type { CorrectedPageToken } from "@/lib/vision-reconcile"
 import { GoogleGenAI, Type } from "@google/genai"
 import { logStudentPaperEvent } from "@mcp-gcse/db"
+import { computeBboxHull } from "@mcp-gcse/shared"
 import { Resource } from "sst"
 
 const TAG = "vision-attribute"
@@ -99,20 +100,7 @@ function parseBbox(
 	return raw as [number, number, number, number]
 }
 
-/**
- * Computes the bounding-box hull (min/max envelope) of a set of token bboxes.
- * Each bbox is [yMin, xMin, yMax, xMax] normalised 0–1000.
- */
-function computeHull(
-	bboxes: [number, number, number, number][],
-): [number, number, number, number] {
-	return [
-		Math.min(...bboxes.map((b) => b[0])),
-		Math.min(...bboxes.map((b) => b[1])),
-		Math.max(...bboxes.map((b) => b[2])),
-		Math.max(...bboxes.map((b) => b[3])),
-	]
-}
+// computeBboxHull imported from @mcp-gcse/shared
 
 /**
  * Replaces Gemini direct bounding-box estimation with a two-step approach:
@@ -332,7 +320,7 @@ IMPORTANT:
 
 				if (assignedBboxes.length === 0) return []
 
-				const hull = computeHull(assignedBboxes)
+				const hull = computeBboxHull(assignedBboxes)
 
 				// questionNumberById.has() above guarantees the key is present.
 				const question_number = questionNumberById.get(assignment.question_id)!

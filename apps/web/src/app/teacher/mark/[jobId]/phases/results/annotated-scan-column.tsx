@@ -4,7 +4,12 @@ import {
 	BoundingBoxViewer,
 	type GradingAnnotation,
 } from "@/components/BoundingBoxViewer"
-import type { GradingResult, PageToken, ScanPageUrl } from "@/lib/marking/types"
+import type {
+	GradingResult,
+	PageToken,
+	ScanPageUrl,
+	StudentPaperAnnotation,
+} from "@/lib/marking/types"
 
 /**
  * Lightweight clickable region overlay for pages that have no OCR analysis.
@@ -88,6 +93,9 @@ export function AnnotatedScanColumn({
 	gradingResults,
 	onAnnotationClick,
 	debugMode = false,
+	annotations = [],
+	showMarks = false,
+	showChains = false,
 }: {
 	pages: ScanPageUrl[]
 	/** Cloud Vision word-level tokens for all pages — filtered per page internally. */
@@ -100,6 +108,12 @@ export function AnnotatedScanColumn({
 	onAnnotationClick?: (questionNumber: string) => void
 	/** When true, shows debug labels on Gemini-fallback regions. */
 	debugMode?: boolean
+	/** Enrichment annotations — filtered per page internally. */
+	annotations?: StudentPaperAnnotation[]
+	/** Controls mark + tag overlay visibility. */
+	showMarks?: boolean
+	/** Controls chain indicator highlight visibility. */
+	showChains?: boolean
 }) {
 	if (pages.length === 0) return null
 
@@ -109,9 +123,12 @@ export function AnnotatedScanColumn({
 				const isPdf = page.mimeType === "application/pdf"
 				const label =
 					pages.length > 1 ? `Page ${i + 1} of ${pages.length}` : null
-				const annotations = annotationsForPage(gradingResults, page.order)
+				const gradingAnns = annotationsForPage(gradingResults, page.order)
 				const tokensForPage = pageTokens.filter(
 					(t) => t.page_order === page.order,
+				)
+				const pageAnnotations = annotations.filter(
+					(a) => a.page_order === page.order,
 				)
 
 				return (
@@ -138,12 +155,15 @@ export function AnnotatedScanColumn({
 								showAnalysisText={false}
 								showHighlights={showHighlights}
 								gradingAnnotations={
-									showRegions && annotations.length > 0
-										? annotations
+									showRegions && gradingAnns.length > 0
+										? gradingAnns
 										: undefined
 								}
 								onAnnotationClick={onAnnotationClick}
 								debugMode={debugMode}
+								annotations={pageAnnotations}
+								showMarks={showMarks}
+								showChains={showChains}
 							/>
 						) : (
 							<div className="relative overflow-hidden rounded-xl border bg-muted/20">
@@ -154,7 +174,7 @@ export function AnnotatedScanColumn({
 									className="block w-full rounded-xl"
 								/>
 								{showRegions &&
-									annotations.map((ann, idx) => (
+									gradingAnns.map((ann, idx) => (
 										<div key={idx}>
 											<SimpleRegionButton
 												annotation={ann}

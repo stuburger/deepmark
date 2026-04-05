@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import type {
 	GradingResult,
+	StudentPaperAnnotation,
 	StudentPaperResultPayload,
 } from "@/lib/marking/types"
 import { GradingResultCard } from "./grading-result-card"
@@ -30,12 +31,14 @@ export function GradingResultsPanel({
 	answers,
 	activeQuestionNumber,
 	onAnswerSaved,
+	annotations = [],
 }: {
 	jobId: string
 	data: StudentPaperResultPayload
 	answers: Record<string, string>
 	activeQuestionNumber: string | null
 	onAnswerSaved: (questionId: string, text: string) => void
+	annotations?: StudentPaperAnnotation[]
 }) {
 	const scorePercent =
 		data.total_max > 0
@@ -90,6 +93,9 @@ export function GradingResultsPanel({
 									currentAnswer={answers[r.question_id] ?? ""}
 									isActive={activeQuestionNumber === r.question_number}
 									onAnswerSaved={onAnswerSaved}
+									annotations={annotations.filter(
+										(a) => a.question_id === r.question_id,
+									)}
 								/>
 							))}
 						</div>

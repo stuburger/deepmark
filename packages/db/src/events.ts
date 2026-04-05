@@ -39,7 +39,12 @@ export type JobEvent =
 			total_max: number
 	  }
 	| { type: "enrich_started"; at: string }
-	| { type: "enrich_complete"; at: string }
+	| {
+			type: "enrich_complete"
+			at: string
+			annotations_count?: number
+			questions_annotated?: number
+	  }
 	| {
 			type: "job_failed"
 			at: string

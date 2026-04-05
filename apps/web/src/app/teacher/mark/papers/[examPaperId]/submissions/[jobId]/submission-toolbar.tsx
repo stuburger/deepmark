@@ -10,11 +10,15 @@ import {
 import type { ScanPageUrl, StudentPaperJobPayload } from "@/lib/marking/types"
 import { cn } from "@/lib/utils"
 import {
+	Check,
 	ChevronRight,
 	FileText,
+	Link2,
+	Loader2,
 	MapPin,
 	PlusCircle,
 	ScanText,
+	Sparkles,
 	StickyNote,
 } from "lucide-react"
 import Link from "next/link"
@@ -38,6 +42,12 @@ export function SubmissionToolbar({
 	showRegions,
 	onToggleOcr,
 	onToggleRegions,
+	showMarks = false,
+	showChains = false,
+	onToggleMarks,
+	onToggleChains,
+	onGenerateAnnotations,
+	enrichmentLoading = false,
 }: {
 	examPaperId: string
 	jobId: string
@@ -48,11 +58,35 @@ export function SubmissionToolbar({
 	showRegions: boolean
 	onToggleOcr: () => void
 	onToggleRegions: () => void
+	showMarks?: boolean
+	showChains?: boolean
+	onToggleMarks?: () => void
+	onToggleChains?: () => void
+	onGenerateAnnotations?: () => void
+	enrichmentLoading?: boolean
 }) {
 	const hasOcr = scanPages.some((p) => p.analysis != null)
 	const hasRegions = data.grading_results.some(
 		(r) => (r.answer_regions?.length ?? 0) > 0,
 	)
+
+	const hasAnnotations = data.enrichment_status === "complete"
+	const isEnriching =
+		data.enrichment_status === "pending" ||
+		data.enrichment_status === "processing"
+
+	const annotationsDisabledReason = hasAnnotations
+		? undefined
+		: isEnriching
+			? "Generating annotations..."
+			: data.enrichment_status === "failed"
+				? "Annotation generation failed — try again"
+				: "Click Annotate to generate"
+
+	// Always allow triggering/re-triggering when grading is complete.
+	// The mutation handles cleanup (deletes existing annotations, resets status).
+	// This prevents stuck jobs from blocking the user — they can always retry.
+	const canGenerate = phase === "completed"
 
 	const ocrDisabledReason = hasOcr ? undefined : "OCR not yet complete"
 	const regionsDisabledReason = hasRegions
@@ -127,8 +161,30 @@ export function SubmissionToolbar({
 						onClick={onToggleRegions}
 						icon={<MapPin className="h-3.5 w-3.5" />}
 						label="Regions"
-						position="last"
+						position={onToggleMarks ? "middle" : "last"}
 					/>
+					{onToggleMarks && (
+						<GroupToggle
+							active={showMarks}
+							disabled={!hasAnnotations}
+							disabledReason={annotationsDisabledReason}
+							onClick={onToggleMarks}
+							icon={<Check className="h-3.5 w-3.5" />}
+							label="Marks"
+							position="middle"
+						/>
+					)}
+					{onToggleChains && (
+						<GroupToggle
+							active={showChains}
+							disabled={!hasAnnotations}
+							disabledReason={annotationsDisabledReason}
+							onClick={onToggleChains}
+							icon={<Link2 className="h-3.5 w-3.5" />}
+							label="Chains"
+							position="last"
+						/>
+					)}
 				</div>
 
 				{/* View panels group */}
@@ -200,6 +256,33 @@ export function SubmissionToolbar({
 
 				{/* Spacer */}
 				<div className="flex-1" />
+
+				{/* Generate / Re-generate Annotations button */}
+				{canGenerate && onGenerateAnnotations && (
+					<button
+						type="button"
+						onClick={onGenerateAnnotations}
+						disabled={enrichmentLoading}
+						className={cn(
+							"inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors",
+							"bg-background text-muted-foreground hover:bg-muted hover:text-foreground",
+							enrichmentLoading && "opacity-60 pointer-events-none",
+						)}
+					>
+						{enrichmentLoading ? (
+							<Loader2 className="h-3.5 w-3.5 animate-spin" />
+						) : (
+							<Sparkles className="h-3.5 w-3.5" />
+						)}
+						<span className="hidden sm:inline">
+							{enrichmentLoading
+								? "Annotating..."
+								: hasAnnotations
+									? "Re-annotate"
+									: "Annotate"}
+						</span>
+					</button>
+				)}
 
 				{/* Phase-conditional actions */}
 				{phase === "completed" && (

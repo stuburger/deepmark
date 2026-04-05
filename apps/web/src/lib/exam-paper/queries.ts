@@ -168,6 +168,7 @@ export async function getExamPaperDetail(
 				sections,
 				questions,
 				section_count: paper.sections.length,
+				level_descriptors: paper.level_descriptors ?? null,
 			},
 		}
 	} catch {

@@ -4,7 +4,7 @@ import {
   type QuestionGrade,
   type QuestionWithMarkScheme,
 } from "./grader";
-import type { Marker } from "./marker";
+import type { Marker, MarkerContext } from "./marker";
 
 /**
  * Marker that delegates to the AI Grader. Used for written questions and as fallback
@@ -23,6 +23,7 @@ export class LlmMarker implements Marker {
   async mark(
     question: QuestionWithMarkScheme,
     answer: string,
+    _context?: MarkerContext,
   ): Promise<QuestionGrade> {
     return this.grader.gradeSingleResponse({
       question,

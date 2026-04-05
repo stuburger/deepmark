@@ -4,6 +4,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import type {
 	PageToken,
 	ScanPageUrl,
+	StudentPaperAnnotation,
 	StudentPaperJobPayload,
 } from "@/lib/marking/types"
 import { AnnotatedScanColumn } from "../../../../[jobId]/phases/results/annotated-scan-column"
@@ -16,6 +17,9 @@ export function ScanPanel({
 	showRegions,
 	onAnnotationClick,
 	debugMode,
+	annotations = [],
+	showMarks = false,
+	showChains = false,
 }: {
 	scanPages: ScanPageUrl[]
 	pageTokens: PageToken[]
@@ -24,6 +28,9 @@ export function ScanPanel({
 	showRegions: boolean
 	onAnnotationClick?: (questionNumber: string) => void
 	debugMode?: boolean
+	annotations?: StudentPaperAnnotation[]
+	showMarks?: boolean
+	showChains?: boolean
 }) {
 	return (
 		<ScrollArea className="h-full w-full bg-muted/20">
@@ -35,6 +42,9 @@ export function ScanPanel({
 				gradingResults={gradingResults}
 				onAnnotationClick={onAnnotationClick}
 				debugMode={debugMode}
+				annotations={annotations}
+				showMarks={showMarks}
+				showChains={showChains}
 			/>
 		</ScrollArea>
 	)

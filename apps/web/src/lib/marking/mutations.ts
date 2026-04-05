@@ -10,6 +10,7 @@ import type {
 	LinkStudentToJobResult,
 	RetriggerGradingResult,
 	RetriggerOcrResult,
+	TriggerEnrichmentResult,
 	TriggerGradingResult,
 	UpdateExtractedAnswerResult,
 	UpdateStudentNameResult,
@@ -272,5 +273,44 @@ export async function retriggerOcr(jobId: string): Promise<RetriggerOcrResult> {
 	)
 
 	log.info(TAG, "Re-OCR triggered", { userId: session.userId, jobId })
+	return { ok: true }
+}
+
+// ─── Enrichment (Annotations) ────────────────────────────────────────────────
+
+export async function triggerEnrichment(
+	jobId: string,
+): Promise<TriggerEnrichmentResult> {
+	const session = await auth()
+	if (!session) return { ok: false, error: "Not authenticated" }
+
+	const job = await db.studentPaperJob.findFirst({
+		where: { id: jobId, uploaded_by: session.userId },
+		select: { id: true, status: true, enrichment_status: true },
+	})
+	if (!job) return { ok: false, error: "Job not found" }
+	if (job.status !== "ocr_complete") {
+		return { ok: false, error: "Job must be fully graded before annotating" }
+	}
+	if (job.enrichment_status === "processing") {
+		return { ok: false, error: "Annotations are already being generated" }
+	}
+
+	// Delete any existing annotations (re-generation)
+	await db.studentPaperAnnotation.deleteMany({ where: { job_id: jobId } })
+
+	await db.studentPaperJob.update({
+		where: { id: jobId },
+		data: { enrichment_status: "pending" },
+	})
+
+	await sqs.send(
+		new SendMessageCommand({
+			QueueUrl: Resource.StudentPaperEnrichQueue.url,
+			MessageBody: JSON.stringify({ job_id: jobId }),
+		}),
+	)
+
+	log.info(TAG, "Enrichment triggered", { userId: session.userId, jobId })
 	return { ok: true }
 }

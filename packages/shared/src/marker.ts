@@ -5,6 +5,15 @@ import type { QuestionWithMarkScheme, QuestionGrade } from "./grader";
 // ============================================
 
 /**
+ * Optional context passed through the marker pipeline. Extensible — future marking
+ * methods may need additional context fields.
+ */
+export interface MarkerContext {
+  /** Exam-wide level descriptors provided by the teacher (used by LoR marker). */
+  levelDescriptors?: string;
+}
+
+/**
  * A marker grades a single question/answer pair. Implementations declare whether they can handle
  * a question via canMark(), then perform grading via mark().
  */
@@ -13,6 +22,7 @@ export interface Marker {
   mark(
     question: QuestionWithMarkScheme,
     answer: string,
+    context?: MarkerContext,
   ): Promise<QuestionGrade>;
 }
 
@@ -34,6 +44,7 @@ export class DeterministicMarker implements Marker {
   async mark(
     question: QuestionWithMarkScheme,
     answer: string,
+    _context?: MarkerContext,
   ): Promise<QuestionGrade> {
     const correctOptionLabels = question.correctOptionLabels;
     if (
@@ -142,10 +153,11 @@ export class MarkerOrchestrator {
   async mark(
     question: QuestionWithMarkScheme,
     answer: string,
+    context?: MarkerContext,
   ): Promise<QuestionGrade> {
     for (const marker of this.markers) {
       if (marker.canMark(question, answer)) {
-        return marker.mark(question, answer);
+        return marker.mark(question, answer, context);
       }
     }
     throw new Error(

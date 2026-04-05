@@ -2,7 +2,10 @@
 
 import { LiveMarkingExamPaperPanel } from "@/components/ExamPaperPanel"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import type { StudentPaperJobPayload } from "@/lib/marking/types"
+import type {
+	StudentPaperAnnotation,
+	StudentPaperJobPayload,
+} from "@/lib/marking/types"
 import { Loader2 } from "lucide-react"
 import { CancelledPanel } from "../../../../[jobId]/phases/cancelled"
 import { FailedPanel } from "../../../../[jobId]/phases/failed"
@@ -38,11 +41,13 @@ function DigitalPanelContent({
 	data,
 	phase,
 	activeQuestionNumber,
+	annotations = [],
 }: {
 	jobId: string
 	data: StudentPaperJobPayload
 	phase: MarkingPhase
 	activeQuestionNumber: string | null
+	annotations?: StudentPaperAnnotation[]
 }) {
 	switch (phase) {
 		case "scan_processing":
@@ -63,6 +68,7 @@ function DigitalPanelContent({
 					jobId={jobId}
 					data={data}
 					activeQuestionNumber={activeQuestionNumber}
+					annotations={annotations}
 				/>
 			)
 
@@ -80,12 +86,14 @@ export function ResultsPanel({
 	phase,
 	isPolling,
 	activeQuestionNumber,
+	annotations = [],
 }: {
 	jobId: string
 	data: StudentPaperJobPayload
 	phase: MarkingPhase
 	isPolling: boolean
 	activeQuestionNumber: string | null
+	annotations?: StudentPaperAnnotation[]
 }) {
 	return (
 		<ScrollArea data-results-panel className="h-full w-full">
@@ -96,6 +104,7 @@ export function ResultsPanel({
 						data={data}
 						phase={phase}
 						activeQuestionNumber={activeQuestionNumber}
+						annotations={annotations}
 					/>
 				</div>
 				<EventLog events={data.job_events} isPolling={isPolling} />

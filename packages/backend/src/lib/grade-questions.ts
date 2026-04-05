@@ -8,6 +8,7 @@ import type {
 } from "@/lib/question-list"
 import { logStudentPaperEvent } from "@mcp-gcse/db"
 import {
+	type MarkerContext,
 	type MarkerOrchestrator,
 	type QuestionWithMarkScheme,
 	parseMarkPointsFromPrisma,
@@ -24,6 +25,22 @@ export type MarkPointResultEntry = {
 	studentCovered?: string
 }
 
+export type LoRSummaryResult = {
+	_v: 1
+	whatWentWell: string[]
+	whatDidntGoWell: string[]
+	finalJudgement: {
+		level: number
+		mark: string
+		justification: string[]
+	}
+	aoBreakdown: Array<{
+		ao: string
+		strength: "strong" | "developing" | "weak" | "absent"
+		evidence?: string
+	}>
+}
+
 export type GradingResult = {
 	question_id: string
 	question_number: string
@@ -36,6 +53,7 @@ export type GradingResult = {
 	level_awarded?: number
 	why_not_next_level?: string
 	cap_applied?: string
+	lor_summary?: LoRSummaryResult
 	mark_points_results: MarkPointResultEntry[]
 	mark_scheme_id: string | null
 }
@@ -171,8 +189,12 @@ async function gradeOneQuestion({
 		marking_method: ms.marking_method,
 	})
 
+	const markerContext: MarkerContext = {
+		levelDescriptors: examPaper.level_descriptors ?? undefined,
+	}
+
 	try {
-		const grade = await orchestrator.mark(questionWithScheme, studentAnswer)
+		const grade = await orchestrator.mark(questionWithScheme, studentAnswer, markerContext)
 
 		logger.info(TAG, "Question graded", {
 			jobId,
@@ -200,6 +222,7 @@ async function gradeOneQuestion({
 			level_awarded: grade.levelAwarded ?? undefined,
 			why_not_next_level: grade.whyNotNextLevel ?? undefined,
 			cap_applied: grade.capApplied ?? undefined,
+			lor_summary: grade.lorSummary ?? undefined,
 			mark_points_results: grade.markPointsResults as MarkPointResultEntry[],
 			mark_scheme_id: ms.id,
 		}

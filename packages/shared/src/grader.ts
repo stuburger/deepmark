@@ -138,7 +138,57 @@ const QuestionGradeSchema = z.object({
 		),
 })
 
-/** Schema for Level-of-Response grading output (levelAwarded, whyNotNextLevel, capApplied required). */
+/** Structured LoR summary — produced by the LLM alongside grading, consumed by the enrichment processor. */
+export const LoRSummarySchema = z.object({
+	_v: z.literal(1),
+	whatWentWell: z
+		.array(z.string().max(50))
+		.min(1)
+		.max(3)
+		.describe(
+			"1-3 bullets. Only credit what is actually present. No exaggeration. Max 6 words each.",
+		),
+	whatDidntGoWell: z
+		.array(z.string().max(50))
+		.min(1)
+		.max(3)
+		.describe(
+			"1-3 bullets. Actionable, student-facing. Max 6 words each.",
+		),
+	finalJudgement: z
+		.object({
+			level: z.number().int().min(0),
+			mark: z.string().describe('e.g. "6/12"'),
+			justification: z
+				.array(z.string())
+				.min(1)
+				.max(3)
+				.describe("1-3 reasons for the awarded level"),
+		})
+		.describe("Structured judgement tile"),
+	aoBreakdown: z
+		.array(
+			z.object({
+				ao: z
+					.string()
+					.describe(
+						"Assessment objective label — free string for cross-board support, e.g. AO1, AO2, AO3",
+					),
+				strength: z.enum(["strong", "developing", "weak", "absent"]),
+				evidence: z
+					.string()
+					.optional()
+					.describe(
+						"Short phrase from student text as evidence, if applicable",
+					),
+			}),
+		)
+		.describe("Per-AO assessment of the response"),
+})
+
+export type LoRSummary = z.infer<typeof LoRSummarySchema>
+
+/** Schema for Level-of-Response grading output (levelAwarded, whyNotNextLevel, capApplied, lorSummary required). */
 export const LoRQuestionGradeSchema = z.object({
 	questionId: z.string().describe("The ID of the question being graded"),
 	markPointsResults: z.array(MarkPointResultSchema),
@@ -172,6 +222,7 @@ export const LoRQuestionGradeSchema = z.object({
 	capApplied: z
 		.string()
 		.describe("If a cap limited the mark, describe it; otherwise empty string"),
+	lorSummary: LoRSummarySchema,
 })
 
 const BatchGradeSchema = z.object({
@@ -188,6 +239,7 @@ export type QuestionGrade = QuestionGradeResult & {
 	levelAwarded?: number
 	whyNotNextLevel?: string
 	capApplied?: string
+	lorSummary?: LoRSummary
 }
 
 export interface AssessmentGrade {
@@ -213,6 +265,8 @@ export interface GradeSingleResponseInput {
 	questionNumber?: number
 	totalQuestions?: number
 	learningContent?: LearningContentItem[]
+	/** Exam-wide level descriptors provided by the teacher (appended to LoR prompts). */
+	levelDescriptors?: string
 }
 
 // ============================================
@@ -339,6 +393,7 @@ Analyze the answer systematically. For each mark point provide reasoning, expect
 		questionNumber?: number,
 		totalQuestions?: number,
 		learningContent?: LearningContentItem[],
+		levelDescriptors?: string,
 	): string {
 		const rules = question.markingRules
 		if (!rules?.levels?.length) {
@@ -393,7 +448,7 @@ ${learningSection}<Topic>\n${question.topic}\n</Topic>
 
 <LevelDescriptors>
 ${levelSections}
-</LevelDescriptors>${capsSection}
+</LevelDescriptors>${capsSection}${levelDescriptors ? `\n\n<ExamLevelDescriptors>\nGeneral level descriptors provided by the teacher for this exam.\nUse alongside the question-specific mark scheme to inform your marking.\n${levelDescriptors}\n</ExamLevelDescriptors>` : ""}
 
 <StudentAnswer>\n${answer || "[No answer provided]"}\n</StudentAnswer>${parsingNote}
 
@@ -405,7 +460,13 @@ ${levelSections}
 </MarkingRules>
 
 <Instructions>
-Output valid JSON matching the schema. Include questionId, markPointsResults, totalScore, llmReasoning, feedbackSummary, correctAnswer, relevantLearningSnippet, levelAwarded, whyNotNextLevel, and capApplied.
+Output valid JSON matching the schema. Include questionId, markPointsResults, totalScore, llmReasoning, feedbackSummary, correctAnswer, relevantLearningSnippet, levelAwarded, whyNotNextLevel, capApplied, and lorSummary.
+
+lorSummary must include:
+- whatWentWell: 1-3 bullets (max 6 words each, only credit what is actually present in the answer)
+- whatDidntGoWell: 1-3 bullets (max 6 words each, actionable and student-facing)
+- finalJudgement: { level (1-based), mark (e.g. "6/12"), justification (1-3 short reasons) }
+- aoBreakdown: per-AO { ao (e.g. "AO1"), strength ("strong"|"developing"|"weak"|"absent"), evidence (short phrase from text, optional) }
 </Instructions>`
 	}
 
@@ -562,6 +623,7 @@ Output valid JSON matching the schema. Include questionId, markPointsResults, to
 			questionNumber,
 			totalQuestions,
 			learningContent,
+			levelDescriptors,
 		} = input
 		const prompt = this.buildLoRGradingPrompt(
 			question,
@@ -569,6 +631,7 @@ Output valid JSON matching the schema. Include questionId, markPointsResults, to
 			questionNumber,
 			totalQuestions,
 			learningContent,
+			levelDescriptors,
 		)
 
 		const { output } = await generateText({
@@ -601,6 +664,7 @@ Output valid JSON matching the schema. Include questionId, markPointsResults, to
 			levelAwarded: aiGrade.levelAwarded,
 			whyNotNextLevel: aiGrade.whyNotNextLevel,
 			capApplied: aiGrade.capApplied,
+			lorSummary: aiGrade.lorSummary,
 		}
 	}
 }

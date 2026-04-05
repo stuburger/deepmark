@@ -8,15 +8,20 @@ import { Resource } from "sst"
 import { auth } from "../auth"
 import { log } from "../logger"
 import type {
+	AnnotationPayload,
 	AnswerRegion,
 	ExtractedAnswer,
 	GetExamPaperStatsResult,
+	GetJobAnnotationsResult,
 	GetJobPageTokensResult,
 	GetJobScanPageUrlsResult,
 	GetStudentPaperJobResult,
 	GradingResult,
 	ListMySubmissionsResult,
+	OverlayType,
+	StudentPaperAnnotation,
 } from "./types"
+import { parseAnnotationPayload } from "@mcp-gcse/shared"
 
 const TAG = "mark-actions"
 
@@ -111,6 +116,7 @@ export async function getStudentPaperJob(
 			created_at: job.created_at,
 			extracted_answers: extractedAnswers,
 			job_events: (job.job_events as JobEvent[] | null) ?? null,
+			enrichment_status: job.enrichment_status ?? null,
 		},
 	}
 }
@@ -181,6 +187,7 @@ export async function getStudentPaperJobForPaper(
 			created_at: job.created_at,
 			extracted_answers: extractedAnswers,
 			job_events: (job.job_events as JobEvent[] | null) ?? null,
+			enrichment_status: job.enrichment_status ?? null,
 		},
 	}
 }
@@ -411,4 +418,51 @@ export async function getExamPaperStats(
 			question_stats: questionStats,
 		},
 	}
+}
+
+// ─── Annotations ─────────────────────────────────────────────────────────────
+
+export async function getJobAnnotations(
+	jobId: string,
+): Promise<GetJobAnnotationsResult> {
+	const session = await auth()
+	if (!session) return { ok: false, error: "Not authenticated" }
+
+	const job = await db.studentPaperJob.findFirst({
+		where: { id: jobId, uploaded_by: session.userId },
+		select: { id: true },
+	})
+	if (!job) return { ok: false, error: "Job not found" }
+
+	const rows = await db.studentPaperAnnotation.findMany({
+		where: { job_id: jobId },
+		orderBy: [{ page_order: "asc" }, { sort_order: "asc" }],
+	})
+
+	const annotations: StudentPaperAnnotation[] = rows.map((row) => {
+		let payload: AnnotationPayload
+		try {
+			payload = parseAnnotationPayload(
+				row.overlay_type as OverlayType,
+				row.payload,
+			)
+		} catch {
+			// Fallback for unparseable payloads — should not happen but be resilient
+			payload = { _v: 1, text: "" } as AnnotationPayload
+		}
+
+		return {
+			id: row.id,
+			job_id: row.job_id,
+			question_id: row.question_id,
+			page_order: row.page_order,
+			overlay_type: row.overlay_type as OverlayType,
+			sentiment: row.sentiment,
+			payload,
+			bbox: row.bbox as [number, number, number, number],
+			parent_annotation_id: row.parent_annotation_id,
+		}
+	})
+
+	return { ok: true, annotations }
 }

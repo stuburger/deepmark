@@ -7,15 +7,22 @@ import {
 } from "@/components/ui/resizable"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { getJobPageTokens, getJobScanPageUrls } from "@/lib/marking/queries"
+import {
+	getJobAnnotations,
+	getJobPageTokens,
+	getJobScanPageUrls,
+} from "@/lib/marking/queries"
+import { triggerEnrichment } from "@/lib/marking/mutations"
 import type {
 	PageToken,
 	ScanPageUrl,
+	StudentPaperAnnotation,
 	StudentPaperJobPayload,
 } from "@/lib/marking/types"
 import { queryKeys } from "@/lib/query-keys"
-import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useCallback, useEffect, useRef, useState } from "react"
+import { toast } from "sonner"
 import { AnnotatedScanColumn } from "../../../../[jobId]/phases/results/annotated-scan-column"
 import type { MarkingPhase } from "../../../../[jobId]/shared/phase"
 import { derivePhase } from "../../../../[jobId]/shared/phase"
@@ -49,6 +56,8 @@ export function SubmissionView({
 	const queryClient = useQueryClient()
 	const [showOcr, setShowOcr] = useState(false)
 	const [showRegions, setShowRegions] = useState(true)
+	const [showMarks, setShowMarks] = useState(false)
+	const [showChains, setShowChains] = useState(false)
 	const { activeQuestionNumber, scrollToQuestion } = useScrollToQuestion()
 
 	const isTerminalPhase =
@@ -99,6 +108,61 @@ export function SubmissionView({
 		staleTime: Number.POSITIVE_INFINITY,
 	})
 
+	// Annotations — fetched when enrichment is complete
+	const { data: annotations = [] } = useQuery<StudentPaperAnnotation[]>({
+		queryKey: queryKeys.jobAnnotations(jobId),
+		queryFn: async () => {
+			const r = await getJobAnnotations(jobId)
+			return r.ok ? r.annotations : []
+		},
+		enabled: data.enrichment_status === "complete",
+		staleTime: Number.POSITIVE_INFINITY,
+	})
+
+	// Auto-enable marks overlay when annotations first load
+	const annotationsLoadedRef = useRef(false)
+	useEffect(() => {
+		if (annotations.length > 0 && !annotationsLoadedRef.current) {
+			annotationsLoadedRef.current = true
+			setShowMarks(true)
+		}
+	}, [annotations])
+
+	// Trigger enrichment mutation
+	const enrichMutation = useMutation({
+		mutationFn: () => triggerEnrichment(jobId),
+		onSuccess: (result) => {
+			if (!result.ok) {
+				toast.error(result.error)
+				return
+			}
+			toast.success("Annotation generation started")
+			void queryClient.invalidateQueries({
+				queryKey: queryKeys.studentJob(jobId),
+			})
+		},
+		onError: () => toast.error("Failed to start annotation generation"),
+	})
+
+	// Poll for enrichment completion: when status changes to "complete", fetch annotations
+	const prevEnrichStatusRef = useRef(data.enrichment_status)
+	useEffect(() => {
+		if (
+			prevEnrichStatusRef.current !== "complete" &&
+			data.enrichment_status === "complete"
+		) {
+			void queryClient.invalidateQueries({
+				queryKey: queryKeys.jobAnnotations(jobId),
+			})
+		}
+		prevEnrichStatusRef.current = data.enrichment_status
+	}, [data.enrichment_status, jobId, queryClient])
+
+	const enrichmentLoading =
+		data.enrichment_status === "pending" ||
+		data.enrichment_status === "processing" ||
+		enrichMutation.isPending
+
 	// When OCR completes (scan_processing → marking_in_progress), invalidate the
 	// scan URLs query so page.analysis data is fetched. This replaces the old
 	// router.refresh() which re-ran the entire server component just for this.
@@ -133,6 +197,12 @@ export function SubmissionView({
 				showRegions={showRegions}
 				onToggleOcr={() => setShowOcr((v) => !v)}
 				onToggleRegions={() => setShowRegions((v) => !v)}
+				showMarks={showMarks}
+				showChains={showChains}
+				onToggleMarks={() => setShowMarks((v) => !v)}
+				onToggleChains={() => setShowChains((v) => !v)}
+				onGenerateAnnotations={() => enrichMutation.mutate()}
+				enrichmentLoading={enrichmentLoading}
 			/>
 
 			{/* Mobile: scan/results tabs */}
@@ -163,6 +233,9 @@ export function SubmissionView({
 								gradingResults={data.grading_results}
 								onAnnotationClick={handleAnnotationClick}
 								debugMode={debugMode}
+								annotations={annotations}
+								showMarks={showMarks}
+								showChains={showChains}
 							/>
 						</ScrollArea>
 					</TabsContent>
@@ -177,6 +250,7 @@ export function SubmissionView({
 							phase={phase}
 							isPolling={isPolling}
 							activeQuestionNumber={activeQuestionNumber}
+							annotations={annotations}
 						/>
 					</TabsContent>
 				</Tabs>
@@ -196,6 +270,9 @@ export function SubmissionView({
 						showRegions={showRegions}
 						onAnnotationClick={handleAnnotationClick}
 						debugMode={debugMode}
+						annotations={annotations}
+						showMarks={showMarks}
+						showChains={showChains}
 					/>
 				</ResizablePanel>
 

@@ -59,6 +59,7 @@ export type ExamPaperDetail = {
 	sections: ExamPaperSection[]
 	questions: ExamPaperQuestion[]
 	section_count: number
+	level_descriptors: string | null
 }
 
 // ── Catalog ─────────────────────────────────────────────────────────────────

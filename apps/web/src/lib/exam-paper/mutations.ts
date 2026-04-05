@@ -113,6 +113,39 @@ export async function toggleExamPaperPublic(
 	}
 }
 
+// ─── Level Descriptors ───────────────────────────────────────────────────────
+
+export type UpdateLevelDescriptorsResult =
+	| { ok: true }
+	| { ok: false; error: string }
+
+export async function updateLevelDescriptors(
+	examPaperId: string,
+	levelDescriptors: string,
+): Promise<UpdateLevelDescriptorsResult> {
+	const session = await auth()
+	if (!session) return { ok: false, error: "Not authenticated" }
+	const trimmed = levelDescriptors.trim()
+	log.info(TAG, "updateLevelDescriptors called", {
+		userId: session.userId,
+		examPaperId,
+		length: trimmed.length,
+	})
+	try {
+		await db.examPaper.update({
+			where: { id: examPaperId },
+			data: { level_descriptors: trimmed || null },
+		})
+		return { ok: true }
+	} catch (err) {
+		log.error(TAG, "updateLevelDescriptors failed", {
+			examPaperId,
+			error: String(err),
+		})
+		return { ok: false, error: "Failed to update level descriptors" }
+	}
+}
+
 // ─── Delete ───────────────────────────────────────────────────────────────────
 
 export type DeleteExamPaperResult = { ok: true } | { ok: false; error: string }

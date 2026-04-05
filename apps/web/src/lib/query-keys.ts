@@ -9,6 +9,7 @@ export const queryKeys = {
 	studentJob: (jobId: string) => ["studentJob", jobId] as const,
 	jobScanUrls: (jobId: string) => ["jobScanUrls", jobId] as const,
 	jobPageTokens: (jobId: string) => ["jobPageTokens", jobId] as const,
+	jobAnnotations: (jobId: string) => ["jobAnnotations", jobId] as const,
 	ingestionJob: (jobId: string) => ["ingestionJob", jobId] as const,
 	catalogExamPapers: () => ["catalogExamPapers"] as const,
 }

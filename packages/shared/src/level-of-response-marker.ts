@@ -3,7 +3,7 @@ import {
   type QuestionWithMarkScheme,
 } from "./grader";
 import type { Grader } from "./grader";
-import type { Marker } from "./marker";
+import type { Marker, MarkerContext } from "./marker";
 
 /**
  * Marker for Level-of-Response (LoR) questions. Uses markingRules.levels and caps
@@ -19,10 +19,12 @@ export class LevelOfResponseMarker implements Marker {
   async mark(
     question: QuestionWithMarkScheme,
     answer: string,
+    context?: MarkerContext,
   ): Promise<QuestionGrade> {
     return this.grader.gradeSingleResponseLoR({
       question,
       answer,
+      levelDescriptors: context?.levelDescriptors,
     });
   }
 }

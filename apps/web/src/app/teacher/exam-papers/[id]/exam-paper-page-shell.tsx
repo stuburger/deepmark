@@ -36,6 +36,7 @@ import { useExamPaperLiveQueries } from "./hooks/use-exam-paper-live-queries"
 import { useLinkMarkScheme } from "./hooks/use-exam-paper-mutations"
 import { useSimilarQuestions } from "./hooks/use-similar-questions"
 import { useUnlinkedSchemes } from "./hooks/use-unlinked-schemes"
+import { LevelDescriptorsCard } from "./level-descriptors-card"
 import { LinkMarkSchemeDialog } from "./link-mark-scheme-dialog"
 import { MarkingJobDialog } from "./marking-job-dialog"
 import { SubmissionGrid } from "./submission-grid"
@@ -353,6 +354,11 @@ export function ExamPaperPageShell({
 					/>
 
 					<ExamPaperQuestionsCard paper={paper} similarPairs={similarPairs} />
+
+					<LevelDescriptorsCard
+						examPaperId={paper.id}
+						initialValue={paper.level_descriptors}
+					/>
 				</TabsContent>
 
 				{/* ── Submissions tab (complete only) ── */}

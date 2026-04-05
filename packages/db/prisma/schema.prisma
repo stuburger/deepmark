@@ -296,6 +296,8 @@ model MarkingResult {
   level_awarded       Int?
   why_not_next_level  String?
   cap_applied         String?
+  /// Structured LoR summary with _v, whatWentWell, whatDidntGoWell, finalJudgement, aoBreakdown
+  lor_summary         Json?
 
   answer      Answer     @relation(fields: [answer_id], references: [id])
   mark_scheme MarkScheme @relation(fields: [mark_scheme_id], references: [id])
@@ -319,6 +321,8 @@ model ExamPaper {
   is_public        Boolean  @default(false)
   // { difficulty_level?, tier?, season? }
   metadata         Json?
+  /// Teacher-provided exam-wide level descriptors (appended to LoR grading prompts)
+  level_descriptors String?
 
   created_by         User              @relation(fields: [created_by_id], references: [id])
   sections           ExamSection[]
@@ -439,7 +443,6 @@ model StudentPaperJob {
   subject               Subject?
   year                  Int?
   paper_reference       String?
-  attempt_count         Int        @default(0)
   student_name          String?
   student_id            String?
   // Multi-page support: [{ key: string, order: number, mime_type: string }]
@@ -455,20 +458,27 @@ model StudentPaperJob {
   // Ordered append-only event log: [{ type, at, ...payload }]
   job_events            Json?
   error                 String?
+  /// Enrichment pipeline status: "pending" | "processing" | "complete" | "failed"
+  enrichment_status     String?
   created_at            DateTime   @default(now())
   processed_at          DateTime?
+  /// Set when this job is superseded by a re-scan. Superseded jobs are excluded from lists and analytics.
+  superseded_at         DateTime?
 
-  batch_job_id String?
-  remark_count Int       @default(0)
-  remarked_at  DateTime?
+  batch_job_id     String?
+  remark_count     Int       @default(0)
+  remarked_at      DateTime?
+  /// The staged script this job was created from. Null for jobs created outside the batch pipeline.
+  staged_script_id String?
 
   uploader       User                       @relation("StudentPaperJobUploader", fields: [uploaded_by], references: [id])
   exam_paper     ExamPaper                  @relation(fields: [exam_paper_id], references: [id])
   student        Student?                   @relation("StudentPaperJobStudent", fields: [student_id], references: [id])
   answer_regions StudentPaperAnswerRegion[] @relation("StudentPaperJobRegions")
   word_tokens    StudentPaperPageToken[]    @relation("JobWordTokens")
-  batch_job      BatchIngestJob?           @relation("BatchIngestStudentJobs", fields: [batch_job_id], references: [id])
-  staged_script  StagedScript?              @relation("StagedScriptJob")
+  batch_job      BatchIngestJob?            @relation("BatchIngestStudentJobs", fields: [batch_job_id], references: [id])
+  staged_script  StagedScript?              @relation("StagedScriptJob", fields: [staged_script_id], references: [id])
+  annotations    StudentPaperAnnotation[]   @relation("JobAnnotations")
 
   @@map("student_paper_jobs")
 }
@@ -510,6 +520,41 @@ model StudentPaperPageToken {
 
   @@index([job_id, page_order])
   @@map("student_paper_page_tokens")
+}
+
+model StudentPaperAnnotation {
+  id              String   @id @default(cuid())
+  job_id          String
+  question_id     String
+  page_order      Int
+
+  /// Overlay type: "mark" | "tag" | "comment" | "chain"
+  overlay_type    String
+  /// Sentiment for color coding: "positive" | "negative" | "neutral"
+  sentiment       String?
+
+  /// Typed payload — shape determined by overlay_type, validated by Zod at app layer
+  payload         Json
+
+  /// Spatial anchoring — references to StudentPaperPageToken IDs
+  anchor_token_start_id String?
+  anchor_token_end_id   String?
+  /// Bounding box [yMin, xMin, yMax, xMax] normalised 0-1000
+  bbox                  Json
+
+  /// Links tag/comment → parent mark annotation
+  parent_annotation_id  String?
+
+  sort_order      Int      @default(0)
+  created_at      DateTime @default(now())
+
+  job             StudentPaperJob          @relation("JobAnnotations", fields: [job_id], references: [id], onDelete: Cascade)
+  parent          StudentPaperAnnotation?  @relation("AnnotationChildren", fields: [parent_annotation_id], references: [id])
+  children        StudentPaperAnnotation[] @relation("AnnotationChildren")
+
+  @@index([job_id, page_order])
+  @@index([job_id, question_id])
+  @@map("student_paper_annotations")
 }
 
 model ExemplarAnswer {
@@ -593,10 +638,9 @@ model StagedScript {
   confirmed_name String?
   status         StagedScriptStatus @default(proposed)
   created_at     DateTime           @default(now())
-  student_job_id String?            @unique
 
-  batch_job   BatchIngestJob  @relation(fields: [batch_job_id], references: [id])
-  student_job StudentPaperJob? @relation("StagedScriptJob", fields: [student_job_id], references: [id])
+  batch_job    BatchIngestJob   @relation(fields: [batch_job_id], references: [id])
+  student_jobs StudentPaperJob[] @relation("StagedScriptJob")
 
   @@map("staged_scripts")
 }

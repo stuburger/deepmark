@@ -53,7 +53,7 @@ export async function alignAnswersWithLlm(
 	const questionsText = unmatchedQuestions
 		.map(
 			(q) =>
-				`- id: ${q.question_id} | number: ${q.question_number} | type: ${q.question_type} | text: ${q.question_text.slice(0, 120)}`,
+				`- id: ${q.question_id} | number: ${q.question_number} | type: ${q.question_type} | text: ${q.question_text}`,
 		)
 		.join("\n")
 

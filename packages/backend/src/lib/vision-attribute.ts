@@ -168,12 +168,10 @@ export async function visionAttributeRegions({
 				? " [MCQ — look for a circled/ticked letter A/B/C/D]"
 				: ""
 			const extracted = extractedAnswerById.get(q.question_id)
-			// Use up to 600 chars — long essay answers need more context so that
-			// the full token span is covered, not just the opening sentences.
 			const answerHint = extracted
-				? ` | student's extracted answer: "${extracted.slice(0, 600)}"`
+				? ` | student's extracted answer: "${extracted}"`
 				: ""
-			return `Q${q.question_number} (id: ${q.question_id})${hint}${answerHint}: ${q.question_text.slice(0, 150)}`
+			return `Q${q.question_number} (id: ${q.question_id})${hint}${answerHint}: ${q.question_text}`
 		})
 		.join("\n")
 
@@ -213,9 +211,10 @@ ${tokenList}
 The exam contains these questions (with the student's already-extracted answer text shown as a matching anchor):
 ${questionsText}
 
-For each question answered on this page, identify the FULL extent of the student's answer using token ranges [start, end]. 
+For each question answered on this page, identify the FULL extent of the student's ANSWER TEXT using token ranges [start, end].
 
 IMPORTANT:
+- EXCLUDE question number labels (e.g. "01.5", "Q2", "1.6)") from the ranges — only include the actual answer content the student wrote. The answer region should start at the first word of the response, not at the question number.
 - Use the image to visually confirm where each answer starts and ends on the page.
 - Use the extracted answer text as a matching guide — especially for short/numeric answers where OCR tokens may be garbled.
 - For long answers that span many lines, the range end must cover ALL the answer tokens, not just the opening lines. If an answer fills most of the page, the range end should be near the last token.

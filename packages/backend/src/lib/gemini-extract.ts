@@ -66,7 +66,7 @@ function buildExtractionPrompt(
 		.map((q) => {
 			const typeHint =
 				q.question_type === "multiple_choice" ? "multiple_choice" : "written"
-			return `[id:${q.question_id}] ${q.question_number} (${typeHint}): ${q.question_text.slice(0, 200)}`
+			return `[id:${q.question_id}] ${q.question_number} (${typeHint}): ${q.question_text}`
 		})
 		.join("\n")
 

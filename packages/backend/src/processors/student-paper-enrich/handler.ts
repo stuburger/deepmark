@@ -102,7 +102,7 @@ export async function handler(
 				where: { id: jobId },
 				include: {
 					exam_paper: {
-						select: { exam_board: true, level_descriptors: true },
+						select: { exam_board: true, level_descriptors: true, subject: true },
 					},
 				},
 			})
@@ -167,15 +167,33 @@ export async function handler(
 			const examBoard = job.exam_paper?.exam_board ?? null
 			const levelDescriptors = job.exam_paper?.level_descriptors ?? null
 			const model = defaultChatModel()
+			const subject = job.exam_paper?.subject ?? null
 
-			// Process each question in parallel
+			// Only annotate LoR questions — MCQ and point-based get tick/cross + score only.
+			// Check marking_method from the mark scheme (works for both old and new grading results).
+			const lorResults = gradingResults.filter((r) => {
+				if (r.lor_summary != null) return true
+				const ms = r.mark_scheme_id ? markSchemeMap.get(r.mark_scheme_id) : null
+				return ms?.marking_method === "level_of_response"
+			})
+			if (lorResults.length === 0) {
+				logger.info(TAG, "No LoR questions — skipping enrichment", { jobId })
+				await db.studentPaperJob.update({
+					where: { id: jobId },
+					data: { enrichment_status: "complete" },
+				})
+				continue
+			}
+
+			// Process each LoR question in parallel
 			const questionResults = await Promise.allSettled(
-				gradingResults.map((result) =>
+				lorResults.map((result) =>
 					annotateOneQuestion({
 						gradingResult: result,
 						allTokens,
 						examBoard,
 						levelDescriptors,
+						subject,
 						markScheme: result.mark_scheme_id
 							? markSchemeMap.get(result.mark_scheme_id) ?? null
 							: null,
@@ -324,6 +342,7 @@ type AnnotateOneQuestionArgs = {
 	}>
 	examBoard: string | null
 	levelDescriptors: string | null
+	subject: string | null
 	markScheme: MarkSchemeForAnnotation | null
 	model: ReturnType<typeof defaultChatModel>
 	jobId: string
@@ -335,6 +354,7 @@ async function annotateOneQuestion(args: AnnotateOneQuestionArgs) {
 		allTokens,
 		examBoard,
 		levelDescriptors,
+		subject,
 		markScheme,
 		model,
 		jobId,
@@ -383,6 +403,7 @@ async function annotateOneQuestion(args: AnnotateOneQuestionArgs) {
 		maxScore: gradingResult.max_score,
 		tokens: tokenSummaries,
 		examBoard,
+		subject,
 		markScheme: markSchemeContext,
 		levelDescriptors,
 	})

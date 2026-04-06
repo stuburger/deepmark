@@ -23,6 +23,7 @@ type AnnotationPromptArgs = {
 	maxScore: number
 	tokens: TokenSummary[]
 	examBoard: string | null
+	subject: string | null
 	markScheme: MarkSchemeContext | null
 	levelDescriptors: string | null
 }
@@ -69,6 +70,7 @@ export function buildAnnotationPrompt(args: AnnotationPromptArgs): string {
 		maxScore,
 		tokens,
 		examBoard,
+		subject,
 		markScheme,
 		levelDescriptors,
 	} = args
@@ -82,16 +84,15 @@ export function buildAnnotationPrompt(args: AnnotationPromptArgs): string {
 	// Sequential index format: [0] "Quality" [1] "management" ...
 	const tokenList = tokens.map((t, i) => `[${i}] "${t.text}"`).join(" ")
 
-	// LoR summary section
-	const lorSection = r.lor_summary
-		? `
-<LoRSummary>
-What went well: ${r.lor_summary.whatWentWell.join("; ")}
-What didn't go well: ${r.lor_summary.whatDidntGoWell.join("; ")}
-Final judgement: Level ${r.lor_summary.finalJudgement.level}, ${r.lor_summary.finalJudgement.mark} — ${r.lor_summary.finalJudgement.justification.join("; ")}
-AO breakdown: ${r.lor_summary.aoBreakdown.map((ao) => `${ao.ao}=${ao.strength}${ao.evidence ? ` (${ao.evidence})` : ""}`).join(", ")}
-</LoRSummary>`
-		: ""
+	// WWW/EBI from grading (if available)
+	const wwwEbiSection =
+		r.what_went_well?.length || r.even_better_if?.length
+			? `
+<GradingSummary>
+${r.what_went_well?.length ? `What went well: ${r.what_went_well.join("; ")}` : ""}
+${r.even_better_if?.length ? `Even better if: ${r.even_better_if.join("; ")}` : ""}
+</GradingSummary>`
+			: ""
 
 	// Mark scheme section
 	const markSchemeSection = markScheme
@@ -161,7 +162,7 @@ Score: ${r.awarded_score}/${maxScore}
 ${r.level_awarded !== undefined ? `Level awarded: ${r.level_awarded}` : ""}
 Feedback: ${r.feedback_summary}
 Examiner reasoning: ${r.llm_reasoning}
-</GradingResult>${markPointResultsSection}${lorSection}${levelDescriptorsSection}
+</GradingResult>${markPointResultsSection}${wwwEbiSection}${levelDescriptorsSection}
 
 <StudentAnswer>
 ${r.student_answer}
@@ -173,6 +174,11 @@ ${tokenList}
 
 <ExamBoard>${examBoard ?? "AQA"}</ExamBoard>
 
+<SubjectContext>
+Subject: ${subject ?? "Unknown"}
+NOTE: Assessment Objective (AO) definitions are SUBJECT-SPECIFIC. Different subjects have different numbers of AOs with different meanings (e.g. Religious Studies has 2 AOs, English Language has 6). Read the level descriptors and mark scheme to understand what each AO means for THIS subject. Do NOT assume AO1 = knowledge — that is only true for some subjects.
+</SubjectContext>
+
 <AnnotationRules>
 ${scoreGuidance}${lowMarkGuidance}
 
@@ -181,6 +187,7 @@ ANNOTATION STRATEGY:
 - For each AWARDED mark point: find the specific text that earned it, place a tick or appropriate mark, and tag the relevant AO skill
 - For each DENIED mark point: identify what is missing or weak, and annotate with a cross/circle and a brief comment explaining what was needed
 - Use your examiner judgement to classify AO skills from the content and context — do not rely on keyword matching
+- The AO labels (e.g. AO1, AO2) and their meanings come from the level descriptors and mark scheme. Use the exact labels and definitions from those descriptors. Do not assume which AOs exist or what they mean.
 - Chain annotations should highlight genuine reasoning structures where the student builds an argument, not just words like "because"
 - If the mark scheme or level descriptors describe what good analysis looks like, use that to assess quality — not a checklist of trigger words
 
@@ -193,9 +200,9 @@ OVERLAY TYPES:
 MARK TYPES:
 - tick (✓): correct/valid point → sentiment="positive"
 - cross (✗): incorrect/invalid → sentiment="negative" (ONLY when marks were lost)
-- underline: applied knowledge, case-study reference → sentiment="positive"
-- double_underline: developed analysis, cause→effect chain → sentiment="positive" or "partial"
-- box: key term or definition → sentiment="positive"
+- underline: applied or contextualised knowledge → sentiment="positive"
+- double_underline: developed reasoning or analysis chain → sentiment="positive" or "partial"
+- box: precise technical term or key concept → sentiment="positive"
 - circle: vague/unclear term → sentiment="negative" (ONLY when marks were lost)
 
 COMMENT FORMAT (STRICT):

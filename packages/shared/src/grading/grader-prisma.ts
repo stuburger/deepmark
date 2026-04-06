@@ -1,8 +1,8 @@
 import { z } from "zod"
-import type { GcseMarkPoint, MarkingRules } from "./grader"
+import type { GcseMarkPoint, MarkingRules } from "./types"
 
 // ============================================
-// PRISMA HELPERS
+// PRISMA JSON → DOMAIN TYPE PARSERS
 // ============================================
 
 const markPointPrismaSchema = z.object({

@@ -59,6 +59,8 @@ type Props = {
 	showMarks?: boolean
 	/** Controls chain indicator highlight visibility. */
 	showChains?: boolean
+	/** Called when an enrichment annotation is clicked, with the question ID. */
+	onEnrichmentAnnotationClick?: (questionId: string) => void
 }
 
 export function BoundingBoxViewer({
@@ -74,6 +76,7 @@ export function BoundingBoxViewer({
 	annotations = [],
 	showMarks = false,
 	showChains = false,
+	onEnrichmentAnnotationClick,
 }: Props) {
 	const [imageDims, setImageDims] = useState<{ w: number; h: number } | null>(
 		null,
@@ -293,6 +296,9 @@ export function BoundingBoxViewer({
 														linkedAnnotations={annotations.filter(
 															(c) => c.parent_annotation_id === a.id,
 														)}
+														onClick={() =>
+															onEnrichmentAnnotationClick?.(a.question_id)
+														}
 													/>
 												))}
 

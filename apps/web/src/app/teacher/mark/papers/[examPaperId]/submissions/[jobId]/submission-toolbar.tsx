@@ -1,5 +1,6 @@
 "use client"
 
+import { AnnotationLegend } from "@/components/BoundingBoxViewer/annotation-legend"
 import { buttonVariants } from "@/components/ui/button-variants"
 import {
 	Tooltip,
@@ -10,6 +11,7 @@ import {
 import type { ScanPageUrl, StudentPaperJobPayload } from "@/lib/marking/types"
 import { cn } from "@/lib/utils"
 import {
+	BookOpen,
 	Check,
 	ChevronRight,
 	FileText,
@@ -253,6 +255,26 @@ export function SubmissionToolbar({
 						</Tooltip>
 					)}
 				</div>
+
+				{/* Legend */}
+				{hasAnnotations && (
+					<AnnotationLegend
+						gradingResults={data.grading_results}
+						levelDescriptors={data.level_descriptors}
+						trigger={
+							<button
+								type="button"
+								className={cn(
+									"inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium transition-colors",
+									"rounded-md border bg-background text-muted-foreground hover:bg-muted hover:text-foreground",
+								)}
+							>
+								<BookOpen className="h-3.5 w-3.5" />
+								<span className="hidden sm:inline">Legend</span>
+							</button>
+						}
+					/>
+				)}
 
 				{/* Spacer */}
 				<div className="flex-1" />

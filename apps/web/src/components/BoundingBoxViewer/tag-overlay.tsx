@@ -25,26 +25,30 @@ const QUALITY_SUFFIX: Record<string, string> = {
 }
 
 /**
- * Renders a large, clearly visible skill tag badge (e.g. [✓ AO2])
- * positioned near the parent mark.
+ * Renders a skill tag badge (e.g. [✓ AO2]) sized proportionally to
+ * the parent mark's bounding box height. Positioned to the right of the parent.
  */
 export function TagOverlay({ annotation, parentBbox, scaleX, scaleY }: Props) {
 	const { payload, bbox } = annotation
 	const refBbox = parentBbox ?? bbox
-	const [yMin, , , xMax] = refBbox
+	const [yMin, , yMax, xMax] = refBbox
 
-	// Position the tag to the right of the parent bbox
-	const x = xMax * scaleX + 10
-	const y = yMin * scaleY - 8
+	// Scale relative to the mark's height so tags look proportional to the text
+	const markHeight = (yMax - yMin) * scaleY
+	const fontSize = Math.max(8, Math.min(markHeight * 0.7, 14))
+	const padding = fontSize * 0.4
+	const pillHeight = fontSize + padding * 2
+
+	// Position the tag to the right of the parent bbox, vertically centred
+	const x = xMax * scaleX + 4
+	const y = yMin * scaleY + (markHeight - pillHeight) / 2
 
 	const color = QUALITY_COLORS[payload.quality] ?? "#6b7280"
 	const symbol = payload.awarded ? "✓" : "✗"
 	const suffix = QUALITY_SUFFIX[payload.quality] ?? ""
 	const label = `${symbol} ${payload.display}${suffix}`
 
-	const fontSize = 40
-	const pillWidth = label.length * 26 + 32
-	const pillHeight = 56
+	const pillWidth = label.length * fontSize * 0.6 + padding * 2
 
 	return (
 		<g>
@@ -57,12 +61,12 @@ export function TagOverlay({ annotation, parentBbox, scaleX, scaleY }: Props) {
 				fill={color}
 				fillOpacity={0.15}
 				stroke={color}
-				strokeWidth={3}
+				strokeWidth={1}
 				strokeOpacity={0.6}
 			/>
 			<text
-				x={x + 16}
-				y={y + 40}
+				x={x + padding}
+				y={y + fontSize + padding * 0.5}
 				fill={color}
 				fontSize={fontSize}
 				fontWeight="700"

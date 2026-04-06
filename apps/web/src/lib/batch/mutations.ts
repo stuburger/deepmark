@@ -233,6 +233,10 @@ export async function commitBatchService(
 			staged_scripts: {
 				where: { status: "confirmed" },
 			},
+			student_jobs: {
+				where: { superseded_at: null },
+				select: { staged_script_id: true },
+			},
 			exam_paper: {
 				select: {
 					id: true,
@@ -246,7 +250,13 @@ export async function commitBatchService(
 
 	if (!batch) return { ok: false, error: "Batch job not found" }
 
-	const confirmedScripts = batch.staged_scripts
+	// Exclude scripts already submitted in a previous commit
+	const alreadySubmitted = new Set(
+		batch.student_jobs.map((j) => j.staged_script_id).filter(Boolean),
+	)
+	const confirmedScripts = batch.staged_scripts.filter(
+		(s) => !alreadySubmitted.has(s.id),
+	)
 
 	if (confirmedScripts.length === 0) {
 		return { ok: false, error: "No confirmed scripts to commit" }
@@ -283,7 +293,7 @@ export async function commitBatchService(
 			where: { id: batchJobId },
 			data: {
 				status: "marking" as BatchStatus,
-				total_student_jobs: jobs.length,
+				total_student_jobs: { increment: jobs.length },
 			},
 		})
 

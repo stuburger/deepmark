@@ -115,6 +115,15 @@ export function AnnotatedScanColumn({
 	/** Controls chain indicator highlight visibility. */
 	showChains?: boolean
 }) {
+	// Map question_id → question_number for enrichment annotation clicks
+	const questionIdToNumber = new Map(
+		gradingResults.map((r) => [r.question_id, r.question_number]),
+	)
+	const handleEnrichmentClick = (questionId: string) => {
+		const questionNumber = questionIdToNumber.get(questionId)
+		if (questionNumber) onAnnotationClick?.(questionNumber)
+	}
+
 	if (pages.length === 0) return null
 
 	return (
@@ -164,6 +173,7 @@ export function AnnotatedScanColumn({
 								annotations={pageAnnotations}
 								showMarks={showMarks}
 								showChains={showChains}
+								onEnrichmentAnnotationClick={handleEnrichmentClick}
 							/>
 						) : (
 							<div className="relative overflow-hidden rounded-xl border bg-muted/20">

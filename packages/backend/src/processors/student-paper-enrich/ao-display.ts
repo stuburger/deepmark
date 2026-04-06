@@ -1,16 +1,13 @@
 /**
- * Maps internal AO categories to exam-board-specific display labels.
- * Falls back to the category itself if no mapping is found.
+ * Returns the display label for an AO category.
+ *
+ * AO definitions are standardised by Ofqual per SUBJECT, not per exam board.
+ * AQA History AO1 = Edexcel History AO1. The LLM uses whatever labels appear
+ * in the level descriptors, so we pass them through unchanged.
  */
-const AO_DISPLAY: Record<string, Record<string, string>> = {
-	AQA: { AO1: "AO1", AO2: "AO2", AO3: "AO3" },
-	Edexcel: { AO1: "K", AO2: "App", AO3: "An" },
-	OCR: { AO1: "AO1", AO2: "AO2", AO3: "AO3" },
-}
-
 export function aoDisplayLabel(
-	examBoard: string | null,
+	_examBoard: string | null,
 	category: string,
 ): string {
-	return AO_DISPLAY[examBoard ?? "AQA"]?.[category] ?? category
+	return category
 }

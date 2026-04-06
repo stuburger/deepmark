@@ -25,23 +25,8 @@ export type MarkPointResultEntry = {
 	studentCovered?: string
 }
 
-export type LoRSummaryResult = {
-	_v: 1
-	whatWentWell: string[]
-	whatDidntGoWell: string[]
-	finalJudgement: {
-		level: number
-		mark: string
-		justification: string[]
-	}
-	aoBreakdown: Array<{
-		ao: string
-		strength: "strong" | "developing" | "weak" | "absent"
-		evidence?: string
-	}>
-}
-
 export type GradingResult = {
+	_v: 1
 	question_id: string
 	question_number: string
 	question_text: string
@@ -53,7 +38,8 @@ export type GradingResult = {
 	level_awarded?: number
 	why_not_next_level?: string
 	cap_applied?: string
-	lor_summary?: LoRSummaryResult
+	what_went_well?: string[]
+	even_better_if?: string[]
 	mark_points_results: MarkPointResultEntry[]
 	mark_scheme_id: string | null
 }
@@ -167,6 +153,7 @@ async function gradeOneQuestion({
 			question_number: qItem.question_number,
 		})
 		return {
+			_v: 1 as const,
 			question_id: qItem.question_id,
 			question_number: qItem.question_number,
 			question_text: qItem.question_text,
@@ -211,6 +198,7 @@ async function gradeOneQuestion({
 		})
 
 		return {
+			_v: 1 as const,
 			question_id: qItem.question_id,
 			question_number: qItem.question_number,
 			question_text: qItem.question_text,
@@ -222,7 +210,8 @@ async function gradeOneQuestion({
 			level_awarded: grade.levelAwarded ?? undefined,
 			why_not_next_level: grade.whyNotNextLevel ?? undefined,
 			cap_applied: grade.capApplied ?? undefined,
-			lor_summary: grade.lorSummary ?? undefined,
+			what_went_well: grade.whatWentWell ?? undefined,
+			even_better_if: grade.whatDidntGoWell ?? undefined,
 			mark_points_results: grade.markPointsResults as MarkPointResultEntry[],
 			mark_scheme_id: ms.id,
 		}
@@ -237,6 +226,7 @@ async function gradeOneQuestion({
 			? "This answer could not be automatically graded. Please review it manually against the mark scheme."
 			: "No answer was detected for this question. If you did write an answer, try re-scanning or edit the extracted answer and re-mark."
 		return {
+			_v: 1 as const,
 			question_id: qItem.question_id,
 			question_number: qItem.question_number,
 			question_text: qItem.question_text,

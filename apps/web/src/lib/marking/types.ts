@@ -64,22 +64,6 @@ export type AnswerRegion = {
 	source: string | null
 }
 
-export type LoRSummary = {
-	_v: 1
-	whatWentWell: string[]
-	whatDidntGoWell: string[]
-	finalJudgement: {
-		level: number
-		mark: string
-		justification: string[]
-	}
-	aoBreakdown: Array<{
-		ao: string
-		strength: "strong" | "developing" | "weak" | "absent"
-		evidence?: string
-	}>
-}
-
 // ─── Annotation types ────────────────────────────────────────────────────────
 
 export type OverlayType = "mark" | "tag" | "comment" | "chain"
@@ -147,7 +131,8 @@ export type GradingResult = {
 	llm_reasoning: string
 	feedback_summary: string
 	level_awarded?: number
-	lor_summary?: LoRSummary
+	what_went_well?: string[]
+	even_better_if?: string[]
 	/** Spatial regions on the scan where this answer was written. Empty for older jobs. */
 	answer_regions?: AnswerRegion[]
 }
@@ -175,6 +160,7 @@ export type StudentPaperJobPayload = {
 	extracted_answers: ExtractedAnswer[] | null
 	job_events: JobEvent[] | null
 	enrichment_status: string | null
+	level_descriptors: string | null
 }
 
 export type GetStudentPaperJobResult =

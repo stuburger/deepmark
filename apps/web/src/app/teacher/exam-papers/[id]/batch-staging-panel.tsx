@@ -133,7 +133,21 @@ export function BatchStagingPanel({
 		const total = activeBatch.total_student_jobs
 		const percent = total > 0 ? Math.round((completedCount / total) * 100) : 0
 
-		return (
+		// Scripts that haven't been submitted as marking jobs yet
+		const submittedScriptIds = new Set(
+			activeBatch.student_jobs.map((j) => j.staged_script_id).filter(Boolean),
+		)
+		const unsubmittedScripts = activeBatch.staged_scripts.filter(
+			(s) => !submittedScriptIds.has(s.id),
+		)
+		const pendingScripts = unsubmittedScripts.filter(
+			(s) => s.status !== "confirmed",
+		)
+		const confirmedScripts = unsubmittedScripts.filter(
+			(s) => s.status === "confirmed",
+		)
+
+		const progressBar = (
 			<div className="rounded-lg border bg-muted/20 px-4 py-4 space-y-2">
 				<div className="flex items-center justify-between text-sm">
 					<span className="font-medium">
@@ -142,6 +156,76 @@ export function BatchStagingPanel({
 					<span className="text-muted-foreground">{percent}%</span>
 				</div>
 				<Progress value={total > 0 ? (completedCount / total) * 100 : 0} />
+			</div>
+		)
+
+		if (unsubmittedScripts.length === 0) {
+			return progressBar
+		}
+
+		return (
+			<div className="space-y-6">
+				{progressBar}
+
+				<div className="space-y-4">
+					<div className="flex items-center gap-3">
+						<p className="text-sm font-medium text-muted-foreground">
+							Review remaining scripts, then submit them for marking
+						</p>
+						<ViewToggle
+							value={viewMode}
+							onChange={onViewModeChange}
+							options={BACKLOG_VIEW_OPTIONS}
+						/>
+					</div>
+
+					<div className="grid grid-cols-2 gap-8 items-start">
+						<div>
+							{pendingScripts.length === 0 ? (
+								<div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed py-16 text-center">
+									<p className="text-sm font-medium">All scripts confirmed</p>
+									<p className="text-xs text-muted-foreground">
+										Click &ldquo;Start marking&rdquo; on the right to begin
+									</p>
+								</div>
+							) : viewMode === "list" ? (
+								<StagedScriptReviewList
+									batchId={activeBatch.id}
+									scripts={pendingScripts}
+									onUpdateName={async (id, name) => {
+										await onUpdateScriptName(id, name)
+									}}
+									onToggleExclude={async (id, status) => {
+										await onToggleExclude(id, status)
+									}}
+									onDeleteScript={() => onDeleteScript()}
+								/>
+							) : (
+								<StagedScriptReviewCards
+									batchId={activeBatch.id}
+									scripts={pendingScripts}
+									onUpdateName={async (id, name) => {
+										await onUpdateScriptName(id, name)
+									}}
+									onToggleExclude={async (id, status) => {
+										await onToggleExclude(id, status)
+									}}
+									onDeleteScript={() => onDeleteScript()}
+								/>
+							)}
+						</div>
+
+						<div>
+							<PaperTrayPanel
+								batchId={activeBatch.id}
+								confirmedScripts={confirmedScripts}
+								committingBatch={committingBatch}
+								onCommitAll={onCommitAll}
+								onToggleExclude={onToggleExclude}
+							/>
+						</div>
+					</div>
+				</div>
 			</div>
 		)
 	}

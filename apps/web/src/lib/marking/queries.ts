@@ -72,7 +72,7 @@ export async function getStudentPaperJob(
 	const job = await db.studentPaperJob.findFirst({
 		where: { id: jobId, uploaded_by: session.userId },
 		include: {
-			exam_paper: { select: { id: true, title: true } },
+			exam_paper: { select: { id: true, title: true, level_descriptors: true } },
 			answer_regions: {
 				select: {
 					question_id: true,
@@ -117,6 +117,7 @@ export async function getStudentPaperJob(
 			extracted_answers: extractedAnswers,
 			job_events: (job.job_events as JobEvent[] | null) ?? null,
 			enrichment_status: job.enrichment_status ?? null,
+			level_descriptors: job.exam_paper?.level_descriptors ?? null,
 		},
 	}
 }
@@ -143,7 +144,7 @@ export async function getStudentPaperJobForPaper(
 			uploaded_by: session.userId,
 		},
 		include: {
-			exam_paper: { select: { id: true, title: true } },
+			exam_paper: { select: { id: true, title: true, level_descriptors: true } },
 			answer_regions: {
 				select: {
 					question_id: true,
@@ -188,6 +189,7 @@ export async function getStudentPaperJobForPaper(
 			extracted_answers: extractedAnswers,
 			job_events: (job.job_events as JobEvent[] | null) ?? null,
 			enrichment_status: job.enrichment_status ?? null,
+			level_descriptors: job.exam_paper?.level_descriptors ?? null,
 		},
 	}
 }

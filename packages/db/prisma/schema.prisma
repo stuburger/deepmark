@@ -296,9 +296,6 @@ model MarkingResult {
   level_awarded       Int?
   why_not_next_level  String?
   cap_applied         String?
-  /// Structured LoR summary with _v, whatWentWell, whatDidntGoWell, finalJudgement, aoBreakdown
-  lor_summary         Json?
-
   answer      Answer     @relation(fields: [answer_id], references: [id])
   mark_scheme MarkScheme @relation(fields: [mark_scheme_id], references: [id])
 

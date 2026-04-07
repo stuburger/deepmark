@@ -208,7 +208,7 @@ export async function getStudentPaperJob(
 	if (!session) return { ok: false, error: "Not authenticated" }
 
 	const sub = await db.studentSubmission.findFirst({
-		where: { id: jobId, uploaded_by: session.userId },
+		where: { id: jobId },
 		include: submissionDetailInclude,
 	})
 	if (!sub) return { ok: false, error: "Job not found" }
@@ -235,7 +235,6 @@ export async function getStudentPaperJobForPaper(
 		where: {
 			id: jobId,
 			exam_paper_id: examPaperId,
-			uploaded_by: session.userId,
 		},
 		include: submissionDetailInclude,
 	})
@@ -257,7 +256,7 @@ export async function getJobScanPageUrls(
 	if (!session) return { ok: false, error: "Not authenticated" }
 
 	const sub = await db.studentSubmission.findFirst({
-		where: { id: jobId, uploaded_by: session.userId },
+		where: { id: jobId },
 		select: {
 			pages: true,
 			s3_bucket: true,
@@ -325,7 +324,7 @@ export async function getJobPageTokens(
 	if (!session) return { ok: false, error: "Not authenticated" }
 
 	const sub = await db.studentSubmission.findFirst({
-		where: { id: jobId, uploaded_by: session.userId },
+		where: { id: jobId },
 		select: { id: true },
 	})
 	if (!sub) return { ok: false, error: "Job not found" }
@@ -373,7 +372,7 @@ export async function listMySubmissions(): Promise<ListMySubmissionsResult> {
 	if (!session) return { ok: false, error: "Not authenticated" }
 
 	const subs = await db.studentSubmission.findMany({
-		where: { uploaded_by: session.userId, superseded_at: null },
+		where: { superseded_at: null },
 		orderBy: { created_at: "desc" },
 		include: {
 			exam_paper: { select: { id: true, title: true } },
@@ -423,7 +422,6 @@ export async function listSubmissionsForPaper(
 
 	const subs = await db.studentSubmission.findMany({
 		where: {
-			uploaded_by: session.userId,
 			exam_paper_id: examPaperId,
 			superseded_at: null,
 		},
@@ -479,7 +477,6 @@ export async function getExamPaperStats(
 	// Find submissions with a completed grading run
 	const subs = await db.studentSubmission.findMany({
 		where: {
-			uploaded_by: session.userId,
 			exam_paper_id: examPaperId,
 			superseded_at: null,
 			grading_runs: {
@@ -580,7 +577,7 @@ export async function getJobAnnotations(
 	if (!session) return { ok: false, error: "Not authenticated" }
 
 	const sub = await db.studentSubmission.findFirst({
-		where: { id: jobId, uploaded_by: session.userId },
+		where: { id: jobId },
 		select: { id: true },
 	})
 	if (!sub) return { ok: false, error: "Job not found" }

@@ -33,7 +33,7 @@ export async function triggerGrading(
 	if (!session) return { ok: false, error: "Not authenticated" }
 
 	const sub = await db.studentSubmission.findFirst({
-		where: { id: jobId, uploaded_by: session.userId },
+		where: { id: jobId },
 		include: {
 			ocr_runs: {
 				orderBy: { created_at: "desc" },
@@ -92,7 +92,7 @@ export async function updateStudentName(
 	if (!session) return { ok: false, error: "Not authenticated" }
 
 	const sub = await db.studentSubmission.findFirst({
-		where: { id: jobId, uploaded_by: session.userId },
+		where: { id: jobId },
 		select: { id: true },
 	})
 	if (!sub) return { ok: false, error: "Job not found" }
@@ -118,11 +118,11 @@ export async function linkStudentToJob(
 
 	const [sub, student] = await Promise.all([
 		db.studentSubmission.findFirst({
-			where: { id: jobId, uploaded_by: session.userId },
+			where: { id: jobId },
 			select: { id: true },
 		}),
 		db.student.findFirst({
-			where: { id: studentId, teacher_id: session.userId },
+			where: { id: studentId },
 		}),
 	])
 	if (!sub) return { ok: false, error: "Job not found" }
@@ -149,12 +149,10 @@ export async function deleteSubmission(
 
 	const sub = await db.studentSubmission.findUnique({
 		where: { id: jobId },
-		select: { uploaded_by: true, batch_job_id: true, superseded_at: true },
+		select: { batch_job_id: true, superseded_at: true },
 	})
 
 	if (!sub) return { ok: false, error: "Submission not found" }
-	if (sub.uploaded_by !== session.userId)
-		return { ok: false, error: "Not authorised" }
 
 	await db.$transaction(async (tx) => {
 		// Delete child runs then submission
@@ -190,7 +188,7 @@ export async function updateExtractedAnswer(
 	if (!session) return { ok: false, error: "Not authenticated" }
 
 	const sub = await db.studentSubmission.findFirst({
-		where: { id: jobId, uploaded_by: session.userId },
+		where: { id: jobId },
 		include: {
 			ocr_runs: {
 				orderBy: { created_at: "desc" },
@@ -240,7 +238,7 @@ export async function retriggerGrading(
 	if (!session) return { ok: false, error: "Not authenticated" }
 
 	const oldSub = await db.studentSubmission.findFirst({
-		where: { id: jobId, uploaded_by: session.userId },
+		where: { id: jobId },
 		include: {
 			ocr_runs: {
 				orderBy: { created_at: "desc" },
@@ -360,7 +358,7 @@ export async function retriggerOcr(jobId: string): Promise<RetriggerOcrResult> {
 	if (!session) return { ok: false, error: "Not authenticated" }
 
 	const oldSub = await db.studentSubmission.findFirst({
-		where: { id: jobId, uploaded_by: session.userId },
+		where: { id: jobId },
 	})
 	if (!oldSub) return { ok: false, error: "Job not found" }
 
@@ -419,7 +417,7 @@ export async function triggerEnrichment(
 	if (!session) return { ok: false, error: "Not authenticated" }
 
 	const sub = await db.studentSubmission.findFirst({
-		where: { id: jobId, uploaded_by: session.userId },
+		where: { id: jobId },
 		select: {
 			id: true,
 			grading_runs: {

@@ -71,7 +71,7 @@ export async function getBatchIngestJob(
 	if (!session) return { ok: false, error: "Not authenticated" }
 
 	const batch = await db.batchIngestJob.findFirst({
-		where: { id: batchJobId, uploaded_by: session.userId },
+		where: { id: batchJobId },
 		include: {
 			staged_scripts: {
 				orderBy: { created_at: "asc" },
@@ -119,7 +119,6 @@ export async function getActiveBatchForPaper(
 	const batch = await db.batchIngestJob.findFirst({
 		where: {
 			exam_paper_id: examPaperId,
-			uploaded_by: session.userId,
 			status: { in: ["classifying", "staging", "marking"] as BatchStatus[] },
 		},
 		orderBy: { created_at: "desc" },
@@ -163,7 +162,7 @@ export async function getStagedScriptPageUrls(
 	if (!session) return { ok: false, error: "Not authenticated" }
 
 	const batch = await db.batchIngestJob.findFirst({
-		where: { id: batchJobId, uploaded_by: session.userId },
+		where: { id: batchJobId },
 		include: { staged_scripts: true },
 	})
 	if (!batch) return { ok: false, error: "Batch not found" }

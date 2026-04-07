@@ -40,7 +40,7 @@ export function ProcessingCard({ sub }: ProcessingCardProps) {
 						</div>
 						{sub.kind === "extracting" && (
 							<p className="text-xs text-muted-foreground">
-								Gemini is reading the cover page and header
+								DeepMark is reading the cover page and header
 							</p>
 						)}
 					</div>

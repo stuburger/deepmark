@@ -78,7 +78,7 @@ export async function addFileToBatch(
 	if (!session) return { ok: false, error: "Not authenticated" }
 
 	const batch = await db.batchIngestJob.findFirst({
-		where: { id: batchJobId, uploaded_by: session.userId },
+		where: { id: batchJobId },
 		select: { id: true },
 	})
 	if (!batch) return { ok: false, error: "Batch job not found" }
@@ -113,7 +113,7 @@ export async function updateBatchJobSettings(
 	if (!session) return { ok: false, error: "Not authenticated" }
 
 	const batch = await db.batchIngestJob.findFirst({
-		where: { id: batchJobId, uploaded_by: session.userId, status: "uploading" },
+		where: { id: batchJobId, status: "uploading" },
 		select: { id: true },
 	})
 	if (!batch)
@@ -153,7 +153,7 @@ export async function triggerClassification(
 	if (!session) return { ok: false, error: "Not authenticated" }
 
 	const batch = await db.batchIngestJob.findFirst({
-		where: { id: batchJobId, uploaded_by: session.userId },
+		where: { id: batchJobId },
 		select: { id: true },
 	})
 	if (!batch) return { ok: false, error: "Batch job not found" }
@@ -191,9 +191,8 @@ export async function updateStagedScript(
 
 	const script = await db.stagedScript.findFirst({
 		where: { id: scriptId },
-		include: { batch_job: { select: { uploaded_by: true } } },
-	})
-	if (!script || script.batch_job.uploaded_by !== session.userId) {
+		})
+	if (!script) {
 		return { ok: false, error: "Staged script not found" }
 	}
 
@@ -228,7 +227,7 @@ export async function commitBatchService(
 	uploadedBy: string,
 ): Promise<CommitBatchResult> {
 	const batch = await db.batchIngestJob.findFirst({
-		where: { id: batchJobId, uploaded_by: uploadedBy },
+		where: { id: batchJobId },
 		include: {
 			staged_scripts: {
 				where: { status: "confirmed" },
@@ -335,9 +334,8 @@ export async function updateStagedScriptPageKeys(
 
 	const script = await db.stagedScript.findFirst({
 		where: { id: scriptId },
-		include: { batch_job: { select: { uploaded_by: true } } },
-	})
-	if (!script || script.batch_job.uploaded_by !== session.userId) {
+		})
+	if (!script) {
 		return { ok: false, error: "Staged script not found" }
 	}
 
@@ -363,9 +361,8 @@ export async function deleteStagedScript(
 
 	const script = await db.stagedScript.findFirst({
 		where: { id: scriptId },
-		include: { batch_job: { select: { uploaded_by: true } } },
-	})
-	if (!script || script.batch_job.uploaded_by !== session.userId) {
+		})
+	if (!script) {
 		return { ok: false, error: "Staged script not found" }
 	}
 
@@ -389,9 +386,8 @@ export async function splitStagedScript(
 
 	const script = await db.stagedScript.findFirst({
 		where: { id: scriptId },
-		include: { batch_job: { select: { uploaded_by: true } } },
-	})
-	if (!script || script.batch_job.uploaded_by !== session.userId) {
+		})
+	if (!script) {
 		return { ok: false, error: "Staged script not found" }
 	}
 

@@ -44,7 +44,6 @@ export async function getActiveIngestionJobsForExamPaper(
 	const jobs = await db.pdfIngestionJob.findMany({
 		where: {
 			exam_paper_id: examPaperId,
-			uploaded_by: session.userId,
 			OR: [
 				// Actively running
 				{ status: { notIn: ["ocr_complete", "failed", "cancelled"] } },
@@ -149,8 +148,6 @@ export async function getExamPaperIngestionLiveState(
 			})
 			continue
 		}
-		if (j.uploaded_by !== session.userId) continue
-
 		const isNonTerminal = !INGESTION_UI_TERMINAL.has(j.status)
 		const isRecentFailure =
 			(j.status === "failed" || j.status === "cancelled") &&

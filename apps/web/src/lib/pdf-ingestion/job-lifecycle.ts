@@ -27,7 +27,7 @@ export async function getPdfIngestionJobStatus(
 	const session = await auth()
 	if (!session) return { ok: false, error: "Not authenticated" }
 	const job = await db.pdfIngestionJob.findFirst({
-		where: { id: jobId, uploaded_by: session.userId },
+		where: { id: jobId },
 	})
 	if (!job) return { ok: false, error: "Job not found" }
 	return {
@@ -51,7 +51,7 @@ export async function getPdfIngestionJobDownloadUrl(
 	const session = await auth()
 	if (!session) return { ok: false, error: "Not authenticated" }
 	const job = await db.pdfIngestionJob.findFirst({
-		where: { id: jobId, uploaded_by: session.userId },
+		where: { id: jobId },
 		select: { s3_key: true, s3_bucket: true },
 	})
 	if (!job) return { ok: false, error: "Job not found" }

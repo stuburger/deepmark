@@ -11,6 +11,13 @@ export type OverlayType = "mark" | "tag" | "comment" | "chain"
 // PAYLOAD SCHEMAS (versioned, per overlay type)
 // ============================================
 
+/** Structured mark point result for point-based annotations. */
+export const MarkPointEntrySchema = z.object({
+	point: z.number().int(),
+	awarded: z.boolean(),
+	criteria: z.string(),
+})
+
 /** Mark: a physical signal placed ON the scanned page (tick, cross, underline, etc.) */
 export const MarkPayloadSchema = z.object({
 	_v: z.literal(1),
@@ -23,9 +30,13 @@ export const MarkPayloadSchema = z.object({
 		"circle",
 	]),
 	label: z.string().max(20).optional(),
+	/** Short examiner-style note explaining what this mark refers to. */
+	reason: z.string().max(80).optional(),
+	/** Structured mark point results for point-based annotations. */
+	markPoints: z.array(MarkPointEntrySchema).optional(),
 })
 
-/** Tag: a semantic skill badge attached to a mark (e.g. [✓ AO2]) */
+/** Tag: a semantic skill badge attached to a mark (e.g. [AO2]) */
 export const TagPayloadSchema = z.object({
 	_v: z.literal(1),
 	/** Free-string category label — "AO1", "AO2", "M1", "B1", etc. */
@@ -36,6 +47,8 @@ export const TagPayloadSchema = z.object({
 	awarded: z.boolean(),
 	/** Quality assessment for the demonstrated skill */
 	quality: z.enum(["strong", "partial", "incorrect", "valid"]),
+	/** Short examiner-style note explaining what skill was demonstrated. */
+	reason: z.string().max(80).optional(),
 })
 
 /** Comment: a short margin note rendered in the results panel (not on the scan) */

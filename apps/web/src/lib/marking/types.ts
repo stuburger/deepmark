@@ -1,4 +1,12 @@
-import type { JobEvent } from "@mcp-gcse/db"
+import type { EnrichmentStatus, JobEvent } from "@mcp-gcse/db"
+import type {
+	AnnotationPayload as SharedAnnotationPayload,
+	ChainPayload as SharedChainPayload,
+	CommentPayload as SharedCommentPayload,
+	MarkPayload as SharedMarkPayload,
+	OverlayType as SharedOverlayType,
+	TagPayload as SharedTagPayload,
+} from "@mcp-gcse/shared"
 
 /** Per-page OCR result from the Gemini transcript call. */
 export type HandwritingAnalysis = {
@@ -64,40 +72,14 @@ export type AnswerRegion = {
 	source: string | null
 }
 
-// ─── Annotation types ────────────────────────────────────────────────────────
+// ─── Annotation types (re-exported from @mcp-gcse/shared) ───────────────────
 
-export type OverlayType = "mark" | "tag" | "comment" | "chain"
-
-export type MarkPayload = {
-	_v: 1
-	signal: "tick" | "cross" | "underline" | "double_underline" | "box" | "circle"
-	label?: string
-}
-
-export type TagPayload = {
-	_v: 1
-	category: string
-	display: string
-	awarded: boolean
-	quality: "strong" | "partial" | "incorrect" | "valid"
-}
-
-export type CommentPayload = {
-	_v: 1
-	text: string
-}
-
-export type ChainPayload = {
-	_v: 1
-	chainType: "reasoning" | "evaluation" | "judgement"
-	phrase: string
-}
-
-export type AnnotationPayload =
-	| MarkPayload
-	| TagPayload
-	| CommentPayload
-	| ChainPayload
+export type OverlayType = SharedOverlayType
+export type MarkPayload = SharedMarkPayload
+export type TagPayload = SharedTagPayload
+export type CommentPayload = SharedCommentPayload
+export type ChainPayload = SharedChainPayload
+export type AnnotationPayload = SharedAnnotationPayload
 
 export type StudentPaperAnnotation = {
 	id: string
@@ -130,6 +112,7 @@ export type GradingResult = {
 	max_score: number
 	llm_reasoning: string
 	feedback_summary: string
+	marking_method: "deterministic" | "point_based" | "level_of_response" | null
 	level_awarded?: number
 	what_went_well?: string[]
 	even_better_if?: string[]
@@ -159,8 +142,13 @@ export type StudentPaperJobPayload = {
 	created_at: Date
 	extracted_answers: ExtractedAnswer[] | null
 	job_events: JobEvent[] | null
-	enrichment_status: string | null
+	enrichment_status: EnrichmentStatus | null
 	level_descriptors: string | null
+	/** Phase 3: IDs of the current domain model run records. Present for jobs processed after the Phase 3 migration. */
+	submission_id?: string
+	ocr_run_id?: string
+	grading_run_id?: string
+	enrichment_run_id?: string
 }
 
 export type GetStudentPaperJobResult =
@@ -216,7 +204,9 @@ export type UpdateExtractedAnswerResult =
 	| { ok: true }
 	| { ok: false; error: string }
 
-export type RetriggerGradingResult = { ok: true } | { ok: false; error: string }
+export type RetriggerGradingResult =
+	| { ok: true; newJobId: string }
+	| { ok: false; error: string }
 
 export type RetriggerOcrResult =
 	| { ok: true; newJobId: string }

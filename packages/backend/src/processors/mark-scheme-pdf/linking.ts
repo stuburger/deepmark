@@ -1,4 +1,4 @@
-import { linkJobQuestionsToExamPaper } from "@/lib/link-job-questions"
+import { linkJobQuestionsToExamPaper } from "@/lib/grading/link-job-questions"
 import { parseMarkPointsFromPrisma } from "@mcp-gcse/shared"
 import type { QuestionWithMarkScheme } from "@mcp-gcse/shared"
 

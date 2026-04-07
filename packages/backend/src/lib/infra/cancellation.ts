@@ -1,5 +1,5 @@
 import { db } from "@/db"
-import { logger } from "@/lib/logger"
+import { logger } from "@/lib/infra/logger"
 
 const TAG = "cancellation"
 

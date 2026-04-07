@@ -2,9 +2,9 @@ import { db } from "@/db"
 import {
 	type CancellationToken,
 	createCancellationToken,
-} from "@/lib/cancellation"
-import { defaultChatModel, embedQuestionText } from "@/lib/google-generative-ai"
-import { logger } from "@/lib/logger"
+} from "@/lib/infra/cancellation"
+import { defaultChatModel, embedQuestionText } from "@/lib/infra/google-generative-ai"
+import { logger } from "@/lib/infra/logger"
 import { GetObjectCommand, S3Client } from "@aws-sdk/client-s3"
 import { GoogleGenAI } from "@google/genai"
 import type { ScanStatus } from "@mcp-gcse/db"
@@ -72,7 +72,7 @@ async function getPdfBase64(bucket: string, key: string): Promise<string> {
 	return Buffer.from(body).toString("base64")
 }
 
-import { normalizeQuestionNumber } from "@/lib/normalize-question-number"
+import { normalizeQuestionNumber } from "@/lib/grading/normalize-question-number"
 export { normalizeQuestionNumber }
 
 export async function handler(
@@ -154,7 +154,7 @@ export async function handler(
 				where: { id: jobId },
 				data: {
 					attempt_count: { increment: 1 },
-					status: "processing" as ScanStatus,
+					status: "processing" satisfies ScanStatus,
 					error: null,
 				},
 			})
@@ -694,7 +694,7 @@ export async function handler(
 			await db.pdfIngestionJob.update({
 				where: { id: jobId },
 				data: {
-					status: "ocr_complete" as ScanStatus,
+					status: "ocr_complete" satisfies ScanStatus,
 					processed_at: new Date(),
 					detected_exam_paper_metadata: detectedMetadata ?? undefined,
 					error: null,
@@ -721,7 +721,7 @@ export async function handler(
 				if (jobId) {
 					await db.pdfIngestionJob.update({
 						where: { id: jobId },
-						data: { status: "failed" as ScanStatus, error: message },
+						data: { status: "failed" satisfies ScanStatus, error: message },
 					})
 				}
 			} catch {

@@ -1,11 +1,17 @@
 import { db } from "@/db"
-import { logger } from "@/lib/logger"
-import { getFileBase64 } from "@/lib/s3"
-import type { CorrectedPageToken } from "@/lib/vision-reconcile"
-import { GoogleGenAI, Type } from "@google/genai"
+import { logger } from "@/lib/infra/logger"
+import { getFileBase64 } from "@/lib/infra/s3"
+import type { CorrectedPageToken } from "@/lib/scan-extraction/vision-reconcile"
+import { GoogleGenAI } from "@google/genai"
 import { logStudentPaperEvent } from "@mcp-gcse/db"
 import { computeBboxHull } from "@mcp-gcse/shared"
 import { Resource } from "sst"
+import {
+	ATTRIBUTION_SCHEMA,
+	MCQ_FALLBACK_SCHEMA,
+	buildAttributionPrompt,
+	buildMcqFallbackPrompt,
+} from "./vision-attribute-prompt"
 
 const TAG = "vision-attribute"
 
@@ -35,51 +41,6 @@ export type VisionAttributeArgs = {
 	tokens: CorrectedPageToken[]
 }
 
-// Ranges are far more compact than flat index arrays — asking Gemini to list
-// every individual index in a 130-word answer produces a huge structured output
-// that gets cut off early. A single start/end pair covers the full extent.
-// Multiple ranges per question handle non-contiguous blocks (e.g. MCQ answers
-// scattered near their question numbers, or mid-page corrections).
-const ATTRIBUTION_SCHEMA = {
-	type: Type.OBJECT,
-	properties: {
-		assignments: {
-			type: Type.ARRAY,
-			description:
-				"For each question answered on this page, provide one or more token ranges that cover the full extent of the student's answer",
-			items: {
-				type: Type.OBJECT,
-				properties: {
-					question_id: {
-						type: Type.STRING,
-						description: "The question_id as provided in the question list",
-					},
-					ranges: {
-						type: Type.ARRAY,
-						description:
-							"Contiguous token ranges for this question's answer. Use multiple ranges if the answer is non-contiguous. Each range is [start, end] inclusive (0-based).",
-						items: {
-							type: Type.OBJECT,
-							properties: {
-								start: {
-									type: Type.INTEGER,
-									description: "First token index (0-based, inclusive)",
-								},
-								end: {
-									type: Type.INTEGER,
-									description: "Last token index (0-based, inclusive)",
-								},
-							},
-							required: ["start", "end"],
-						},
-					},
-				},
-				required: ["question_id", "ranges"],
-			},
-		},
-	},
-	required: ["assignments"],
-}
 
 /**
  * Narrows an unknown bbox value to [yMin, xMin, yMax, xMax].
@@ -203,24 +164,7 @@ export async function visionAttributeRegions({
 				.map((t, i) => `${i}: "${t.text_corrected ?? t.text_raw}"`)
 				.join("\n")
 
-			const prompt = `You are examining a student's handwritten exam answer script. The image above shows one page of the script.
-
-Below is a list of words (tokens) detected by OCR on this page, numbered 0-based in reading order:
-${tokenList}
-
-The exam contains these questions (with the student's already-extracted answer text shown as a matching anchor):
-${questionsText}
-
-For each question answered on this page, identify the FULL extent of the student's ANSWER TEXT using token ranges [start, end].
-
-IMPORTANT:
-- EXCLUDE question number labels (e.g. "01.5", "Q2", "1.6)") from the ranges — only include the actual answer content the student wrote. The answer region should start at the first word of the response, not at the question number.
-- Use the image to visually confirm where each answer starts and ends on the page.
-- Use the extracted answer text as a matching guide — especially for short/numeric answers where OCR tokens may be garbled.
-- For long answers that span many lines, the range end must cover ALL the answer tokens, not just the opening lines. If an answer fills most of the page, the range end should be near the last token.
-- Include crossing-out, corrections, and continuation text in the range.
-- Use multiple ranges only if an answer is genuinely non-contiguous (e.g. a MCQ letter near its question number).
-- Omit questions that have no answer on this page.`
+			const prompt = buildAttributionPrompt(tokenList, questionsText)
 
 			let response: Awaited<ReturnType<typeof gemini.models.generateContent>>
 			try {
@@ -400,29 +344,6 @@ IMPORTANT:
 
 // ── MCQ Gemini fallback ────────────────────────────────────────────────────────
 
-const MCQ_FALLBACK_SCHEMA = {
-	type: Type.OBJECT,
-	properties: {
-		regions: {
-			type: Type.ARRAY,
-			items: {
-				type: Type.OBJECT,
-				properties: {
-					question_id: { type: Type.STRING },
-					box: {
-						type: Type.ARRAY,
-						description:
-							"[yMin, xMin, yMax, xMax] normalised 0–1000 around the selected option",
-						items: { type: Type.INTEGER },
-					},
-					found: { type: Type.BOOLEAN },
-				},
-				required: ["question_id", "box", "found"],
-			},
-		},
-	},
-	required: ["regions"],
-}
 
 type McqFallbackArgs = {
 	questions: VisionAttributeQuestion[]
@@ -473,14 +394,7 @@ async function runMcqGeminiFallback({
 				})
 				.join("\n")
 
-			const prompt = `You are examining a student's handwritten multiple-choice exam script. The image shows one page.
-
-The following MCQ questions may have been answered on this page. The student selected their answer by circling, ticking, or writing next to an option letter:
-${questionsText}
-
-For each question answered on this page, draw a tight bounding box around the selected option or written letter. If a question is not answered on this page, set found to false and use [0,0,0,0].
-
-Return bounding box coordinates as [yMin, xMin, yMax, xMax] normalised 0–1000.`
+			const prompt = buildMcqFallbackPrompt(questionsText)
 
 			let response: Awaited<ReturnType<typeof gemini.models.generateContent>>
 			try {

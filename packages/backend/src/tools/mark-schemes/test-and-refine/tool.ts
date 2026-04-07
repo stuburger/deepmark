@@ -1,5 +1,5 @@
 import { db } from "@/db"
-import { defaultChatModel } from "@/lib/google-generative-ai"
+import { defaultChatModel } from "@/lib/infra/google-generative-ai"
 import { tool } from "@/tools/shared/tool-utils"
 import {
 	Grader,

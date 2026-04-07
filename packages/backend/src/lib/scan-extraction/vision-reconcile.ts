@@ -1,9 +1,10 @@
 import { db } from "@/db"
-import { logger } from "@/lib/logger"
-import { getFileBase64 } from "@/lib/s3"
-import { GoogleGenAI, Type } from "@google/genai"
+import { logger } from "@/lib/infra/logger"
+import { getFileBase64 } from "@/lib/infra/s3"
+import { GoogleGenAI } from "@google/genai"
 import { logStudentPaperEvent } from "@mcp-gcse/db"
 import { Resource } from "sst"
+import { RECONCILE_SCHEMA, buildReconciliationPrompt } from "./vision-reconcile-prompt"
 
 const TAG = "vision-reconcile"
 
@@ -29,26 +30,6 @@ export type CorrectedPageToken = PageToken & {
 	text_corrected: string | null
 }
 
-const RECONCILE_SCHEMA = {
-	type: Type.ARRAY,
-	description:
-		"Corrected text for each Vision token, in the same order as the input tokens",
-	items: {
-		type: Type.OBJECT,
-		properties: {
-			token_idx: {
-				type: Type.INTEGER,
-				description: "Zero-based index of the token in the input list",
-			},
-			text_corrected: {
-				type: Type.STRING,
-				description:
-					"The correctly-read word (may be same as text_raw if correct)",
-			},
-		},
-		required: ["token_idx", "text_corrected"],
-	},
-}
 
 /**
  * Corrects Cloud Vision OCR token text against the original page images using Gemini.
@@ -137,16 +118,7 @@ export async function reconcilePageTokens({
 							role: "user",
 							parts: [
 								{ inlineData: { data: imageBase64, mimeType: page.mime_type } },
-								{
-									text: `You are correcting OCR errors in a list of words extracted from a student's handwritten exam script.
-
-The OCR engine has detected the following words (indexed 0-based) from this page:
-${tokenList}
-
-For each token, provide the correctly-read word by looking at the image. If the OCR reading is already correct, return it unchanged. If the token is a punctuation mark, space, or non-word symbol, return it as-is.
-
-Return one entry per token, preserving the original token_idx values.`,
-								},
+								{ text: buildReconciliationPrompt(tokenList) },
 							],
 						},
 					],

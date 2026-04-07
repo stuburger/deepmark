@@ -2,22 +2,26 @@ import { db } from "@/db"
 import {
 	type CancellationToken,
 	createCancellationToken,
-} from "@/lib/cancellation"
-import { defaultChatModel } from "@/lib/google-generative-ai"
-import { type GradingResult, gradeAllQuestions } from "@/lib/grade-questions"
-import { logger } from "@/lib/logger"
-import { persistAnswerRows } from "@/lib/persist-answers"
-import { sendBatchCompleteNotification } from "@/lib/push-notification"
-import { type QuestionListItem, loadQuestionList } from "@/lib/question-list"
+} from "@/lib/infra/cancellation"
+import { defaultChatModel } from "@/lib/infra/google-generative-ai"
+import { type GradingResult, gradeAllQuestions } from "@/lib/grading/grade-questions"
+import { logger } from "@/lib/infra/logger"
+import { persistAnswerRows } from "@/lib/grading/persist-answers"
+import { sendBatchCompleteNotification } from "@/lib/infra/push-notification"
+import { type QuestionListItem, loadQuestionList } from "@/lib/grading/question-list"
 import {
 	type SqsEvent,
 	markJobFailed,
 	parseSqsJobId,
-} from "@/lib/sqs-job-runner"
-import { loadExamPaperForGrading } from "@/lib/student-paper/grade-queries"
-import { EXAMINER_SYSTEM_PROMPT } from "@/lib/student-paper/grader-config"
+} from "@/lib/infra/sqs-job-runner"
+import { loadExamPaperForGrading } from "@/lib/grading/grade-queries"
+import { EXAMINER_SYSTEM_PROMPT } from "@/lib/grading/grader-config"
 import { SQSClient, SendMessageCommand } from "@aws-sdk/client-sqs"
-import { type ScanStatus, logStudentPaperEvent } from "@mcp-gcse/db"
+import {
+	type GradingStatus,
+	type ScanStatus,
+	logStudentPaperEvent,
+} from "@mcp-gcse/db"
 import {
 	DeterministicMarker,
 	Grader,
@@ -102,7 +106,7 @@ async function gradeJob({
 		return
 	}
 
-	await markJobAsProcessing(jobId)
+	await markJobAsGrading(jobId)
 
 	const examPaper = await loadExamPaperForGrading(job.exam_paper_id)
 	const questionList = loadQuestionList({ examPaper })
@@ -152,20 +156,39 @@ async function rejectJobMissingOcr(jobId: string): Promise<void> {
 	await db.studentPaperJob.update({
 		where: { id: jobId },
 		data: {
-			status: "failed" as ScanStatus,
+			status: "failed" satisfies ScanStatus,
 			error: "No extracted answers — run OCR before grading",
 		},
 	})
 }
 
-async function markJobAsProcessing(jobId: string): Promise<void> {
+async function markJobAsGrading(jobId: string): Promise<void> {
 	await db.studentPaperJob.update({
 		where: { id: jobId },
 		data: {
-			status: "processing" as ScanStatus,
+			status: "grading" satisfies ScanStatus,
 			error: null,
 		},
 	})
+
+	// Phase 3 dual-write: create/update GradingRun (submission_id === jobId by convention)
+	await db.gradingRun
+		.upsert({
+			where: { id: jobId },
+			create: {
+				id: jobId,
+				submission_id: jobId,
+				ocr_run_id: jobId, // same ID convention
+				status: "processing" satisfies GradingStatus,
+				started_at: new Date(),
+			},
+			update: {
+				status: "processing" satisfies GradingStatus,
+				error: null,
+				started_at: new Date(),
+			},
+		})
+		.catch(() => {})
 }
 
 function extractRawAnswers(
@@ -206,7 +229,7 @@ async function completeGradingJob({
 	const updatedJob = await db.studentPaperJob.update({
 		where: { id: jobId },
 		data: {
-			status: "ocr_complete" as ScanStatus,
+			status: "ocr_complete" satisfies ScanStatus,
 			processed_at: new Date(),
 			student_name:
 				(
@@ -217,6 +240,19 @@ async function completeGradingJob({
 		},
 		select: { batch_job_id: true },
 	})
+
+	// Phase 3 dual-write: mark GradingRun complete (grading_run_id === jobId by convention)
+	db.gradingRun
+		.update({
+			where: { id: jobId },
+			data: {
+				status: "complete" satisfies GradingStatus,
+				grading_results: gradingResults,
+				completed_at: new Date(),
+				error: null,
+			},
+		})
+		.catch(() => {})
 
 	void logStudentPaperEvent(db, jobId, {
 		type: "grading_complete",
@@ -237,6 +273,8 @@ async function completeGradingJob({
 		await checkAndNotifyBatchCompletion(updatedJob.batch_job_id)
 	}
 
+	// Pass grading_run_id as job_id so the enrich processor can look up EnrichmentRun directly
+	// (grading_run_id === jobId by the migration convention)
 	await sqs.send(
 		new SendMessageCommand({
 			QueueUrl: Resource.StudentPaperEnrichQueue.url,
@@ -247,7 +285,7 @@ async function completeGradingJob({
 
 // ─── Batch completion check ───────────────────────────────────────────────────
 
-const TERMINAL_STATUSES = ["ocr_complete", "failed", "cancelled"]
+const TERMINAL_STATUSES: ScanStatus[] = ["ocr_complete", "failed", "cancelled"]
 
 /**
  * Atomically checks whether all child jobs for a batch are in a terminal
@@ -276,7 +314,7 @@ export async function checkAndNotifyBatchCompletion(
 	const terminalCount = await db.studentPaperJob.count({
 		where: {
 			batch_job_id: batchJobId,
-			status: { in: TERMINAL_STATUSES as ScanStatus[] },
+			status: { in: TERMINAL_STATUSES },
 		},
 	})
 

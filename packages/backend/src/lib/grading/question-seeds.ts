@@ -1,6 +1,6 @@
 import { db } from "@/db"
-import type { QuestionSeed } from "@/lib/gemini-extract"
-import { logger } from "@/lib/logger"
+import type { QuestionSeed } from "@/lib/types"
+import { logger } from "@/lib/infra/logger"
 import type { Subject } from "@mcp-gcse/db"
 
 const TAG = "student-paper/question-seeds"

@@ -72,7 +72,9 @@ export async function getStudentPaperJob(
 	const job = await db.studentPaperJob.findFirst({
 		where: { id: jobId, uploaded_by: session.userId },
 		include: {
-			exam_paper: { select: { id: true, title: true, level_descriptors: true } },
+			exam_paper: {
+				select: { id: true, title: true, level_descriptors: true },
+			},
 			answer_regions: {
 				select: {
 					question_id: true,
@@ -144,7 +146,9 @@ export async function getStudentPaperJobForPaper(
 			uploaded_by: session.userId,
 		},
 		include: {
-			exam_paper: { select: { id: true, title: true, level_descriptors: true } },
+			exam_paper: {
+				select: { id: true, title: true, level_descriptors: true },
+			},
 			answer_regions: {
 				select: {
 					question_id: true,
@@ -310,6 +314,41 @@ export async function listMySubmissions(): Promise<ListMySubmissionsResult> {
 
 	const jobs = await db.studentPaperJob.findMany({
 		where: { uploaded_by: session.userId, superseded_at: null },
+		orderBy: { created_at: "desc" },
+		include: { exam_paper: { select: { id: true, title: true } } },
+	})
+
+	return {
+		ok: true,
+		submissions: jobs.map((job) => {
+			const results = (job.grading_results ?? []) as GradingResult[]
+			return {
+				id: job.id,
+				student_name: job.student_name,
+				exam_paper_id: job.exam_paper_id,
+				exam_paper_title: job.exam_paper?.title ?? null,
+				detected_subject: job.detected_subject,
+				total_awarded: results.reduce((s, r) => s + r.awarded_score, 0),
+				total_max: results.reduce((s, r) => s + r.max_score, 0),
+				status: job.status,
+				created_at: job.created_at,
+			}
+		}),
+	}
+}
+
+export async function listSubmissionsForPaper(
+	examPaperId: string,
+): Promise<ListMySubmissionsResult> {
+	const session = await auth()
+	if (!session) return { ok: false, error: "Not authenticated" }
+
+	const jobs = await db.studentPaperJob.findMany({
+		where: {
+			uploaded_by: session.userId,
+			exam_paper_id: examPaperId,
+			superseded_at: null,
+		},
 		orderBy: { created_at: "desc" },
 		include: { exam_paper: { select: { id: true, title: true } } },
 	})

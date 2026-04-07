@@ -1,28 +1,29 @@
 import { db } from "@/db"
-import { createCancellationToken } from "@/lib/cancellation"
-import { runVisionOcr } from "@/lib/cloud-vision-ocr"
-import { type PageMimeType, extractStudentPaper } from "@/lib/gemini-extract"
-import { logger } from "@/lib/logger"
-import { getFileBase64, s3 } from "@/lib/s3"
+import { createCancellationToken } from "@/lib/infra/cancellation"
+import { runVisionOcr } from "@/lib/scan-extraction/cloud-vision-ocr"
+import { type PageMimeType, extractStudentPaper } from "@/lib/scan-extraction/gemini-extract"
+import { logger } from "@/lib/infra/logger"
+import { getFileBase64, s3 } from "@/lib/infra/s3"
 import {
 	type SqsEvent,
 	markJobFailed,
 	parseSqsJobId,
-} from "@/lib/sqs-job-runner"
+} from "@/lib/infra/sqs-job-runner"
 import {
 	type PageEntry,
 	isValidSubject,
 	loadQuestionSeeds,
 	parsePages,
-} from "@/lib/student-paper/question-seeds"
+} from "@/lib/grading/question-seeds"
 import {
 	type VisionAttributeQuestion,
 	visionAttributeRegions,
-} from "@/lib/vision-attribute"
-import { reconcilePageTokens } from "@/lib/vision-reconcile"
+} from "@/lib/scan-extraction/vision-attribute"
+import { reconcilePageTokens } from "@/lib/scan-extraction/vision-reconcile"
 import { PutObjectCommand } from "@aws-sdk/client-s3"
 import { SQSClient, SendMessageCommand } from "@aws-sdk/client-sqs"
 import {
+	type OcrStatus,
 	type ScanStatus,
 	type Subject,
 	logStudentPaperEvent,
@@ -61,10 +62,28 @@ export async function handler(
 			await db.studentPaperJob.update({
 				where: { id: jobId },
 				data: {
-					status: "processing" as ScanStatus,
+					status: "processing" satisfies ScanStatus,
 					error: null,
 				},
 			})
+
+			// Phase 3 dual-write: create/update OcrRun (submission_id === jobId by migration convention)
+			await db.ocrRun
+				.upsert({
+					where: { id: jobId },
+					create: {
+						id: jobId,
+						submission_id: jobId,
+						status: "processing" satisfies OcrStatus,
+						started_at: new Date(),
+					},
+					update: {
+						status: "processing" satisfies OcrStatus,
+						error: null,
+						started_at: new Date(),
+					},
+				})
+				.catch(() => {})
 
 			void logStudentPaperEvent(db, jobId, {
 				type: "ocr_started",
@@ -167,6 +186,10 @@ export async function handler(
 				a.answer_text.trim(),
 			).length
 
+			const rawSubject = extraction.detectedSubject?.trim().toLowerCase()
+			const detectedSubject: Subject | null =
+				rawSubject && isValidSubject(rawSubject) ? rawSubject : null
+
 			logger.info(TAG, "Gemini OCR complete", {
 				jobId,
 				student_name: extraction.studentName,
@@ -182,6 +205,35 @@ export async function handler(
 				count: answersExtracted,
 				student_name: extraction.studentName?.trim() || null,
 			})
+
+			// Persist extracted answers immediately so the UI can show them while
+			// Vision token work (reconciliation + region attribution) runs below.
+			await db.studentPaperJob.update({
+				where: { id: jobId },
+				data: {
+					student_name: extraction.studentName?.trim() || null,
+					detected_subject: detectedSubject,
+					extracted_answers_raw: {
+						student_name: extraction.studentName?.trim() || null,
+						answers: extraction.answers,
+					},
+					page_analyses: pageAnalyses,
+				},
+			})
+
+			// Phase 3 dual-write: update OcrRun with extracted data
+			db.ocrRun
+				.update({
+					where: { id: jobId },
+					data: {
+						extracted_answers_raw: {
+							student_name: extraction.studentName?.trim() || null,
+							answers: extraction.answers,
+						},
+						page_analyses: pageAnalyses,
+					},
+				})
+				.catch(() => {})
 
 			// Save raw Cloud Vision responses to S3
 			const visionRawKey = `scans/${jobId}/vision-raw.json`
@@ -235,6 +287,7 @@ export async function handler(
 				}
 				return result.tokens.map((t) => ({
 					job_id: jobId,
+					submission_id: jobId, // Phase 3: submission_id === jobId by migration convention
 					page_order: pageOrder,
 					para_index: t.para_index,
 					line_index: t.line_index,
@@ -302,26 +355,28 @@ export async function handler(
 				jobId,
 			})
 
-			const rawSubject = extraction.detectedSubject?.trim().toLowerCase()
-			const detectedSubject: Subject | null =
-				rawSubject && isValidSubject(rawSubject) ? rawSubject : null
-
 			await db.studentPaperJob.update({
 				where: { id: jobId },
 				data: {
-					status: "text_extracted" as ScanStatus,
-					student_name: extraction.studentName?.trim() || null,
-					detected_subject: detectedSubject,
-					extracted_answers_raw: {
-						student_name: extraction.studentName?.trim() || null,
-						answers: extraction.answers,
-					},
-					page_analyses: pageAnalyses,
+					status: "text_extracted" satisfies ScanStatus,
 					vision_raw_s3_key: visionRawKey,
 					processed_at: new Date(),
 					error: null,
 				},
 			})
+
+			// Phase 3 dual-write: mark OcrRun complete
+			db.ocrRun
+				.update({
+					where: { id: jobId },
+					data: {
+						status: "complete" satisfies OcrStatus,
+						vision_raw_s3_key: visionRawKey,
+						completed_at: new Date(),
+						error: null,
+					},
+				})
+				.catch(() => {})
 
 			void logStudentPaperEvent(db, jobId, {
 				type: "ocr_complete",

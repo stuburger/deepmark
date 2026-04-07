@@ -1,16 +1,12 @@
-import { type HandwritingAnalysis, runOcr } from "@/lib/gemini-ocr"
-import { logger } from "@/lib/logger"
+import { type HandwritingAnalysis, runOcr } from "@/lib/scan-extraction/gemini-ocr"
+import { logger } from "@/lib/infra/logger"
 import { GoogleGenAI, Type } from "@google/genai"
 import { Resource } from "sst"
 
 const TAG = "gemini-extract"
 
-export type PageMimeType =
-	| "application/pdf"
-	| "image/jpeg"
-	| "image/png"
-	| "image/webp"
-	| "image/heic"
+export type { PageMimeType, QuestionSeed } from "@/lib/types"
+import type { PageMimeType } from "@/lib/types"
 
 export type PageData = {
 	/** base64-encoded file content */
@@ -18,16 +14,7 @@ export type PageData = {
 	mimeType: PageMimeType
 }
 
-/**
- * A question seed supplied to the extraction model so it can return canonical
- * question_id values rather than OCR-derived question numbers.
- */
-export type QuestionSeed = {
-	question_id: string
-	question_number: string
-	question_text: string
-	question_type: string
-}
+import type { QuestionSeed } from "@/lib/types"
 
 export type StudentPaperExtraction = {
 	studentName: string | null

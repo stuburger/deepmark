@@ -1,6 +1,6 @@
 import { db } from "@/db"
-import type { GradingResult } from "@/lib/grade-questions"
-import { logger } from "@/lib/logger"
+import type { GradingResult } from "@/lib/grading/grade-questions"
+import { logger } from "@/lib/infra/logger"
 
 const TAG = "persist-answers"
 

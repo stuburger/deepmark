@@ -1,5 +1,5 @@
 import { tool } from "@/tools/shared/tool-utils"
-import { runOcr } from "@/lib/gemini-ocr"
+import { runOcr } from "@/lib/scan-extraction/gemini-ocr"
 import { AnalyzeHandwritingSchema } from "./schema"
 
 export const handler = tool(AnalyzeHandwritingSchema, async (args) => {

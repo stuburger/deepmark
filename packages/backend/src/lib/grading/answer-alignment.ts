@@ -1,8 +1,8 @@
-import { defaultChatModel } from "@/lib/google-generative-ai"
-import { logger } from "@/lib/logger"
-import type { QuestionListItem } from "@/lib/question-list"
+import { defaultChatModel } from "@/lib/infra/google-generative-ai"
+import { logger } from "@/lib/infra/logger"
+import type { QuestionListItem } from "@/lib/grading/question-list"
 import { Output, generateText } from "ai"
-import { z } from "zod"
+import { AlignmentSchema, buildAlignmentPrompt } from "./answer-alignment-prompt"
 
 const TAG = "answer-alignment"
 
@@ -16,14 +16,6 @@ export function normaliseQNum(s: string): string {
 	return s.replace(/^q/i, "").replace(/[\s.]/g, "").toLowerCase()
 }
 
-const AlignmentSchema = z.object({
-	alignments: z.array(
-		z.object({
-			question_id: z.string(),
-			answer_text: z.string(),
-		}),
-	),
-})
 
 export type AlignAnswersWithLlmArgs = {
 	unmatchedQuestions: Array<{
@@ -64,20 +56,7 @@ export async function alignAnswersWithLlm(
 		)
 		.join("\n")
 
-	const prompt = `You are aligning a student's OCR-extracted answers to the correct exam questions.
-The OCR may have misread question numbers (e.g. "0.1.2" instead of "01.2", "0.01" instead of "01.1").
-Scan pages may have been photographed or uploaded out of order — do not assume the list order of OCR answers matches exam question order.
-
-EXAM QUESTIONS THAT NEED ANSWERS (currently unmatched):
-${questionsText}
-
-ALL OCR-EXTRACTED ANSWERS (including already-matched ones for context):
-${answersText}
-
-For each unmatched exam question, identify the most likely student answer from the OCR outputs.
-Consider: question number similarity, answer content matching question type (A/B/C/D for MCQ, text for written).
-If a question genuinely has no student answer, use an empty string "".
-Return the alignments array strictly matching the schema.`
+	const prompt = buildAlignmentPrompt(questionsText, answersText)
 
 	try {
 		const { output } = await generateText({

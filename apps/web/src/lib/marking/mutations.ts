@@ -1,7 +1,11 @@
 "use server"
 
 import { SQSClient, SendMessageCommand } from "@aws-sdk/client-sqs"
-import { Prisma, createPrismaClient, logStudentPaperEvent } from "@mcp-gcse/db"
+import {
+	type EnrichmentStatus,
+	createPrismaClient,
+	logStudentPaperEvent,
+} from "@mcp-gcse/db"
 import { Resource } from "sst"
 import { auth } from "../auth"
 import { log } from "../logger"
@@ -151,14 +155,26 @@ export async function deleteStudentPaperJob(
 
 	const job = await db.studentPaperJob.findUnique({
 		where: { id: jobId },
-		select: { uploaded_by: true },
+		select: { uploaded_by: true, batch_job_id: true, superseded_at: true },
 	})
 
 	if (!job) return { ok: false, error: "Submission not found" }
 	if (job.uploaded_by !== session.userId)
 		return { ok: false, error: "Not authorised" }
 
-	await db.studentPaperJob.delete({ where: { id: jobId } })
+	await db.$transaction(async (tx) => {
+		await tx.studentPaperJob.delete({ where: { id: jobId } })
+
+		// Keep batch counter in sync — only count non-superseded jobs
+		if (job.batch_job_id && job.superseded_at === null) {
+			await tx.batchIngestJob.update({
+				where: { id: job.batch_job_id },
+				data: {
+					total_student_jobs: { decrement: 1 },
+				},
+			})
+		}
+	})
 
 	return { ok: true }
 }
@@ -203,8 +219,12 @@ export async function updateExtractedAnswer(
 }
 
 /**
- * Re-queues a completed or failed job for grading using the already-selected
- * exam paper. Clears previous grading results so the processor starts fresh.
+ * Creates a new job from the same OCR data as the given job, then marks the
+ * old job as superseded. Jobs are immutable — re-marking always produces a new
+ * record so the original result is preserved as history.
+ *
+ * Copies extracted answers, word tokens, and answer regions so grading can run
+ * without re-doing OCR.
  */
 export async function retriggerGrading(
 	jobId: string,
@@ -212,27 +232,117 @@ export async function retriggerGrading(
 	const session = await auth()
 	if (!session) return { ok: false, error: "Not authenticated" }
 
-	const job = await db.studentPaperJob.findFirst({
+	const oldJob = await db.studentPaperJob.findFirst({
 		where: { id: jobId, uploaded_by: session.userId },
 	})
-	if (!job) return { ok: false, error: "Job not found" }
-	if (!job.extracted_answers_raw)
+	if (!oldJob) return { ok: false, error: "Job not found" }
+	if (!oldJob.extracted_answers_raw)
 		return { ok: false, error: "No extracted answers — run OCR first" }
 
-	await db.studentPaperJob.update({
-		where: { id: jobId },
-		data: { status: "pending", grading_results: [], error: null },
+	const newJob = await db.$transaction(async (tx) => {
+		const created = await tx.studentPaperJob.create({
+			data: {
+				s3_key: oldJob.s3_key,
+				s3_bucket: oldJob.s3_bucket,
+				status: "pending",
+				uploaded_by: oldJob.uploaded_by,
+				exam_paper_id: oldJob.exam_paper_id,
+				exam_board: oldJob.exam_board,
+				subject: oldJob.subject,
+				year: oldJob.year,
+				pages: oldJob.pages as never,
+				student_name: oldJob.student_name,
+				batch_job_id: oldJob.batch_job_id,
+				staged_script_id: oldJob.staged_script_id,
+				// Carry over OCR results so grading can run without re-OCR
+				extracted_answers_raw: oldJob.extracted_answers_raw as never,
+				page_analyses: oldJob.page_analyses as never,
+				vision_raw_s3_key: oldJob.vision_raw_s3_key,
+			},
+		})
+
+		// Phase 3 dual-write: create StudentSubmission (submission_id === jobId convention)
+		await tx.studentSubmission
+			.create({
+				data: {
+					id: created.id,
+					s3_key: oldJob.s3_key,
+					s3_bucket: oldJob.s3_bucket,
+					uploaded_by: oldJob.uploaded_by,
+					exam_paper_id: oldJob.exam_paper_id!,
+					exam_board: oldJob.exam_board ?? "Unknown",
+					pages: oldJob.pages as never,
+					student_name: oldJob.student_name,
+					student_id: oldJob.student_id,
+					subject: oldJob.subject,
+					year: oldJob.year,
+					batch_job_id: oldJob.batch_job_id,
+					staged_script_id: oldJob.staged_script_id,
+				},
+			})
+			.catch(() => {})
+
+		// Copy word tokens — enrichment needs these for annotation placement
+		const oldTokens = await tx.studentPaperPageToken.findMany({
+			where: { job_id: jobId },
+		})
+		if (oldTokens.length > 0) {
+			await tx.studentPaperPageToken.createMany({
+				data: oldTokens.map((t) => ({
+					job_id: created.id,
+					submission_id: created.id,
+					page_order: t.page_order,
+					para_index: t.para_index,
+					line_index: t.line_index,
+					word_index: t.word_index,
+					text_raw: t.text_raw,
+					text_corrected: t.text_corrected,
+					bbox: t.bbox as never,
+					confidence: t.confidence,
+					question_id: t.question_id,
+				})),
+			})
+		}
+
+		// Copy answer regions — UI needs these for bounding box display
+		const oldRegions = await tx.studentPaperAnswerRegion.findMany({
+			where: { job_id: jobId },
+		})
+		if (oldRegions.length > 0) {
+			await tx.studentPaperAnswerRegion.createMany({
+				data: oldRegions.map((r) => ({
+					job_id: created.id,
+					submission_id: created.id,
+					question_id: r.question_id,
+					question_number: r.question_number,
+					page_order: r.page_order,
+					box: r.box as never,
+					source: r.source,
+				})),
+			})
+		}
+
+		await tx.studentPaperJob.update({
+			where: { id: jobId },
+			data: { superseded_at: new Date() },
+		})
+
+		return created
 	})
 
 	await sqs.send(
 		new SendMessageCommand({
 			QueueUrl: Resource.StudentPaperQueue.url,
-			MessageBody: JSON.stringify({ job_id: jobId }),
+			MessageBody: JSON.stringify({ job_id: newJob.id }),
 		}),
 	)
 
-	log.info(TAG, "Re-grading triggered", { userId: session.userId, jobId })
-	return { ok: true }
+	log.info(TAG, "Re-grading triggered — new job created", {
+		userId: session.userId,
+		oldJobId: jobId,
+		newJobId: newJob.id,
+	})
+	return { ok: true, newJobId: newJob.id }
 }
 
 /**
@@ -271,6 +381,27 @@ export async function retriggerOcr(jobId: string): Promise<RetriggerOcrResult> {
 				staged_script_id: oldJob.staged_script_id,
 			},
 		})
+
+		// Phase 3 dual-write: create StudentSubmission (submission_id === jobId convention)
+		await tx.studentSubmission
+			.create({
+				data: {
+					id: created.id,
+					s3_key: oldJob.s3_key,
+					s3_bucket: oldJob.s3_bucket,
+					uploaded_by: oldJob.uploaded_by,
+					exam_paper_id: oldJob.exam_paper_id!,
+					exam_board: oldJob.exam_board ?? "Unknown",
+					pages: oldJob.pages as never,
+					student_name: oldJob.student_name,
+					student_id: oldJob.student_id,
+					subject: oldJob.subject,
+					year: oldJob.year,
+					batch_job_id: oldJob.batch_job_id,
+					staged_script_id: oldJob.staged_script_id,
+				},
+			})
+			.catch(() => {})
 
 		await tx.studentPaperJob.update({
 			where: { id: jobId },
@@ -315,12 +446,11 @@ export async function triggerEnrichment(
 		return { ok: false, error: "Annotations are already being generated" }
 	}
 
-	// Delete any existing annotations (re-generation)
-	await db.studentPaperAnnotation.deleteMany({ where: { job_id: jobId } })
-
+	// Mark as pending — the handler creates a new EnrichmentRun with its own
+	// annotations. Old runs and their annotations are preserved as history.
 	await db.studentPaperJob.update({
 		where: { id: jobId },
-		data: { enrichment_status: "pending" },
+		data: { enrichment_status: "pending" satisfies EnrichmentStatus },
 	})
 
 	await sqs.send(

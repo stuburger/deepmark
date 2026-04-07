@@ -1,24 +1,20 @@
 import { db } from "@/db"
-import type { GradingResult } from "@/lib/grade-questions"
-import { defaultChatModel } from "@/lib/google-generative-ai"
-import { logger } from "@/lib/logger"
-import {
-	type SqsEvent,
-	markJobFailed,
-	parseSqsJobId,
-} from "@/lib/sqs-job-runner"
-import { logStudentPaperEvent } from "@mcp-gcse/db"
+import { defaultChatModel } from "@/lib/infra/google-generative-ai"
+import type { GradingResult } from "@/lib/grading/grade-questions"
+import { logger } from "@/lib/infra/logger"
+import { type SqsEvent, parseSqsJobId } from "@/lib/infra/sqs-job-runner"
+import { type EnrichmentStatus, logStudentPaperEvent } from "@mcp-gcse/db"
 import {
 	type NormalisedBox,
 	computeBboxHull,
 	parseMarkPointsFromPrisma,
 } from "@mcp-gcse/shared"
 import { Output, generateText } from "ai"
-import {
-	AnnotationPlanSchema,
-	type AnnotationPlanItem,
-} from "./annotation-schema"
 import { buildAnnotationPrompt } from "./annotation-prompt"
+import {
+	type AnnotationPlanItem,
+	AnnotationPlanSchema,
+} from "./annotation-schema"
 import { aoDisplayLabel } from "./ao-display"
 
 const TAG = "student-paper-enrich"
@@ -53,6 +49,116 @@ function resolveTokenSpan(
 	}
 }
 
+// ─── Shared annotation row type ──────────────────────────────────────────────
+
+export type PendingAnnotation = {
+	questionId: string
+	pageOrder: number
+	overlayType: string
+	sentiment: string
+	payload: Record<string, unknown>
+	anchorTokenStartId: string | null
+	anchorTokenEndId: string | null
+	bbox: NormalisedBox
+	parentIndex: number | undefined
+	sortOrder: number
+}
+
+// ─── Non-LLM annotations (derived from grading results) ─────────────────────
+
+type AnswerRegionRow = {
+	question_id: string
+	page_order: number
+	box: unknown
+}
+
+/**
+ * Creates a single tick or cross annotation for a point-based question.
+ * Always a green tick if 1+ marks awarded. The payload includes structured
+ * mark point results so the popover can render a checklist.
+ * No LLM call — purely derived from grading results.
+ */
+function pointBasedAnnotations(
+	gradingResult: GradingResult,
+	answerRegion: AnswerRegionRow | undefined,
+): PendingAnnotation[] {
+	if (!answerRegion || gradingResult.mark_points_results.length === 0) return []
+
+	const regionBox = answerRegion.box as NormalisedBox
+	const awarded = gradingResult.awarded_score
+	const max = gradingResult.max_score
+
+	// Place the tick near the top-left of the answer region, not the center
+	const tickBox: NormalisedBox = [
+		regionBox[0],
+		regionBox[1],
+		Math.min(regionBox[0] + 30, regionBox[2]),
+		Math.min(regionBox[1] + 30, regionBox[3]),
+	]
+
+	const markPoints = gradingResult.mark_points_results.map((mp) => ({
+		point: mp.pointNumber,
+		awarded: mp.awarded,
+		criteria: mp.expectedCriteria ?? mp.studentCovered ?? `Point ${mp.pointNumber}`,
+	}))
+
+	return [
+		{
+			questionId: gradingResult.question_id,
+			pageOrder: answerRegion.page_order,
+			overlayType: "mark",
+			sentiment: awarded > 0 ? "positive" : "negative",
+			payload: {
+				_v: 1,
+				signal: awarded > 0 ? "tick" : "cross",
+				reason: `${awarded}/${max}`,
+				markPoints,
+			},
+			anchorTokenStartId: null,
+			anchorTokenEndId: null,
+			bbox: tickBox,
+			parentIndex: undefined,
+			sortOrder: 0,
+		},
+	]
+}
+
+/**
+ * Creates a single tick/cross annotation for an MCQ question.
+ * No LLM call — purely from awarded_score vs max_score.
+ */
+function deterministicMcqAnnotation(
+	gradingResult: GradingResult,
+	answerRegion: AnswerRegionRow | undefined,
+): PendingAnnotation[] {
+	if (!answerRegion) return []
+
+	const correct = gradingResult.awarded_score === gradingResult.max_score
+	const bbox = answerRegion.box as NormalisedBox
+	const reason = correct
+		? `✓ correct — ${gradingResult.awarded_score}/${gradingResult.max_score}`
+		: `✗ incorrect — ${gradingResult.awarded_score}/${gradingResult.max_score}`
+
+	return [
+		{
+			questionId: gradingResult.question_id,
+			pageOrder: answerRegion.page_order,
+			overlayType: "mark",
+			sentiment: correct ? "positive" : "negative",
+			payload: {
+				_v: 1,
+				signal: correct ? "tick" : "cross",
+				reason,
+			},
+			anchorTokenStartId: null,
+			anchorTokenEndId: null,
+			bbox,
+			parentIndex: undefined,
+			sortOrder: 0,
+		},
+	]
+}
+
 // ─── Mark scheme context type ────────────────────────────────────────────────
 
 type MarkSchemeForAnnotation = {
@@ -81,6 +187,9 @@ export async function handler(
 		const jobId = parseSqsJobId(record, TAG)
 		if (!jobId) continue
 
+		// Declared outside try so the catch block can mark it as failed
+		let enrichmentRunId: string | null = null
+
 		try {
 			logger.info(TAG, "Enrich job received", {
 				jobId,
@@ -94,15 +203,29 @@ export async function handler(
 
 			await db.studentPaperJob.update({
 				where: { id: jobId },
-				data: { enrichment_status: "processing" },
+				data: { enrichment_status: "processing" satisfies EnrichmentStatus },
 			})
+
+			// Phase 3: create a new EnrichmentRun for each annotation pass.
+			// Old runs (and their annotations) are preserved as history.
+			const enrichmentRun = await db.enrichmentRun.create({
+				data: {
+					grading_run_id: jobId,
+					status: "processing" satisfies EnrichmentStatus,
+				},
+			})
+			enrichmentRunId = enrichmentRun.id
 
 			// Load job with grading results and exam paper
 			const job = await db.studentPaperJob.findUniqueOrThrow({
 				where: { id: jobId },
 				include: {
 					exam_paper: {
-						select: { exam_board: true, level_descriptors: true, subject: true },
+						select: {
+							exam_board: true,
+							level_descriptors: true,
+							subject: true,
+						},
 					},
 				},
 			})
@@ -114,9 +237,30 @@ export async function handler(
 				})
 				await db.studentPaperJob.update({
 					where: { id: jobId },
-					data: { enrichment_status: "complete" },
+					data: { enrichment_status: "complete" satisfies EnrichmentStatus },
+				})
+				await db.enrichmentRun.update({
+					where: { id: enrichmentRun.id },
+					data: {
+						status: "complete" satisfies EnrichmentStatus,
+						completed_at: new Date(),
+					},
 				})
 				continue
+			}
+
+			// Load answer regions (for deterministic point_based and MCQ annotations)
+			const answerRegions = await db.studentPaperAnswerRegion.findMany({
+				where: { job_id: jobId },
+				select: { question_id: true, page_order: true, box: true },
+			})
+			// Use the region with the lowest page_order per question (primary page)
+			const regionByQuestion = new Map<string, AnswerRegionRow>()
+			for (const r of answerRegions) {
+				const existing = regionByQuestion.get(r.question_id)
+				if (!existing || r.page_order < existing.page_order) {
+					regionByQuestion.set(r.question_id, r)
+				}
 			}
 
 			// Load all tokens for this job, ordered by reading position
@@ -160,34 +304,42 @@ export async function handler(
 							},
 						})
 					: []
-			const markSchemeMap = new Map(
-				markSchemes.map((ms) => [ms.id, ms]),
-			)
+			const markSchemeMap = new Map(markSchemes.map((ms) => [ms.id, ms]))
 
 			const examBoard = job.exam_paper?.exam_board ?? null
 			const levelDescriptors = job.exam_paper?.level_descriptors ?? null
 			const model = defaultChatModel()
 			const subject = job.exam_paper?.subject ?? null
 
-			// Only annotate LoR questions — MCQ and point-based get tick/cross + score only.
-			// Check marking_method from the mark scheme (works for both old and new grading results).
-			const lorResults = gradingResults.filter((r) => {
-				if (r.lor_summary != null) return true
-				const ms = r.mark_scheme_id ? markSchemeMap.get(r.mark_scheme_id) : null
-				return ms?.marking_method === "level_of_response"
-			})
-			if (lorResults.length === 0) {
-				logger.info(TAG, "No LoR questions — skipping enrichment", { jobId })
-				await db.studentPaperJob.update({
-					where: { id: jobId },
-					data: { enrichment_status: "complete" },
-				})
-				continue
+			// ─── Non-LLM annotations ────────────────────────────────────────────────
+			// Produce tick/cross annotations for point_based and MCQ questions
+			// directly from grading results. No Gemini call needed.
+			const deterministicGroups: PendingAnnotation[][] = []
+			const lorGradingResults: GradingResult[] = []
+
+			for (const result of gradingResults) {
+				const method =
+					result.marking_method ??
+					(result.mark_scheme_id
+						? (markSchemeMap.get(result.mark_scheme_id)?.marking_method ?? null)
+						: null)
+				const region = regionByQuestion.get(result.question_id)
+
+				if (method === "point_based") {
+					const annotations = pointBasedAnnotations(result, region)
+					if (annotations.length > 0) deterministicGroups.push(annotations)
+				} else if (method === "deterministic") {
+					const annotations = deterministicMcqAnnotation(result, region)
+					if (annotations.length > 0) deterministicGroups.push(annotations)
+				} else {
+					// level_of_response or unknown — use Gemini
+					lorGradingResults.push(result)
+				}
 			}
 
-			// Process each LoR question in parallel
+			// ─── LLM annotations (Gemini) — LoR questions only ───────────────────────
 			const questionResults = await Promise.allSettled(
-				lorResults.map((result) =>
+				lorGradingResults.map((result) =>
 					annotateOneQuestion({
 						gradingResult: result,
 						allTokens,
@@ -195,7 +347,7 @@ export async function handler(
 						levelDescriptors,
 						subject,
 						markScheme: result.mark_scheme_id
-							? markSchemeMap.get(result.mark_scheme_id) ?? null
+							? (markSchemeMap.get(result.mark_scheme_id) ?? null)
 							: null,
 						model,
 						jobId,
@@ -203,22 +355,8 @@ export async function handler(
 				),
 			)
 
-			// Collect per-question annotation groups
-			type PendingAnnotation = {
-				questionId: string
-				pageOrder: number
-				overlayType: string
-				sentiment: string
-				payload: Record<string, unknown>
-				anchorTokenStartId: string | null
-				anchorTokenEndId: string | null
-				bbox: NormalisedBox
-				parentIndex: number | undefined
-				sortOrder: number
-			}
-
-			const perQuestionGroups: PendingAnnotation[][] = []
-			let questionsSucceeded = 0
+			const perQuestionGroups: PendingAnnotation[][] = [...deterministicGroups]
+			let questionsSucceeded = deterministicGroups.length
 
 			for (const qResult of questionResults) {
 				if (qResult.status === "fulfilled" && qResult.value) {
@@ -242,12 +380,12 @@ export async function handler(
 				// Pass 1: insert marks and chains (no parent FK)
 				for (let i = 0; i < questionAnnotations.length; i++) {
 					const a = questionAnnotations[i]
-					if (a.overlayType !== "mark" && a.overlayType !== "chain")
-						continue
+					if (a.overlayType !== "mark" && a.overlayType !== "chain") continue
 
 					const created = await db.studentPaperAnnotation.create({
 						data: {
 							job_id: jobId,
+							enrichment_run_id: enrichmentRun.id,
 							question_id: a.questionId,
 							page_order: a.pageOrder,
 							overlay_type: a.overlayType,
@@ -265,17 +403,17 @@ export async function handler(
 
 				// Pass 2: insert tags and comments with parent FK
 				for (const a of questionAnnotations) {
-					if (a.overlayType !== "tag" && a.overlayType !== "comment")
-						continue
+					if (a.overlayType !== "tag" && a.overlayType !== "comment") continue
 
 					const parentDbId =
 						a.parentIndex !== undefined
-							? indexToDbId.get(a.parentIndex) ?? null
+							? (indexToDbId.get(a.parentIndex) ?? null)
 							: null
 
 					await db.studentPaperAnnotation.create({
 						data: {
 							job_id: jobId,
+							enrichment_run_id: enrichmentRun.id,
 							question_id: a.questionId,
 							page_order: a.pageOrder,
 							overlay_type: a.overlayType,
@@ -294,7 +432,14 @@ export async function handler(
 
 			await db.studentPaperJob.update({
 				where: { id: jobId },
-				data: { enrichment_status: "complete" },
+				data: { enrichment_status: "complete" satisfies EnrichmentStatus },
+			})
+			await db.enrichmentRun.update({
+				where: { id: enrichmentRun.id },
+				data: {
+					status: "complete" satisfies EnrichmentStatus,
+					completed_at: new Date(),
+				},
 			})
 
 			void logStudentPaperEvent(db, jobId, {
@@ -314,13 +459,27 @@ export async function handler(
 				jobId,
 				error: String(err),
 			})
+			// Only update enrichment_status — never touch the main job status.
+			// A graded job (status: "ocr_complete") must not be downgraded to
+			// "failed" because an annotation overlay errored. The DLQ handler
+			// will detect the enrichment failure via status + enrichment_status.
 			await db.studentPaperJob
 				.update({
 					where: { id: jobId },
-					data: { enrichment_status: "failed" },
+					data: { enrichment_status: "failed" satisfies EnrichmentStatus },
 				})
 				.catch(() => {})
-			await markJobFailed(jobId, TAG, "enrich", err)
+			if (enrichmentRunId) {
+				db.enrichmentRun
+					.update({
+						where: { id: enrichmentRunId },
+						data: {
+							status: "failed" satisfies EnrichmentStatus,
+							error: String(err),
+						},
+					})
+					.catch(() => {})
+			}
 			failures.push({ itemIdentifier: record.messageId })
 		}
 	}
@@ -427,19 +586,6 @@ async function annotateOneQuestion(args: AnnotateOneQuestionArgs) {
 	const plan = output
 
 	// Resolve token indices to spans and build pending records
-	type PendingAnnotation = {
-		questionId: string
-		pageOrder: number
-		overlayType: string
-		sentiment: string
-		payload: Record<string, unknown>
-		anchorTokenStartId: string | null
-		anchorTokenEndId: string | null
-		bbox: NormalisedBox
-		parentIndex: number | undefined
-		sortOrder: number
-	}
-
 	const pending: PendingAnnotation[] = []
 
 	for (let i = 0; i < plan.annotations.length; i++) {
@@ -493,6 +639,7 @@ function buildPayload(
 				_v: 1,
 				signal: item.signal ?? "tick",
 				...(item.label ? { label: item.label } : {}),
+				...(item.reason ? { reason: item.reason } : {}),
 			}
 		case "tag":
 			return {
@@ -501,6 +648,7 @@ function buildPayload(
 				display: aoDisplayLabel(examBoard, item.category ?? "AO1"),
 				awarded: item.awarded ?? true,
 				quality: item.quality ?? "valid",
+				...(item.reason ? { reason: item.reason } : {}),
 			}
 		case "comment":
 			return {

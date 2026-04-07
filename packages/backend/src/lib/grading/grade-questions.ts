@@ -1,11 +1,11 @@
 import { db } from "@/db"
-import type { CancellationToken } from "@/lib/cancellation"
-import { logger } from "@/lib/logger"
+import type { CancellationToken } from "@/lib/infra/cancellation"
+import { logger } from "@/lib/infra/logger"
 import type {
 	ExamPaperWithSections,
 	MarkScheme,
 	QuestionListItem,
-} from "@/lib/question-list"
+} from "@/lib/grading/question-list"
 import { logStudentPaperEvent } from "@mcp-gcse/db"
 import {
 	type MarkerContext,
@@ -35,6 +35,7 @@ export type GradingResult = {
 	max_score: number
 	llm_reasoning: string
 	feedback_summary: string
+	marking_method: "deterministic" | "point_based" | "level_of_response" | null
 	level_awarded?: number
 	why_not_next_level?: string
 	cap_applied?: string
@@ -162,6 +163,7 @@ async function gradeOneQuestion({
 			max_score: qItem.question_obj.points ?? 0,
 			llm_reasoning: "No mark scheme available for this question.",
 			feedback_summary: "No mark scheme available.",
+			marking_method: null,
 			mark_points_results: [],
 			mark_scheme_id: null,
 		}
@@ -181,7 +183,11 @@ async function gradeOneQuestion({
 	}
 
 	try {
-		const grade = await orchestrator.mark(questionWithScheme, studentAnswer, markerContext)
+		const grade = await orchestrator.mark(
+			questionWithScheme,
+			studentAnswer,
+			markerContext,
+		)
 
 		logger.info(TAG, "Question graded", {
 			jobId,
@@ -207,6 +213,7 @@ async function gradeOneQuestion({
 			max_score: grade.maxPossibleScore,
 			llm_reasoning: grade.llmReasoning,
 			feedback_summary: grade.feedbackSummary,
+			marking_method: ms.marking_method as GradingResult["marking_method"],
 			level_awarded: grade.levelAwarded ?? undefined,
 			why_not_next_level: grade.whyNotNextLevel ?? undefined,
 			cap_applied: grade.capApplied ?? undefined,
@@ -235,6 +242,7 @@ async function gradeOneQuestion({
 			max_score: ms.points_total,
 			llm_reasoning: `Automatic grading failed for this question (${qItem.question_number}). Manual review required.`,
 			feedback_summary: gradingFailedNote,
+			marking_method: ms.marking_method as GradingResult["marking_method"],
 			mark_points_results: [],
 			mark_scheme_id: ms.id,
 		}

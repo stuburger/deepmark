@@ -1,6 +1,12 @@
 import { db } from "@/db"
-import { logger } from "@/lib/logger"
-import { type ScanStatus, logStudentPaperEvent } from "@mcp-gcse/db"
+import { logger } from "@/lib/infra/logger"
+import {
+	type EnrichmentStatus,
+	type GradingStatus,
+	type OcrStatus,
+	type ScanStatus,
+	logStudentPaperEvent,
+} from "@mcp-gcse/db"
 
 export interface SqsRecord {
 	messageId: string
@@ -26,9 +32,9 @@ export function parseSqsJobId(record: SqsRecord, tag: string): string | null {
 }
 
 /**
- * Marks a student paper job as failed: logs the error, updates the DB status,
- * and fires a job_failed event. Safe to call from a catch block — any DB
- * errors are swallowed so the original error is not obscured.
+ * Marks a student paper job as failed on the legacy StudentPaperJob table.
+ * Also fails the corresponding run record (OcrRun or GradingRun) when present.
+ * Safe to call from a catch block — any DB errors are swallowed.
  */
 export async function markJobFailed(
 	jobId: string,
@@ -41,7 +47,7 @@ export async function markJobFailed(
 	try {
 		await db.studentPaperJob.update({
 			where: { id: jobId },
-			data: { status: "failed" as ScanStatus, error: message },
+			data: { status: "failed" satisfies ScanStatus, error: message },
 		})
 		void logStudentPaperEvent(db, jobId, {
 			type: "job_failed",
@@ -52,4 +58,23 @@ export async function markJobFailed(
 	} catch {
 		// ignore — don't mask the original error
 	}
+
+	// Also fail the corresponding run record (best-effort).
+	// Uses id === jobId (same convention as the processors' upsert calls).
+	if (phase === "ocr") {
+		db.ocrRun
+			.update({
+				where: { id: jobId },
+				data: { status: "failed" satisfies OcrStatus, error: message },
+			})
+			.catch(() => {})
+	} else if (phase === "grading") {
+		db.gradingRun
+			.update({
+				where: { id: jobId },
+				data: { status: "failed" satisfies GradingStatus, error: message },
+			})
+			.catch(() => {})
+	}
+	// Enrichment failures are handled by the enrich processor directly (never touches main job status)
 }

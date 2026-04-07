@@ -6,8 +6,7 @@ import { useJobQuery } from "../shared/use-job-query"
 const STATUS_LABELS: Record<string, string> = {
 	pending: "Queued — waiting to start",
 	processing: "Reading pages…",
-	extracting: "Extracting text from scan…",
-	extracted: "Text extracted",
+	text_extracted: "Answers extracted — queuing for marking…",
 	grading: "Marking answers against the mark scheme…",
 }
 

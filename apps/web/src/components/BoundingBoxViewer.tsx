@@ -1,6 +1,6 @@
 "use client"
 
-import { AnnotationPopover } from "@/components/BoundingBoxViewer/annotation-popover"
+import { AnnotationHitTarget } from "@/components/BoundingBoxViewer/annotation-hit-target"
 import { ChainOverlay } from "@/components/BoundingBoxViewer/chain-overlay"
 import { GradingAnnotationOverlay } from "@/components/BoundingBoxViewer/grading-annotation-overlay"
 import { MarkOverlay } from "@/components/BoundingBoxViewer/mark-overlay"
@@ -21,8 +21,15 @@ import type {
 	TagPayload,
 } from "@/lib/marking/types"
 import { cn } from "@/lib/utils"
+import {
+	HOVER_HIGHLIGHT_DASH,
+	HOVER_HIGHLIGHT_GAP,
+	HOVER_HIGHLIGHT_RADIUS,
+	HOVER_HIGHLIGHT_STROKE,
+	overlayUnit,
+} from "./BoundingBoxViewer/overlay-sizing"
 import { Minus, Plus, RotateCcw } from "lucide-react"
-import { useState } from "react"
+import { useCallback, useState } from "react"
 import { TransformComponent, TransformWrapper } from "react-zoom-pan-pinch"
 
 export type { GradingAnnotation }
@@ -81,6 +88,11 @@ export function BoundingBoxViewer({
 	const [imageDims, setImageDims] = useState<{ w: number; h: number } | null>(
 		null,
 	)
+	/** ID of the parent mark whose text region should be highlighted (tag hover) */
+	const [hoveredParentId, setHoveredParentId] = useState<string | null>(null)
+	const handleTagHover = useCallback((parentId: string | null) => {
+		setHoveredParentId(parentId)
+	}, [])
 
 	const handleImageLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
 		setImageDims({
@@ -244,7 +256,7 @@ export function BoundingBoxViewer({
 											</svg>
 										)}
 
-										{/* Mark + tag signal layer */}
+										{/* Mark + tag visual layer (no pointer events) */}
 										{showMarks && annotations.length > 0 && (
 											<svg
 												viewBox={viewBox}
@@ -278,27 +290,55 @@ export function BoundingBoxViewer({
 															/>
 														)
 													})}
+
+												{/* Highlight parent mark's text region on tag hover */}
+												{hoveredParentId != null &&
+													(() => {
+														const parent = annotations.find((a) => a.id === hoveredParentId)
+														if (!parent) return null
+														const [pyMin, pxMin, pyMax, pxMax] = parent.bbox
+														const sz = overlayUnit(scaleY)
+														const color = (parent.payload as MarkPayload).signal === "cross"
+															? "#ef4444"
+															: "#3b82f6"
+														return (
+															<rect
+																x={pxMin * scaleX}
+																y={pyMin * scaleY}
+																width={(pxMax - pxMin) * scaleX}
+																height={(pyMax - pyMin) * scaleY}
+																fill={color}
+																fillOpacity={0.12}
+																stroke={color}
+																strokeWidth={sz * HOVER_HIGHLIGHT_STROKE}
+																strokeOpacity={0.5}
+																strokeDasharray={`${sz * HOVER_HIGHLIGHT_DASH} ${sz * HOVER_HIGHLIGHT_GAP}`}
+																rx={sz * HOVER_HIGHLIGHT_RADIUS}
+																pointerEvents="none"
+															/>
+														)
+													})()}
 											</svg>
 										)}
 
-										{/* Annotation click targets (popovers) */}
+										{/* Unified annotation interaction layer */}
 										{(showMarks || showChains) &&
 											annotations
 												.filter(
 													(a) =>
 														a.overlay_type === "mark" ||
-														a.overlay_type === "chain",
+														a.overlay_type === "chain" ||
+														(showMarks && a.overlay_type === "tag"),
 												)
 												.map((a) => (
-													<AnnotationPopover
+													<AnnotationHitTarget
 														key={a.id}
 														annotation={a}
-														linkedAnnotations={annotations.filter(
-															(c) => c.parent_annotation_id === a.id,
-														)}
+														allAnnotations={annotations}
 														onClick={() =>
 															onEnrichmentAnnotationClick?.(a.question_id)
 														}
+														onTagHover={handleTagHover}
 													/>
 												))}
 

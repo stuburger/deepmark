@@ -1,5 +1,10 @@
 import { GoogleGenAI, type Part } from "@google/genai"
 import { Resource } from "sst"
+import {
+	buildBlankClassificationPrompt,
+	buildNameExtractionPrompt,
+	buildPageBoundaryPrompt,
+} from "./classify-prompts"
 import { extractJsonFromResponse } from "./llm-output"
 import type { PageData } from "./types"
 
@@ -33,14 +38,7 @@ export async function callClassifyPageBoundary(
 		? "The FIRST image is the PREVIOUS page; the SECOND image is the CURRENT page."
 		: "The image is the CURRENT page (no previous page context)."
 
-	parts.push({
-		text: `You are analysing scanned student exam scripts.
-${contextDesc}
-Determine whether the CURRENT page is the FIRST page of a NEW student's exam script.
-Structural cues for a new script start: different student name or header at the top, question numbers resetting to the first question, a new paper title or section header, visibly different handwriting style.
-Return ONLY valid JSON with no markdown or explanation:
-{"isScriptStart":true,"confidence":0.95}`,
-	})
+	parts.push({ text: buildPageBoundaryPrompt(contextDesc) })
 
 	try {
 		const response = await ai.models.generateContent({
@@ -103,16 +101,7 @@ export async function callClassifyBlankPage(
 					? "The image is the page AFTER the blank (nothing precedes)."
 					: "No surrounding pages available."
 
-	parts.push({
-		text: `You are analysing scanned student exam scripts. A blank/near-blank page has been detected.
-${contextDesc}
-Classify the blank page as exactly one of:
-- "separator": a deliberate blank page inserted between two different student scripts
-- "script_page": a blank answer page belonging to a student (e.g. a page they left unanswered)
-- "artifact": scanner noise, accidental blank, or cover page
-Return ONLY valid JSON with no markdown:
-{"classification":"separator"}`,
-	})
+	parts.push({ text: buildBlankClassificationPrompt(contextDesc) })
 
 	try {
 		const response = await ai.models.generateContent({
@@ -153,9 +142,7 @@ export async function callExtractNameFromPage(
 								data: jpegBuffer.toString("base64"),
 							},
 						},
-						{
-							text: 'Extract the student name from this exam script page if legible. Return ONLY valid JSON with no markdown: {"name":"<name>","confidence":0.95} — use null for name if not readable.',
-						},
+						{ text: buildNameExtractionPrompt() },
 					],
 				},
 			],

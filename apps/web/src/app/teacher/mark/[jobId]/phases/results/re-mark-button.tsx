@@ -1,44 +1,85 @@
 "use client"
 
-import { Button } from "@/components/ui/button"
-import { retriggerGrading } from "@/lib/marking/mutations"
-import { queryKeys } from "@/lib/query-keys"
-import { useMutation, useQueryClient } from "@tanstack/react-query"
-import { Loader2, RefreshCw } from "lucide-react"
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { buttonVariants } from "@/components/ui/button-variants"
+import { retriggerGrading, retriggerOcr } from "@/lib/marking/mutations"
+import { cn } from "@/lib/utils"
+import { useMutation } from "@tanstack/react-query"
+import { ChevronDown, Loader2, RefreshCw, ScanText } from "lucide-react"
+import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 
-export function ReMarkButton({ jobId }: { jobId: string }) {
-	const queryClient = useQueryClient()
+export function ReMarkButton({
+	jobId,
+	examPaperId,
+}: {
+	jobId: string
+	examPaperId: string
+}) {
+	const router = useRouter()
 
-	const { mutate, isPending, error } = useMutation({
+	function navigateToNewJob(newJobId: string) {
+		router.push(
+			`/teacher/mark/papers/${examPaperId}/submissions/${newJobId}`,
+		)
+	}
+
+	const gradingMutation = useMutation({
 		mutationFn: () => retriggerGrading(jobId),
 		onSuccess: (result) => {
 			if (!result.ok) {
 				toast.error(result.error)
 				return
 			}
-			void queryClient.invalidateQueries({
-				queryKey: queryKeys.studentJob(jobId),
-			})
+			navigateToNewJob(result.newJobId)
 		},
 	})
 
+	const ocrMutation = useMutation({
+		mutationFn: () => retriggerOcr(jobId),
+		onSuccess: (result) => {
+			if (!result.ok) {
+				toast.error(result.error)
+				return
+			}
+			navigateToNewJob(result.newJobId)
+		},
+	})
+
+	const isPending = gradingMutation.isPending || ocrMutation.isPending
+
 	return (
-		<div className="flex flex-col items-start gap-1">
-			<Button
-				variant="outline"
-				size="sm"
+		<DropdownMenu>
+			<DropdownMenuTrigger
 				disabled={isPending}
-				onClick={() => mutate()}
+				className={cn(
+					buttonVariants({ variant: "outline", size: "sm" }),
+					isPending && "opacity-60 pointer-events-none",
+				)}
 			>
 				{isPending ? (
-					<Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" />
+					<Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
 				) : (
-					<RefreshCw className="h-3.5 w-3.5 mr-2" />
+					<RefreshCw className="h-3.5 w-3.5 mr-1.5" />
 				)}
 				Re-mark
-			</Button>
-			{error && <p className="text-xs text-destructive">{error.message}</p>}
-		</div>
+				<ChevronDown className="h-3 w-3 ml-1 opacity-50" />
+			</DropdownMenuTrigger>
+			<DropdownMenuContent align="end">
+				<DropdownMenuItem onClick={() => gradingMutation.mutate()}>
+					<RefreshCw className="h-3.5 w-3.5 mr-2" />
+					Re-run marking only
+				</DropdownMenuItem>
+				<DropdownMenuItem onClick={() => ocrMutation.mutate()}>
+					<ScanText className="h-3.5 w-3.5 mr-2" />
+					Re-run answer detection
+				</DropdownMenuItem>
+			</DropdownMenuContent>
+		</DropdownMenu>
 	)
 }

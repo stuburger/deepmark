@@ -1,4 +1,6 @@
-import type { GradingResult, MarkPointResultEntry } from "@/lib/grade-questions"
+import type { GradingResult, MarkPointResultEntry } from "@/lib/grading/grade-questions"
+
+// ─── Types ───────────────────────────────────────────────────────────────────
 
 type TokenSummary = {
 	text: string
@@ -28,14 +30,11 @@ type AnnotationPromptArgs = {
 	levelDescriptors: string | null
 }
 
-/**
- * Density rules: target annotation count by max marks available.
- */
-function densityTarget(maxScore: number): {
-	min: number
-	max: number
-	maxComments: number
-} {
+// ─── Density ─────────────────────────────────────────────────────────────────
+
+type DensityTarget = { min: number; max: number; maxComments: number }
+
+function densityTarget(maxScore: number): DensityTarget {
 	if (maxScore <= 2) return { min: 1, max: 2, maxComments: 1 }
 	if (maxScore <= 4) return { min: 2, max: 3, maxComments: 2 }
 	if (maxScore <= 6) return { min: 3, max: 5, maxComments: 3 }
@@ -43,9 +42,9 @@ function densityTarget(maxScore: number): {
 	return { min: 8, max: 12, maxComments: 6 }
 }
 
-function formatMarkPointResults(
-	results: MarkPointResultEntry[],
-): string {
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function formatMarkPointResults(results: MarkPointResultEntry[]): string {
 	if (results.length === 0) return "No mark point results available."
 	return results
 		.map(
@@ -58,10 +57,211 @@ function formatMarkPointResults(
 		.join("\n\n")
 }
 
+// ─── Context sections (dynamic — depend on grading result / mark scheme) ────
+
+function systemPreamble(): string {
+	return "You are an expert GCSE examiner annotating a student's answer script. Your job is to place precise marks on the script that show the student's thinking has been carefully read and evaluated."
+}
+
+function questionContext(questionText: string): string {
+	return `<Question>\n${questionText}\n</Question>`
+}
+
+function markSchemeSection(markScheme: MarkSchemeContext | null): string {
+	if (!markScheme) return ""
+	const points =
+		markScheme.markPoints.length > 0
+			? `\nMark points:\n${markScheme.markPoints.map((mp) => `  Point ${mp.pointNumber}: ${mp.description}\n    Criteria: ${mp.criteria}`).join("\n")}`
+			: ""
+	const rules = markScheme.markingRules
+		? `\nMarking rules: ${JSON.stringify(markScheme.markingRules)}`
+		: ""
+	return `<MarkScheme>
+Description: ${markScheme.description}
+${markScheme.guidance ? `Guidance: ${markScheme.guidance}` : ""}
+Marking method: ${markScheme.markingMethod}${points}${rules}
+</MarkScheme>`
+}
+
+function gradingResultSection(r: GradingResult, maxScore: number): string {
+	return `<GradingResult>
+Score: ${r.awarded_score}/${maxScore}
+${r.level_awarded !== undefined ? `Level awarded: ${r.level_awarded}` : ""}
+Feedback: ${r.feedback_summary}
+Examiner reasoning: ${r.llm_reasoning}
+</GradingResult>`
+}
+
+function markPointResultsSection(results: MarkPointResultEntry[]): string {
+	if (results.length === 0) return ""
+	return `<MarkPointResults>\n${formatMarkPointResults(results)}\n</MarkPointResults>`
+}
+
+function wwwEbiSection(r: GradingResult): string {
+	if (!r.what_went_well?.length && !r.even_better_if?.length) return ""
+	return `<GradingSummary>
+${r.what_went_well?.length ? `What went well: ${r.what_went_well.join("; ")}` : ""}
+${r.even_better_if?.length ? `Even better if: ${r.even_better_if.join("; ")}` : ""}
+</GradingSummary>`
+}
+
+function levelDescriptorsSection(levelDescriptors: string | null): string {
+	if (!levelDescriptors) return ""
+	return `<ExamLevelDescriptors>\n${levelDescriptors}\n</ExamLevelDescriptors>`
+}
+
+function studentAnswerSection(answer: string): string {
+	return `<StudentAnswer>\n${answer}\n</StudentAnswer>`
+}
+
+function ocrTokensSection(tokens: TokenSummary[]): string {
+	const tokenList = tokens.map((t, i) => `[${i}] "${t.text}"`).join(" ")
+	return `<OCRTokens>\n${tokenList}\n</OCRTokens>`
+}
+
+function subjectContext(
+	examBoard: string | null,
+	subject: string | null,
+): string {
+	return `<ExamBoard>${examBoard ?? "AQA"}</ExamBoard>
+
+<SubjectContext>
+Subject: ${subject ?? "Unknown"}
+NOTE: Assessment Objective (AO) definitions are SUBJECT-SPECIFIC. Different subjects have different numbers of AOs with different meanings (e.g. Religious Studies has 2 AOs, English Language has 6). Read the level descriptors and mark scheme to understand what each AO means for THIS subject. Do NOT assume AO1 = knowledge — that is only true for some subjects.
+</SubjectContext>`
+}
+
+// ─── Score guidance (dynamic — varies by score band) ─────────────────────────
+
+function scoreGuidance(
+	awarded: number,
+	maxScore: number,
+): string {
+	const percent = maxScore > 0 ? Math.round((awarded / maxScore) * 100) : 0
+	if (awarded === maxScore) {
+		return `SCORE CONTEXT: The student scored FULL MARKS (${awarded}/${maxScore}).
+- ALL annotations must be POSITIVE (ticks, valid tags, positive comments only)
+- Do NOT add any crosses, circles, negative comments, or criticism
+- Confirm what the student did right — tick each correct point
+- If there is little to annotate, use fewer annotations rather than inventing problems`
+	}
+	if (percent >= 70) {
+		return `SCORE CONTEXT: The student scored well (${awarded}/${maxScore}, ${percent}%).
+- Annotations should be MOSTLY POSITIVE with minimal constructive feedback
+- Only mark genuine weaknesses that cost marks — not nitpicks
+- The balance should reflect the high score`
+	}
+	return `SCORE CONTEXT: The student scored ${awarded}/${maxScore} (${percent}%).
+- Annotations should reflect the actual strengths AND weaknesses
+- Credit what is genuinely present, flag what is missing or weak
+- Balance positive and negative proportionally to the score`
+}
+
+function questionTypeGuidance(maxScore: number): string {
+	if (maxScore > 2) return ""
+	return `QUESTION TYPE: This is a short-answer recall question (${maxScore} marks).
+- Keep annotations minimal — just tick valid points
+- Do not add chain annotations or detailed AO analysis for basic recall
+- 1-2 simple tick marks is sufficient`
+}
+
+// ─── Static rule sections ────────────────────────────────────────────────────
+
+const ANNOTATION_STRATEGY = `ANNOTATION STRATEGY:
+- Use the mark scheme, mark point results, and LoR summary (if present) to decide what to annotate
+- For each AWARDED mark point: find the specific text that earned it, place a tick or appropriate mark, and tag the relevant AO skill
+- For each DENIED mark point: identify what is missing or weak, and annotate with a cross/circle and a brief comment explaining what was needed
+- Use your examiner judgement to classify AO skills from the content and context — do not rely on keyword matching
+- The AO labels (e.g. AO1, AO2) and their meanings come from the level descriptors and mark scheme. Use the exact labels and definitions from those descriptors. Do not assume which AOs exist or what they mean.
+- Chain annotations should highlight genuine reasoning structures where the student builds an argument, not just words like "because"
+- If the mark scheme or level descriptors describe what good analysis looks like, use that to assess quality — not a checklist of trigger words`
+
+const OVERLAY_TYPES = `OVERLAY TYPES:
+- "mark": physical signal ON the script (tick, cross, underline, double_underline, box, circle). MUST include a "reason" field.
+- "tag": semantic skill badge attached to a mark (e.g. [AO2]). Must have a parent_index pointing to a mark. MUST include a "reason" field.
+- "comment": short margin note. Format: "[diagnosis] → [specific issue]". Max 8-14 words, one idea only. Must have a parent_index pointing to a mark.
+- "chain": highlighted connective phrase showing reasoning flow. Standalone (no parent).`
+
+const MARK_TYPES = `MARK TYPES:
+- tick (✓): correct/valid point → sentiment="positive"
+- cross (✗): incorrect/invalid → sentiment="negative" (ONLY when marks were lost)
+- underline: applied or contextualised knowledge → sentiment="positive"
+- double_underline: developed reasoning or analysis chain → sentiment="positive" or "partial"
+- box: precise technical term or key concept → sentiment="positive"
+- circle: vague/unclear term → sentiment="negative" (ONLY when marks were lost)`
+
+const REASON_FIELD = `REASON FIELD (REQUIRED on every mark and tag):
+Write like an examiner annotating a real script — short, specific, no waffle.
+- For ticks: what was credited. e.g. "correct — osmosis", "✓ identifies active transport"
+- For crosses: what was wrong or missing. e.g. "needed named example", "confused with mitosis"
+- For underlines: what knowledge was applied. e.g. "applied to River Tees case study"
+- For double_underlines: what analysis was developed. e.g. "consequence chain — job loss → depopulation"
+- For boxes: what term was used. e.g. "precise — 'tectonic hazard'"
+- For circles: what was vague. e.g. "which type of energy?"
+- For AO tags: what skill was shown. e.g. "evaluates both sides", "recalls formation process"
+Max ~10 words. Never generic ("valid point", "good answer"). Always reference the specific content.`
+
+const COMMENT_FORMAT = `COMMENT FORMAT (STRICT):
+- Format: "[diagnosis] → [specific issue]"
+- Max 8-14 words, one idea only
+- Reference the specific mark point or skill, not generic feedback
+- Positive: "correct — matches mark point 2", "clear application to case"
+- Negative: "weak analysis → no consequence stated", "missing — needed link to data"
+- NEVER write negative comments for answers that scored full marks`
+
+const POINT_BASED_GUIDANCE = `POINT-BASED / DETERMINISTIC QUESTIONS:
+- For short-answer questions, use ONE tick (if marks awarded) or ONE cross (if zero marks) per question
+- The reason field should summarise which mark points were hit, e.g. "3/4 — osmosis ✓, diffusion ✓, active transport ✓"
+- Do NOT place a separate tick for every mark point — keep it clean
+- AO tags are optional for short-answer recall questions`
+
+const PARENT_LINKING = `PARENT LINKING:
+- Tags and comments MUST include parent_index pointing to the index of their parent mark in the annotations array
+- Marks and chains do NOT have parent_index`
+
+const GLOBAL_RULES = `GLOBAL RULES:
+- CRITICAL: Annotation sentiment MUST match the score — do not contradict the grading result
+- NEVER invent weaknesses that don't exist
+- NEVER invent annotations for content not in the answer
+- NEVER write long explanations or repeat the same comment
+- ALWAYS anchor to specific text from the student answer
+- ALWAYS prefer short + precise over verbose`
+
+const INSTRUCTIONS = `<Instructions>
+Analyse the student answer against the mark scheme and mark point results. Place annotations that show this answer has been carefully read and evaluated. Output valid JSON matching the schema.
+Return annotations ordered by reading position (ascending token index).
+</Instructions>`
+
+// ─── Density section (dynamic — depends on maxScore) ─────────────────────────
+
+function densitySection(maxScore: number): string {
+	const d = densityTarget(maxScore)
+	return `DENSITY:
+- Target ${d.min}-${d.max} annotations total for this ${maxScore}-mark question
+- Maximum ${d.maxComments} margin comments
+- For full marks: fewer annotations is better — just confirm correctness
+- Avoid over-marking`
+}
+
+function anchoringSection(tokenCount: number): string {
+	return `ANCHORING:
+- anchor_start and anchor_end are token indices from the OCR token list above
+- anchor_start is the first token index (inclusive), anchor_end is the last (inclusive)
+- Choose the minimal span that captures the annotated phrase (1-5 tokens typically)
+- Each annotation must anchor to a different token span (no overlapping ranges)
+- anchor_start must be <= anchor_end
+- Both must be valid indices (0 to ${tokenCount - 1})`
+}
+
+// ─── Public API ──────────────────────────────────────────────────────────────
+
 /**
  * Builds the Gemini prompt for generating annotations for a single question.
- * Uses mark scheme, mark point results, and level descriptors to drive
- * annotation decisions — no hardcoded keyword checklists.
+ *
+ * Composed from independent section functions — each owns one concern.
+ * Static rules are plain constants; dynamic sections are small focused
+ * functions. Adding a new rule means adding a section, not finding the
+ * right line in a monolithic string.
  */
 export function buildAnnotationPrompt(args: AnnotationPromptArgs): string {
 	const {
@@ -74,174 +274,45 @@ export function buildAnnotationPrompt(args: AnnotationPromptArgs): string {
 		markScheme,
 		levelDescriptors,
 	} = args
-	const density = densityTarget(maxScore)
-	const scorePercent =
-		maxScore > 0 ? Math.round((r.awarded_score / maxScore) * 100) : 0
-	const isFullMarks = r.awarded_score === maxScore
-	const isHighScore = scorePercent >= 70
-	const isLowMarkQuestion = maxScore <= 2
 
-	// Sequential index format: [0] "Quality" [1] "management" ...
-	const tokenList = tokens.map((t, i) => `[${i}] "${t.text}"`).join(" ")
+	// ── Data context ────────────────────────────────────────────────────────
+	const contextSections = [
+		questionContext(questionText),
+		markSchemeSection(markScheme),
+		gradingResultSection(r, maxScore),
+		markPointResultsSection(r.mark_points_results),
+		wwwEbiSection(r),
+		levelDescriptorsSection(levelDescriptors),
+		studentAnswerSection(r.student_answer),
+		ocrTokensSection(tokens),
+		subjectContext(examBoard, subject),
+	]
 
-	// WWW/EBI from grading (if available)
-	const wwwEbiSection =
-		r.what_went_well?.length || r.even_better_if?.length
-			? `
-<GradingSummary>
-${r.what_went_well?.length ? `What went well: ${r.what_went_well.join("; ")}` : ""}
-${r.even_better_if?.length ? `Even better if: ${r.even_better_if.join("; ")}` : ""}
-</GradingSummary>`
-			: ""
+	// ── Annotation rules ────────────────────────────────────────────────────
+	const ruleSections = [
+		scoreGuidance(r.awarded_score, maxScore),
+		questionTypeGuidance(maxScore),
+		ANNOTATION_STRATEGY,
+		OVERLAY_TYPES,
+		MARK_TYPES,
+		REASON_FIELD,
+		COMMENT_FORMAT,
+		POINT_BASED_GUIDANCE,
+		densitySection(maxScore),
+		anchoringSection(tokens.length),
+		PARENT_LINKING,
+		GLOBAL_RULES,
+	]
 
-	// Mark scheme section
-	const markSchemeSection = markScheme
-		? `
-<MarkScheme>
-Description: ${markScheme.description}
-${markScheme.guidance ? `Guidance: ${markScheme.guidance}` : ""}
-Marking method: ${markScheme.markingMethod}
-${markScheme.markPoints.length > 0 ? `\nMark points:\n${markScheme.markPoints.map((mp) => `  Point ${mp.pointNumber}: ${mp.description}\n    Criteria: ${mp.criteria}`).join("\n")}` : ""}
-${markScheme.markingRules ? `\nMarking rules: ${JSON.stringify(markScheme.markingRules)}` : ""}
-</MarkScheme>`
-		: ""
-
-	// Mark point results section
-	const markPointResultsSection =
-		r.mark_points_results.length > 0
-			? `
-<MarkPointResults>
-${formatMarkPointResults(r.mark_points_results)}
-</MarkPointResults>`
-			: ""
-
-	// Level descriptors section
-	const levelDescriptorsSection = levelDescriptors
-		? `
-<ExamLevelDescriptors>
-${levelDescriptors}
-</ExamLevelDescriptors>`
-		: ""
-
-	// Score-aware annotation guidance
-	let scoreGuidance: string
-	if (isFullMarks) {
-		scoreGuidance = `SCORE CONTEXT: The student scored FULL MARKS (${r.awarded_score}/${maxScore}).
-- ALL annotations must be POSITIVE (ticks, valid tags, positive comments only)
-- Do NOT add any crosses, circles, negative comments, or criticism
-- Confirm what the student did right — tick each correct point
-- If there is little to annotate, use fewer annotations rather than inventing problems`
-	} else if (isHighScore) {
-		scoreGuidance = `SCORE CONTEXT: The student scored well (${r.awarded_score}/${maxScore}, ${scorePercent}%).
-- Annotations should be MOSTLY POSITIVE with minimal constructive feedback
-- Only mark genuine weaknesses that cost marks — not nitpicks
-- The balance should reflect the high score`
-	} else {
-		scoreGuidance = `SCORE CONTEXT: The student scored ${r.awarded_score}/${maxScore} (${scorePercent}%).
-- Annotations should reflect the actual strengths AND weaknesses
-- Credit what is genuinely present, flag what is missing or weak
-- Balance positive and negative proportionally to the score`
-	}
-
-	// Low-mark question guidance
-	const lowMarkGuidance = isLowMarkQuestion
-		? `\nQUESTION TYPE: This is a short-answer recall question (${maxScore} marks).
-- Keep annotations minimal — just tick valid points
-- Do not add chain annotations or detailed AO analysis for basic recall
-- 1-2 simple tick marks is sufficient`
-		: ""
-
-	return `You are an expert GCSE examiner annotating a student's answer script. Your job is to place precise marks on the script that show the student's thinking has been carefully read and evaluated.
-
-<Question>
-${questionText}
-</Question>
-${markSchemeSection}
-<GradingResult>
-Score: ${r.awarded_score}/${maxScore}
-${r.level_awarded !== undefined ? `Level awarded: ${r.level_awarded}` : ""}
-Feedback: ${r.feedback_summary}
-Examiner reasoning: ${r.llm_reasoning}
-</GradingResult>${markPointResultsSection}${wwwEbiSection}${levelDescriptorsSection}
-
-<StudentAnswer>
-${r.student_answer}
-</StudentAnswer>
-
-<OCRTokens>
-${tokenList}
-</OCRTokens>
-
-<ExamBoard>${examBoard ?? "AQA"}</ExamBoard>
-
-<SubjectContext>
-Subject: ${subject ?? "Unknown"}
-NOTE: Assessment Objective (AO) definitions are SUBJECT-SPECIFIC. Different subjects have different numbers of AOs with different meanings (e.g. Religious Studies has 2 AOs, English Language has 6). Read the level descriptors and mark scheme to understand what each AO means for THIS subject. Do NOT assume AO1 = knowledge — that is only true for some subjects.
-</SubjectContext>
-
-<AnnotationRules>
-${scoreGuidance}${lowMarkGuidance}
-
-ANNOTATION STRATEGY:
-- Use the mark scheme, mark point results, and LoR summary (if present) to decide what to annotate
-- For each AWARDED mark point: find the specific text that earned it, place a tick or appropriate mark, and tag the relevant AO skill
-- For each DENIED mark point: identify what is missing or weak, and annotate with a cross/circle and a brief comment explaining what was needed
-- Use your examiner judgement to classify AO skills from the content and context — do not rely on keyword matching
-- The AO labels (e.g. AO1, AO2) and their meanings come from the level descriptors and mark scheme. Use the exact labels and definitions from those descriptors. Do not assume which AOs exist or what they mean.
-- Chain annotations should highlight genuine reasoning structures where the student builds an argument, not just words like "because"
-- If the mark scheme or level descriptors describe what good analysis looks like, use that to assess quality — not a checklist of trigger words
-
-OVERLAY TYPES:
-- "mark": physical signal ON the script (tick, cross, underline, double_underline, box, circle)
-- "tag": semantic skill badge attached to a mark (e.g. [✓ AO2]). Must have a parent_index pointing to a mark.
-- "comment": short margin note. Format: "[diagnosis] → [specific issue]". Max 8-14 words, one idea only. Must have a parent_index pointing to a mark.
-- "chain": highlighted connective phrase showing reasoning flow. Standalone (no parent).
-
-MARK TYPES:
-- tick (✓): correct/valid point → sentiment="positive"
-- cross (✗): incorrect/invalid → sentiment="negative" (ONLY when marks were lost)
-- underline: applied or contextualised knowledge → sentiment="positive"
-- double_underline: developed reasoning or analysis chain → sentiment="positive" or "partial"
-- box: precise technical term or key concept → sentiment="positive"
-- circle: vague/unclear term → sentiment="negative" (ONLY when marks were lost)
-
-COMMENT FORMAT (STRICT):
-- Format: "[diagnosis] → [specific issue]"
-- Max 8-14 words, one idea only
-- Reference the specific mark point or skill, not generic feedback
-- Positive: "correct — matches mark point 2", "clear application to case"
-- Negative: "weak analysis → no consequence stated", "missing — needed link to data"
-- NEVER write negative comments for answers that scored full marks
-
-DENSITY:
-- Target ${density.min}-${density.max} annotations total for this ${maxScore}-mark question
-- Maximum ${density.maxComments} margin comments
-- For full marks: fewer annotations is better — just confirm correctness
-- Avoid over-marking
-
-ANCHORING:
-- anchor_start and anchor_end are token indices from the OCR token list above
-- anchor_start is the first token index (inclusive), anchor_end is the last (inclusive)
-- Choose the minimal span that captures the annotated phrase (1-5 tokens typically)
-- Each annotation must anchor to a different token span (no overlapping ranges)
-- anchor_start must be <= anchor_end
-- Both must be valid indices (0 to ${tokens.length - 1})
-
-PARENT LINKING:
-- Tags and comments MUST include parent_index pointing to the index of their parent mark in the annotations array
-- Marks and chains do NOT have parent_index
-
-GLOBAL RULES:
-- CRITICAL: Annotation sentiment MUST match the score — do not contradict the grading result
-- NEVER invent weaknesses that don't exist
-- NEVER invent annotations for content not in the answer
-- NEVER write long explanations or repeat the same comment
-- ALWAYS anchor to specific text from the student answer
-- ALWAYS prefer short + precise over verbose
-</AnnotationRules>
-
-<Instructions>
-Analyse the student answer against the mark scheme and mark point results. Place annotations that show this answer has been carefully read and evaluated. Output valid JSON matching the schema.
-Return annotations ordered by reading position (ascending token index).
-</Instructions>`
+	return [
+		systemPreamble(),
+		"",
+		...contextSections.filter(Boolean),
+		"",
+		"<AnnotationRules>",
+		...ruleSections.filter(Boolean),
+		"</AnnotationRules>",
+		"",
+		INSTRUCTIONS,
+	].join("\n\n")
 }

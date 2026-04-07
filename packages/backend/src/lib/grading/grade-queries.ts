@@ -1,5 +1,5 @@
 import { db } from "@/db"
-import type { ExamPaperWithSections } from "@/lib/question-list"
+import type { ExamPaperWithSections } from "@/lib/grading/question-list"
 
 /**
  * Loads the full exam paper structure needed for grading — sections, questions,

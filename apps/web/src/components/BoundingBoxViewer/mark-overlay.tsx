@@ -1,6 +1,20 @@
 "use client"
 
 import type { MarkPayload, StudentPaperAnnotation } from "@/lib/marking/types"
+import {
+	DOUBLE_UNDERLINE_GAP,
+	DOUBLE_UNDERLINE_STROKE,
+	LABEL_SIZE,
+	MARK_SYMBOL_SIZE,
+	OFFSET_H,
+	SHAPE_PAD,
+	SHAPE_STROKE,
+	CIRCLE_PAD_X,
+	SYMBOL_BASELINE,
+	SYMBOL_OFFSET_LEFT,
+	UNDERLINE_STROKE,
+	overlayUnit,
+} from "./overlay-sizing"
 
 type Props = {
 	annotation: StudentPaperAnnotation & { payload: MarkPayload }
@@ -19,7 +33,9 @@ const SIGNAL_COLORS = {
 
 /**
  * Renders a mark signal (tick/cross/underline/box/circle) on the scanned page.
- * Strokes are bold (6-7px) for clear visibility on scanned handwriting.
+ *
+ * All sizes derive from the resolution-independent `overlayUnit()`. See
+ * `overlay-sizing.ts` for the named constants and their rationale.
  */
 export function MarkOverlay({ annotation, scaleX, scaleY }: Props) {
 	const { payload, bbox } = annotation
@@ -30,21 +46,26 @@ export function MarkOverlay({ annotation, scaleX, scaleY }: Props) {
 	const w = (xMax - xMin) * scaleX
 	const h = (yMax - yMin) * scaleY
 
+	const sz = overlayUnit(scaleY)
+	const strokeW = sz * UNDERLINE_STROKE
+	const thinStrokeW = sz * DOUBLE_UNDERLINE_STROKE
+	const labelSize = sz * LABEL_SIZE
+
 	switch (payload.signal) {
 		case "tick":
 			return (
 				<g>
 					<text
-						x={x - 18}
-						y={y + h * 0.5 + 8}
+						x={x - sz * SYMBOL_OFFSET_LEFT}
+						y={y + h * 0.5 + sz * SYMBOL_BASELINE}
 						fill={color}
-						fontSize={Math.max(22, h * 0.9)}
+						fontSize={sz * MARK_SYMBOL_SIZE}
 						fontWeight="bold"
 					>
 						✓
 					</text>
 					{payload.label && (
-						<text x={x + w + 6} y={y + 14} fill={color} fontSize={13} fontWeight="600">
+						<text x={x + w + sz * OFFSET_H} y={y + labelSize} fill={color} fontSize={labelSize} fontWeight="600">
 							{payload.label}
 						</text>
 					)}
@@ -55,16 +76,16 @@ export function MarkOverlay({ annotation, scaleX, scaleY }: Props) {
 			return (
 				<g>
 					<text
-						x={x - 18}
-						y={y + h * 0.5 + 8}
+						x={x - sz * SYMBOL_OFFSET_LEFT}
+						y={y + h * 0.5 + sz * SYMBOL_BASELINE}
 						fill={color}
-						fontSize={Math.max(22, h * 0.9)}
+						fontSize={sz * MARK_SYMBOL_SIZE}
 						fontWeight="bold"
 					>
 						✗
 					</text>
 					{payload.label && (
-						<text x={x + w + 6} y={y + 14} fill={color} fontSize={13} fontWeight="600">
+						<text x={x + w + sz * OFFSET_H} y={y + labelSize} fill={color} fontSize={labelSize} fontWeight="600">
 							{payload.label}
 						</text>
 					)}
@@ -76,94 +97,104 @@ export function MarkOverlay({ annotation, scaleX, scaleY }: Props) {
 				<g>
 					<line
 						x1={x}
-						y1={y + h + 3}
+						y1={y + h + strokeW}
 						x2={x + w}
-						y2={y + h + 3}
+						y2={y + h + strokeW}
 						stroke={color}
-						strokeWidth={7}
+						strokeWidth={strokeW}
 						strokeOpacity={0.9}
 						strokeLinecap="round"
 					/>
 					{payload.label && (
-						<text x={x + w + 6} y={y + h} fill={color} fontSize={13} fontWeight="600">
+						<text x={x + w + sz * OFFSET_H} y={y + h} fill={color} fontSize={labelSize} fontWeight="600">
 							{payload.label}
 						</text>
 					)}
 				</g>
 			)
 
-		case "double_underline":
+		case "double_underline": {
+			const lineY1 = y + h + thinStrokeW
+			const lineY2 = lineY1 + sz * DOUBLE_UNDERLINE_GAP
 			return (
 				<g>
 					<line
 						x1={x}
-						y1={y + h + 2}
+						y1={lineY1}
 						x2={x + w}
-						y2={y + h + 2}
+						y2={lineY1}
 						stroke={color}
-						strokeWidth={6}
+						strokeWidth={thinStrokeW}
 						strokeOpacity={0.9}
 						strokeLinecap="round"
 					/>
 					<line
 						x1={x}
-						y1={y + h + 12}
+						y1={lineY2}
 						x2={x + w}
-						y2={y + h + 12}
+						y2={lineY2}
 						stroke={color}
-						strokeWidth={6}
+						strokeWidth={thinStrokeW}
 						strokeOpacity={0.9}
 						strokeLinecap="round"
 					/>
 					{payload.label && (
-						<text x={x + w + 6} y={y + h} fill={color} fontSize={13} fontWeight="600">
+						<text x={x + w + sz * OFFSET_H} y={y + h} fill={color} fontSize={labelSize} fontWeight="600">
 							{payload.label}
 						</text>
 					)}
 				</g>
 			)
+		}
 
-		case "box":
+		case "box": {
+			const pad = sz * SHAPE_PAD
+			const boxStroke = sz * SHAPE_STROKE
 			return (
 				<g>
 					<rect
-						x={x - 4}
-						y={y - 4}
-						width={w + 8}
-						height={h + 8}
+						x={x - pad}
+						y={y - pad}
+						width={w + pad * 2}
+						height={h + pad * 2}
 						fill="none"
 						stroke={color}
-						strokeWidth={6}
+						strokeWidth={boxStroke}
 						strokeOpacity={0.8}
-						rx={4}
+						rx={pad}
 					/>
 					{payload.label && (
-						<text x={x + w + 10} y={y + 14} fill={color} fontSize={13} fontWeight="600">
+						<text x={x + w + pad * 2 + sz * OFFSET_H} y={y + labelSize} fill={color} fontSize={labelSize} fontWeight="600">
 							{payload.label}
 						</text>
 					)}
 				</g>
 			)
+		}
 
-		case "circle":
+		case "circle": {
+			const circleStroke = sz * SHAPE_STROKE
+			const padX = sz * CIRCLE_PAD_X
+			const padY = sz * SHAPE_PAD
 			return (
 				<g>
 					<ellipse
 						cx={x + w / 2}
 						cy={y + h / 2}
-						rx={w / 2 + 6}
-						ry={h / 2 + 5}
+						rx={w / 2 + padX}
+						ry={h / 2 + padY}
 						fill="none"
 						stroke={color}
-						strokeWidth={6}
+						strokeWidth={circleStroke}
 						strokeOpacity={0.8}
 					/>
 					{payload.label && (
-						<text x={x + w + 12} y={y + 14} fill={color} fontSize={13} fontWeight="600">
+						<text x={x + w + padX + sz * OFFSET_H} y={y + labelSize} fill={color} fontSize={labelSize} fontWeight="600">
 							{payload.label}
 						</text>
 					)}
 				</g>
 			)
+		}
 	}
 }

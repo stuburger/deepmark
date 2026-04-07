@@ -3,12 +3,12 @@ import {
 	callClassifyBlankPage,
 	callClassifyPageBoundary,
 	callExtractNameFromPage,
-} from "@/lib/batch/classify-calls"
-import { extractPdfPages, fetchS3Bytes } from "@/lib/batch/pdf-pages"
-import type { PageData, PageGroup, StagedScriptData } from "@/lib/batch/types"
-import { logger } from "@/lib/logger"
-import { s3 } from "@/lib/s3"
-import type { SqsEvent, SqsRecord } from "@/lib/sqs-job-runner"
+} from "@/lib/script-ingestion/classify-calls"
+import { extractPdfPages, fetchS3Bytes } from "@/lib/script-ingestion/pdf-pages"
+import type { PageData, PageGroup, StagedScriptData } from "@/lib/script-ingestion/types"
+import { logger } from "@/lib/infra/logger"
+import { s3 } from "@/lib/infra/s3"
+import type { SqsEvent, SqsRecord } from "@/lib/infra/sqs-job-runner"
 import { ListObjectsV2Command } from "@aws-sdk/client-s3"
 import { SQSClient, SendMessageCommand } from "@aws-sdk/client-sqs"
 import type {

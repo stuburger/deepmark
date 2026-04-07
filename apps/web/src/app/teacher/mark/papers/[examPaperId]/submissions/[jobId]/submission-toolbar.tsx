@@ -50,6 +50,7 @@ export function SubmissionToolbar({
 	onToggleChains,
 	onGenerateAnnotations,
 	enrichmentLoading = false,
+	annotationCount,
 }: {
 	examPaperId: string
 	jobId: string
@@ -66,13 +67,18 @@ export function SubmissionToolbar({
 	onToggleChains?: () => void
 	onGenerateAnnotations?: () => void
 	enrichmentLoading?: boolean
+	/** Number of annotation rows fetched — used to gate Marks/Chains/Legend controls. */
+	annotationCount?: number
 }) {
 	const hasOcr = scanPages.some((p) => p.analysis != null)
 	const hasRegions = data.grading_results.some(
 		(r) => (r.answer_regions?.length ?? 0) > 0,
 	)
 
-	const hasAnnotations = data.enrichment_status === "complete"
+	// Enrichment is "complete" only when it produced actual annotations.
+	// If enrichment ran but produced nothing (e.g. MCQ-only paper), controls stay disabled.
+	const hasAnnotations =
+		data.enrichment_status === "complete" && (annotationCount ?? 0) > 0
 	const isEnriching =
 		data.enrichment_status === "pending" ||
 		data.enrichment_status === "processing"
@@ -85,10 +91,11 @@ export function SubmissionToolbar({
 				? "Annotation generation failed — try again"
 				: "Click Annotate to generate"
 
-	// Always allow triggering/re-triggering when grading is complete.
-	// The mutation handles cleanup (deletes existing annotations, resets status).
-	// This prevents stuck jobs from blocking the user — they can always retry.
-	const canGenerate = phase === "completed"
+	// Annotations are available for all question types after Phase 4c/4d:
+	// LoR → Gemini annotations; point_based + MCQ → deterministic tick/cross.
+	// Show the Annotate button whenever grading is complete and there are results.
+	const hasAnnotatableResults = data.grading_results.length > 0
+	const canGenerate = phase === "completed" && hasAnnotatableResults
 
 	const ocrDisabledReason = hasOcr ? undefined : "OCR not yet complete"
 	const regionsDisabledReason = hasRegions
@@ -310,7 +317,7 @@ export function SubmissionToolbar({
 				{phase === "completed" && (
 					<div className="flex items-center gap-2">
 						<DownloadPdfButton data={data} />
-						<ReMarkButton jobId={jobId} />
+						<ReMarkButton jobId={jobId} examPaperId={examPaperId} />
 						<Link
 							href={`/teacher/exam-papers/${examPaperId}`}
 							className={buttonVariants({ size: "sm" })}

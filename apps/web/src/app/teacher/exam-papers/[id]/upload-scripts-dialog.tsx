@@ -10,20 +10,9 @@ import {
 	DialogTitle,
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
-import { Progress } from "@/components/ui/progress"
 import { Spinner } from "@/components/ui/spinner"
-import {
-	AlertTriangle,
-	CheckCircle2,
-	ChevronDown,
-	FileText,
-	Loader2,
-	Trash2,
-	Upload,
-} from "lucide-react"
-import Link from "next/link"
+import { ChevronDown, FileText, Loader2, Trash2, Upload } from "lucide-react"
 import { useBatchUpload } from "./hooks/use-batch-upload"
-import { StagedScriptReviewCards } from "./staged-script-review-cards"
 
 export function UploadScriptsDialog({
 	examPaperId,
@@ -40,13 +29,7 @@ export function UploadScriptsDialog({
 
 	return (
 		<Dialog open={open} onOpenChange={batch.handleOpenChange}>
-			<DialogContent
-				className={
-					batch.phase === "staging"
-						? "sm:max-w-4xl max-h-[90vh] overflow-y-auto"
-						: "max-w-lg"
-				}
-			>
+			<DialogContent className="max-w-lg">
 				{/* ── Phase 1: Upload ── */}
 				{batch.phase === "upload" && (
 					<>
@@ -273,182 +256,6 @@ export function UploadScriptsDialog({
 							>
 								Cancel
 							</Button>
-						</DialogFooter>
-					</>
-				)}
-
-				{/* ── Phase 3: Staging ── */}
-				{batch.phase === "staging" && batch.batchData && (
-					<>
-						<DialogHeader>
-							<DialogTitle>Review detected scripts</DialogTitle>
-							<DialogDescription>
-								{batch.batchData.staged_scripts.length} script
-								{batch.batchData.staged_scripts.length === 1 ? "" : "s"}{" "}
-								detected. Confirm names before marking.
-								{batch.proposedCount > 0 && (
-									<span className="ml-1 text-amber-600 font-medium">
-										{batch.proposedCount} still need review.
-									</span>
-								)}
-							</DialogDescription>
-						</DialogHeader>
-
-						{batch.oversizedCount > 0 && (
-							<div className="flex items-start gap-2.5 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-sm text-amber-700 dark:text-amber-400">
-								<AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
-								<div>
-									<p className="font-medium">
-										{batch.oversizedCount} script
-										{batch.oversizedCount === 1 ? "" : "s"} may contain multiple
-										students
-									</p>
-									<p className="text-xs mt-0.5 opacity-80">
-										These files have more pages than expected for a single
-										student. Use the split action on each card to separate them,
-										or drag pages between scripts.
-									</p>
-								</div>
-							</div>
-						)}
-
-						{batch.proposedCount > 0 && batch.oversizedCount === 0 && (
-							<div className="flex justify-end">
-								<Button
-									variant="outline"
-									size="sm"
-									onClick={batch.handleConfirmAll}
-								>
-									Confirm all
-								</Button>
-							</div>
-						)}
-
-						{batch.proposedCount > 0 && batch.oversizedCount > 0 && (
-							<div className="flex justify-end">
-								<Button
-									variant="outline"
-									size="sm"
-									onClick={batch.handleConfirmAll}
-									title="Confirm scripts that are not oversized"
-								>
-									Confirm non-oversized
-								</Button>
-							</div>
-						)}
-
-						<StagedScriptReviewCards
-							batchId={batch.batchJobId ?? ""}
-							scripts={batch.batchData.staged_scripts}
-							pagesPerScript={batch.batchData.pages_per_script}
-							classificationMode={batch.batchData.classification_mode}
-							onUpdateName={batch.handleUpdateName}
-							onToggleExclude={batch.handleToggleExclude}
-							onSplitScript={batch.handleSplitScript}
-							onDeleteScript={batch.handleRefreshBatch}
-						/>
-
-						{batch.confirmedCount > 0 && (
-							<DialogFooter>
-								<Button
-									disabled={batch.committing || batch.proposedCount > 0}
-									onClick={batch.handleCommit}
-								>
-									{batch.committing ? (
-										<>
-											<Spinner className="h-4 w-4 mr-2" />
-											Starting…
-										</>
-									) : (
-										`Start marking ${batch.confirmedCount} script${
-											batch.confirmedCount === 1 ? "" : "s"
-										}`
-									)}
-								</Button>
-							</DialogFooter>
-						)}
-					</>
-				)}
-
-				{/* ── Phase 4: Marking ── */}
-				{batch.phase === "marking" && (
-					<>
-						<DialogHeader>
-							<DialogTitle>Marking in progress</DialogTitle>
-							<DialogDescription>
-								Scripts are being OCR&apos;d and graded in the background. You
-								can close this dialog — the Submissions tab will show progress.
-							</DialogDescription>
-						</DialogHeader>
-						<div className="space-y-4 py-2">
-							{batch.totalJobs > 0 && (
-								<div className="space-y-2">
-									<div className="flex justify-between text-sm">
-										<span className="text-muted-foreground">
-											{batch.completeJobs} of {batch.totalJobs} complete
-										</span>
-										<span className="text-muted-foreground">
-											{Math.round(
-												(batch.completeJobs / batch.totalJobs) * 100,
-											)}
-											%
-										</span>
-									</div>
-									<Progress
-										value={(batch.completeJobs / batch.totalJobs) * 100}
-									/>
-								</div>
-							)}
-							<p className="text-sm text-muted-foreground">
-								You&apos;ll get a browser notification when all scripts are done.
-							</p>
-							<Link
-								href={`/teacher/mark/papers/${examPaperId}`}
-								className="text-sm text-primary underline underline-offset-4"
-							>
-								View results →
-							</Link>
-						</div>
-						<DialogFooter>
-							<Button
-								variant="outline"
-								onClick={() => batch.handleOpenChange(false)}
-							>
-								Close
-							</Button>
-						</DialogFooter>
-					</>
-				)}
-
-				{/* ── Phase 5: Done ── */}
-				{batch.phase === "done" && batch.batchData && (
-					<>
-						<DialogHeader>
-							<DialogTitle>Marking complete</DialogTitle>
-							<DialogDescription>
-								All scripts in this batch have been marked.
-							</DialogDescription>
-						</DialogHeader>
-						<div className="flex flex-col items-center gap-3 py-6">
-							<CheckCircle2 className="h-12 w-12 text-green-500" />
-							<p className="text-sm font-medium">
-								{batch.totalJobs} script{batch.totalJobs === 1 ? "" : "s"}{" "}
-								marked
-							</p>
-						</div>
-						<DialogFooter>
-							<Button
-								variant="outline"
-								onClick={() => batch.handleOpenChange(false)}
-							>
-								Close
-							</Button>
-							<Link
-								href={`/teacher/mark/papers/${examPaperId}`}
-								className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-sm hover:bg-primary/90 transition-colors"
-							>
-								View all results →
-							</Link>
 						</DialogFooter>
 					</>
 				)}

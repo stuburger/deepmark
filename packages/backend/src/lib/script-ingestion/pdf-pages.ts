@@ -1,6 +1,6 @@
 import { inflateSync } from "zlib"
-import { computeInkDensity } from "@/lib/blank-detection"
-import { s3 } from "@/lib/s3"
+import { computeInkDensity } from "@/lib/scan-extraction/blank-detection"
+import { s3 } from "@/lib/infra/s3"
 import { GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3"
 import { PDFDict, PDFDocument, PDFName, PDFRawStream, PDFRef } from "pdf-lib"
 import { Resource } from "sst"

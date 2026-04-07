@@ -1,18 +1,14 @@
 import {
 	addFileToBatch,
-	commitBatch,
 	createBatchIngestJob,
-	splitStagedScript,
 	triggerClassification,
 	updateBatchJobSettings,
-	updateStagedScript,
 } from "@/lib/batch/mutations"
 import { getBatchIngestJob } from "@/lib/batch/queries"
-import type { BatchIngestJobData } from "@/lib/batch/types"
 import { useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 
-export type Phase = "upload" | "classifying" | "staging" | "marking" | "done"
+export type Phase = "upload" | "classifying"
 
 export type FileItem = {
 	name: string
@@ -35,8 +31,6 @@ export function useBatchUpload({
 	const [phase, setPhase] = useState<Phase>("upload")
 	const [files, setFiles] = useState<FileItem[]>([])
 	const [batchJobId, setBatchJobId] = useState<string | null>(null)
-	const [batchData, setBatchData] = useState<BatchIngestJobData | null>(null)
-	const [committing, setCommitting] = useState(false)
 	const [showAdvanced, setShowAdvanced] = useState(false)
 	const [autoCommit, setAutoCommit] = useState(false)
 	const [blankPageMode, setBlankPageMode] = useState<
@@ -56,26 +50,15 @@ export function useBatchUpload({
 		pollRef.current = setInterval(async () => {
 			const result = await getBatchIngestJob(jobId)
 			if (!result.ok) return
-			setBatchData(result.batch)
 
-			if (result.batch.status === "staging") {
-				setPhase("staging")
+			// Classification done — close dialog and hand off to StagingReviewDialog
+			if (
+				result.batch.status === "staging" ||
+				result.batch.status === "marking" ||
+				result.batch.status === "complete"
+			) {
 				stopPolling()
-			} else if (result.batch.status === "marking") {
-				setPhase("marking")
-				const complete = result.batch.student_jobs.filter(
-					(j) => j.status === "ocr_complete",
-				).length
-				if (
-					complete >= result.batch.total_student_jobs &&
-					result.batch.total_student_jobs > 0
-				) {
-					setPhase("done")
-					stopPolling()
-				}
-			} else if (result.batch.status === "complete") {
-				setPhase("done")
-				stopPolling()
+				handleOpenChange(false)
 			} else if (result.batch.status === "failed") {
 				stopPolling()
 				toast.error(result.batch.error ?? "Classification failed")
@@ -102,7 +85,6 @@ export function useBatchUpload({
 			setPhase("upload")
 			setFiles([])
 			setBatchJobId(null)
-			setBatchData(null)
 			setShowAdvanced(false)
 			setAutoCommit(false)
 			setBlankPageMode("script_page")
@@ -201,70 +183,6 @@ export function useBatchUpload({
 		startPolling(batchJobId)
 	}
 
-	// ── Staging phase ─────────────────────────────────────────────────────────
-
-	async function handleUpdateName(scriptId: string, name: string) {
-		await updateStagedScript(scriptId, { confirmedName: name })
-	}
-
-	async function handleToggleExclude(scriptId: string, currentStatus: string) {
-		const newStatus = currentStatus === "excluded" ? "confirmed" : "excluded"
-		await updateStagedScript(scriptId, {
-			status: newStatus as "confirmed" | "excluded",
-		})
-		if (batchJobId) {
-			const result = await getBatchIngestJob(batchJobId)
-			if (result.ok) setBatchData(result.batch)
-		}
-	}
-
-	async function handleConfirmAll() {
-		if (!batchJobId || !batchData) return
-		const proposed = batchData.staged_scripts.filter(
-			(s) => s.status === "proposed",
-		)
-		for (const script of proposed) {
-			await updateStagedScript(script.id, { status: "confirmed" })
-		}
-		const result = await getBatchIngestJob(batchJobId)
-		if (result.ok) setBatchData(result.batch)
-	}
-
-	async function handleSplitScript(
-		scriptId: string,
-		splitAfterIndex: number,
-	) {
-		const result = await splitStagedScript(scriptId, splitAfterIndex)
-		if (!result.ok) {
-			toast.error(result.error)
-			return
-		}
-		if (batchJobId) {
-			const refreshed = await getBatchIngestJob(batchJobId)
-			if (refreshed.ok) setBatchData(refreshed.batch)
-		}
-	}
-
-	async function handleCommit() {
-		if (!batchJobId) return
-		setCommitting(true)
-		const result = await commitBatch(batchJobId)
-		setCommitting(false)
-		if (!result.ok) {
-			toast.error(result.error)
-			return
-		}
-		setPhase("marking")
-		startPolling(batchJobId)
-	}
-
-	async function handleRefreshBatch() {
-		if (batchJobId) {
-			const result = await getBatchIngestJob(batchJobId)
-			if (result.ok) setBatchData(result.batch)
-		}
-	}
-
 	function handleUpdateSettings(
 		settings: Parameters<typeof updateBatchJobSettings>[1],
 	) {
@@ -279,33 +197,12 @@ export function useBatchUpload({
 	const hasErrors = files.some((f) => f.error !== null)
 	const canStart = files.length > 0 && !isUploading && !hasErrors
 
-	const confirmedCount =
-		batchData?.staged_scripts.filter((s) => s.status === "confirmed").length ??
-		0
-	const proposedCount =
-		batchData?.staged_scripts.filter((s) => s.status === "proposed").length ?? 0
-	const oversizedCount =
-		batchData && batchData.classification_mode === "per_file"
-			? batchData.staged_scripts.filter(
-					(s) =>
-						s.status === "proposed" &&
-						(s.page_keys as { s3_key: string }[]).length >
-							batchData.pages_per_script * 2,
-				).length
-			: 0
-	const totalJobs = batchData?.total_student_jobs ?? 0
-	const completeJobs =
-		batchData?.student_jobs.filter((j) => j.status === "ocr_complete")
-			.length ?? 0
-
 	return {
 		phase,
 		files,
 		setFiles,
 		fileInputRef,
-		batchData,
 		batchJobId,
-		committing,
 		showAdvanced,
 		setShowAdvanced,
 		autoCommit,
@@ -319,20 +216,9 @@ export function useBatchUpload({
 		isUploading,
 		hasErrors,
 		canStart,
-		confirmedCount,
-		proposedCount,
-		oversizedCount,
-		totalJobs,
-		completeJobs,
 		handleOpenChange,
 		handleFiles,
 		handleStartClassifying,
-		handleUpdateName,
-		handleToggleExclude,
-		handleConfirmAll,
-		handleSplitScript,
-		handleCommit,
-		handleRefreshBatch,
 		handleUpdateSettings,
 	}
 }

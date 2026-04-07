@@ -31,18 +31,23 @@ export async function handler(event: SqsEvent): Promise<void> {
 
 			const job = await db.studentPaperJob.findUnique({
 				where: { id: jobId },
-				select: { status: true, enrichment_status: true },
+				select: {
+					status: true,
+					enrichment_status: true,
+					extracted_answers_raw: true,
+				},
 			})
 			if (!job) {
 				logger.warn("student-paper-dlq", "Job not found", { jobId })
 				continue
 			}
 
-			// Determine which phase failed based on current state
+			// Determine which phase failed based on current state.
+			// Enrichment failures are identified by the main job still being graded
+			// ("ocr_complete") while enrichment hasn't completed — the enrich handler
+			// only updates enrichment_status and never touches the main job status.
 			const isEnrichmentFailure =
-				job.status === "ocr_complete" &&
-				(job.enrichment_status === "pending" ||
-					job.enrichment_status === "processing")
+				job.status === "ocr_complete" && job.enrichment_status !== "complete"
 
 			if (isEnrichmentFailure) {
 				// Enrichment failure — don't change job status, just enrichment_status
@@ -57,12 +62,16 @@ export async function handler(event: SqsEvent): Promise<void> {
 					error: "Annotation generation failed after maximum retries",
 				})
 			} else {
-				// OCR or grading failure — set job status to failed
-				const phase = ["text_extracted", "marking_in_progress"].includes(
-					job.status,
-				)
-					? "grading"
-					: "ocr"
+				// OCR or grading failure — set job status to failed.
+				// Grading phase: status is "text_extracted" (queued but not started) or
+				// "grading" / "processing" (actively grading). When status is "processing",
+				// distinguish grading from OCR by whether extracted_answers_raw is present.
+				const isGradingPhase =
+					job.status === "text_extracted" ||
+					job.status === "grading" ||
+					(job.status === "processing" && job.extracted_answers_raw !== null)
+
+				const phase = isGradingPhase ? "grading" : "ocr"
 
 				await db.studentPaperJob.update({
 					where: { id: jobId },

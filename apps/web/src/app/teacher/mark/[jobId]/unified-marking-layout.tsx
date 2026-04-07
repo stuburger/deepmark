@@ -132,7 +132,7 @@ export function UnifiedMarkingLayout({
 					{phase === "completed" && (
 						<>
 							<DownloadPdfButton data={data} />
-							<ReMarkButton jobId={jobId} />
+							<ReMarkButton jobId={jobId} examPaperId={data.exam_paper_id} />
 							<Link
 								href="/teacher/exam-papers"
 								className={buttonVariants({ size: "sm" })}

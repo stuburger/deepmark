@@ -2,12 +2,12 @@ import { db } from "@/db"
 import {
 	type CancellationToken,
 	createCancellationToken,
-} from "@/lib/cancellation"
-import { embedQuestionText } from "@/lib/google-generative-ai"
-import { linkJobQuestionsToExamPaper } from "@/lib/link-job-questions"
-import { logger } from "@/lib/logger"
-import { normalizeQuestionNumber } from "@/lib/normalize-question-number"
-import { getPdfBase64, parseJobIdFromKey } from "@/lib/processor-s3"
+} from "@/lib/infra/cancellation"
+import { embedQuestionText } from "@/lib/infra/google-generative-ai"
+import { linkJobQuestionsToExamPaper } from "@/lib/grading/link-job-questions"
+import { logger } from "@/lib/infra/logger"
+import { normalizeQuestionNumber } from "@/lib/grading/normalize-question-number"
+import { getPdfBase64, parseJobIdFromKey } from "@/lib/infra/processor-s3"
 import { GoogleGenAI } from "@google/genai"
 import type { ScanStatus } from "@mcp-gcse/db"
 import { Resource } from "sst"
@@ -100,7 +100,7 @@ export async function handler(
 				await db.pdfIngestionJob.update({
 					where: { id: jobId },
 					data: {
-						status: "failed" as ScanStatus,
+						status: "failed" satisfies ScanStatus,
 						error: "Question paper job missing required subject",
 					},
 				})
@@ -129,7 +129,7 @@ export async function handler(
 				where: { id: jobId },
 				data: {
 					attempt_count: { increment: 1 },
-					status: "processing" as ScanStatus,
+					status: "processing" satisfies ScanStatus,
 					error: null,
 				},
 			})
@@ -299,7 +299,7 @@ export async function handler(
 			await db.pdfIngestionJob.update({
 				where: { id: jobId },
 				data: {
-					status: "ocr_complete" as ScanStatus,
+					status: "ocr_complete" satisfies ScanStatus,
 					processed_at: new Date(),
 					detected_exam_paper_metadata: detectedMetadata ?? undefined,
 					error: null,
@@ -327,7 +327,7 @@ export async function handler(
 				if (jobId) {
 					await db.pdfIngestionJob.update({
 						where: { id: jobId },
-						data: { status: "failed" as ScanStatus, error: message },
+						data: { status: "failed" satisfies ScanStatus, error: message },
 					})
 				}
 			} catch {

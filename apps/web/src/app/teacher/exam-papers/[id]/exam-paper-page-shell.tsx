@@ -13,6 +13,7 @@ import type {
 	ExamPaperDetail,
 	UnlinkedMarkScheme,
 } from "@/lib/exam-paper/queries"
+import { listSubmissionsForPaper } from "@/lib/marking/queries"
 import type { ExamPaperStats, SubmissionHistoryItem } from "@/lib/marking/types"
 import type {
 	ActiveExamPaperIngestionJob,
@@ -20,13 +21,19 @@ import type {
 } from "@/lib/pdf-ingestion/queries"
 import { queryKeys } from "@/lib/query-keys"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { AlertTriangle, Globe, Lock, PenLine, Trash2 } from "lucide-react"
+import {
+	AlertTriangle,
+	Globe,
+	Loader2,
+	Lock,
+	PenLine,
+	Trash2,
+} from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { parseAsString, parseAsStringEnum, useQueryState } from "nuqs"
 import { useState } from "react"
 import { toast } from "sonner"
-import { BatchStagingPanel } from "./batch-staging-panel"
 import { DocumentUploadCards } from "./document-upload-cards"
 import { EditableTitle } from "./editable-title"
 import { ExamPaperAnalyticsTab } from "./exam-paper-analytics-tab"
@@ -39,6 +46,7 @@ import { useUnlinkedSchemes } from "./hooks/use-unlinked-schemes"
 import { LevelDescriptorsCard } from "./level-descriptors-card"
 import { LinkMarkSchemeDialog } from "./link-mark-scheme-dialog"
 import { MarkingJobDialog } from "./marking-job-dialog"
+import { StagingReviewDialog } from "./staging-review-dialog"
 import { SubmissionGrid } from "./submission-grid"
 import { TERMINAL_STATUSES } from "./submission-grid-config"
 import { SubmissionTable } from "./submission-table"
@@ -64,18 +72,12 @@ export function ExamPaperPageShell({
 	const router = useRouter()
 	const queryClient = useQueryClient()
 
-	const [submissions, setSubmissions] =
-		useState<SubmissionHistoryItem[]>(initialSubmissions)
-
 	// Tab navigation — synced with ?tab= search param via nuqs
 	const [activeTab, setActiveTab] = useQueryState(
 		"tab",
-		parseAsStringEnum([
+		parseAsStringEnum(["paper", "submissions", "analytics"]).withDefault(
 			"paper",
-			"submissions",
-			"backlog",
-			"analytics",
-		]).withDefault("paper"),
+		),
 	)
 
 	// Grid vs table view for submissions
@@ -84,9 +86,9 @@ export function ExamPaperPageShell({
 		parseAsStringEnum(["grid", "table"]).withDefault("grid"),
 	)
 
-	// List vs grid view for backlog staged scripts
-	const [backlogView, setBacklogView] = useQueryState(
-		"backlog_view",
+	// List vs grid view for staged script review
+	const [stagingView, setStagingView] = useQueryState(
+		"staging_view",
 		parseAsStringEnum(["list", "grid"]).withDefault("list"),
 	)
 
@@ -113,10 +115,11 @@ export function ExamPaperPageShell({
 
 	// Upload scripts
 	const [uploadOpen, setUploadOpen] = useState(false)
+	const [stagingOpen, setStagingOpen] = useState(false)
 	const [markingJobId, setMarkingJobId] = useQueryState("job", parseAsString)
 	const [committingBatch, setCommittingBatch] = useState(false)
 
-	// Active batch
+	// Active batch — polls every 3s while classifying, staging, or marking
 	const { data: activeBatch, refetch: refetchActiveBatch } =
 		useQuery<ActiveBatchInfo>({
 			queryKey: ["activeBatch", paper.id],
@@ -126,12 +129,31 @@ export function ExamPaperPageShell({
 			},
 			refetchInterval: (q) => {
 				const b = q.state.data
-				return b?.status === "classifying" || b?.status === "marking"
+				return b?.status === "classifying" ||
+					b?.status === "staging" ||
+					b?.status === "marking"
 					? 3000
 					: false
 			},
+			// Auto-open the staging dialog when classification completes
+			select: (batch) => {
+				if (batch?.status === "staging" && !stagingOpen) {
+					setStagingOpen(true)
+				}
+				return batch
+			},
 		})
-	const hasActiveBatch = activeBatch?.status === "marking"
+
+	// Live submissions list — polls every 3s while marking is active
+	const { data: submissions = [] } = useQuery({
+		queryKey: queryKeys.submissions(paper.id),
+		queryFn: async () => {
+			const r = await listSubmissionsForPaper(paper.id)
+			return r.ok ? r.submissions : []
+		},
+		initialData: initialSubmissions,
+		refetchInterval: activeBatch?.status === "marking" ? 3000 : false,
+	})
 
 	async function handleCommitAll() {
 		if (!activeBatch) return
@@ -184,17 +206,13 @@ export function ExamPaperPageShell({
 
 	const readyForSubmissions = hasQuestionPaper && allQuestionsHaveMarkSchemes
 
-	// Split submissions into complete vs backlog for the two tabs
-	const completeSubmissions = submissions.filter((s) =>
+	// Split submissions into terminal (marked) and in-progress sections
+	const markedSubmissions = submissions.filter((s) =>
 		TERMINAL_STATUSES.has(s.status),
 	)
-	const backlogSubmissions = submissions.filter(
+	const inProgressSubmissions = submissions.filter(
 		(s) => !TERMINAL_STATUSES.has(s.status),
 	)
-	const backlogBadgeCount =
-		activeBatch?.status === "staging"
-			? activeBatch.staged_scripts.length
-			: backlogSubmissions.length
 
 	const tabTriggerClass =
 		"rounded-none px-4 h-full after:bg-primary data-active:text-primary data-active:bg-transparent data-active:shadow-none"
@@ -204,7 +222,7 @@ export function ExamPaperPageShell({
 			<Tabs
 				value={activeTab}
 				onValueChange={(v) =>
-					setActiveTab(v as "paper" | "submissions" | "backlog" | "analytics")
+					setActiveTab(v as "paper" | "submissions" | "analytics")
 				}
 				className="gap-0"
 			>
@@ -260,20 +278,12 @@ export function ExamPaperPageShell({
 						</TabsTrigger>
 						<TabsTrigger value="submissions" className={tabTriggerClass}>
 							Submissions
-							{completeSubmissions.length > 0 && (
-								<span className="ml-1.5 inline-flex items-center justify-center rounded-full bg-muted px-1.5 py-0.5 text-xs tabular-nums leading-none">
-									{completeSubmissions.length}
-								</span>
-							)}
-						</TabsTrigger>
-						<TabsTrigger value="backlog" className={tabTriggerClass}>
-							Backlog
-							{hasActiveBatch && (
+							{activeBatch && (
 								<span className="ml-1.5 h-1.5 w-1.5 rounded-full bg-primary animate-pulse shrink-0" />
 							)}
-							{backlogBadgeCount > 0 && (
+							{submissions.length > 0 && (
 								<span className="ml-1.5 inline-flex items-center justify-center rounded-full bg-muted px-1.5 py-0.5 text-xs tabular-nums leading-none">
-									{backlogBadgeCount}
+									{submissions.length}
 								</span>
 							)}
 						</TabsTrigger>
@@ -361,96 +371,92 @@ export function ExamPaperPageShell({
 					/>
 				</TabsContent>
 
-				{/* ── Submissions tab (complete only) ── */}
+				{/* ── Submissions tab (status banner + in-progress + marked) ── */}
 				<TabsContent value="submissions" className="space-y-6 mt-10">
-					{completeSubmissions.length > 0 ? (
+					{/* Compact batch status banner */}
+					{activeBatch && (
+						<BatchStatusBanner
+							activeBatch={activeBatch}
+							onReviewClick={() => setStagingOpen(true)}
+						/>
+					)}
+
+					{/* In-progress jobs */}
+					{inProgressSubmissions.length > 0 && (
 						<>
 							<SubmissionsHeader
-								count={completeSubmissions.length}
+								label="In progress"
+								count={inProgressSubmissions.length}
 								view={subView}
 								onViewChange={setSubView}
 							/>
 							{subView === "grid" ? (
 								<SubmissionGrid
-									submissions={completeSubmissions}
+									submissions={inProgressSubmissions}
 									onView={(id) => setMarkingJobId(id)}
 									onDelete={(id) =>
-										setSubmissions((prev) => prev.filter((s) => s.id !== id))
+										queryClient.setQueryData(
+											queryKeys.submissions(paper.id),
+											(prev: SubmissionHistoryItem[]) =>
+												prev.filter((s) => s.id !== id),
+										)
 									}
 								/>
 							) : (
 								<SubmissionTable
-									submissions={completeSubmissions}
+									submissions={inProgressSubmissions}
 									onView={(id) => setMarkingJobId(id)}
 									onDeleteRequest={(id) =>
-										setSubmissions((prev) => prev.filter((s) => s.id !== id))
+										queryClient.setQueryData(
+											queryKeys.submissions(paper.id),
+											(prev: SubmissionHistoryItem[]) =>
+												prev.filter((s) => s.id !== id),
+										)
 									}
 								/>
 							)}
 						</>
-					) : (
-						<div className="rounded-lg border border-dashed py-16 text-center text-sm text-muted-foreground">
-							No completed submissions yet. Marked scripts will appear here.
-						</div>
 					)}
-				</TabsContent>
 
-				{/* ── Backlog tab (in-progress + staging) ── */}
-				<TabsContent value="backlog" className="space-y-6 mt-10">
-					{readyForSubmissions || activeBatch ? (
+					{/* Marked submissions */}
+					{markedSubmissions.length > 0 && (
 						<>
-							{/* Active batch pipeline (classifying → staging → marking) */}
-							<BatchStagingPanel
-								activeBatch={activeBatch}
-								committingBatch={committingBatch}
-								viewMode={backlogView}
-								onViewModeChange={setBacklogView}
-								onCommitAll={handleCommitAll}
-								onUpdateScriptName={async (id, name) => {
-									await updateStagedScript(id, { confirmedName: name })
-								}}
-								onToggleExclude={async (id, status) => {
-									await updateStagedScript(id, {
-										status: status === "confirmed" ? "excluded" : "confirmed",
-									})
-									void refetchActiveBatch()
-								}}
-								onDeleteScript={() => void refetchActiveBatch()}
+							<SubmissionsHeader
+								label="Marked"
+								count={markedSubmissions.length}
+								view={subView}
+								onViewChange={setSubView}
 							/>
-
-							{/* In-progress marking jobs */}
-							{backlogSubmissions.length > 0 && (
-								<>
-									<SubmissionsHeader
-										count={backlogSubmissions.length}
-										view={subView}
-										onViewChange={setSubView}
-									/>
-									{subView === "grid" ? (
-										<SubmissionGrid
-											submissions={backlogSubmissions}
-											onView={(id) => setMarkingJobId(id)}
-											onDelete={(id) =>
-												setSubmissions((prev) =>
-													prev.filter((s) => s.id !== id),
-												)
-											}
-										/>
-									) : (
-										<SubmissionTable
-											submissions={backlogSubmissions}
-											onView={(id) => setMarkingJobId(id)}
-											onDeleteRequest={(id) =>
-												setSubmissions((prev) =>
-													prev.filter((s) => s.id !== id),
-												)
-											}
-										/>
-									)}
-								</>
+							{subView === "grid" ? (
+								<SubmissionGrid
+									submissions={markedSubmissions}
+									onView={(id) => setMarkingJobId(id)}
+									onDelete={(id) =>
+										queryClient.setQueryData(
+											queryKeys.submissions(paper.id),
+											(prev: SubmissionHistoryItem[]) =>
+												prev.filter((s) => s.id !== id),
+										)
+									}
+								/>
+							) : (
+								<SubmissionTable
+									submissions={markedSubmissions}
+									onView={(id) => setMarkingJobId(id)}
+									onDeleteRequest={(id) =>
+										queryClient.setQueryData(
+											queryKeys.submissions(paper.id),
+											(prev: SubmissionHistoryItem[]) =>
+												prev.filter((s) => s.id !== id),
+										)
+									}
+								/>
 							)}
 						</>
-					) : (
+					)}
+
+					{/* Empty state */}
+					{!activeBatch && submissions.length === 0 && (
 						<div className="rounded-lg border border-dashed py-16 text-center text-sm text-muted-foreground">
 							No submissions yet. Click &ldquo;Upload scripts&rdquo; to mark
 							your first student script.
@@ -497,13 +503,43 @@ export function ExamPaperPageShell({
 				}}
 			/>
 
+			<StagingReviewDialog
+				open={stagingOpen}
+				onOpenChange={setStagingOpen}
+				activeBatch={activeBatch}
+				committingBatch={committingBatch}
+				viewMode={stagingView}
+				onViewModeChange={setStagingView}
+				onCommitAll={handleCommitAll}
+				onUpdateScriptName={async (id, name) => {
+					await updateStagedScript(id, { confirmedName: name })
+				}}
+				onToggleExclude={async (id, status) => {
+					await updateStagedScript(id, {
+						status: status === "confirmed" ? "excluded" : "confirmed",
+					})
+					void refetchActiveBatch()
+				}}
+				onDeleteScript={() => void refetchActiveBatch()}
+				onJobDeleted={() => {
+					void refetchActiveBatch()
+					void queryClient.invalidateQueries({
+						queryKey: queryKeys.submissions(paper.id),
+					})
+				}}
+				onViewJob={(id) => {
+					setStagingOpen(false)
+					void setMarkingJobId(id)
+				}}
+			/>
+
 			<UploadScriptsDialog
 				examPaperId={paper.id}
 				open={uploadOpen}
 				onOpenChange={setUploadOpen}
 				onBatchStarted={() => {
 					void refetchActiveBatch()
-					void setActiveTab("backlog")
+					void setActiveTab("submissions")
 				}}
 			/>
 
@@ -586,24 +622,122 @@ function ReadinessStrip({
 }
 
 function SubmissionsHeader({
+	label,
 	count,
 	view,
 	onViewChange,
 }: {
+	label?: string
 	count: number
 	view: "grid" | "table"
 	onViewChange: (v: "grid" | "table") => void
 }) {
+	const countLabel = `${count} script${count !== 1 ? "s" : ""}`
 	return (
 		<div className="flex items-center justify-between gap-4">
-			<p className="text-sm text-muted-foreground">
-				{count === 0
-					? "No submissions yet."
-					: `${count} submission${count !== 1 ? "s" : ""}`}
+			<p className="text-sm font-medium text-muted-foreground">
+				{label ? `${label} · ${countLabel}` : countLabel}
 			</p>
 			{count > 0 && <ViewToggle value={view} onChange={onViewChange} />}
 		</div>
 	)
+}
+
+// ── BatchStatusBanner ─────────────────────────────────────────────────────
+
+function BatchStatusBanner({
+	activeBatch,
+	onReviewClick,
+}: {
+	activeBatch: NonNullable<ActiveBatchInfo>
+	onReviewClick: () => void
+}) {
+	if (activeBatch.status === "classifying") {
+		return (
+			<div className="flex items-center gap-3 rounded-lg border bg-muted/30 px-4 py-3">
+				<Loader2 className="h-4 w-4 animate-spin text-muted-foreground shrink-0" />
+				<p className="text-sm text-muted-foreground">
+					Analysing upload… scripts will appear shortly.
+				</p>
+			</div>
+		)
+	}
+
+	if (activeBatch.status === "staging") {
+		const pendingCount = activeBatch.staged_scripts.filter(
+			(s) => s.status !== "confirmed",
+		).length
+		const totalCount = activeBatch.staged_scripts.length
+
+		return (
+			<div className="flex items-center justify-between gap-4 rounded-lg border bg-muted/20 px-4 py-3">
+				<div className="flex items-center gap-3">
+					<span className="h-2 w-2 rounded-full bg-primary animate-pulse shrink-0" />
+					<p className="text-sm">
+						<span className="font-medium">
+							{pendingCount > 0
+								? `${pendingCount} of ${totalCount} script${totalCount !== 1 ? "s" : ""} need review`
+								: `${totalCount} script${totalCount !== 1 ? "s" : ""} ready to mark`}
+						</span>
+						<span className="text-muted-foreground">
+							{pendingCount > 0
+								? " — confirm before submitting for marking"
+								: " — open the review panel to start marking"}
+						</span>
+					</p>
+				</div>
+				<Button size="sm" onClick={onReviewClick}>
+					Review scripts
+				</Button>
+			</div>
+		)
+	}
+
+	if (activeBatch.status === "marking") {
+		const completedCount = activeBatch.student_jobs.filter(
+			(j) => j.status === "ocr_complete",
+		).length
+		const total = activeBatch.total_student_jobs
+		const percent = total > 0 ? Math.round((completedCount / total) * 100) : 0
+
+		const unsubmittedCount = activeBatch.staged_scripts.filter((s) => {
+			const submittedIds = new Set(
+				activeBatch.student_jobs.map((j) => j.staged_script_id),
+			)
+			return !submittedIds.has(s.id)
+		}).length
+
+		return (
+			<div className="rounded-lg border bg-muted/20 px-4 py-3 space-y-2">
+				<div className="flex items-center justify-between gap-4">
+					<div className="flex items-center gap-3">
+						<Loader2 className="h-4 w-4 animate-spin text-muted-foreground shrink-0" />
+						<p className="text-sm font-medium">
+							Marking · {completedCount} of {total} scripts done
+						</p>
+					</div>
+					<div className="flex items-center gap-3">
+						<span className="text-sm text-muted-foreground tabular-nums">
+							{percent}%
+						</span>
+						{unsubmittedCount > 0 && (
+							<Button size="sm" variant="outline" onClick={onReviewClick}>
+								{unsubmittedCount} more to review
+							</Button>
+						)}
+					</div>
+				</div>
+				<div className="h-1.5 rounded-full bg-muted overflow-hidden">
+					<div
+						className="h-full rounded-full bg-primary transition-all duration-500"
+						style={{ width: `${percent}%` }}
+					/>
+				</div>
+			</div>
+		)
+	}
+
+	return null
 }
 
 function ReadinessIndicator({

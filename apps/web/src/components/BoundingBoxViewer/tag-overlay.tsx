@@ -1,6 +1,16 @@
 "use client"
 
 import type { StudentPaperAnnotation, TagPayload } from "@/lib/marking/types"
+import {
+	OFFSET_H,
+	TAG_BORDER,
+	TAG_CHAR_WIDTH,
+	TAG_FONT_SIZE,
+	TAG_PADDING_H,
+	TAG_PADDING_V,
+	TAG_RADIUS,
+	overlayUnit,
+} from "./overlay-sizing"
 
 type Props = {
 	annotation: StudentPaperAnnotation & { payload: TagPayload }
@@ -10,45 +20,40 @@ type Props = {
 	scaleY: number
 }
 
-const QUALITY_COLORS: Record<string, string> = {
-	strong: "#16a34a",
-	valid: "#16a34a",
-	partial: "#d97706",
-	incorrect: "#dc2626",
+/** Colour by AO category — blue for knowledge, pink for analysis, green for AO3. */
+const AO_COLORS: Record<string, string> = {
+	AO1: "#3b82f6", // blue-500
+	AO2: "#ec4899", // pink-500
+	AO3: "#22c55e", // green-500
 }
-
-const QUALITY_SUFFIX: Record<string, string> = {
-	strong: "+",
-	partial: "?",
-	incorrect: "✗",
-	valid: "",
-}
+const AO_FALLBACK_COLOR = "#6b7280" // gray-500
 
 /**
- * Renders a skill tag badge (e.g. [✓ AO2]) sized proportionally to
- * the parent mark's bounding box height. Positioned to the right of the parent.
+ * Renders an AO skill tag badge (e.g. "AO2") colour-coded by assessment
+ * objective. Purely visual — all interaction is handled by AnnotationHitTarget.
  */
 export function TagOverlay({ annotation, parentBbox, scaleX, scaleY }: Props) {
 	const { payload, bbox } = annotation
 	const refBbox = parentBbox ?? bbox
 	const [yMin, , yMax, xMax] = refBbox
 
-	// Scale relative to the mark's height so tags look proportional to the text
-	const markHeight = (yMax - yMin) * scaleY
-	const fontSize = Math.max(8, Math.min(markHeight * 0.7, 14))
-	const padding = fontSize * 0.4
-	const pillHeight = fontSize + padding * 2
+	const sz = overlayUnit(scaleY)
+	const fontSize = sz * TAG_FONT_SIZE
+	const paddingV = fontSize * TAG_PADDING_V
+	const paddingH = fontSize * TAG_PADDING_H
+	const pillHeight = fontSize + paddingV * 2
+	const borderWidth = sz * TAG_BORDER
+	const borderRadius = sz * TAG_RADIUS
 
 	// Position the tag to the right of the parent bbox, vertically centred
-	const x = xMax * scaleX + 4
+	const markHeight = (yMax - yMin) * scaleY
+	const x = xMax * scaleX + sz * OFFSET_H
 	const y = yMin * scaleY + (markHeight - pillHeight) / 2
 
-	const color = QUALITY_COLORS[payload.quality] ?? "#6b7280"
-	const symbol = payload.awarded ? "✓" : "✗"
-	const suffix = QUALITY_SUFFIX[payload.quality] ?? ""
-	const label = `${symbol} ${payload.display}${suffix}`
+	const color = AO_COLORS[payload.display] ?? AO_FALLBACK_COLOR
+	const label = payload.display
 
-	const pillWidth = label.length * fontSize * 0.6 + padding * 2
+	const pillWidth = label.length * fontSize * TAG_CHAR_WIDTH + paddingH * 2
 
 	return (
 		<g>
@@ -57,20 +62,21 @@ export function TagOverlay({ annotation, parentBbox, scaleX, scaleY }: Props) {
 				y={y}
 				width={pillWidth}
 				height={pillHeight}
-				rx={pillHeight / 2}
+				rx={borderRadius}
 				fill={color}
 				fillOpacity={0.15}
 				stroke={color}
-				strokeWidth={1}
+				strokeWidth={borderWidth}
 				strokeOpacity={0.6}
 			/>
 			<text
-				x={x + padding}
-				y={y + fontSize + padding * 0.5}
+				x={x + pillWidth / 2}
+				y={y + fontSize + paddingV * 0.5}
 				fill={color}
 				fontSize={fontSize}
 				fontWeight="700"
 				fontFamily="system-ui, sans-serif"
+				textAnchor="middle"
 			>
 				{label}
 			</text>

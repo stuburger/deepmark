@@ -169,7 +169,7 @@ export async function visionAttributeRegions({
 			let response: Awaited<ReturnType<typeof gemini.models.generateContent>>
 			try {
 				response = await gemini.models.generateContent({
-					model: "gemini-2.5-flash",
+					model: "gemini-2.5-pro",
 					contents: [
 						{
 							role: "user",

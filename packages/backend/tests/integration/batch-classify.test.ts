@@ -1,17 +1,18 @@
 import * as fs from "node:fs"
 import * as path from "node:path"
-import { Resource } from "sst"
-import { afterEach, beforeAll, describe, expect, it } from "vitest"
-import { db } from "./helpers/db"
-import { cleanupBatch, createTestBatch } from "./helpers/fixtures"
-import { uploadTestFile } from "./helpers/s3"
 import {
 	TEST_EXAM_PAPER_ID,
 	TEST_USER_ID,
+	cleanupBatch,
+	createTestBatch,
+	db,
 	ensureExamPaper,
-} from "./helpers/seed"
-import { sendToQueue } from "./helpers/sqs"
-import { waitFor } from "./helpers/wait-for"
+	sendToQueue,
+	uploadTestFile,
+	waitFor,
+} from "@mcp-gcse/test-utils"
+import { Resource } from "sst"
+import { afterEach, beforeAll, describe, expect, it } from "vitest"
 
 const Y10_PAPERS = path.resolve(process.cwd(), "y10_papers")
 
@@ -26,7 +27,7 @@ describe("batch-classify Lambda", () => {
 		if (batchId) await cleanupBatch(batchId).catch(() => {})
 	})
 
-	it("classifies sofia-1.png (single JPEG) as 1 proposed StagedScript", async () => {
+	it("classifies sofia-1.png (single JPEG) as 1 excluded StagedScript pending review", async () => {
 		const batch = await createTestBatch(TEST_EXAM_PAPER_ID, TEST_USER_ID)
 		batchId = batch.id
 
@@ -58,7 +59,7 @@ describe("batch-classify Lambda", () => {
 
 		expect(result.status).not.toBe("failed")
 		expect(result.staged_scripts).toHaveLength(1)
-		expect(result.staged_scripts[0]!.status).toBe("proposed")
+		expect(result.staged_scripts[0]!.status).toBe("excluded")
 	})
 
 	it("classifies sofia-1.pdf (3-page single-student PDF) as at least 1 proposed StagedScript", async () => {

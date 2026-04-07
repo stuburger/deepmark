@@ -300,6 +300,7 @@ lib/
 - Types live in `types.ts` within the domain folder, not scattered across files.
 - Prompts and LLM schemas live in `processors/<name>/prompts.ts` + `schema.ts` sibling files, never inline in handlers.
 - Do not create barrel re-export files. Import directly from domain modules.
+- **Never import across package boundaries.** Tests must not import from `apps/web/` — if a test needs a function, that function belongs in `packages/backend/` or `packages/shared/`. Web server actions should be thin auth wrappers that delegate to backend services.
 
 ### Tables, Grids & Dialogs — Always Extracted
 
@@ -550,7 +551,8 @@ Types are declared in `sst-env.d.ts`.
 
 - ORM: **Prisma** (`packages/db`)
 - DB: **Neon** (serverless Postgres)
-- Migrations: `bun db:migrate` (dev), `bun db:deploy` (production)
+- Schema sync: `bun db:push` (pushes schema to DB without migrations — use `--accept-data-loss` or `--force-reset` when needed)
+- **Do NOT use `bun db:migrate`** — this project uses `db:push` not Prisma Migrate
 - Studio: `bun db:studio`
 
 Never import runtime values from `@mcp-gcse/db` into client components — only `import type`.
@@ -580,12 +582,12 @@ bun check            # Biome lint + format check
 bun fix              # Biome auto-fix
 
 bun db:generate      # Regenerate Prisma client
-bun db:migrate       # Create + apply migration (dev)
-bun db:deploy        # Apply migrations (production)
+bun db:push          # Push schema to DB (no migrations)
 bun db:studio        # Open Prisma Studio
 
-bun test:unit        # Vitest unit tests
-bun test:integration # Vitest integration tests (requires SST env)
+bun test:unit                    # Unit tests (packages/backend)
+bun test:integration             # All integration tests (requires SST env via sst shell)
+# Filter by project: --project backend:integration, --project web:integration
 ```
 
 ---

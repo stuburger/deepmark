@@ -64,10 +64,30 @@ enum ScanStatus {
   processing
   text_extracted
   ocr_complete
-  extracting
-  extracted
   grading
-  graded
+  failed
+  cancelled
+}
+
+enum EnrichmentStatus {
+  pending
+  processing
+  complete
+  failed
+}
+
+enum OcrStatus {
+  pending
+  processing
+  complete
+  failed
+  cancelled
+}
+
+enum GradingStatus {
+  pending
+  processing
+  complete
   failed
   cancelled
 }
@@ -150,11 +170,11 @@ model User {
   created_exam_sections  ExamSection[]
   created_question_banks QuestionBank[]
 
-  students           Student[]              @relation("TeacherStudents")
-  pdf_ingestion_jobs PdfIngestionJob[]      @relation("PdfIngestionJobUploader")
-  student_paper_jobs StudentPaperJob[]      @relation("StudentPaperJobUploader")
-  batch_ingest_jobs BatchIngestJob[]      @relation("BatchIngestJobUploader")
-  push_subscriptions UserPushSubscription[] @relation("UserPushSubscriptions")
+  students             Student[]              @relation("TeacherStudents")
+  pdf_ingestion_jobs   PdfIngestionJob[]      @relation("PdfIngestionJobUploader")
+  student_submissions  StudentSubmission[]    @relation("SubmissionUploader")
+  batch_ingest_jobs    BatchIngestJob[]       @relation("BatchIngestJobUploader")
+  push_subscriptions   UserPushSubscription[] @relation("UserPushSubscriptions")
 
   @@map("users")
 }
@@ -254,9 +274,9 @@ model Student {
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
-  teacher            User              @relation("TeacherStudents", fields: [teacher_id], references: [id])
-  answers            Answer[]          @relation("StudentAnswers")
-  student_paper_jobs StudentPaperJob[] @relation("StudentPaperJobStudent")
+  teacher              User                @relation("TeacherStudents", fields: [teacher_id], references: [id])
+  answers              Answer[]            @relation("StudentAnswers")
+  student_submissions  StudentSubmission[] @relation("SubmissionStudent")
 
   @@map("students")
 }
@@ -321,11 +341,11 @@ model ExamPaper {
   /// Teacher-provided exam-wide level descriptors (appended to LoR grading prompts)
   level_descriptors String?
 
-  created_by         User              @relation(fields: [created_by_id], references: [id])
-  sections           ExamSection[]
-  pdf_ingestion_jobs PdfIngestionJob[]
-  student_paper_jobs StudentPaperJob[]
-  batch_ingest_jobs BatchIngestJob[]
+  created_by           User                @relation(fields: [created_by_id], references: [id])
+  sections             ExamSection[]
+  pdf_ingestion_jobs   PdfIngestionJob[]
+  student_submissions  StudentSubmission[] @relation("SubmissionExamPaper")
+  batch_ingest_jobs    BatchIngestJob[]
 
   @@map("exam_papers")
 }
@@ -429,60 +449,9 @@ model PdfIngestionJob {
   @@map("pdf_ingestion_jobs")
 }
 
-model StudentPaperJob {
-  id                    String     @id @default(cuid())
-  s3_key                String
-  s3_bucket             String
-  status                ScanStatus @default(pending)
-  uploaded_by           String
-  exam_board            String
-  exam_paper_id         String
-  subject               Subject?
-  year                  Int?
-  paper_reference       String?
-  student_name          String?
-  student_id            String?
-  // Multi-page support: [{ key: string, order: number, mime_type: string }]
-  pages                 Json?
-  detected_subject      Subject?
-  // Raw OCR extraction before grading: { student_name?, answers: [{question_number, answer_text}] }
-  extracted_answers_raw Json?
-  // Per-page OCR analysis: [{ page: number, transcript: string, observations: string[] }]
-  page_analyses         Json?
-  grading_results       Json?
-  // S3 key for the raw Cloud Vision API response: scans/{jobId}/vision-raw.json
-  vision_raw_s3_key     String?
-  // Ordered append-only event log: [{ type, at, ...payload }]
-  job_events            Json?
-  error                 String?
-  /// Enrichment pipeline status: "pending" | "processing" | "complete" | "failed"
-  enrichment_status     String?
-  created_at            DateTime   @default(now())
-  processed_at          DateTime?
-  /// Set when this job is superseded by a re-scan. Superseded jobs are excluded from lists and analytics.
-  superseded_at         DateTime?
-
-  batch_job_id     String?
-  remark_count     Int       @default(0)
-  remarked_at      DateTime?
-  /// The staged script this job was created from. Null for jobs created outside the batch pipeline.
-  staged_script_id String?
-
-  uploader       User                       @relation("StudentPaperJobUploader", fields: [uploaded_by], references: [id])
-  exam_paper     ExamPaper                  @relation(fields: [exam_paper_id], references: [id])
-  student        Student?                   @relation("StudentPaperJobStudent", fields: [student_id], references: [id])
-  answer_regions StudentPaperAnswerRegion[] @relation("StudentPaperJobRegions")
-  word_tokens    StudentPaperPageToken[]    @relation("JobWordTokens")
-  batch_job      BatchIngestJob?            @relation("BatchIngestStudentJobs", fields: [batch_job_id], references: [id])
-  staged_script  StagedScript?              @relation("StagedScriptJob", fields: [staged_script_id], references: [id])
-  annotations    StudentPaperAnnotation[]   @relation("JobAnnotations")
-
-  @@map("student_paper_jobs")
-}
-
 model StudentPaperAnswerRegion {
   id              String   @id @default(cuid())
-  job_id          String
+  submission_id   String
   question_id     String
   question_number String
   page_order      Int
@@ -492,15 +461,15 @@ model StudentPaperAnswerRegion {
   source          String?
   created_at      DateTime @default(now())
 
-  job StudentPaperJob @relation("StudentPaperJobRegions", fields: [job_id], references: [id])
+  submission StudentSubmission @relation("SubmissionAnswerRegions", fields: [submission_id], references: [id])
 
-  @@unique([job_id, question_id, page_order])
+  @@unique([submission_id, question_id, page_order])
   @@map("student_paper_answer_regions")
 }
 
 model StudentPaperPageToken {
   id             String   @id @default(cuid())
-  job_id         String
+  submission_id  String
   page_order     Int
   para_index     Int
   line_index     Int
@@ -513,15 +482,15 @@ model StudentPaperPageToken {
   question_id    String?
   created_at     DateTime @default(now())
 
-  job StudentPaperJob @relation("JobWordTokens", fields: [job_id], references: [id])
+  submission StudentSubmission @relation("SubmissionWordTokens", fields: [submission_id], references: [id])
 
-  @@index([job_id, page_order])
+  @@index([submission_id, page_order])
   @@map("student_paper_page_tokens")
 }
 
 model StudentPaperAnnotation {
   id              String   @id @default(cuid())
-  job_id          String
+  enrichment_run_id String
   question_id     String
   page_order      Int
 
@@ -545,13 +514,107 @@ model StudentPaperAnnotation {
   sort_order      Int      @default(0)
   created_at      DateTime @default(now())
 
-  job             StudentPaperJob          @relation("JobAnnotations", fields: [job_id], references: [id], onDelete: Cascade)
+  enrichment_run  EnrichmentRun            @relation("EnrichmentRunAnnotations", fields: [enrichment_run_id], references: [id], onDelete: Cascade)
   parent          StudentPaperAnnotation?  @relation("AnnotationChildren", fields: [parent_annotation_id], references: [id])
   children        StudentPaperAnnotation[] @relation("AnnotationChildren")
 
-  @@index([job_id, page_order])
-  @@index([job_id, question_id])
+  @@index([enrichment_run_id, page_order])
+  @@index([enrichment_run_id, question_id])
   @@map("student_paper_annotations")
+}
+
+model StudentSubmission {
+  id               String   @id @default(cuid())
+  s3_key           String
+  s3_bucket        String
+  uploaded_by      String
+  exam_board       String
+  exam_paper_id    String
+  pages            Json
+  student_name     String?
+  student_id       String?
+  subject          Subject?
+  year             Int?
+  paper_reference  String?
+  detected_subject Subject?
+  batch_job_id     String?
+  staged_script_id String?
+  created_at       DateTime @default(now())
+  /// Set when this submission is superseded by a re-scan/re-mark. Superseded submissions are excluded from lists and analytics.
+  superseded_at    DateTime?
+
+  uploader      User                       @relation("SubmissionUploader", fields: [uploaded_by], references: [id])
+  exam_paper    ExamPaper                  @relation("SubmissionExamPaper", fields: [exam_paper_id], references: [id])
+  student       Student?                   @relation("SubmissionStudent", fields: [student_id], references: [id])
+  batch_job     BatchIngestJob?            @relation("BatchIngestSubmissions", fields: [batch_job_id], references: [id])
+  staged_script StagedScript?             @relation("StagedScriptSubmission", fields: [staged_script_id], references: [id])
+  ocr_runs      OcrRun[]
+  grading_runs  GradingRun[]
+  word_tokens   StudentPaperPageToken[]   @relation("SubmissionWordTokens")
+  answer_regions StudentPaperAnswerRegion[] @relation("SubmissionAnswerRegions")
+
+  @@map("student_submissions")
+}
+
+model OcrRun {
+  id                    String    @id @default(cuid())
+  submission_id         String
+  status                OcrStatus @default(pending)
+  error                 String?
+  // Raw OCR extraction: { student_name?, answers: [{question_number, answer_text}] }
+  extracted_answers_raw Json?
+  // Per-page OCR analysis: [{ page: number, transcript: string, observations: string[] }]
+  page_analyses         Json?
+  // S3 key for the raw Cloud Vision API response
+  vision_raw_s3_key     String?
+  // Ordered append-only event log
+  job_events            Json?
+  started_at            DateTime?
+  completed_at          DateTime?
+  created_at            DateTime  @default(now())
+
+  submission   StudentSubmission @relation(fields: [submission_id], references: [id])
+  grading_runs GradingRun[]
+
+  @@index([submission_id])
+  @@map("ocr_runs")
+}
+
+model GradingRun {
+  id            String        @id @default(cuid())
+  submission_id String
+  ocr_run_id    String
+  status        GradingStatus @default(pending)
+  error         String?
+  grading_results Json?
+  // Ordered append-only event log
+  job_events    Json?
+  started_at    DateTime?
+  completed_at  DateTime?
+  created_at    DateTime      @default(now())
+
+  submission      StudentSubmission @relation(fields: [submission_id], references: [id])
+  ocr_run         OcrRun            @relation(fields: [ocr_run_id], references: [id])
+  enrichment_runs EnrichmentRun[]
+
+  @@index([submission_id])
+  @@index([ocr_run_id])
+  @@map("grading_runs")
+}
+
+model EnrichmentRun {
+  id             String           @id @default(cuid())
+  grading_run_id String
+  status         EnrichmentStatus @default(pending)
+  error          String?
+  completed_at   DateTime?
+  created_at     DateTime         @default(now())
+
+  grading_run GradingRun               @relation(fields: [grading_run_id], references: [id])
+  annotations StudentPaperAnnotation[] @relation("EnrichmentRunAnnotations")
+
+  @@index([grading_run_id])
+  @@map("enrichment_runs")
 }
 
 model ExemplarAnswer {
@@ -617,10 +680,10 @@ model BatchIngestJob {
   created_at           DateTime      @default(now())
   processed_at         DateTime?
 
-  uploader       User              @relation("BatchIngestJobUploader", fields: [uploaded_by], references: [id])
-  exam_paper     ExamPaper         @relation(fields: [exam_paper_id], references: [id])
-  student_jobs   StudentPaperJob[] @relation("BatchIngestStudentJobs")
-  staged_scripts StagedScript[]
+  uploader            User                @relation("BatchIngestJobUploader", fields: [uploaded_by], references: [id])
+  exam_paper          ExamPaper           @relation(fields: [exam_paper_id], references: [id])
+  student_submissions StudentSubmission[] @relation("BatchIngestSubmissions")
+  staged_scripts      StagedScript[]
 
   @@map("batch_ingest_jobs")
 }
@@ -636,8 +699,8 @@ model StagedScript {
   status         StagedScriptStatus @default(proposed)
   created_at     DateTime           @default(now())
 
-  batch_job    BatchIngestJob   @relation(fields: [batch_job_id], references: [id])
-  student_jobs StudentPaperJob[] @relation("StagedScriptJob")
+  batch_job           BatchIngestJob      @relation(fields: [batch_job_id], references: [id])
+  student_submissions StudentSubmission[] @relation("StagedScriptSubmission")
 
   @@map("staged_scripts")
 }

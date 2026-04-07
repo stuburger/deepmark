@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/button"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import type { ActiveBatchInfo } from "@/lib/batch/types"
-import { deleteStudentPaperJob } from "@/lib/marking/mutations"
+import { deleteSubmission } from "@/lib/marking/mutations"
 import { Eye, LayoutGrid, Rows3, Trash2 } from "lucide-react"
 import { useState } from "react"
 import { toast } from "sonner"
@@ -263,7 +263,7 @@ function MarkingJobList({
 	async function handleConfirmDelete() {
 		if (!pendingDeleteId) return
 		setDeleting(true)
-		const result = await deleteStudentPaperJob(pendingDeleteId)
+		const result = await deleteSubmission(pendingDeleteId)
 		setDeleting(false)
 		if (!result.ok) {
 			toast.error(result.error)

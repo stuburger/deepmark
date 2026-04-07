@@ -13,7 +13,7 @@ export type PersistAnswerRowsArgs = {
 /**
  * Persists normalised Answer + MarkingResult rows when a Student record
  * is linked to the job. Failures are non-fatal — the JSON blob in
- * studentPaperJob already carries the results.
+ * the GradingRun already carries the results.
  */
 export async function persistAnswerRows(
 	args: PersistAnswerRowsArgs,

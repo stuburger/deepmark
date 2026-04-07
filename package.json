@@ -24,12 +24,13 @@
 		"@types/sharp": "^0.32.0",
 		"sharp": "^0.34.5",
 		"turbo": "^2.3.3",
-		"typescript": "^5.8.3"
+		"typescript": "^5.8.3",
+		"vite-tsconfig-paths": "^6.1.1"
 	},
 	"workspaces": ["packages/*", "apps/*"],
 	"scripts": {
-		"test:unit": "vitest run tests/unit --config tests/vitest.unit.config.ts",
-		"test:integration": "sst shell -- vitest run tests/integration --config tests/vitest.config.ts",
+		"test:unit": "vitest run --project backend:unit",
+		"test:integration": "sst shell -- vitest run --project 'backend:integration' --project 'web:integration'",
 		"process-logo": "bun scripts/process-logo.ts",
 		"build": "turbo build",
 		"typecheck": "turbo typecheck",

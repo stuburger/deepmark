@@ -2,7 +2,7 @@
 
 import { headers } from "next/headers"
 import { redirect } from "next/navigation"
-import { clearTokens, client } from "./auth"
+import { clearTokens, getClient } from "./auth"
 
 export async function logout() {
 	await clearTokens()
@@ -21,7 +21,7 @@ async function authorizeWith(provider: "github" | "google") {
 	const origin = `${protocol}://${host}`
 	const redirectURI = `${origin}/api/callback`
 
-	const { url } = await client.authorize(redirectURI, "code", { provider })
+	const { url } = await getClient().authorize(redirectURI, "code", { provider })
 
 	redirect(url)
 }

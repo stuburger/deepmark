@@ -9,10 +9,16 @@ const subjects = createSubjects({
 	}),
 })
 
-export const client = createClient({
-	clientID: "nextjs",
-	issuer: process.env.OPENAUTH_ISSUER!,
-})
+let _client: ReturnType<typeof createClient> | null = null
+export function getClient() {
+	if (!_client) {
+		_client = createClient({
+			clientID: "nextjs",
+			issuer: process.env.OPENAUTH_ISSUER!,
+		})
+	}
+	return _client
+}
 
 export type SessionUser = {
 	userId: string
@@ -54,7 +60,7 @@ export async function auth(): Promise<SessionUser | null> {
 		return null
 	}
 
-	const verified = await client.verify(subjects, accessToken.value, {
+	const verified = await getClient().verify(subjects, accessToken.value, {
 		refresh: refreshToken?.value,
 	})
 

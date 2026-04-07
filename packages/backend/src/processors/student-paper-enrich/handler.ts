@@ -3,7 +3,7 @@ import { defaultChatModel } from "@/lib/infra/google-generative-ai"
 import type { GradingResult } from "@/lib/grading/grade-questions"
 import { logger } from "@/lib/infra/logger"
 import { type SqsEvent, parseSqsJobId } from "@/lib/infra/sqs-job-runner"
-import { type EnrichmentStatus, logStudentPaperEvent } from "@mcp-gcse/db"
+import type { EnrichmentStatus } from "@mcp-gcse/db"
 import {
 	type NormalisedBox,
 	computeBboxHull,
@@ -196,16 +196,6 @@ export async function handler(
 				messageId: record.messageId,
 			})
 
-			void logStudentPaperEvent(db, jobId, {
-				type: "enrich_started",
-				at: new Date().toISOString(),
-			})
-
-			await db.studentPaperJob.update({
-				where: { id: jobId },
-				data: { enrichment_status: "processing" satisfies EnrichmentStatus },
-			})
-
 			// Phase 3: create a new EnrichmentRun for each annotation pass.
 			// Old runs (and their annotations) are preserved as history.
 			const enrichmentRun = await db.enrichmentRun.create({
@@ -216,28 +206,25 @@ export async function handler(
 			})
 			enrichmentRunId = enrichmentRun.id
 
-			// Load job with grading results and exam paper
-			const job = await db.studentPaperJob.findUniqueOrThrow({
+			// Load submission with grading results and exam paper
+			const sub = await db.studentSubmission.findUniqueOrThrow({
 				where: { id: jobId },
 				include: {
 					exam_paper: {
-						select: {
-							exam_board: true,
-							level_descriptors: true,
-							subject: true,
-						},
+						select: { exam_board: true, level_descriptors: true, subject: true },
+					},
+					grading_runs: {
+						orderBy: { created_at: "desc" },
+						take: 1,
+						select: { grading_results: true },
 					},
 				},
 			})
 
-			const gradingResults = (job.grading_results ?? []) as GradingResult[]
+			const gradingResults = (sub.grading_runs[0]?.grading_results ?? []) as GradingResult[]
 			if (gradingResults.length === 0) {
 				logger.warn(TAG, "No grading results — skipping enrichment", {
 					jobId,
-				})
-				await db.studentPaperJob.update({
-					where: { id: jobId },
-					data: { enrichment_status: "complete" satisfies EnrichmentStatus },
 				})
 				await db.enrichmentRun.update({
 					where: { id: enrichmentRun.id },
@@ -251,7 +238,7 @@ export async function handler(
 
 			// Load answer regions (for deterministic point_based and MCQ annotations)
 			const answerRegions = await db.studentPaperAnswerRegion.findMany({
-				where: { job_id: jobId },
+				where: { submission_id: jobId },
 				select: { question_id: true, page_order: true, box: true },
 			})
 			// Use the region with the lowest page_order per question (primary page)
@@ -265,7 +252,7 @@ export async function handler(
 
 			// Load all tokens for this job, ordered by reading position
 			const allTokens = await db.studentPaperPageToken.findMany({
-				where: { job_id: jobId },
+				where: { submission_id: jobId },
 				orderBy: [
 					{ page_order: "asc" },
 					{ para_index: "asc" },
@@ -306,10 +293,10 @@ export async function handler(
 					: []
 			const markSchemeMap = new Map(markSchemes.map((ms) => [ms.id, ms]))
 
-			const examBoard = job.exam_paper?.exam_board ?? null
-			const levelDescriptors = job.exam_paper?.level_descriptors ?? null
+			const examBoard = sub.exam_paper?.exam_board ?? null
+			const levelDescriptors = sub.exam_paper?.level_descriptors ?? null
 			const model = defaultChatModel()
-			const subject = job.exam_paper?.subject ?? null
+			const subject = sub.exam_paper?.subject ?? null
 
 			// ─── Non-LLM annotations ────────────────────────────────────────────────
 			// Produce tick/cross annotations for point_based and MCQ questions
@@ -384,7 +371,6 @@ export async function handler(
 
 					const created = await db.studentPaperAnnotation.create({
 						data: {
-							job_id: jobId,
 							enrichment_run_id: enrichmentRun.id,
 							question_id: a.questionId,
 							page_order: a.pageOrder,
@@ -412,7 +398,6 @@ export async function handler(
 
 					await db.studentPaperAnnotation.create({
 						data: {
-							job_id: jobId,
 							enrichment_run_id: enrichmentRun.id,
 							question_id: a.questionId,
 							page_order: a.pageOrder,
@@ -430,23 +415,12 @@ export async function handler(
 				}
 			}
 
-			await db.studentPaperJob.update({
-				where: { id: jobId },
-				data: { enrichment_status: "complete" satisfies EnrichmentStatus },
-			})
 			await db.enrichmentRun.update({
 				where: { id: enrichmentRun.id },
 				data: {
 					status: "complete" satisfies EnrichmentStatus,
 					completed_at: new Date(),
 				},
-			})
-
-			void logStudentPaperEvent(db, jobId, {
-				type: "enrich_complete",
-				at: new Date().toISOString(),
-				annotations_count: totalAnnotations,
-				questions_annotated: questionsSucceeded,
 			})
 
 			logger.info(TAG, "Enrich job complete", {
@@ -463,12 +437,6 @@ export async function handler(
 			// A graded job (status: "ocr_complete") must not be downgraded to
 			// "failed" because an annotation overlay errored. The DLQ handler
 			// will detect the enrichment failure via status + enrichment_status.
-			await db.studentPaperJob
-				.update({
-					where: { id: jobId },
-					data: { enrichment_status: "failed" satisfies EnrichmentStatus },
-				})
-				.catch(() => {})
 			if (enrichmentRunId) {
 				db.enrichmentRun
 					.update({

@@ -24,9 +24,8 @@ import { PutObjectCommand } from "@aws-sdk/client-s3"
 import { SQSClient, SendMessageCommand } from "@aws-sdk/client-sqs"
 import {
 	type OcrStatus,
-	type ScanStatus,
 	type Subject,
-	logStudentPaperEvent,
+	logOcrRunEvent,
 } from "@mcp-gcse/db"
 import { Resource } from "sst"
 
@@ -50,42 +49,26 @@ export async function handler(
 				messageId: record.messageId,
 			})
 
-			const job = await db.studentPaperJob.findUniqueOrThrow({
+			const job = await db.studentSubmission.findUniqueOrThrow({
 				where: { id: jobId },
 			})
 
-			if (job.status === "cancelled") {
-				logger.info(TAG, "Job was cancelled — skipping", { jobId })
-				continue
-			}
-
-			await db.studentPaperJob.update({
+			await db.ocrRun.upsert({
 				where: { id: jobId },
-				data: {
-					status: "processing" satisfies ScanStatus,
+				create: {
+					id: jobId,
+					submission_id: jobId,
+					status: "processing" satisfies OcrStatus,
+					started_at: new Date(),
+				},
+				update: {
+					status: "processing" satisfies OcrStatus,
 					error: null,
+					started_at: new Date(),
 				},
 			})
 
-			// Phase 3 dual-write: create/update OcrRun (submission_id === jobId by migration convention)
-			await db.ocrRun
-				.upsert({
-					where: { id: jobId },
-					create: {
-						id: jobId,
-						submission_id: jobId,
-						status: "processing" satisfies OcrStatus,
-						started_at: new Date(),
-					},
-					update: {
-						status: "processing" satisfies OcrStatus,
-						error: null,
-						started_at: new Date(),
-					},
-				})
-				.catch(() => {})
-
-			void logStudentPaperEvent(db, jobId, {
+			void logOcrRunEvent(db, jobId, {
 				type: "ocr_started",
 				at: new Date().toISOString(),
 			})
@@ -199,20 +182,27 @@ export async function handler(
 				pages_analysed: pageAnalyses.length,
 			})
 
-			void logStudentPaperEvent(db, jobId, {
+			void logOcrRunEvent(db, jobId, {
 				type: "answers_extracted",
 				at: new Date().toISOString(),
 				count: answersExtracted,
 				student_name: extraction.studentName?.trim() || null,
 			})
 
-			// Persist extracted answers immediately so the UI can show them while
-			// Vision token work (reconciliation + region attribution) runs below.
-			await db.studentPaperJob.update({
+			// Persist student metadata on the submission
+			await db.studentSubmission.update({
 				where: { id: jobId },
 				data: {
 					student_name: extraction.studentName?.trim() || null,
 					detected_subject: detectedSubject,
+				},
+			})
+
+			// Persist extracted answers on the OcrRun so the UI can show them
+			// while Vision token work (reconciliation + region attribution) runs below.
+			await db.ocrRun.update({
+				where: { id: jobId },
+				data: {
 					extracted_answers_raw: {
 						student_name: extraction.studentName?.trim() || null,
 						answers: extraction.answers,
@@ -220,20 +210,6 @@ export async function handler(
 					page_analyses: pageAnalyses,
 				},
 			})
-
-			// Phase 3 dual-write: update OcrRun with extracted data
-			db.ocrRun
-				.update({
-					where: { id: jobId },
-					data: {
-						extracted_answers_raw: {
-							student_name: extraction.studentName?.trim() || null,
-							answers: extraction.answers,
-						},
-						page_analyses: pageAnalyses,
-					},
-				})
-				.catch(() => {})
 
 			// Save raw Cloud Vision responses to S3
 			const visionRawKey = `scans/${jobId}/vision-raw.json`
@@ -286,8 +262,7 @@ export async function handler(
 					)
 				}
 				return result.tokens.map((t) => ({
-					job_id: jobId,
-					submission_id: jobId, // Phase 3: submission_id === jobId by migration convention
+					submission_id: jobId,
 					page_order: pageOrder,
 					para_index: t.para_index,
 					line_index: t.line_index,
@@ -334,7 +309,7 @@ export async function handler(
 			})
 
 			// Phase 2b — assign corrected tokens to questions, derive answer regions.
-			void logStudentPaperEvent(db, jobId, {
+			void logOcrRunEvent(db, jobId, {
 				type: "region_attribution_started",
 				at: new Date().toISOString(),
 			})
@@ -355,30 +330,17 @@ export async function handler(
 				jobId,
 			})
 
-			await db.studentPaperJob.update({
+			await db.ocrRun.update({
 				where: { id: jobId },
 				data: {
-					status: "text_extracted" satisfies ScanStatus,
+					status: "complete" satisfies OcrStatus,
 					vision_raw_s3_key: visionRawKey,
-					processed_at: new Date(),
+					completed_at: new Date(),
 					error: null,
 				},
 			})
 
-			// Phase 3 dual-write: mark OcrRun complete
-			db.ocrRun
-				.update({
-					where: { id: jobId },
-					data: {
-						status: "complete" satisfies OcrStatus,
-						vision_raw_s3_key: visionRawKey,
-						completed_at: new Date(),
-						error: null,
-					},
-				})
-				.catch(() => {})
-
-			void logStudentPaperEvent(db, jobId, {
+			void logOcrRunEvent(db, jobId, {
 				type: "ocr_complete",
 				at: new Date().toISOString(),
 			})

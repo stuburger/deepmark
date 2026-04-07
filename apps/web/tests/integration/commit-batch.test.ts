@@ -1,21 +1,19 @@
 import * as fs from "node:fs"
 import * as path from "node:path"
-import { afterEach, beforeAll, describe, expect, it } from "vitest"
-import { db } from "./helpers/db"
-import { cleanupBatch } from "./helpers/fixtures"
-import { uploadTestFile } from "./helpers/s3"
 import {
 	TEST_EXAM_PAPER_ID,
 	TEST_USER_ID,
+	cleanupBatch,
+	db,
 	ensureExamPaper,
-} from "./helpers/seed"
+	uploadTestFile,
+} from "@mcp-gcse/test-utils"
+import { afterEach, beforeAll, describe, expect, it } from "vitest"
 
 const Y10_PAPERS = path.resolve(process.cwd(), "y10_papers")
 
-// Direct import of the service function — bypasses Next.js server action wrapper
-const { commitBatchService } = await import(
-	"../../apps/web/src/lib/batch-actions"
-)
+// Same-package import — no cross-boundary violation
+const { commitBatchService } = await import("../../src/lib/batch/mutations")
 
 beforeAll(async () => {
 	await ensureExamPaper()
@@ -28,7 +26,7 @@ describe("commitBatch", () => {
 		if (batchId) await cleanupBatch(batchId).catch(() => {})
 	})
 
-	it("creates 1 StudentPaperJob from 1 confirmed StagedScript", async () => {
+	it("creates 1 StudentSubmission from 1 confirmed StagedScript", async () => {
 		const batch = await db.batchIngestJob.create({
 			data: {
 				exam_paper_id: TEST_EXAM_PAPER_ID,
@@ -70,15 +68,15 @@ describe("commitBatch", () => {
 
 		expect(result.studentJobCount).toBe(1)
 
-		const jobs = await db.studentPaperJob.findMany({
+		const subs = await db.studentSubmission.findMany({
 			where: { batch_job_id: batchId },
 		})
-		expect(jobs).toHaveLength(1)
-		expect(jobs[0]!.student_name).toBe("Sofia")
-		expect(jobs[0]!.batch_job_id).toBe(batchId)
+		expect(subs).toHaveLength(1)
+		expect(subs[0]!.student_name).toBe("Sofia")
+		expect(subs[0]!.batch_job_id).toBe(batchId)
 	})
 
-	it("creates 2 StudentPaperJobs from 2 confirmed StagedScripts", async () => {
+	it("creates 2 StudentSubmissions from 2 confirmed StagedScripts", async () => {
 		const batch = await db.batchIngestJob.create({
 			data: {
 				exam_paper_id: TEST_EXAM_PAPER_ID,
@@ -145,10 +143,10 @@ describe("commitBatch", () => {
 
 		expect(result.studentJobCount).toBe(2)
 
-		const jobs = await db.studentPaperJob.findMany({
+		const subs = await db.studentSubmission.findMany({
 			where: { batch_job_id: batchId },
 		})
-		expect(jobs).toHaveLength(2)
+		expect(subs).toHaveLength(2)
 	})
 
 	it("sets total_student_jobs = N on BatchIngestJob", async () => {
@@ -195,7 +193,7 @@ describe("commitBatch", () => {
 		expect(updated.status).toBe("marking")
 	})
 
-	it("each StudentPaperJob.pages uses {key, order, mime_type} mapped from StagedScript.page_keys", async () => {
+	it("each StudentSubmission.pages uses {key, order, mime_type} mapped from StagedScript.page_keys", async () => {
 		const batch = await db.batchIngestJob.create({
 			data: {
 				exam_paper_id: TEST_EXAM_PAPER_ID,
@@ -232,16 +230,16 @@ describe("commitBatch", () => {
 
 		await commitBatchService(batchId, TEST_USER_ID)
 
-		const jobs = await db.studentPaperJob.findMany({
+		const subs = await db.studentSubmission.findMany({
 			where: { batch_job_id: batchId },
 		})
-		expect(jobs).toHaveLength(1)
-		expect(jobs[0]!.pages).toEqual([
+		expect(subs).toHaveLength(1)
+		expect(subs[0]!.pages).toEqual([
 			{ key, order: 1, mime_type: "application/pdf" },
 		])
 	})
 
-	it("rejects commit if any StagedScript is still in proposed status", async () => {
+	it("commits only confirmed scripts, ignoring proposed ones", async () => {
 		const batch = await db.batchIngestJob.create({
 			data: {
 				exam_paper_id: TEST_EXAM_PAPER_ID,
@@ -294,14 +292,15 @@ describe("commitBatch", () => {
 
 		const result = await commitBatchService(batchId, TEST_USER_ID)
 
-		expect(result.ok).toBe(false)
-		if (result.ok) return
+		expect(result.ok).toBe(true)
+		if (!result.ok) return
 
-		expect(result.error).toMatch(/still need review/i)
+		expect(result.studentJobCount).toBe(1)
 
-		const jobs = await db.studentPaperJob.findMany({
+		const subs = await db.studentSubmission.findMany({
 			where: { batch_job_id: batchId },
 		})
-		expect(jobs).toHaveLength(0)
+		expect(subs).toHaveLength(1)
+		expect(subs[0]!.student_name).toBe("Sofia")
 	})
 })

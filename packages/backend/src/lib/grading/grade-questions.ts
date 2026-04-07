@@ -6,7 +6,7 @@ import type {
 	MarkScheme,
 	QuestionListItem,
 } from "@/lib/grading/question-list"
-import { logStudentPaperEvent } from "@mcp-gcse/db"
+import { logGradingRunEvent } from "@mcp-gcse/db"
 import {
 	type MarkerContext,
 	type MarkerOrchestrator,
@@ -85,7 +85,7 @@ export async function gradeAllQuestions(
 		const completed = resultSlots.filter(
 			(r): r is GradingResult => r !== undefined,
 		)
-		db.studentPaperJob
+		db.gradingRun
 			.update({ where: { id: jobId }, data: { grading_results: completed } })
 			.catch((err) =>
 				logger.warn(
@@ -195,7 +195,7 @@ async function gradeOneQuestion({
 			awarded: grade.totalScore,
 			max: grade.maxPossibleScore,
 		})
-		void logStudentPaperEvent(db, jobId, {
+		void logGradingRunEvent(db, jobId, {
 			type: "question_graded",
 			at: new Date().toISOString(),
 			question_number: qItem.question_number,

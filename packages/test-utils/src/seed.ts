@@ -1,4 +1,4 @@
-import fixture from "../../fixtures/exam-paper-abc.json"
+import fixture from "../fixtures/exam-paper-abc.json"
 import { db } from "./db"
 
 export const TEST_EXAM_PAPER_ID = fixture.exam_paper.id

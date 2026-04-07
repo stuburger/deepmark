@@ -1,4 +1,4 @@
-import { client, setTokens } from "@/lib/auth"
+import { getClient, setTokens } from "@/lib/auth"
 import { NextResponse, type NextRequest } from "next/server"
 
 export async function GET(req: NextRequest) {
@@ -9,7 +9,7 @@ export async function GET(req: NextRequest) {
 		return NextResponse.json({ error: "No code provided" }, { status: 400 })
 	}
 
-	const exchanged = await client.exchange(code, `${url.origin}/api/callback`)
+	const exchanged = await getClient().exchange(code, `${url.origin}/api/callback`)
 
 	if (exchanged.err) {
 		return NextResponse.json(exchanged.err, { status: 400 })

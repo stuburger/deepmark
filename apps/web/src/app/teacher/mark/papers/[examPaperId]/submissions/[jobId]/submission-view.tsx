@@ -7,12 +7,12 @@ import {
 } from "@/components/ui/resizable"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { triggerEnrichment } from "@/lib/marking/mutations"
 import {
 	getJobAnnotations,
 	getJobPageTokens,
 	getJobScanPageUrls,
 } from "@/lib/marking/queries"
-import { triggerEnrichment } from "@/lib/marking/mutations"
 import type {
 	PageToken,
 	ScanPageUrl,
@@ -203,6 +203,7 @@ export function SubmissionView({
 				onToggleChains={() => setShowChains((v) => !v)}
 				onGenerateAnnotations={() => enrichMutation.mutate()}
 				enrichmentLoading={enrichmentLoading}
+				annotationCount={annotations.length}
 			/>
 
 			{/* Mobile: scan/results tabs */}

@@ -2,7 +2,7 @@ import { db } from "@/db"
 import { logger } from "@/lib/infra/logger"
 import { getFileBase64 } from "@/lib/infra/s3"
 import { GoogleGenAI } from "@google/genai"
-import { logStudentPaperEvent } from "@mcp-gcse/db"
+import { logOcrRunEvent } from "@mcp-gcse/db"
 import { Resource } from "sst"
 import { RECONCILE_SCHEMA, buildReconciliationPrompt } from "./vision-reconcile-prompt"
 
@@ -173,7 +173,7 @@ export async function reconcilePageTokens({
 		}),
 	)
 
-	void logStudentPaperEvent(db, jobId, {
+	void logOcrRunEvent(db, jobId, {
 		type: "token_reconciliation_complete",
 		at: new Date().toISOString(),
 		tokens_corrected: totalCorrected,

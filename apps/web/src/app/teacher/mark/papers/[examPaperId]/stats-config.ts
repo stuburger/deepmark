@@ -34,9 +34,8 @@ export function statusLabel(status: string) {
 			return "Queued"
 		case "processing":
 			return "Reading pages…"
-		case "extracting":
-		case "extracted":
-			return "Extracting text…"
+		case "text_extracted":
+			return "Answers extracted…"
 		case "grading":
 			return "Marking…"
 		case "ocr_complete":

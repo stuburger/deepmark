@@ -77,21 +77,41 @@ export async function logEvent(
 }
 
 /**
- * Atomically appends one event to the job_events JSONB array on student_paper_jobs.
- * Uses Postgres || operator — no read-modify-write race.
+ * Atomically appends one event to the job_events JSONB array on ocr_runs.
  * Non-fatal: swallows all errors so the main pipeline is never affected.
  */
-export async function logStudentPaperEvent(
+export async function logOcrRunEvent(
 	db: PrismaClient,
-	jobId: string,
+	runId: string,
 	event: JobEvent,
 ): Promise<void> {
 	try {
 		const payload = JSON.stringify([event])
 		await db.$executeRaw(Prisma.sql`
-      UPDATE "student_paper_jobs"
+      UPDATE "ocr_runs"
       SET job_events = COALESCE(job_events, '[]'::jsonb) || ${payload}::jsonb
-      WHERE id = ${jobId}
+      WHERE id = ${runId}
+    `)
+	} catch {
+		// Event loss is acceptable — pipeline correctness must not depend on this.
+	}
+}
+
+/**
+ * Atomically appends one event to the job_events JSONB array on grading_runs.
+ * Non-fatal: swallows all errors so the main pipeline is never affected.
+ */
+export async function logGradingRunEvent(
+	db: PrismaClient,
+	runId: string,
+	event: JobEvent,
+): Promise<void> {
+	try {
+		const payload = JSON.stringify([event])
+		await db.$executeRaw(Prisma.sql`
+      UPDATE "grading_runs"
+      SET job_events = COALESCE(job_events, '[]'::jsonb) || ${payload}::jsonb
+      WHERE id = ${runId}
     `)
 	} catch {
 		// Event loss is acceptable — pipeline correctness must not depend on this.

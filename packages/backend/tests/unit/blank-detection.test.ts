@@ -4,7 +4,7 @@ import {
 	DEFAULT_BLANK_THRESHOLD,
 	computeInkDensity,
 	isBlankPage,
-} from "../../packages/backend/src/lib/blank-detection"
+} from "../../src/lib/scan-extraction/blank-detection"
 
 async function makeJpeg(
 	width: number,
@@ -46,17 +46,13 @@ describe("blank-detection", () => {
 	it("does not flag a greyscale form/header page with ~5% ink as blank", async () => {
 		const buffer = await makeJpegWithDarkPixels(200, 200, 0.05)
 		const density = await computeInkDensity(buffer)
-		// Should have meaningful ink density
 		expect(density).toBeGreaterThan(DEFAULT_BLANK_THRESHOLD)
 		expect(await isBlankPage(buffer)).toBe(false)
 	})
 
 	it("threshold is configurable", async () => {
-		// 1% ink density image
 		const buffer = await makeJpegWithDarkPixels(100, 100, 0.01)
-		// Default threshold (0.5%): 1% ink → not blank
 		expect(await isBlankPage(buffer, DEFAULT_BLANK_THRESHOLD)).toBe(false)
-		// Higher threshold (2%): 1% ink → blank
 		expect(await isBlankPage(buffer, 0.02)).toBe(true)
 	})
 })

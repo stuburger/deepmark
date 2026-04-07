@@ -6,6 +6,7 @@ import type { BatchStatus } from "@mcp-gcse/db"
 import { createPrismaClient } from "@mcp-gcse/db"
 import { Resource } from "sst"
 import { auth } from "../auth"
+import { deriveScanStatus } from "../marking/status"
 import {
 	type ActiveBatchInfo,
 	type BatchIngestJobData,
@@ -15,6 +16,47 @@ import {
 const bucketName = Resource.ScansBucket.name
 const s3 = new S3Client({})
 const db = createPrismaClient(Resource.NeonPostgres.databaseUrl)
+
+const submissionInclude = {
+	student_submissions: {
+		where: { superseded_at: null },
+		select: {
+			id: true,
+			student_name: true,
+			staged_script_id: true,
+			ocr_runs: {
+				orderBy: { created_at: "desc" as const },
+				take: 1,
+				select: { status: true },
+			},
+			grading_runs: {
+				orderBy: { created_at: "desc" as const },
+				take: 1,
+				select: { status: true, grading_results: true },
+			},
+		},
+	},
+} as const
+
+type SubRow = {
+	id: string
+	student_name: string | null
+	staged_script_id: string | null
+	ocr_runs: Array<{ status: string }>
+	grading_runs: Array<{ status: string; grading_results: unknown }>
+}
+
+function mapSubmission(s: SubRow): BatchIngestJobData["student_jobs"][number] {
+	const ocrStatus = (s.ocr_runs[0]?.status ?? null) as Parameters<typeof deriveScanStatus>[0]
+	const gradingStatus = (s.grading_runs[0]?.status ?? null) as Parameters<typeof deriveScanStatus>[1]
+	return {
+		id: s.id,
+		status: deriveScanStatus(ocrStatus, gradingStatus),
+		student_name: s.student_name,
+		grading_results: s.grading_runs[0]?.grading_results ?? null,
+		staged_script_id: s.staged_script_id,
+	}
+}
 
 // ─── getBatchIngestJob ──────────────────────────────────────────────────────
 
@@ -34,16 +76,7 @@ export async function getBatchIngestJob(
 			staged_scripts: {
 				orderBy: { created_at: "asc" },
 			},
-			student_jobs: {
-				where: { superseded_at: null },
-				select: {
-					id: true,
-					status: true,
-					student_name: true,
-					grading_results: true,
-					staged_script_id: true,
-				},
-			},
+			...submissionInclude,
 		},
 	})
 
@@ -68,13 +101,7 @@ export async function getBatchIngestJob(
 				confidence: s.confidence,
 				status: s.status,
 			})),
-			student_jobs: batch.student_jobs.map((j) => ({
-				id: j.id,
-				status: j.status,
-				student_name: j.student_name,
-				grading_results: j.grading_results,
-				staged_script_id: j.staged_script_id,
-			})),
+			student_jobs: batch.student_submissions.map(mapSubmission),
 		},
 	}
 }
@@ -98,16 +125,7 @@ export async function getActiveBatchForPaper(
 		orderBy: { created_at: "desc" },
 		include: {
 			staged_scripts: { orderBy: { created_at: "asc" } },
-			student_jobs: {
-				where: { superseded_at: null },
-				select: {
-					id: true,
-					status: true,
-					student_name: true,
-					grading_results: true,
-					staged_script_id: true,
-				},
-			},
+			...submissionInclude,
 		},
 	})
 
@@ -129,13 +147,7 @@ export async function getActiveBatchForPaper(
 				confidence: s.confidence,
 				status: s.status,
 			})),
-			student_jobs: batch.student_jobs.map((j) => ({
-				id: j.id,
-				status: j.status,
-				student_name: j.student_name,
-				grading_results: j.grading_results,
-				staged_script_id: j.staged_script_id,
-			})),
+			student_jobs: batch.student_submissions.map(mapSubmission),
 		},
 	}
 }

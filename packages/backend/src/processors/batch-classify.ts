@@ -609,11 +609,10 @@ async function autoCommitBatch(
 	const createdJobs = await Promise.all(
 		stagedScripts.map((script) => {
 			const pageKeys = script.page_keys as PageKey[]
-			return db.studentPaperJob.create({
+			return db.studentSubmission.create({
 				data: {
 					s3_key: pageKeys[0]?.s3_key ?? "",
 					s3_bucket: Resource.ScansBucket.name,
-					status: "pending",
 					uploaded_by: batch.uploaded_by,
 					exam_paper_id: examPaper.id,
 					exam_board: examPaper.exam_board ?? "Unknown",

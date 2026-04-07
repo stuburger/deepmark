@@ -233,7 +233,7 @@ export async function commitBatchService(
 			staged_scripts: {
 				where: { status: "confirmed" },
 			},
-			student_jobs: {
+			student_submissions: {
 				where: { superseded_at: null },
 				select: { staged_script_id: true },
 			},
@@ -252,7 +252,7 @@ export async function commitBatchService(
 
 	// Exclude scripts already submitted in a previous commit
 	const alreadySubmitted = new Set(
-		batch.student_jobs.map((j) => j.staged_script_id).filter(Boolean),
+		batch.student_submissions.map((j) => j.staged_script_id).filter(Boolean),
 	)
 	const confirmedScripts = batch.staged_scripts.filter(
 		(s) => !alreadySubmitted.has(s.id),
@@ -264,24 +264,26 @@ export async function commitBatchService(
 
 	const createdJobs = await db.$transaction(async (tx) => {
 		const jobs = await Promise.all(
-			confirmedScripts.map((script) => {
+			confirmedScripts.map(async (script) => {
 				const pageKeys = parsePageKeys(script.page_keys)
-				return tx.studentPaperJob.create({
+				const pagesJson = pageKeys.map(({ s3_key, order, mime_type }) => ({
+					key: s3_key,
+					order,
+					mime_type,
+				}))
+				const studentName = script.confirmed_name ?? script.proposed_name
+
+				return tx.studentSubmission.create({
 					data: {
 						s3_key: pageKeys[0]?.s3_key ?? "",
 						s3_bucket: bucketName,
-						status: "pending",
 						uploaded_by: uploadedBy,
 						exam_paper_id: batch.exam_paper.id,
 						exam_board: batch.exam_paper.exam_board ?? "Unknown",
 						subject: batch.exam_paper.subject,
 						year: batch.exam_paper.year,
-						pages: pageKeys.map(({ s3_key, order, mime_type }) => ({
-							key: s3_key,
-							order,
-							mime_type,
-						})) as never,
-						student_name: script.confirmed_name ?? script.proposed_name,
+						pages: pagesJson as never,
+						student_name: studentName,
 						batch_job_id: batchJobId,
 						staged_script_id: script.id,
 					},

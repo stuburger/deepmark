@@ -3,7 +3,7 @@ import { logger } from "@/lib/infra/logger"
 import { getFileBase64 } from "@/lib/infra/s3"
 import type { CorrectedPageToken } from "@/lib/scan-extraction/vision-reconcile"
 import { GoogleGenAI } from "@google/genai"
-import { logStudentPaperEvent } from "@mcp-gcse/db"
+import { logOcrRunEvent } from "@mcp-gcse/db"
 import { computeBboxHull } from "@mcp-gcse/shared"
 import { Resource } from "sst"
 import {
@@ -270,7 +270,7 @@ export async function visionAttributeRegions({
 
 				return [
 					{
-						job_id: jobId,
+						submission_id: jobId,
 						question_id: assignment.question_id,
 						question_number,
 						page_order: page.order,
@@ -307,7 +307,7 @@ export async function visionAttributeRegions({
 	const assignedQuestionIds = new Set(
 		await db.studentPaperAnswerRegion
 			.findMany({
-				where: { job_id: jobId },
+				where: { submission_id: jobId },
 				select: { question_id: true },
 			})
 			.then((rows) => rows.map((r) => r.question_id)),
@@ -335,7 +335,7 @@ export async function visionAttributeRegions({
 		totalLocated += fallbackLocated
 	}
 
-	void logStudentPaperEvent(db, jobId, {
+	void logOcrRunEvent(db, jobId, {
 		type: "region_attribution_complete",
 		at: new Date().toISOString(),
 		questions_located: totalLocated,
@@ -464,7 +464,7 @@ async function runMcqGeminiFallback({
 			// questionNumberById.has() above guarantees the key is present.
 			await db.studentPaperAnswerRegion.createMany({
 				data: found.map((r) => ({
-					job_id: jobId,
+					submission_id: jobId,
 					question_id: r.question_id,
 					question_number: questionNumberById.get(r.question_id)!,
 					page_order: page.order,

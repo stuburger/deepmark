@@ -83,7 +83,7 @@ export type AnnotationPayload = SharedAnnotationPayload
 
 export type StudentPaperAnnotation = {
 	id: string
-	job_id: string
+	enrichment_run_id: string
 	question_id: string
 	page_order: number
 	overlay_type: OverlayType
@@ -196,7 +196,7 @@ export type ListMySubmissionsResult =
 	| { ok: true; submissions: SubmissionHistoryItem[] }
 	| { ok: false; error: string }
 
-export type DeleteStudentPaperJobResult =
+export type DeleteSubmissionResult =
 	| { ok: true }
 	| { ok: false; error: string }
 

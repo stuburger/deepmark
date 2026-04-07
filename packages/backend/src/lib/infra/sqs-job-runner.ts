@@ -1,11 +1,10 @@
 import { db } from "@/db"
 import { logger } from "@/lib/infra/logger"
 import {
-	type EnrichmentStatus,
 	type GradingStatus,
 	type OcrStatus,
-	type ScanStatus,
-	logStudentPaperEvent,
+	logGradingRunEvent,
+	logOcrRunEvent,
 } from "@mcp-gcse/db"
 
 export interface SqsRecord {
@@ -32,8 +31,7 @@ export function parseSqsJobId(record: SqsRecord, tag: string): string | null {
 }
 
 /**
- * Marks a student paper job as failed on the legacy StudentPaperJob table.
- * Also fails the corresponding run record (OcrRun or GradingRun) when present.
+ * Marks a job as failed on the corresponding run record (OcrRun or GradingRun).
  * Safe to call from a catch block — any DB errors are swallowed.
  */
 export async function markJobFailed(
@@ -44,37 +42,35 @@ export async function markJobFailed(
 ): Promise<void> {
 	logger.error(tag, "Job failed", { jobId, phase, error: String(err) })
 	const message = err instanceof Error ? err.message : String(err)
-	try {
-		await db.studentPaperJob.update({
-			where: { id: jobId },
-			data: { status: "failed" satisfies ScanStatus, error: message },
-		})
-		void logStudentPaperEvent(db, jobId, {
-			type: "job_failed",
-			at: new Date().toISOString(),
-			phase,
-			error: message,
-		})
-	} catch {
-		// ignore — don't mask the original error
-	}
 
-	// Also fail the corresponding run record (best-effort).
+	// Fail the corresponding run record and log the event.
 	// Uses id === jobId (same convention as the processors' upsert calls).
-	if (phase === "ocr") {
-		db.ocrRun
-			.update({
+	try {
+		if (phase === "ocr") {
+			await db.ocrRun.update({
 				where: { id: jobId },
 				data: { status: "failed" satisfies OcrStatus, error: message },
 			})
-			.catch(() => {})
-	} else if (phase === "grading") {
-		db.gradingRun
-			.update({
+			void logOcrRunEvent(db, jobId, {
+				type: "job_failed",
+				at: new Date().toISOString(),
+				phase,
+				error: message,
+			})
+		} else if (phase === "grading") {
+			await db.gradingRun.update({
 				where: { id: jobId },
 				data: { status: "failed" satisfies GradingStatus, error: message },
 			})
-			.catch(() => {})
+			void logGradingRunEvent(db, jobId, {
+				type: "job_failed",
+				at: new Date().toISOString(),
+				phase,
+				error: message,
+			})
+		}
+	} catch {
+		// ignore — don't mask the original error
 	}
 	// Enrichment failures are handled by the enrich processor directly (never touches main job status)
 }

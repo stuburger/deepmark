@@ -1,7 +1,7 @@
 "use client"
 
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
-import { deleteStudentPaperJob } from "@/lib/marking/mutations"
+import { deleteSubmission } from "@/lib/marking/mutations"
 import type { SubmissionHistoryItem } from "@/lib/marking/types"
 import { useState } from "react"
 import { toast } from "sonner"
@@ -22,7 +22,7 @@ export function SubmissionGrid({
 	async function handleConfirmDelete() {
 		if (!pendingDeleteId) return
 		setDeleting(true)
-		const result = await deleteStudentPaperJob(pendingDeleteId)
+		const result = await deleteSubmission(pendingDeleteId)
 		setDeleting(false)
 		if (!result.ok) {
 			toast.error(result.error)

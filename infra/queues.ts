@@ -23,23 +23,27 @@ export const questionPaperQueue = new sst.aws.Queue("QuestionPaperQueue", {
 	visibilityTimeout: "10 minutes",
 })
 
-// Shared DLQ for student paper pipeline — catches messages that fail after max retries
-// across OCR, grading, and enrichment queues. Generic handler inspects job state to
-// determine which phase failed and marks the job accordingly.
-const studentPaperDlq = new sst.aws.Queue("StudentPaperDLQ", {
+// Dedicated DLQ per queue — each handler already knows its phase, no state inference needed.
+const studentPaperOcrDlq = new sst.aws.Queue("StudentPaperOcrDLQ", {
+	visibilityTimeout: "1 minute",
+})
+const studentPaperGradingDlq = new sst.aws.Queue("StudentPaperGradingDLQ", {
+	visibilityTimeout: "1 minute",
+})
+const studentPaperEnrichDlq = new sst.aws.Queue("StudentPaperEnrichDLQ", {
 	visibilityTimeout: "1 minute",
 })
 
 // OCR queue: manually triggered by server action after teacher finalises upload
 export const studentPaperOcrQueue = new sst.aws.Queue("StudentPaperOcrQueue", {
 	visibilityTimeout: "10 minutes",
-	dlq: { queue: studentPaperDlq.arn, retry: 2 },
+	dlq: { queue: studentPaperOcrDlq.arn, retry: 2 },
 })
 
 // Grading queue: manually triggered by server action after teacher selects exam paper
 export const studentPaperQueue = new sst.aws.Queue("StudentPaperQueue", {
 	visibilityTimeout: "10 minutes",
-	dlq: { queue: studentPaperDlq.arn, retry: 2 },
+	dlq: { queue: studentPaperGradingDlq.arn, retry: 2 },
 })
 
 // Enrich queue: automatically triggered by student-paper-grade once grading completes.
@@ -48,7 +52,7 @@ export const studentPaperEnrichQueue = new sst.aws.Queue(
 	"StudentPaperEnrichQueue",
 	{
 		visibilityTimeout: "10 minutes",
-		dlq: { queue: studentPaperDlq.arn, retry: 2 },
+		dlq: { queue: studentPaperEnrichDlq.arn, retry: 2 },
 	},
 )
 
@@ -186,10 +190,22 @@ studentPaperEnrichQueue.subscribe({
 	memory: "1 GB",
 })
 
-// DLQ handler: when any student paper pipeline stage fails after max retries,
-// mark the job as failed so the UI shows a clear error state.
-studentPaperDlq.subscribe({
-	handler: "packages/backend/src/processors/student-paper-dlq.handler",
+// DLQ handlers: each queue has its own dedicated DLQ handler that already knows
+// which phase failed — no job state inspection required.
+studentPaperOcrDlq.subscribe({
+	handler: "packages/backend/src/processors/student-paper-ocr-dlq.handler",
+	link: [neonPostgres],
+	timeout: "30 seconds",
+})
+
+studentPaperGradingDlq.subscribe({
+	handler: "packages/backend/src/processors/student-paper-grading-dlq.handler",
+	link: [neonPostgres],
+	timeout: "30 seconds",
+})
+
+studentPaperEnrichDlq.subscribe({
+	handler: "packages/backend/src/processors/student-paper-enrich-dlq.handler",
 	link: [neonPostgres],
 	timeout: "30 seconds",
 })

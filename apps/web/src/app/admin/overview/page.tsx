@@ -61,9 +61,9 @@ export default async function AdminOverviewPage() {
 			color: "text-yellow-500",
 		},
 		{
-			title: "Student paper jobs",
-			value: stats.totalStudentPaperJobs,
-			description: `${stats.activeStudentPaperJobs} in progress (not yet finished)`,
+			title: "Submissions",
+			value: stats.totalSubmissions,
+			description: `${stats.activeSubmissions} in progress (not yet finished)`,
 			icon: FileText,
 			color: "text-pink-500",
 		},

@@ -15,8 +15,8 @@ export type DashboardStats = {
 	pendingAnswers: number
 	completedAnswers: number
 	failedAnswers: number
-	totalStudentPaperJobs: number
-	activeStudentPaperJobs: number
+	totalSubmissions: number
+	activeSubmissions: number
 	markSchemesNeedingReview: number
 }
 
@@ -51,8 +51,8 @@ export async function getDashboardData(): Promise<DashboardData> {
 		pendingAnswers,
 		completedAnswers,
 		failedAnswers,
-		totalStudentPaperJobs,
-		activeStudentPaperJobs,
+		totalSubmissions,
+		activeSubmissions,
 		markSchemesNeedingReview,
 		answersByStatus,
 		questionsBySubjectRaw,
@@ -65,12 +65,11 @@ export async function getDashboardData(): Promise<DashboardData> {
 		db.answer.count({ where: { marking_status: "pending" } }),
 		db.answer.count({ where: { marking_status: "completed" } }),
 		db.answer.count({ where: { marking_status: "failed" } }),
-		db.studentPaperJob.count(),
-		db.studentPaperJob.count({
+		db.studentSubmission.count(),
+		db.studentSubmission.count({
 			where: {
-				status: {
-					notIn: ["ocr_complete", "failed", "cancelled"],
-				},
+				superseded_at: null,
+				grading_runs: { none: { status: { in: ["complete", "failed", "cancelled"] } } },
 			},
 		}),
 		db.markScheme.count({
@@ -90,8 +89,8 @@ export async function getDashboardData(): Promise<DashboardData> {
 			pendingAnswers,
 			completedAnswers,
 			failedAnswers,
-			totalStudentPaperJobs,
-			activeStudentPaperJobs,
+			totalSubmissions,
+			activeSubmissions,
 			markSchemesNeedingReview,
 		},
 		markingStatusBreakdown: answersByStatus.map((row) => ({

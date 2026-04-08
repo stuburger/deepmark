@@ -12,7 +12,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
-import { createExamPaperStandalone } from "@/lib/exam-paper/mutations"
+import { createExamPaperStandalone } from "@/lib/exam-paper/paper/mutations"
 import {
 	type DetectedPdfMetadata,
 	type IngestionSlot,

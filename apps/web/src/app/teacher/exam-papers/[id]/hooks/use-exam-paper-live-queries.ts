@@ -1,7 +1,7 @@
 "use client"
 
-import type { ExamPaperDetail } from "@/lib/exam-paper/queries"
-import { getExamPaperDetail } from "@/lib/exam-paper/queries"
+import { getExamPaperDetail } from "@/lib/exam-paper/paper/queries"
+import type { ExamPaperDetail } from "@/lib/exam-paper/types"
 import { getExamPaperStats } from "@/lib/marking/stats/queries"
 import type { ExamPaperStats } from "@/lib/marking/types"
 import type {

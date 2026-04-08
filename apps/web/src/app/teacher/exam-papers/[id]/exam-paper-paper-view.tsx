@@ -1,14 +1,14 @@
 "use client"
 
+import {
+	reorderQuestionsInSection,
+	reorderSections,
+} from "@/lib/exam-paper/questions/mutations"
 import type {
 	ExamPaperDetail,
 	ExamPaperQuestion,
 	ExamPaperSection,
-} from "@/lib/exam-paper/queries"
-import {
-	reorderQuestionsInSection,
-	reorderSections,
-} from "@/lib/exam-paper/questions"
+} from "@/lib/exam-paper/types"
 import { queryKeys } from "@/lib/query-keys"
 import {
 	DndContext,

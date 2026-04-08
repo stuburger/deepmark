@@ -8,7 +8,7 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table"
-import type { ExamPaperDetail } from "@/lib/exam-paper/queries"
+import type { ExamPaperDetail } from "@/lib/exam-paper/types"
 import { naturalCompare } from "@/lib/utils"
 import {
 	ArrowUpDown,

@@ -7,9 +7,8 @@ import {
 	TooltipProvider,
 	TooltipTrigger,
 } from "@/components/ui/tooltip"
-import type { ExamPaperQuestion } from "@/lib/exam-paper/queries"
-import type { QuestionDetail } from "@/lib/exam-paper/questions"
-import { getQuestionDetail } from "@/lib/exam-paper/questions"
+import { getQuestionDetail } from "@/lib/exam-paper/questions/queries"
+import type { ExamPaperQuestion, QuestionDetail } from "@/lib/exam-paper/types"
 import type { MarkingRulesInput } from "@/lib/mark-scheme/manual"
 import { cn } from "@/lib/utils"
 import { useSortable } from "@dnd-kit/sortable"

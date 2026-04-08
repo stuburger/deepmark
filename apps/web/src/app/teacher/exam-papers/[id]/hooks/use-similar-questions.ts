@@ -1,7 +1,7 @@
 "use client"
 
-import type { SimilarPair } from "@/lib/exam-paper/queries"
-import { getSimilarQuestionsForPaper } from "@/lib/exam-paper/queries"
+import { getSimilarQuestionsForPaper } from "@/lib/exam-paper/similarity"
+import type { SimilarPair } from "@/lib/exam-paper/types"
 import { queryKeys } from "@/lib/query-keys"
 import { useQuery } from "@tanstack/react-query"
 

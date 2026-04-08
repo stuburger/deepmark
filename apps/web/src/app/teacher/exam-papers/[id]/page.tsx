@@ -1,4 +1,4 @@
-import { getExamPaperDetail } from "@/lib/exam-paper/queries"
+import { getExamPaperDetail } from "@/lib/exam-paper/paper/queries"
 import { listMySubmissions } from "@/lib/marking/listing/queries"
 import { getExamPaperStats } from "@/lib/marking/stats/queries"
 import { getExamPaperIngestionLiveState } from "@/lib/pdf-ingestion/queries"

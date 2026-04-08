@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
-import { deleteQuestion } from "@/lib/exam-paper/questions"
+import { deleteQuestion } from "@/lib/exam-paper/questions/mutations"
 import { Trash2 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useState } from "react"

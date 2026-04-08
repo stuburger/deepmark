@@ -1,14 +1,14 @@
 "use client"
 
+import {
+	deleteQuestion,
+	updateQuestion,
+} from "@/lib/exam-paper/questions/mutations"
 import type {
 	ExamPaperDetail,
 	UnlinkedMarkScheme,
-} from "@/lib/exam-paper/queries"
-import {
-	type UpdateQuestionInput,
-	deleteQuestion,
-	updateQuestion,
-} from "@/lib/exam-paper/questions"
+	UpdateQuestionInput,
+} from "@/lib/exam-paper/types"
 import { linkMarkSchemeToQuestion } from "@/lib/exam-paper/unlinked-schemes"
 import {
 	type MarkSchemeInput,

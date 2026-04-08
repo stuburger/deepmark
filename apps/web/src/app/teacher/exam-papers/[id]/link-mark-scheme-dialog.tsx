@@ -12,7 +12,7 @@ import { Spinner } from "@/components/ui/spinner"
 import type {
 	ExamPaperQuestion,
 	UnlinkedMarkScheme,
-} from "@/lib/exam-paper/queries"
+} from "@/lib/exam-paper/types"
 import type { UseMutateFunction } from "@tanstack/react-query"
 
 interface LinkMarkSchemeDialogProps {

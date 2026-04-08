@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Textarea } from "@/components/ui/textarea"
-import { updateLevelDescriptors } from "@/lib/exam-paper/mutations"
+import { updateLevelDescriptors } from "@/lib/exam-paper/paper/mutations"
 import { queryKeys } from "@/lib/query-keys"
 import { useQueryClient } from "@tanstack/react-query"
 import { ChevronDown, Save } from "lucide-react"

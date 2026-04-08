@@ -10,7 +10,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Spinner } from "@/components/ui/spinner"
 import { Textarea } from "@/components/ui/textarea"
-import type { UpdateQuestionInput } from "@/lib/exam-paper/questions"
+import type { UpdateQuestionInput } from "@/lib/exam-paper/types"
 import { CheckCircle2 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useState } from "react"

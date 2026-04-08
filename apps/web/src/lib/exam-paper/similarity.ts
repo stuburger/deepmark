@@ -6,8 +6,83 @@ import { auth } from "../auth"
 import { embedText } from "../embeddings"
 import { log } from "../logger"
 
+import type { SimilarPair } from "./types"
+
 const TAG = "exam-paper/similarity"
 const db = createPrismaClient(Resource.NeonPostgres.databaseUrl)
+
+// ─── Query ───────────────────────────────────────────────────────────────────
+
+export type GetSimilarQuestionsForPaperResult =
+	| { ok: true; pairs: SimilarPair[] }
+	| { ok: false; error: string }
+
+/**
+ * For each question in the paper, finds the nearest neighbour within the same
+ * paper using vector cosine similarity. Returns pairs with distance < 0.15
+ * (tighter than the matching threshold to avoid false positives).
+ *
+ * Deduplicates symmetric pairs (A,B) == (B,A) so each pair appears once.
+ */
+export async function getSimilarQuestionsForPaper(
+	examPaperId: string,
+): Promise<GetSimilarQuestionsForPaperResult> {
+	const session = await auth()
+	if (!session) return { ok: false, error: "Not authenticated" }
+
+	try {
+		const rows = await db.$queryRaw<{ id: string; embedding: string | null }[]>`
+			SELECT q.id, q.embedding::text AS embedding
+			FROM questions q
+			JOIN exam_section_questions esq ON esq.question_id = q.id
+			JOIN exam_sections es ON es.id = esq.exam_section_id
+			WHERE es.exam_paper_id = ${examPaperId}
+			AND q.embedding IS NOT NULL
+		`
+
+		if (rows.length < 2) return { ok: true, pairs: [] }
+
+		const seen = new Set<string>()
+		const pairs: SimilarPair[] = []
+
+		await Promise.all(
+			rows.map(async (row) => {
+				const nearRows = await db.$queryRaw<{ id: string; dist: number }[]>`
+					SELECT q.id, (q.embedding <=> (SELECT embedding FROM questions WHERE id = ${row.id})) AS dist
+					FROM questions q
+					JOIN exam_section_questions esq ON esq.question_id = q.id
+					JOIN exam_sections es ON es.id = esq.exam_section_id
+					WHERE es.exam_paper_id = ${examPaperId}
+					AND q.id != ${row.id}
+					AND q.embedding IS NOT NULL
+					ORDER BY dist ASC
+					LIMIT 1
+				`
+				const near = nearRows[0]
+				if (!near || Number(near.dist) >= 0.15) return
+
+				const key = [row.id, near.id].sort().join(":")
+				if (seen.has(key)) return
+				seen.add(key)
+				pairs.push({
+					questionId: row.id,
+					similarToId: near.id,
+					distance: Number(near.dist),
+				})
+			}),
+		)
+
+		return { ok: true, pairs }
+	} catch (err) {
+		log.error(TAG, "getSimilarQuestionsForPaper failed", {
+			examPaperId,
+			error: String(err),
+		})
+		return { ok: false, error: "Failed to compute similarity" }
+	}
+}
+
+// ─── Mutation ────────────────────────────────────────────────────────────────
 
 export type ConsolidateQuestionsResult =
 	| { ok: true }

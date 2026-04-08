@@ -1,7 +1,7 @@
 "use client"
 
 import { Button } from "@/components/ui/button"
-import { getSimilarQuestionsForPaper } from "@/lib/exam-paper/queries"
+import { getSimilarQuestionsForPaper } from "@/lib/exam-paper/similarity"
 import { AlertTriangle, GitMerge } from "lucide-react"
 import Link from "next/link"
 import { useEffect, useState } from "react"

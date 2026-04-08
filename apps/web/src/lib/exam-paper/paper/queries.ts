@@ -2,28 +2,14 @@
 
 import { createPrismaClient } from "@mcp-gcse/db"
 import { Resource } from "sst"
-import { auth } from "../auth"
-import { log } from "../logger"
 import type {
 	CatalogExamPaper,
 	ExamPaperDetail,
 	ExamPaperListItem,
 	ExamPaperQuestion,
 	ExamPaperSection,
-	SimilarPair,
-	UnlinkedMarkScheme,
-} from "./types"
-export type {
-	CatalogExamPaper,
-	ExamPaperDetail,
-	ExamPaperListItem,
-	ExamPaperQuestion,
-	ExamPaperSection,
-	SimilarPair,
-	UnlinkedMarkScheme,
-} from "./types"
+} from "../types"
 
-const TAG = "exam-paper/queries"
 const db = createPrismaClient(Resource.NeonPostgres.databaseUrl)
 
 // ─── Exam paper list ──────────────────────────────────────────────────────────
@@ -233,144 +219,5 @@ export async function listCatalogExamPapers(): Promise<ListCatalogExamPapersResu
 		}
 	} catch {
 		return { ok: false, error: "Failed to load catalog" }
-	}
-}
-
-// ─── Unlinked mark schemes ────────────────────────────────────────────────────
-
-export type GetUnlinkedMarkSchemesResult =
-	| { ok: true; items: UnlinkedMarkScheme[] }
-	| { ok: false; error: string }
-
-/**
- * Returns questions in the paper whose mark scheme has link_status = "unlinked".
- * These are "ghost" questions created by the ingestion pipeline that couldn't
- * be matched to an existing question paper question.
- */
-export async function getUnlinkedMarkSchemes(
-	examPaperId: string,
-): Promise<GetUnlinkedMarkSchemesResult> {
-	const session = await auth()
-	if (!session) return { ok: false, error: "Not authenticated" }
-
-	try {
-		const rows = await db.examSectionQuestion.findMany({
-			where: {
-				exam_section: { exam_paper_id: examPaperId },
-				question: {
-					mark_schemes: { some: { link_status: "unlinked" } },
-				},
-			},
-			select: {
-				question: {
-					select: {
-						id: true,
-						text: true,
-						question_number: true,
-						mark_schemes: {
-							where: { link_status: "unlinked" },
-							select: {
-								id: true,
-								description: true,
-								points_total: true,
-							},
-						},
-					},
-				},
-			},
-		})
-
-		const items: UnlinkedMarkScheme[] = []
-		for (const row of rows) {
-			for (const ms of row.question.mark_schemes) {
-				items.push({
-					markSchemeId: ms.id,
-					markSchemeDescription: ms.description,
-					pointsTotal: ms.points_total,
-					ghostQuestionId: row.question.id,
-					ghostQuestionText: row.question.text,
-					ghostQuestionNumber: row.question.question_number,
-				})
-			}
-		}
-
-		return { ok: true, items }
-	} catch (err) {
-		log.error(TAG, "getUnlinkedMarkSchemes failed", {
-			examPaperId,
-			error: String(err),
-		})
-		return { ok: false, error: "Failed to load unlinked mark schemes" }
-	}
-}
-
-// ─── Similarity ───────────────────────────────────────────────────────────────
-
-export type GetSimilarQuestionsForPaperResult =
-	| { ok: true; pairs: SimilarPair[] }
-	| { ok: false; error: string }
-
-/**
- * For each question in the paper, finds the nearest neighbour within the same
- * paper using vector cosine similarity. Returns pairs with distance < 0.15
- * (tighter than the matching threshold to avoid false positives).
- *
- * Deduplicates symmetric pairs (A,B) == (B,A) so each pair appears once.
- */
-export async function getSimilarQuestionsForPaper(
-	examPaperId: string,
-): Promise<GetSimilarQuestionsForPaperResult> {
-	const session = await auth()
-	if (!session) return { ok: false, error: "Not authenticated" }
-
-	try {
-		const rows = await db.$queryRaw<{ id: string; embedding: string | null }[]>`
-			SELECT q.id, q.embedding::text AS embedding
-			FROM questions q
-			JOIN exam_section_questions esq ON esq.question_id = q.id
-			JOIN exam_sections es ON es.id = esq.exam_section_id
-			WHERE es.exam_paper_id = ${examPaperId}
-			AND q.embedding IS NOT NULL
-		`
-
-		if (rows.length < 2) return { ok: true, pairs: [] }
-
-		const seen = new Set<string>()
-		const pairs: SimilarPair[] = []
-
-		await Promise.all(
-			rows.map(async (row) => {
-				const nearRows = await db.$queryRaw<{ id: string; dist: number }[]>`
-					SELECT q.id, (q.embedding <=> (SELECT embedding FROM questions WHERE id = ${row.id})) AS dist
-					FROM questions q
-					JOIN exam_section_questions esq ON esq.question_id = q.id
-					JOIN exam_sections es ON es.id = esq.exam_section_id
-					WHERE es.exam_paper_id = ${examPaperId}
-					AND q.id != ${row.id}
-					AND q.embedding IS NOT NULL
-					ORDER BY dist ASC
-					LIMIT 1
-				`
-				const near = nearRows[0]
-				if (!near || Number(near.dist) >= 0.15) return
-
-				const key = [row.id, near.id].sort().join(":")
-				if (seen.has(key)) return
-				seen.add(key)
-				pairs.push({
-					questionId: row.id,
-					similarToId: near.id,
-					distance: Number(near.dist),
-				})
-			}),
-		)
-
-		return { ok: true, pairs }
-	} catch (err) {
-		log.error(TAG, "getSimilarQuestionsForPaper failed", {
-			examPaperId,
-			error: String(err),
-		})
-		return { ok: false, error: "Failed to compute similarity" }
 	}
 }

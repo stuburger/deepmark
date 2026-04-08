@@ -1,6 +1,6 @@
 import { buttonVariants } from "@/components/ui/button-variants"
 import { Skeleton } from "@/components/ui/skeleton"
-import { listExamPapers } from "@/lib/exam-paper/queries"
+import { listExamPapers } from "@/lib/exam-paper/paper/queries"
 import { PlusCircle } from "lucide-react"
 import Link from "next/link"
 import { Suspense } from "react"

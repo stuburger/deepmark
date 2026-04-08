@@ -1,7 +1,7 @@
 "use client"
 
-import type { UnlinkedMarkScheme } from "@/lib/exam-paper/queries"
-import { getUnlinkedMarkSchemes } from "@/lib/exam-paper/queries"
+import type { UnlinkedMarkScheme } from "@/lib/exam-paper/types"
+import { getUnlinkedMarkSchemes } from "@/lib/exam-paper/unlinked-schemes"
 import { queryKeys } from "@/lib/query-keys"
 import { useQuery } from "@tanstack/react-query"
 

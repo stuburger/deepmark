@@ -6,11 +6,8 @@ import { Card, CardContent } from "@/components/ui/card"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { updateStagedScript } from "@/lib/batch/mutations"
-import { deleteExamPaper } from "@/lib/exam-paper/mutations"
-import type {
-	ExamPaperDetail,
-	UnlinkedMarkScheme,
-} from "@/lib/exam-paper/queries"
+import { deleteExamPaper } from "@/lib/exam-paper/paper/mutations"
+import type { ExamPaperDetail, UnlinkedMarkScheme } from "@/lib/exam-paper/types"
 import type { ExamPaperStats, SubmissionHistoryItem } from "@/lib/marking/types"
 import type {
 	ActiveExamPaperIngestionJob,

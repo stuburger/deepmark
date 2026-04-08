@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button"
-import type { UnlinkedMarkScheme } from "@/lib/exam-paper/queries"
+import type { UnlinkedMarkScheme } from "@/lib/exam-paper/types"
 import { AlertTriangle, Link2 } from "lucide-react"
 
 export function UnlinkedSchemesPanel({

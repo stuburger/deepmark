@@ -78,8 +78,7 @@ function AnswerHighlight({
 type Props = {
 	page: GradedPage
 	activeQuestionId: string | null
-	activeQuestionPartId?: string | null
-	onQuestionActivate: (id: string | null, partId?: string | null) => void
+	onQuestionActivate: (id: string | null) => void
 	className?: string
 }
 
@@ -88,7 +87,6 @@ type Props = {
 export function GradedScanViewer({
 	page,
 	activeQuestionId,
-	activeQuestionPartId = null,
 	onQuestionActivate,
 	className,
 }: Props) {
@@ -113,7 +111,6 @@ export function GradedScanViewer({
 		answers: page.gradedAnswers,
 		imageRenderedHeight: imageDims?.h ?? null,
 		activeQuestionId,
-		activeQuestionPartId,
 	})
 
 	// Primary answers only (no continuations) for the feedback panels
@@ -143,14 +140,12 @@ export function GradedScanViewer({
 							>
 								{page.gradedAnswers.map((answer) => (
 									<AnswerHighlight
-										key={`${answer.questionId}-${answer.questionPartId ?? ""}`}
+										key={answer.questionId}
 										answer={answer}
 										scaleX={scaleX}
 										scaleY={scaleY}
 										isActive={
-											answer.questionId === activeQuestionId &&
-											(answer.questionPartId ?? null) ===
-												(activeQuestionPartId ?? null)
+											answer.questionId === activeQuestionId
 										}
 									/>
 								))}
@@ -161,13 +156,10 @@ export function GradedScanViewer({
 								const region = resolveRegion(answer)
 								if (!region) return null
 								const style = regionToCssStyle(region)
-								const isActive =
-									answer.questionId === activeQuestionId &&
-									(answer.questionPartId ?? null) ===
-										(activeQuestionPartId ?? null)
+								const isActive = answer.questionId === activeQuestionId
 								return (
 									<button
-										key={`trigger-${answer.questionId}-${answer.questionPartId ?? ""}`}
+										key={`trigger-${answer.questionId}`}
 										type="button"
 										aria-label={`Q${answer.questionNumber}: ${answer.questionText}`}
 										style={{
@@ -182,11 +174,8 @@ export function GradedScanViewer({
 										}}
 										onClick={() =>
 											isActive
-												? onQuestionActivate(null, null)
-												: onQuestionActivate(
-														answer.questionId,
-														answer.questionPartId,
-													)
+												? onQuestionActivate(null)
+												: onQuestionActivate(answer.questionId)
 										}
 									/>
 								)
@@ -203,20 +192,16 @@ export function GradedScanViewer({
 					aria-label="Answer feedback"
 				>
 					<div className="relative" style={{ minHeight: imageDims?.h ?? 600 }}>
-						{layout.map(({ questionId, questionPartId, top }) => {
+						{layout.map(({ questionId, top }) => {
 							const answer = page.gradedAnswers.find(
-								(a) =>
-									a.questionId === questionId &&
-									(a.questionPartId ?? null) === (questionPartId ?? null),
+								(a) => a.questionId === questionId,
 							)
 							if (!answer) return null
-							const isActive =
-								questionId === activeQuestionId &&
-								(questionPartId ?? null) === (activeQuestionPartId ?? null)
+							const isActive = questionId === activeQuestionId
 
 							return (
 								<div
-									key={`card-${questionId}-${questionPartId ?? ""}`}
+									key={`card-${questionId}`}
 									className={cn(
 										"pointer-events-auto absolute right-0 left-0 transition-[top] duration-300 ease-out",
 										isActive ? "z-30" : "z-10",
@@ -225,7 +210,6 @@ export function GradedScanViewer({
 								>
 									<MarkingFeedbackThread
 										questionId={answer.questionId}
-										questionPartId={answer.questionPartId}
 										questionText={answer.questionText}
 										questionNumber={answer.questionNumber}
 										awardedScore={answer.awardedScore}
@@ -239,11 +223,8 @@ export function GradedScanViewer({
 										isActive={isActive}
 										onExpand={() =>
 											isActive
-												? onQuestionActivate(null, null)
-												: onQuestionActivate(
-														answer.questionId,
-														answer.questionPartId,
-													)
+												? onQuestionActivate(null)
+												: onQuestionActivate(answer.questionId)
 										}
 									/>
 								</div>
@@ -257,14 +238,11 @@ export function GradedScanViewer({
 			{primaryAnswers.length > 0 && (
 				<div className="space-y-2 lg:hidden">
 					{primaryAnswers.map((answer) => {
-						const isActive =
-							answer.questionId === activeQuestionId &&
-							(answer.questionPartId ?? null) === (activeQuestionPartId ?? null)
+						const isActive = answer.questionId === activeQuestionId
 						return (
 							<MarkingFeedbackThread
-								key={`mobile-${answer.questionId}-${answer.questionPartId ?? ""}`}
+								key={`mobile-${answer.questionId}`}
 								questionId={answer.questionId}
-								questionPartId={answer.questionPartId}
 								questionText={answer.questionText}
 								questionNumber={answer.questionNumber}
 								awardedScore={answer.awardedScore}
@@ -278,11 +256,8 @@ export function GradedScanViewer({
 								isActive={isActive}
 								onExpand={() =>
 									isActive
-										? onQuestionActivate(null, null)
-										: onQuestionActivate(
-												answer.questionId,
-												answer.questionPartId,
-											)
+										? onQuestionActivate(null)
+										: onQuestionActivate(answer.questionId)
 								}
 							/>
 						)

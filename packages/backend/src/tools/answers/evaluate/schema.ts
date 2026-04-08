@@ -4,12 +4,6 @@ export const EvaluateAnswerSchema = {
 	question_id: z
 		.string()
 		.describe("ID of the question to evaluate the answer against"),
-	question_part_id: z
-		.string()
-		.optional()
-		.describe(
-			"Optional: ID of the specific question part (for multi-part questions)",
-		),
 	student_answer: z
 		.string()
 		.min(1)

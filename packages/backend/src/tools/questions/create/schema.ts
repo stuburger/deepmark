@@ -8,35 +8,6 @@ export const MultipleChoiceOptionSchema = z.object({
 	option_text: z.string().describe("The text for this option"),
 })
 
-export const CreateQuestionPartSchema = z.object({
-	part_label: z.string().describe("The part label (e.g., 'a', 'b', 'c')"),
-	part_text: z.string().describe("The text for this specific question part"),
-	part_points: z
-		.number()
-		.int()
-		.positive()
-		.optional()
-		.describe(
-			"Number of marks for this specific part (optional, defaults to parent question points)",
-		),
-	part_difficulty_level: z
-		.enum(["easy", "medium", "hard", "expert"])
-		.optional()
-		.describe(
-			"Difficulty level for this specific part (optional, defaults to parent question difficulty)",
-		),
-	part_question_type: z
-		.enum(["written", "multiple_choice"])
-		.default("written")
-		.describe("Type of question part - written or multiple choice"),
-	part_multiple_choice_options: z
-		.array(MultipleChoiceOptionSchema)
-		.optional()
-		.describe(
-			"Multiple choice options (required for multiple_choice type questions)",
-		),
-})
-
 export const CreateQuestionSchema = {
 	topic: z
 		.string()
@@ -62,7 +33,22 @@ export const CreateQuestionSchema = {
 		.describe(
 			"Multiple choice options (required for multiple_choice type questions)",
 		),
-	question_parts: z.array(CreateQuestionPartSchema),
+	stem_text: z
+		.string()
+		.optional()
+		.describe(
+			"Shared stimulus/context from a parent question group (e.g., 'Read Source A below')",
+		),
+	parent_number: z
+		.string()
+		.optional()
+		.describe(
+			"Grouping key for display (e.g., '2' for questions '2a', '2b', '2c')",
+		),
+	part_label: z
+		.string()
+		.optional()
+		.describe("Sub-question designator (e.g., 'a', 'b', 'i', 'ii')"),
 	// Optional fields for adding question to an exam paper
 	exam_paper_id: z
 		.string()

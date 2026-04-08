@@ -20,14 +20,6 @@ export async function loadExamPaperForGrading(
 							question: {
 								include: {
 									mark_schemes: { take: 1, orderBy: { created_at: "desc" } },
-									question_parts: {
-										include: {
-											mark_schemes: {
-												take: 1,
-												orderBy: { created_at: "desc" },
-											},
-										},
-									},
 								},
 							},
 						},

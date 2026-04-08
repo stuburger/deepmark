@@ -42,12 +42,6 @@ export const CreateMarkSchemeSchema = {
   question_id: z
     .string()
     .describe("The ID of the question this mark scheme is for"),
-  question_part_id: z
-    .string()
-    .optional()
-    .describe(
-      "The ID of the specific question part this mark scheme is for (optional - omit for whole question mark schemes)"
-    ),
   description: z
     .string()
     .describe("Description of what this mark scheme is for"),

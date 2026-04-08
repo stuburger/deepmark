@@ -68,7 +68,6 @@ function ScoreDots({
 
 type Props = {
 	questionId: string
-	questionPartId?: string | null
 	questionText: string
 	questionNumber: string
 	awardedScore: number

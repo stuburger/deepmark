@@ -70,7 +70,6 @@ export async function ensureExamPaper(): Promise<void> {
 		data: fixture.mark_schemes.map((ms) => ({
 			id: ms.id,
 			question_id: ms.question_id,
-			question_part_id: ms.question_part_id ?? undefined,
 			description: ms.description,
 			guidance: ms.guidance ?? undefined,
 			points_total: ms.points_total,

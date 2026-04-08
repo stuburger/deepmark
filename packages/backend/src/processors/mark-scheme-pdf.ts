@@ -476,19 +476,21 @@ export async function handler(
 							},
 						})
 						if (runAdversarialLoopEnabled && grader) {
-							const questionWithScheme = buildQuestionWithMarkScheme(
-								existingId,
+							const questionWithScheme = buildQuestionWithMarkScheme({
+								questionId: existingId,
 								questionText,
-								subject,
-								q.question_type,
-								markPointsPrisma,
-								pointsTotal,
-								q.guidance,
-								formatAoAllocations(q.ao_allocations) ?? "",
-								correctOptionLabels,
-								effectiveMarkingMethod,
-								markingRules ?? null,
-							)
+								topic: subject,
+								questionType: q.question_type,
+								markScheme: {
+									description: formatAoAllocations(q.ao_allocations) ?? "",
+									guidance: q.guidance,
+									pointsTotal,
+									markPoints: markPointsPrisma,
+									markingMethod: effectiveMarkingMethod,
+									markingRules: markingRules ?? null,
+									correctOptionLabels,
+								},
+							})
 							const testResults = await runAdversarialLoop(
 								questionWithScheme,
 								grader,
@@ -541,19 +543,21 @@ export async function handler(
 							},
 						})
 						if (runAdversarialLoopEnabled && grader) {
-							const questionWithScheme = buildQuestionWithMarkScheme(
-								existingId,
+							const questionWithScheme = buildQuestionWithMarkScheme({
+								questionId: existingId,
 								questionText,
-								subject,
-								q.question_type,
-								markPointsPrisma,
-								pointsTotal,
-								q.guidance,
-								formatAoAllocations(q.ao_allocations) ?? "",
-								correctOptionLabels,
-								effectiveMarkingMethod,
-								markingRules ?? null,
-							)
+								topic: subject,
+								questionType: q.question_type,
+								markScheme: {
+									description: formatAoAllocations(q.ao_allocations) ?? "",
+									guidance: q.guidance,
+									pointsTotal,
+									markPoints: markPointsPrisma,
+									markingMethod: effectiveMarkingMethod,
+									markingRules: markingRules ?? null,
+									correctOptionLabels,
+								},
+							})
 							const testResults = await runAdversarialLoop(
 								questionWithScheme,
 								grader,
@@ -630,19 +634,21 @@ export async function handler(
 						},
 					})
 					if (runAdversarialLoopEnabled && grader) {
-						const questionWithScheme = buildQuestionWithMarkScheme(
-							newQuestion.id,
+						const questionWithScheme = buildQuestionWithMarkScheme({
+							questionId: newQuestion.id,
 							questionText,
-							subject,
-							q.question_type,
-							markPointsPrisma,
-							pointsTotal,
-							q.guidance,
-							formatAoAllocations(q.ao_allocations) ?? "",
-							correctOptionLabels,
-							effectiveMarkingMethod,
-							markingRules ?? null,
-						)
+							topic: subject,
+							questionType: q.question_type,
+							markScheme: {
+								description: formatAoAllocations(q.ao_allocations) ?? "",
+								guidance: q.guidance,
+								pointsTotal,
+								markPoints: markPointsPrisma,
+								markingMethod: effectiveMarkingMethod,
+								markingRules: markingRules ?? null,
+								correctOptionLabels,
+							},
+						})
 						const testResults = await runAdversarialLoop(
 							questionWithScheme,
 							grader,

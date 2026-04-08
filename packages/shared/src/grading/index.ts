@@ -1,6 +1,7 @@
 export * from "./types"
 export * from "./schemas"
 export * from "./score"
+export * from "./build-question"
 export { Grader } from "./grader"
 export { parseMarkPointsFromPrisma, parseMarkingRulesFromPrisma } from "./grader-prisma"
 export { parseGradingResults, GradingResultDbSchema, type GradingResultDb } from "./parse-grading-result"

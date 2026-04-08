@@ -43,7 +43,6 @@ export type MarkPointResult = {
 export type GradedAnswerOnPage = {
 	extractedAnswerId: string
 	questionId: string
-	questionPartId: string | null
 	questionText: string
 	questionNumber: string
 	extractedText: string

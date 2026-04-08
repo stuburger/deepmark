@@ -35,7 +35,6 @@ const additionalTestCasesSchema = z.object({
 export const handler = tool(CreateTestDatasetSchema, async (args, extra) => {
 	const {
 		question_id,
-		question_part_id,
 		dataset_name,
 		answer_examples,
 		generate_additional,
@@ -44,14 +43,13 @@ export const handler = tool(CreateTestDatasetSchema, async (args, extra) => {
 
 	console.log("[create-test-dataset] Handler invoked", {
 		question_id,
-		question_part_id,
 		dataset_name,
 		examples_count: answer_examples.length,
 		generate_additional,
 		additional_count,
 	})
 
-	// Fetch the question and question part details
+	// Fetch the question details
 	const question = await db.question.findUniqueOrThrow({
 		where: { id: question_id },
 		select: {
@@ -64,25 +62,10 @@ export const handler = tool(CreateTestDatasetSchema, async (args, extra) => {
 		},
 	})
 
-	let questionPart = null
-	if (question_part_id) {
-		questionPart = await db.questionPart.findUniqueOrThrow({
-			where: { id: question_part_id },
-			select: {
-				id: true,
-				part_label: true,
-				text: true,
-				points: true,
-				question_type: true,
-			},
-		})
-	}
-
 	// Get the mark scheme to understand the scoring range
 	const markScheme = await db.markScheme.findFirstOrThrow({
 		where: {
 			question_id: question_id,
-			question_part_id: question_part_id,
 		},
 		select: {
 			id: true,
@@ -115,7 +98,6 @@ export const handler = tool(CreateTestDatasetSchema, async (args, extra) => {
 
 		const additionalCases = await generateAdditionalTestCases(
 			question,
-			questionPart,
 			markScheme,
 			answer_examples,
 			additional_count,
@@ -131,7 +113,6 @@ export const handler = tool(CreateTestDatasetSchema, async (args, extra) => {
 	// Create the final report
 	const report = generateDatasetReport(
 		question,
-		questionPart,
 		markScheme,
 		dataset_name,
 		allTestCases,
@@ -156,13 +137,6 @@ async function generateAdditionalTestCases(
 		points: number | null
 		question_type: string
 	},
-	questionPart: {
-		id: string
-		part_label: string
-		text: string
-		points: number | null
-		question_type: string
-	} | null,
 	markScheme: {
 		id: string
 		points_total: number
@@ -180,16 +154,12 @@ async function generateAdditionalTestCases(
 	test_cases: TestCase[]
 	generation_summary: string
 }> {
-	const questionText = questionPart ? questionPart.text : question.text
-	const partLabel = questionPart ? questionPart.part_label : null
-
 	const prompt = `You are an expert GCSE examiner creating test cases for mark scheme validation.
 
 <Question>
 Topic: ${question.topic}
 Subject: ${question.subject}
 Text: ${question.text}
-${questionPart ? `Part ${questionPart.part_label}: ${questionPart.text}` : ""}
 </Question>
 
 <MarkScheme>
@@ -335,10 +305,6 @@ function generateDatasetReport(
 		topic: string
 		subject: string
 	},
-	questionPart: {
-		part_label: string
-		text: string
-	} | null,
 	markScheme: {
 		id: string
 		points_total: number
@@ -363,7 +329,6 @@ function generateDatasetReport(
 - Question ID: ${question.id}
 - Topic: ${question.topic} (${question.subject})
 - Text: ${question.text.slice(0, 150)}${question.text.length > 150 ? "..." : ""}
-${questionPart ? `- Part ${questionPart.part_label}: ${questionPart.text.slice(0, 100)}${questionPart.text.length > 100 ? "..." : ""}` : ""}
 
 🎯 **Mark Scheme Information**:
 - Mark Scheme ID: ${markScheme.id}

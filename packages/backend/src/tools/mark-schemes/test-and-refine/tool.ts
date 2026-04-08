@@ -3,31 +3,11 @@ import { defaultChatModel } from "@/lib/infra/google-generative-ai"
 import { tool } from "@/tools/shared/tool-utils"
 import {
 	Grader,
-	type QuestionWithMarkScheme,
-	parseMarkPointsFromPrisma,
+	buildQuestionWithMarkScheme,
 	probeBoundaries,
 	runAdversarialLoop,
 } from "@mcp-gcse/shared"
 import { TestAndRefineMarkSchemeSchema } from "./schema"
-
-function parseMultipleChoiceOptions(
-	json: unknown,
-): Array<{ optionLabel: string; optionText: string }> | undefined {
-	if (!Array.isArray(json)) return undefined
-	const opts = json
-		.filter(
-			(item): item is Record<string, unknown> =>
-				item !== null &&
-				typeof item === "object" &&
-				"option_label" in item &&
-				"option_text" in item,
-		)
-		.map((item) => ({
-			optionLabel: String(item.option_label),
-			optionText: String(item.option_text),
-		}))
-	return opts.length > 0 ? opts : undefined
-}
 
 export const handler = tool(TestAndRefineMarkSchemeSchema, async (args) => {
 	const { mark_scheme_id, target_scores, max_iterations = 3 } = args
@@ -44,43 +24,26 @@ export const handler = tool(TestAndRefineMarkSchemeSchema, async (args) => {
 					multiple_choice_options: true,
 				},
 			},
-			question_part: {
-				select: {
-					id: true,
-					part_label: true,
-					text: true,
-					question_type: true,
-					multiple_choice_options: true,
-				},
-			},
 		},
 	})
 
 	const q = markScheme.question
-	const part = markScheme.question_part
-	const questionText = part ? q.text + part.text : q.text
-	const questionType = (part ? part.question_type : q.question_type) as
-		| "written"
-		| "multiple_choice"
-	const availableOptions = parseMultipleChoiceOptions(
-		part?.multiple_choice_options ?? q.multiple_choice_options,
-	)
-
-	const questionWithScheme: QuestionWithMarkScheme = {
-		id: part?.id ?? q.id,
-		questionType,
-		questionText,
+	const questionWithScheme = buildQuestionWithMarkScheme({
+		questionId: q.id,
+		questionText: q.text,
 		topic: q.topic,
-		rubric: markScheme.description,
-		guidance: markScheme.guidance ?? null,
-		totalPoints: markScheme.points_total,
-		markPoints: parseMarkPointsFromPrisma(markScheme.mark_points),
-		correctOptionLabels:
-			(markScheme.correct_option_labels?.length ?? 0) > 0
-				? markScheme.correct_option_labels
-				: undefined,
-		availableOptions,
-	}
+		questionType: q.question_type,
+		multipleChoiceOptions: q.multiple_choice_options,
+		markScheme: {
+			description: markScheme.description,
+			guidance: markScheme.guidance,
+			pointsTotal: markScheme.points_total,
+			markPoints: markScheme.mark_points,
+			markingMethod: markScheme.marking_method,
+			markingRules: markScheme.marking_rules,
+			correctOptionLabels: markScheme.correct_option_labels,
+		},
+	})
 
 	const scores = target_scores ?? probeBoundaries(markScheme.points_total)
 	const grader = new Grader(defaultChatModel(), {

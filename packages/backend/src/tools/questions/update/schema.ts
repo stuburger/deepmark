@@ -1,6 +1,5 @@
 import { SUBJECT_VALUES } from "@mcp-gcse/db"
 import { z } from "zod"
-import { CreateQuestionPartSchema } from "../create/schema"
 
 export const UpdateQuestionByIdSchema = {
 	id: z.string().describe("The unique identifier for the question to update"),
@@ -24,8 +23,4 @@ export const UpdateQuestionByIdSchema = {
 		.enum(SUBJECT_VALUES)
 		.optional()
 		.describe("Subject area for the question"),
-	question_parts: z
-		.array(CreateQuestionPartSchema)
-		.optional()
-		.describe("The parts/sub-questions for this question"),
 }

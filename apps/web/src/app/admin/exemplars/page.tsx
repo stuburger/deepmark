@@ -92,11 +92,6 @@ function ExemplarRow({ exemplar }: { exemplar: ExemplarAnswerListItem }) {
 		<TableRow>
 			<TableCell className="overflow-hidden" title={questionText}>
 				<p className="truncate text-sm">{truncate(questionText)}</p>
-				{exemplar.question_part && (
-					<span className="text-xs text-muted-foreground">
-						Part {exemplar.question_part.part_label}
-					</span>
-				)}
 			</TableCell>
 			<TableCell>
 				{subject ? (

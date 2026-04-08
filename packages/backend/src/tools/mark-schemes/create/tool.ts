@@ -2,12 +2,10 @@ import { CreateMarkSchemeSchema } from "./schema"
 
 import { tool } from "@/tools/shared/tool-utils"
 import { db } from "@/db"
-import type { QuestionPart } from "@/generated/prisma"
 
 export const handler = tool(CreateMarkSchemeSchema, async (args, extra) => {
 	const {
 		question_id,
-		question_part_id,
 		description,
 		guidance,
 		points_total,
@@ -19,7 +17,6 @@ export const handler = tool(CreateMarkSchemeSchema, async (args, extra) => {
 
 	console.log("[create-mark-scheme] Handler invoked", {
 		question_id,
-		question_part_id,
 		points_total,
 		marking_method,
 		tags,
@@ -65,22 +62,10 @@ export const handler = tool(CreateMarkSchemeSchema, async (args, extra) => {
 		where: { id: question_id },
 	})
 
-	// If question_part_id is provided, validate that the question part exists
-	let questionPart: QuestionPart | null = null
-	if (question_part_id) {
-		questionPart = await db.questionPart.findFirstOrThrow({
-			where: {
-				id: question_part_id,
-				question_id: question_id, // Ensure the part belongs to the question
-			},
-		})
-	}
-
 	// Insert the mark scheme into the database
 	const result = await db.markScheme.create({
 		data: {
 			question_id,
-			question_part_id: question_part_id || undefined,
 			description,
 			guidance,
 			points_total,
@@ -88,29 +73,24 @@ export const handler = tool(CreateMarkSchemeSchema, async (args, extra) => {
 			mark_points,
 			marking_method: marking_method ?? "point_based",
 			marking_rules: marking_rules ?? undefined,
-			created_by_id: extra.authInfo.extra.userId, // TODO: Get from auth context when available
+			created_by_id: extra.authInfo.extra.userId,
 		},
 	})
 
 	console.log("[create-mark-scheme] Successfully created mark scheme", {
 		mark_scheme_id: result.id,
 		question_id,
-		question_part_id,
 		points_total,
 	})
 
-	// Get the text to display (question or question part)
-	const questionText = questionPart ? questionPart.text : question.text
-	const partInfo = questionPart ? ` (Part ${questionPart.part_label})` : ""
-
 	const questionPreview =
-		questionText.substring(0, 100) + (questionText.length > 100 ? "..." : "")
+		question.text.substring(0, 100) + (question.text.length > 100 ? "..." : "")
 
 	const tagsInfo = tags && tags.length > 0 ? `\nTags: ${tags.join(", ")}` : ""
 
 	return `Mark scheme created successfully! Mark Scheme ID: ${result.id}
 
-Question${partInfo}: ${questionPreview}
+Question: ${questionPreview}
 Description: ${description}${tagsInfo}
 Total Points: ${points_total}
 Number of Mark Points: ${mark_points.length}`

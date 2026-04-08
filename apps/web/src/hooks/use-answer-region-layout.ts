@@ -5,12 +5,11 @@ import { useMemo } from "react"
 
 export type AnswerAnchor = Pick<
 	GradedAnswerOnPage,
-	"extractedAnswerId" | "questionId" | "questionPartId" | "answerRegion"
+	"extractedAnswerId" | "questionId" | "answerRegion"
 >
 
 export type LayoutItem = {
 	questionId: string
-	questionPartId: string | null
 	top: number
 }
 
@@ -42,13 +41,11 @@ export function useAnswerRegionLayout({
 	answers,
 	imageRenderedHeight,
 	activeQuestionId,
-	activeQuestionPartId = null,
 	cardEstimatedHeight = COLLAPSED_HEIGHT,
 }: {
 	answers: AnswerAnchor[]
 	imageRenderedHeight: number | null
 	activeQuestionId: string | null
-	activeQuestionPartId?: string | null
 	cardEstimatedHeight?: number
 }): LayoutItem[] {
 	return useMemo(() => {
@@ -56,12 +53,9 @@ export function useAnswerRegionLayout({
 
 		// Build items with ideal anchor positions
 		const items = answers.map((answer, index) => {
-			const isActive =
-				answer.questionId === activeQuestionId &&
-				(answer.questionPartId ?? null) === (activeQuestionPartId ?? null)
+			const isActive = answer.questionId === activeQuestionId
 			return {
 				questionId: answer.questionId,
-				questionPartId: answer.questionPartId,
 				idealTop: anchorYForAnswer(answer, imageRenderedHeight),
 				height: isActive ? ACTIVE_HEIGHT : cardEstimatedHeight,
 				isActive,
@@ -106,14 +100,12 @@ export function useAnswerRegionLayout({
 
 		return items.map((item, i) => ({
 			questionId: item.questionId,
-			questionPartId: item.questionPartId,
 			top: tops[i] ?? item.idealTop,
 		}))
 	}, [
 		answers,
 		imageRenderedHeight,
 		activeQuestionId,
-		activeQuestionPartId,
 		cardEstimatedHeight,
 	])
 }

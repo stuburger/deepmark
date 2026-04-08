@@ -6,9 +6,7 @@ import {
 	LevelOfResponseMarker,
 	LlmMarker,
 	MarkerOrchestrator,
-	type QuestionWithMarkScheme,
-	parseMarkPointsFromPrisma,
-	parseMarkingRulesFromPrisma,
+	buildQuestionWithMarkScheme,
 } from "@mcp-gcse/shared"
 
 const grader = new Grader(defaultChatModel(), {
@@ -38,15 +36,6 @@ async function loadAnswer(answer_id: string) {
 					multiple_choice_options: true,
 				},
 			},
-			question_part: {
-				select: {
-					id: true,
-					text: true,
-					part_label: true,
-					question_type: true,
-					multiple_choice_options: true,
-				},
-			},
 		},
 	})
 }
@@ -55,48 +44,8 @@ async function loadMarkScheme(answer: AnswerWithRelations) {
 	return db.markScheme.findFirstOrThrow({
 		where: {
 			question_id: answer.question_id,
-			question_part_id: answer.question_part_id,
 		},
 	})
-}
-
-function buildQuestionWithMarkScheme(
-	answer: AnswerWithRelations,
-	markScheme: MarkSchemeForAnswer,
-	questionText: string,
-): QuestionWithMarkScheme {
-	const q = answer.question
-	const part = answer.question_part
-	const questionType = part ? part.question_type : q.question_type
-	const rawOptions = (part?.multiple_choice_options ??
-		q.multiple_choice_options) as
-		| Array<{ option_label: string; option_text: string }>
-		| null
-		| undefined
-	const availableOptions = Array.isArray(rawOptions)
-		? rawOptions.map((o) => ({
-				optionLabel: o.option_label,
-				optionText: o.option_text,
-			}))
-		: undefined
-
-	return {
-		id: part?.id ?? q.id,
-		questionType,
-		questionText,
-		topic: q.topic,
-		rubric: markScheme.description,
-		guidance: markScheme.guidance ?? null,
-		totalPoints: markScheme.points_total,
-		markPoints: parseMarkPointsFromPrisma(markScheme.mark_points),
-		correctOptionLabels:
-			markScheme.correct_option_labels?.length > 0
-				? markScheme.correct_option_labels
-				: undefined,
-		availableOptions,
-		markingMethod: markScheme.marking_method ?? undefined,
-		markingRules: parseMarkingRulesFromPrisma(markScheme.marking_rules),
-	}
 }
 
 /**
@@ -118,16 +67,25 @@ export async function markAnswerById(answer_id: string): Promise<{
 		}
 	}
 
-	const questionText = answer.question_part
-		? answer.question.text + answer.question_part.text
-		: answer.question.text
+	const q = answer.question
 
 	const markScheme = await loadMarkScheme(answer)
-	const questionWithMarkScheme = buildQuestionWithMarkScheme(
-		answer,
-		markScheme,
-		questionText,
-	)
+	const questionWithMarkScheme = buildQuestionWithMarkScheme({
+		questionId: q.id,
+		questionText: q.text,
+		topic: q.topic,
+		questionType: q.question_type,
+		multipleChoiceOptions: q.multiple_choice_options,
+		markScheme: {
+			description: markScheme.description,
+			guidance: markScheme.guidance,
+			pointsTotal: markScheme.points_total,
+			markPoints: markScheme.mark_points,
+			markingMethod: markScheme.marking_method,
+			markingRules: markScheme.marking_rules,
+			correctOptionLabels: markScheme.correct_option_labels,
+		},
+	})
 
 	const grade = await orchestrator.mark(
 		questionWithMarkScheme,

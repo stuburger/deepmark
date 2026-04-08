@@ -4,10 +4,6 @@ export const CreateTestDatasetSchema = {
 	question_id: z
 		.string()
 		.describe("ID of the question to create test dataset for"),
-	question_part_id: z
-		.string()
-		.optional()
-		.describe("Optional: ID of the specific question part"),
 	dataset_name: z
 		.string()
 		.min(1)

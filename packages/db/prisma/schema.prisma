@@ -164,7 +164,6 @@ model User {
   updated_at DateTime @updatedAt
 
   created_questions      Question[]
-  created_question_parts QuestionPart[]
   created_exam_papers    ExamPaper[]
   created_mark_schemes   MarkScheme[]
   created_exam_sections  ExamSection[]
@@ -198,8 +197,15 @@ model Question {
   // Canonical question number extracted from PDF e.g. "1a", "2bii", "3"
   question_number             String?
 
+  // ── Flat-model grouping (replaces QuestionPart table) ──
+  // Shared stimulus/context from parent question (e.g., "Read Source A below")
+  stem_text                   String?
+  // Grouping key for display (e.g., "2" for questions "2a", "2b", "2c")
+  parent_number               String?
+  // Sub-question designator (e.g., "a", "b", "i", "ii")
+  part_label                  String?
+
   created_by               User                  @relation(fields: [created_by_id], references: [id])
-  question_parts           QuestionPart[]
   mark_schemes             MarkScheme[]
   answers                  Answer[]
   exam_section_questions   ExamSectionQuestion[]
@@ -207,37 +213,16 @@ model Question {
   source_pdf_ingestion_job PdfIngestionJob?      @relation("QuestionSource", fields: [source_pdf_ingestion_job_id], references: [id])
   exemplar_answers         ExemplarAnswer[]
 
+  // Explicit cross-question dependencies (e.g., "1b refers to 1a")
+  depends_on               Question[]            @relation("QuestionDependency")
+  depended_by              Question[]            @relation("QuestionDependency")
+
   @@map("questions")
-}
-
-model QuestionPart {
-  id                      String           @id @default(cuid())
-  question_id             String
-  part_label              String
-  text                    String
-  points                  Int?
-  difficulty_level        DifficultyLevel?
-  order                   Int
-  created_by_id           String
-  created_at              DateTime         @default(now())
-  updated_at              DateTime         @updatedAt
-  question_type           QuestionType     @default(written)
-  // Array of { option_label, option_text } objects
-  multiple_choice_options Json             @default("[]")
-
-  created_by       User             @relation(fields: [created_by_id], references: [id])
-  question         Question         @relation(fields: [question_id], references: [id])
-  mark_schemes     MarkScheme[]
-  answers          Answer[]
-  exemplar_answers ExemplarAnswer[]
-
-  @@map("question_parts")
 }
 
 model MarkScheme {
   id                    String           @id @default(cuid())
   question_id           String
-  question_part_id      String?
   description           String
   guidance              String?
   created_by_id         String
@@ -257,7 +242,6 @@ model MarkScheme {
 
   created_by       User                @relation(fields: [created_by_id], references: [id])
   question         Question            @relation(fields: [question_id], references: [id])
-  question_part    QuestionPart?       @relation(fields: [question_part_id], references: [id])
   marking_results  MarkingResult[]
   test_runs        MarkSchemeTestRun[]
   exemplar_answers ExemplarAnswer[]
@@ -284,7 +268,6 @@ model Student {
 model Answer {
   id                 String        @id @default(cuid())
   question_id        String
-  question_part_id   String?
   student_id         String
   student_answer     String
   submitted_at       DateTime      @default(now())
@@ -296,7 +279,6 @@ model Answer {
 
   student         Student         @relation("StudentAnswers", fields: [student_id], references: [id])
   question        Question        @relation(fields: [question_id], references: [id])
-  question_part   QuestionPart?   @relation(fields: [question_part_id], references: [id])
   marking_results MarkingResult[]
 
   @@map("answers")
@@ -621,7 +603,6 @@ model ExemplarAnswer {
   id                   String   @id @default(cuid())
   pdf_ingestion_job_id String
   question_id          String?
-  question_part_id     String?
   mark_scheme_id       String?
   raw_question_text    String
   source_exam_board    String
@@ -636,7 +617,6 @@ model ExemplarAnswer {
 
   pdf_ingestion_job PdfIngestionJob     @relation(fields: [pdf_ingestion_job_id], references: [id])
   question          Question?           @relation(fields: [question_id], references: [id])
-  question_part     QuestionPart?       @relation(fields: [question_part_id], references: [id])
   mark_scheme       MarkScheme?         @relation(fields: [mark_scheme_id], references: [id])
   test_runs         MarkSchemeTestRun[]
 

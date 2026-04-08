@@ -1,82 +1,12 @@
 import { db } from "@/db"
 import { defaultChatModel } from "@/lib/infra/google-generative-ai"
-import {
-	Grader,
-	type QuestionWithMarkScheme,
-	parseMarkPointsFromPrisma,
-	parseMarkingRulesFromPrisma,
-} from "@mcp-gcse/shared"
+import { Grader, buildQuestionWithMarkScheme } from "@mcp-gcse/shared"
 
 export interface ExemplarValidationSummary {
 	markSchemeId: string
 	totalTested: number
 	passCount: number
 	accuracyPercent: number
-}
-
-function buildQuestionWithMarkScheme(markScheme: {
-	id: string
-	description: string
-	guidance: string | null
-	points_total: number
-	mark_points: unknown
-	marking_method: string
-	marking_rules: unknown
-	correct_option_labels: string[]
-	question: {
-		id: string
-		text: string
-		topic: string
-		question_type: string
-		multiple_choice_options: unknown
-	}
-	question_part: {
-		id: string
-		text: string
-		part_label: string
-		question_type: string
-		multiple_choice_options: unknown
-	} | null
-}): QuestionWithMarkScheme {
-	const q = markScheme.question
-	const part = markScheme.question_part
-	const questionText = part ? q.text + part.text : q.text
-	const questionType = (part ? part.question_type : q.question_type) as
-		| "written"
-		| "multiple_choice"
-	const rawOptions = (part?.multiple_choice_options ??
-		q.multiple_choice_options) as
-		| Array<{ option_label: string; option_text: string }>
-		| null
-		| undefined
-	const availableOptions = Array.isArray(rawOptions)
-		? rawOptions.map((o) => ({
-				optionLabel: o.option_label,
-				optionText: o.option_text,
-			}))
-		: undefined
-
-	return {
-		id: part?.id ?? q.id,
-		questionType,
-		questionText,
-		topic: q.topic,
-		rubric: markScheme.description,
-		guidance: markScheme.guidance ?? null,
-		totalPoints: markScheme.points_total,
-		markPoints: parseMarkPointsFromPrisma(markScheme.mark_points),
-		correctOptionLabels:
-			markScheme.correct_option_labels?.length > 0
-				? markScheme.correct_option_labels
-				: undefined,
-		availableOptions,
-		markingMethod:
-			(markScheme.marking_method as
-				| "deterministic"
-				| "point_based"
-				| "level_of_response") ?? undefined,
-		markingRules: parseMarkingRulesFromPrisma(markScheme.marking_rules),
-	}
 }
 
 /**
@@ -95,15 +25,6 @@ export async function validateWithExemplars(
 					id: true,
 					text: true,
 					topic: true,
-					question_type: true,
-					multiple_choice_options: true,
-				},
-			},
-			question_part: {
-				select: {
-					id: true,
-					text: true,
-					part_label: true,
 					question_type: true,
 					multiple_choice_options: true,
 				},
@@ -130,7 +51,23 @@ export async function validateWithExemplars(
 			"You are an expert GCSE examiner. Mark the student's answer against the provided mark scheme. Return valid JSON matching the schema. Be consistent and conservative.",
 	})
 
-	const questionWithScheme = buildQuestionWithMarkScheme(markScheme)
+	const q = markScheme.question
+	const questionWithScheme = buildQuestionWithMarkScheme({
+		questionId: q.id,
+		questionText: q.text,
+		topic: q.topic,
+		questionType: q.question_type,
+		multipleChoiceOptions: q.multiple_choice_options,
+		markScheme: {
+			description: markScheme.description,
+			guidance: markScheme.guidance,
+			pointsTotal: markScheme.points_total,
+			markPoints: markScheme.mark_points,
+			markingMethod: markScheme.marking_method,
+			markingRules: markScheme.marking_rules,
+			correctOptionLabels: markScheme.correct_option_labels,
+		},
+	})
 	const isLoR = markScheme.marking_method === "level_of_response"
 
 	let passCount = 0

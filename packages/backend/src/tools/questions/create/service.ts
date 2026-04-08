@@ -17,7 +17,9 @@ export async function service(
 		subject,
 		question_type,
 		multiple_choice_options,
-		question_parts,
+		stem_text,
+		parent_number,
+		part_label,
 		exam_paper_id,
 		section_title,
 		section_order,
@@ -30,7 +32,6 @@ export async function service(
 		difficulty_level,
 		question_type,
 		multipleChoiceOptionsCount: multiple_choice_options?.length || 0,
-		partsCount: question_parts.length,
 		exam_paper_id,
 		section_title,
 		section_order,
@@ -40,20 +41,6 @@ export async function service(
 	if (question_type === "multiple_choice") {
 		if (!multiple_choice_options || multiple_choice_options.length === 0) {
 			throw new Error("Multiple choice questions must have at least one option")
-		}
-	}
-
-	// Validation for question parts
-	for (const part of question_parts) {
-		if (part.part_question_type === "multiple_choice") {
-			if (
-				!part.part_multiple_choice_options ||
-				part.part_multiple_choice_options.length === 0
-			) {
-				throw new Error(
-					`Question part ${part.part_label} is multiple choice but has no options`,
-				)
-			}
 		}
 	}
 
@@ -67,21 +54,10 @@ export async function service(
 			difficulty_level,
 			question_type,
 			multiple_choice_options: multiple_choice_options || [],
+			stem_text: stem_text || null,
+			parent_number: parent_number || null,
+			part_label: part_label || null,
 			created_by_id: userId,
-			question_parts: {
-				createMany: {
-					data: question_parts.map((p, i) => ({
-						created_by_id: userId,
-						order: i,
-						part_label: p.part_label,
-						text: p.part_text,
-						points: p.part_points,
-						difficulty_level: p.part_difficulty_level,
-						question_type: p.part_question_type || "written",
-						multiple_choice_options: p.part_multiple_choice_options || [],
-					})),
-				},
-			},
 		},
 		include: {
 			created_by: {

@@ -121,7 +121,6 @@ export type QuestionListItem = {
 	origin: string
 	created_at: Date
 	_count: {
-		question_parts: number
 		mark_schemes: number
 		answers: number
 	}
@@ -147,7 +146,6 @@ export async function listQuestions(): Promise<ListQuestionsResult> {
 				created_at: true,
 				_count: {
 					select: {
-						question_parts: true,
 						mark_schemes: true,
 						answers: true,
 					},
@@ -181,7 +179,6 @@ export type ExemplarAnswerListItem = {
 	expected_score: number | null
 	created_at: Date
 	question: { id: string; text: string; subject: string } | null
-	question_part: { id: string; part_label: string } | null
 	validation: ExemplarValidationStats | null
 }
 
@@ -207,9 +204,6 @@ export async function listExemplarAnswers(): Promise<ListExemplarAnswersResult> 
 				created_at: true,
 				question: {
 					select: { id: true, text: true, subject: true },
-				},
-				question_part: {
-					select: { id: true, part_label: true },
 				},
 				test_runs: {
 					where: { triggered_by: "exemplar_validation" },
@@ -243,7 +237,6 @@ export async function listExemplarAnswers(): Promise<ListExemplarAnswersResult> 
 				expected_score: e.expected_score,
 				created_at: e.created_at,
 				question: e.question,
-				question_part: e.question_part,
 				validation,
 			}
 		})

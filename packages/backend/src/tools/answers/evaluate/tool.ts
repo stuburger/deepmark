@@ -2,6 +2,15 @@ import { db } from "@/db"
 import { defaultChatModel } from "@/lib/infra/google-generative-ai"
 import { tool } from "@/tools/shared/tool-utils"
 import type { MarkScheme } from "@mcp-gcse/db"
+import {
+	DeterministicMarker,
+	Grader,
+	LevelOfResponseMarker,
+	LlmMarker,
+	MarkerOrchestrator,
+	buildQuestionWithMarkScheme,
+	parseMarkPointsFromPrisma,
+} from "@mcp-gcse/shared"
 import { EvaluateAnswerSchema } from "./schema"
 
 /** Mark scheme row from DB (mark_points is JsonValue at runtime but typed as unknown for assignment). */
@@ -15,16 +24,6 @@ type MarkPointResultItem = {
 	expected_criteria: string
 	student_covered: string
 }
-import {
-	DeterministicMarker,
-	Grader,
-	LevelOfResponseMarker,
-	LlmMarker,
-	MarkerOrchestrator,
-	type QuestionWithMarkScheme,
-	parseMarkPointsFromPrisma,
-	parseMarkingRulesFromPrisma,
-} from "@mcp-gcse/shared"
 
 const grader = new Grader(defaultChatModel(), {
 	systemPrompt:
@@ -37,88 +36,9 @@ const orchestrator = new MarkerOrchestrator([
 	new LlmMarker(grader),
 ])
 
-function parseMultipleChoiceOptions(
-	json: unknown,
-): Array<{ optionLabel: string; optionText: string }> | undefined {
-	if (!Array.isArray(json)) return undefined
-	const opts = json
-		.filter(
-			(item): item is Record<string, unknown> =>
-				item !== null &&
-				typeof item === "object" &&
-				"option_label" in item &&
-				"option_text" in item,
-		)
-		.map((item) => ({
-			optionLabel: String(item.option_label),
-			optionText: String(item.option_text),
-		}))
-	return opts.length > 0 ? opts : undefined
-}
-
-function buildQuestionWithMarkScheme(
-	question: {
-		id: string
-		text: string
-		topic: string
-		question_type: string
-		multiple_choice_options: unknown
-	},
-	questionPart: {
-		id: string
-		part_label: string
-		text: string
-		question_type: string
-		multiple_choice_options: unknown
-	} | null,
-	markScheme: {
-		description: string
-		guidance: string | null
-		points_total: number
-		correct_option_labels: string[]
-		mark_points: unknown
-		marking_method?: string
-		marking_rules?: unknown
-	},
-	questionText: string,
-): QuestionWithMarkScheme {
-	const q = question
-	const part = questionPart
-	const questionType = (part ? part.question_type : q.question_type) as
-		| "written"
-		| "multiple_choice"
-	const availableOptions = parseMultipleChoiceOptions(
-		part?.multiple_choice_options ?? q.multiple_choice_options,
-	)
-
-	return {
-		id: part?.id ?? q.id,
-		questionType,
-		questionText,
-		topic: q.topic,
-		rubric: markScheme.description,
-		guidance: markScheme.guidance ?? null,
-		totalPoints: markScheme.points_total,
-		markPoints: parseMarkPointsFromPrisma(markScheme.mark_points),
-		correctOptionLabels:
-			markScheme.correct_option_labels?.length > 0
-				? markScheme.correct_option_labels
-				: undefined,
-		availableOptions,
-		markingMethod:
-			markScheme.marking_method === "deterministic" ||
-			markScheme.marking_method === "point_based" ||
-			markScheme.marking_method === "level_of_response"
-				? markScheme.marking_method
-				: undefined,
-		markingRules: parseMarkingRulesFromPrisma(markScheme.marking_rules),
-	}
-}
-
 export const handler = tool(EvaluateAnswerSchema, async (args, extra) => {
 	const {
 		question_id,
-		question_part_id,
 		student_answer,
 		mark_scheme_id,
 		expected_score,
@@ -126,7 +46,6 @@ export const handler = tool(EvaluateAnswerSchema, async (args, extra) => {
 
 	console.log("[evaluate-answer] Handler invoked", {
 		question_id,
-		question_part_id,
 		mark_scheme_id,
 		answerLength: student_answer.length,
 	})
@@ -145,56 +64,21 @@ export const handler = tool(EvaluateAnswerSchema, async (args, extra) => {
 		},
 	})
 
-	// Fetch the question part if specified
-	let questionPart: {
-		id: string
-		part_label: string
-		text: string
-		points: number | null
-		question_type: string
-		multiple_choice_options: unknown
-	} | null = null
-	if (question_part_id) {
-		questionPart = await db.questionPart.findUniqueOrThrow({
-			where: { id: question_part_id },
-			select: {
-				id: true,
-				part_label: true,
-				text: true,
-				points: true,
-				question_type: true,
-				multiple_choice_options: true,
-			},
-		})
-	}
-
 	// Find the appropriate mark scheme
 	let markScheme: MarkSchemeRow
 	if (mark_scheme_id) {
-		// Use the specified mark scheme
 		markScheme = await db.markScheme.findUniqueOrThrow({
 			where: { id: mark_scheme_id },
 		})
 
-		// Validate that the mark scheme matches the question/question part
 		if (markScheme.question_id !== question_id) {
 			throw new Error(
 				`Mark scheme ${mark_scheme_id} does not belong to question ${question_id}`,
 			)
 		}
-
-		if (markScheme.question_part_id !== question_part_id) {
-			throw new Error(
-				`Mark scheme ${mark_scheme_id} does not match question part ${question_part_id}`,
-			)
-		}
 	} else {
-		// Find the mark scheme automatically
 		markScheme = await db.markScheme.findFirstOrThrow({
-			where: {
-				question_id: question_id,
-				question_part_id: question_part_id,
-			},
+			where: { question_id },
 		})
 	}
 
@@ -205,34 +89,24 @@ export const handler = tool(EvaluateAnswerSchema, async (args, extra) => {
 		markPointsCount: markPointsArray.length,
 	})
 
-	// Calculate max possible score
-	const maxPossibleScore =
-		questionPart?.points || question.points || markScheme.points_total
+	const maxPossibleScore = question.points || markScheme.points_total
 
-	// Build question for shared orchestrator (DeterministicMarker for MCQ, LlmMarker for written)
-	const questionText = questionPart
-		? question.text + questionPart.text
-		: question.text
-	const questionWithMarkScheme = buildQuestionWithMarkScheme(
-		{
-			id: question.id,
-			text: question.text,
-			topic: question.topic,
-			question_type: question.question_type,
-			multiple_choice_options: question.multiple_choice_options,
-		},
-		questionPart,
-		{
+	const questionWithMarkScheme = buildQuestionWithMarkScheme({
+		questionId: question.id,
+		questionText: question.text,
+		topic: question.topic,
+		questionType: question.question_type,
+		multipleChoiceOptions: question.multiple_choice_options,
+		markScheme: {
 			description: markScheme.description,
 			guidance: markScheme.guidance,
-			points_total: markScheme.points_total,
-			correct_option_labels: markScheme.correct_option_labels,
-			mark_points: markScheme.mark_points,
-			marking_method: markScheme.marking_method,
-			marking_rules: markScheme.marking_rules,
+			pointsTotal: markScheme.points_total,
+			markPoints: markScheme.mark_points,
+			markingMethod: markScheme.marking_method,
+			markingRules: markScheme.marking_rules,
+			correctOptionLabels: markScheme.correct_option_labels,
 		},
-		questionText,
-	)
+	})
 
 	const grade = await orchestrator.mark(questionWithMarkScheme, student_answer)
 
@@ -297,7 +171,6 @@ export const handler = tool(EvaluateAnswerSchema, async (args, extra) => {
 🎯 **Answer Evaluation Results**
 
 📄 **Question**: ${question.text.slice(0, 100)}${question.text.length > 100 ? "..." : ""}
-${questionPart ? `📋 **Part ${questionPart.part_label}**: ${questionPart.text.slice(0, 100)}${questionPart.text.length > 100 ? "..." : ""}` : ""}
 
 📊 **Score**: ${markingResult.total_score}/${maxPossibleScore} marks
 ${

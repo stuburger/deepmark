@@ -124,7 +124,6 @@ function QuestionRow({ q }: { q: QuestionListItem }) {
 					<span className="text-muted-foreground">—</span>
 				)}
 			</TableCell>
-			<TableCell className="text-center">{q._count.question_parts}</TableCell>
 			<TableCell className="text-center">{q._count.mark_schemes}</TableCell>
 			<TableCell className="text-center">{q._count.answers}</TableCell>
 			<TableCell>
@@ -180,7 +179,6 @@ export default async function QuestionsPage() {
 									<TableHead>Topic</TableHead>
 									<TableHead>Difficulty</TableHead>
 									<TableHead className="text-center">Pts</TableHead>
-									<TableHead className="text-center">Parts</TableHead>
 									<TableHead className="text-center">Schemes</TableHead>
 									<TableHead className="text-center">Answers</TableHead>
 									<TableHead>Origin</TableHead>

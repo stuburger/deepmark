@@ -3,7 +3,6 @@ import {
 	type CancellationToken,
 	createCancellationToken,
 } from "@/lib/infra/cancellation"
-import { defaultChatModel } from "@/lib/infra/google-generative-ai"
 import { type GradingResult, gradeAllQuestions } from "@/lib/grading/grade-questions"
 import { logger } from "@/lib/infra/logger"
 import { persistAnswerRows } from "@/lib/grading/persist-answers"
@@ -15,19 +14,13 @@ import {
 	parseSqsJobId,
 } from "@/lib/infra/sqs-job-runner"
 import { loadExamPaperForGrading } from "@/lib/grading/grade-queries"
-import { EXAMINER_SYSTEM_PROMPT } from "@/lib/grading/grader-config"
+import { createMarkerOrchestrator } from "@/lib/grading/grader-config"
+import type { MarkerOrchestrator } from "@mcp-gcse/shared"
 import { SQSClient, SendMessageCommand } from "@aws-sdk/client-sqs"
 import {
 	type GradingStatus,
 	logGradingRunEvent,
 } from "@mcp-gcse/db"
-import {
-	DeterministicMarker,
-	Grader,
-	LevelOfResponseMarker,
-	LlmMarker,
-	MarkerOrchestrator,
-} from "@mcp-gcse/shared"
 import { Resource } from "sst"
 
 const TAG = "student-paper-grade"
@@ -49,15 +42,7 @@ export async function handler(
 	event: SqsEvent,
 ): Promise<{ batchItemFailures?: { itemIdentifier: string }[] }> {
 	const failures: { itemIdentifier: string }[] = []
-	const grader = new Grader(defaultChatModel(), {
-		systemPrompt: EXAMINER_SYSTEM_PROMPT,
-	})
-
-	const orchestrator = new MarkerOrchestrator([
-		new DeterministicMarker(),
-		new LevelOfResponseMarker(grader),
-		new LlmMarker(grader),
-	])
+	const orchestrator = createMarkerOrchestrator()
 
 	for (const record of event.Records) {
 		const jobId = parseSqsJobId(record, TAG)

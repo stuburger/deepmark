@@ -1,13 +1,8 @@
 import { db } from "@/db"
-import { defaultChatModel } from "@/lib/infra/google-generative-ai"
+import { createMarkerOrchestrator } from "@/lib/grading/grader-config"
 import { tool } from "@/tools/shared/tool-utils"
 import type { MarkScheme } from "@mcp-gcse/db"
 import {
-	DeterministicMarker,
-	Grader,
-	LevelOfResponseMarker,
-	LlmMarker,
-	MarkerOrchestrator,
 	buildQuestionWithMarkScheme,
 	parseMarkPointsFromPrisma,
 } from "@mcp-gcse/shared"
@@ -25,16 +20,7 @@ type MarkPointResultItem = {
 	student_covered: string
 }
 
-const grader = new Grader(defaultChatModel(), {
-	systemPrompt:
-		"You are an expert GCSE examiner. Mark the student's answer against the provided mark scheme. Return valid JSON matching the schema. Ignore spelling and grammar; focus on understanding and correct science. Be consistent and conservative: only award marks when there is clear evidence.",
-})
-
-const orchestrator = new MarkerOrchestrator([
-	new DeterministicMarker(),
-	new LevelOfResponseMarker(grader),
-	new LlmMarker(grader),
-])
+const orchestrator = createMarkerOrchestrator()
 
 export const handler = tool(EvaluateAnswerSchema, async (args, extra) => {
 	const {

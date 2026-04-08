@@ -1,24 +1,8 @@
 import { db } from "@/db"
-import { defaultChatModel } from "@/lib/infra/google-generative-ai"
-import {
-	DeterministicMarker,
-	Grader,
-	LevelOfResponseMarker,
-	LlmMarker,
-	MarkerOrchestrator,
-	buildQuestionWithMarkScheme,
-} from "@mcp-gcse/shared"
+import { createMarkerOrchestrator } from "@/lib/grading/grader-config"
+import { buildQuestionWithMarkScheme } from "@mcp-gcse/shared"
 
-const grader = new Grader(defaultChatModel(), {
-	systemPrompt:
-		"You are an expert GCSE examiner. Mark the student's answer against the provided mark scheme. Return valid JSON matching the schema. Ignore spelling and grammar; focus on understanding and correct science. Be consistent and conservative: only award marks when there is clear evidence.",
-})
-
-const orchestrator = new MarkerOrchestrator([
-	new DeterministicMarker(),
-	new LevelOfResponseMarker(grader),
-	new LlmMarker(grader),
-])
+const orchestrator = createMarkerOrchestrator()
 
 type AnswerWithRelations = Awaited<ReturnType<typeof loadAnswer>>
 type MarkSchemeForAnswer = Awaited<ReturnType<typeof loadMarkScheme>>

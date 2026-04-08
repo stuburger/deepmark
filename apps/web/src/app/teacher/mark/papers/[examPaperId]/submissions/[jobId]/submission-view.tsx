@@ -12,7 +12,7 @@ import {
 	getJobAnnotations,
 	getJobPageTokens,
 	getJobScanPageUrls,
-} from "@/lib/marking/queries"
+} from "@/lib/marking/scan/queries"
 import type {
 	PageToken,
 	ScanPageUrl,

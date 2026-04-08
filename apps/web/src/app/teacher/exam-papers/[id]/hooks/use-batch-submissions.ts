@@ -1,7 +1,7 @@
 import { commitBatch } from "@/lib/batch/mutations"
 import { getActiveBatchForPaper } from "@/lib/batch/queries"
 import type { ActiveBatchInfo } from "@/lib/batch/types"
-import { listSubmissionsForPaper } from "@/lib/marking/queries"
+import { listSubmissionsForPaper } from "@/lib/marking/listing/queries"
 import type { SubmissionHistoryItem } from "@/lib/marking/types"
 import { queryKeys } from "@/lib/query-keys"
 import { useQuery } from "@tanstack/react-query"

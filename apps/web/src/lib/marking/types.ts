@@ -196,9 +196,7 @@ export type ListMySubmissionsResult =
 	| { ok: true; submissions: SubmissionHistoryItem[] }
 	| { ok: false; error: string }
 
-export type DeleteSubmissionResult =
-	| { ok: true }
-	| { ok: false; error: string }
+export type DeleteSubmissionResult = { ok: true } | { ok: false; error: string }
 
 export type UpdateExtractedAnswerResult =
 	| { ok: true }

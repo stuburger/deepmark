@@ -278,7 +278,9 @@ Never manually compose URLs with `useSearchParams` + `useRouter` + `usePathname`
 
 ### Domain Module Layout (`apps/web/src/lib/`)
 
-Functionality is split into domain folders with consistent file naming:
+Functionality is split into domain folders. Small domains use flat files; larger domains nest into **sub-domain folders** that group queries, mutations, and types that change together.
+
+**Flat structure** (default for small domains):
 
 ```
 lib/
@@ -286,20 +288,44 @@ lib/
     queries.ts    — read-only server actions (fetch data)
     mutations.ts  — write server actions
     questions.ts  — question-specific mutations
-  marking/
-    types.ts      — shared TypeScript types
-    queries.ts
-    mutations.ts
+    types.ts
   pdf-ingestion/
     upload.ts
     queries.ts
     job-lifecycle.ts
+    types.ts
 ```
 
+**Nested structure** (for domains that outgrow flat files — use `marking/` as the reference):
+
+```
+lib/
+  marking/
+    types.ts              — shared types used across sub-domains
+    status.ts             — cross-cutting utility
+    mutations.ts          — flat until split is needed
+    evaluation.ts         — standalone small concern
+    bounding-box.ts       — standalone small concern
+    submissions/
+      queries.ts          — single-submission detail retrieval
+    scan/
+      queries.ts          — page images, tokens, annotations
+    listing/
+      queries.ts          — submission list views
+    stats/
+      queries.ts          — aggregate analytics
+```
+
+**When to nest:** A domain should move from flat to nested when it has ~400+ line files **or** 3+ distinct sub-domains with their own queries/mutations. The sub-domain folder groups things that change together — if "scan data" changes, you touch `marking/scan/` and nothing else.
+
+**What stays at the domain root:** Cross-cutting types (`types.ts`), shared utilities (`status.ts`), and small leaf files (<~100 lines, single concern) that don't belong to any one sub-domain.
+
+**Incremental migration:** Not all domains are nested yet. When doing significant work in a domain that still uses flat files (e.g. `exam-paper/`, `batch/`), convert it to the nested convention as part of that work. This keeps the migration gradual rather than a big-bang rewrite.
+
 **Rules:**
-- Types live in `types.ts` within the domain folder, not scattered across files.
+- Types shared across sub-domains live in `types.ts` at the domain root, not scattered across files. Sub-domain-specific types can live in `<subdomain>/types.ts` as that sub-domain grows.
 - Prompts and LLM schemas live in `processors/<name>/prompts.ts` + `schema.ts` sibling files, never inline in handlers.
-- Do not create barrel re-export files. Import directly from domain modules.
+- Do not create barrel re-export files. Import directly from the specific file — `"use server"` barrels cause problems in Next.js.
 - **Never import across package boundaries.** Tests must not import from `apps/web/` — if a test needs a function, that function belongs in `packages/backend/` or `packages/shared/`. Web server actions should be thin auth wrappers that delegate to backend services.
 
 ### Tables, Grids & Dialogs — Always Extracted

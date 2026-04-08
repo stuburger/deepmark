@@ -1,5 +1,6 @@
 import { getExamPaperDetail } from "@/lib/exam-paper/queries"
-import { getExamPaperStats, listMySubmissions } from "@/lib/marking/queries"
+import { listMySubmissions } from "@/lib/marking/listing/queries"
+import { getExamPaperStats } from "@/lib/marking/stats/queries"
 import { getExamPaperIngestionLiveState } from "@/lib/pdf-ingestion/queries"
 import { notFound } from "next/navigation"
 import { ExamPaperPageShell } from "./exam-paper-page-shell"

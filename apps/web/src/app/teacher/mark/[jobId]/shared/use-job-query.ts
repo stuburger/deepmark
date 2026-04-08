@@ -1,6 +1,6 @@
 "use client"
 
-import { getStudentPaperJob } from "@/lib/marking/queries"
+import { getStudentPaperJob } from "@/lib/marking/submissions/queries"
 import type { StudentPaperJobPayload } from "@/lib/marking/types"
 import { queryKeys } from "@/lib/query-keys"
 import { useQuery } from "@tanstack/react-query"

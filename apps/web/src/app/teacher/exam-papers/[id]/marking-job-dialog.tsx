@@ -1,11 +1,8 @@
 "use client"
 
 import { Dialog, DialogContent } from "@/components/ui/dialog"
-import {
-	getJobPageTokens,
-	getJobScanPageUrls,
-	getStudentPaperJobForPaper,
-} from "@/lib/marking/queries"
+import { getJobPageTokens, getJobScanPageUrls } from "@/lib/marking/scan/queries"
+import { getStudentPaperJobForPaper } from "@/lib/marking/submissions/queries"
 import type { StudentPaperJobPayload } from "@/lib/marking/types"
 import { queryKeys } from "@/lib/query-keys"
 import { useQuery } from "@tanstack/react-query"

@@ -2,7 +2,7 @@
 
 import type { ExamPaperDetail } from "@/lib/exam-paper/queries"
 import { getExamPaperDetail } from "@/lib/exam-paper/queries"
-import { getExamPaperStats } from "@/lib/marking/queries"
+import { getExamPaperStats } from "@/lib/marking/stats/queries"
 import type { ExamPaperStats } from "@/lib/marking/types"
 import type {
 	ActiveExamPaperIngestionJob,

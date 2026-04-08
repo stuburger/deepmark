@@ -1,8 +1,5 @@
-import {
-	getJobPageTokens,
-	getJobScanPageUrls,
-	getStudentPaperJobForPaper,
-} from "@/lib/marking/queries"
+import { getJobPageTokens, getJobScanPageUrls } from "@/lib/marking/scan/queries"
+import { getStudentPaperJobForPaper } from "@/lib/marking/submissions/queries"
 import { notFound } from "next/navigation"
 import { derivePhase } from "../../../../[jobId]/shared/phase"
 import { SubmissionView } from "./submission-view"

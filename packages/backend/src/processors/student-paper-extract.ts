@@ -2,15 +2,16 @@ import { db } from "@/db"
 import { createCancellationToken } from "@/lib/infra/cancellation"
 import { runVisionOcr } from "@/lib/scan-extraction/cloud-vision-ocr"
 import { type PageMimeType, extractStudentPaper } from "@/lib/scan-extraction/gemini-extract"
+import { persistTokens } from "@/lib/scan-extraction/persist-tokens"
+import { saveVisionRaw } from "@/lib/scan-extraction/save-vision-raw"
 import { logger } from "@/lib/infra/logger"
-import { getFileBase64, s3 } from "@/lib/infra/s3"
+import { getFileBase64 } from "@/lib/infra/s3"
 import {
 	type SqsEvent,
 	markJobFailed,
 	parseSqsJobId,
 } from "@/lib/infra/sqs-job-runner"
 import {
-	type PageEntry,
 	isValidSubject,
 	loadQuestionSeeds,
 	parsePages,
@@ -20,7 +21,6 @@ import {
 	visionAttributeRegions,
 } from "@/lib/scan-extraction/vision-attribute"
 import { reconcilePageTokens } from "@/lib/scan-extraction/vision-reconcile"
-import { PutObjectCommand } from "@aws-sdk/client-s3"
 import { SQSClient, SendMessageCommand } from "@aws-sdk/client-sqs"
 import {
 	type OcrStatus,
@@ -211,93 +211,18 @@ export async function handler(
 				},
 			})
 
-			// Save raw Cloud Vision responses to S3
-			const visionRawKey = `scans/${jobId}/vision-raw.json`
-			const visionRawPayload = {
-				pages: visionResults.map((result, i) => {
-					const pageOrder = sortedPages[i]?.order
-					if (pageOrder == null) {
-						throw new Error(
-							`sortedPages[${i}] is undefined while building visionRawPayload — arrays are out of sync`,
-						)
-					}
-					return {
-						page_order: pageOrder,
-						response: result?.rawResponse ?? null,
-					}
-				}),
-			}
+			const visionRawKey = await saveVisionRaw(
+				jobId,
+				bucket,
+				sortedPages,
+				visionResults,
+			)
 
-			try {
-				await s3.send(
-					new PutObjectCommand({
-						Bucket: bucket,
-						Key: visionRawKey,
-						Body: JSON.stringify(visionRawPayload),
-						ContentType: "application/json",
-					}),
-				)
-				logger.info(TAG, "Raw Cloud Vision output saved to S3", {
-					jobId,
-					key: visionRawKey,
-				})
-			} catch (err) {
-				logger.error(
-					TAG,
-					"Failed to save raw Vision output to S3 — non-fatal",
-					{
-						jobId,
-						error: String(err),
-					},
-				)
-			}
-
-			// Bulk-insert word tokens from Cloud Vision into Neon
-			const tokenRows = visionResults.flatMap((result, i) => {
-				if (!result) return []
-				const pageOrder = sortedPages[i]?.order
-				if (pageOrder == null) {
-					throw new Error(
-						`sortedPages[${i}] is undefined while building tokenRows — arrays are out of sync`,
-					)
-				}
-				return result.tokens.map((t) => ({
-					submission_id: jobId,
-					page_order: pageOrder,
-					para_index: t.para_index,
-					line_index: t.line_index,
-					word_index: t.word_index,
-					text_raw: t.text_raw,
-					bbox: t.bbox,
-					confidence: t.confidence,
-				}))
-			})
-
-			// Insert tokens and return the created rows (with DB-generated ids) so
-			// the records can be threaded directly into reconcile and attribution
-			// without redundant DB round-trips.
-			const insertedTokens =
-				tokenRows.length > 0
-					? await db.studentPaperPageToken.createManyAndReturn({
-							data: tokenRows,
-							select: {
-								id: true,
-								page_order: true,
-								para_index: true,
-								line_index: true,
-								word_index: true,
-								text_raw: true,
-								bbox: true,
-							},
-						})
-					: []
-
-			if (insertedTokens.length > 0) {
-				logger.info(TAG, "Word tokens inserted", {
-					jobId,
-					token_count: insertedTokens.length,
-				})
-			}
+			const insertedTokens = await persistTokens(
+				jobId,
+				sortedPages,
+				visionResults,
+			)
 
 			// Phase 2a — correct raw Vision token text against the page image.
 			// Returns the same tokens with text_corrected populated, which are
@@ -356,7 +281,7 @@ export async function handler(
 				jobId,
 				exam_paper_id: job.exam_paper_id,
 				detected_subject: detectedSubject,
-				word_tokens_inserted: tokenRows.length,
+				word_tokens_inserted: insertedTokens.length,
 			})
 		} catch (err) {
 			await markJobFailed(jobId, TAG, "ocr", err)

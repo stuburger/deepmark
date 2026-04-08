@@ -108,11 +108,11 @@ export async function reconcilePageTokens({
 				}
 
 				const tokenList = pageTokens
-					.map((t, i) => `${i}: "${t.text_raw}"`)
-					.join("\n")
+					.map((t) => `"${t.text_raw}"`)
+					.join(", ")
 
 				const response = await gemini.models.generateContent({
-					model: "gemini-2.5-flash",
+					model: "gemini-2.5-pro",
 					contents: [
 						{
 							role: "user",
@@ -129,7 +129,7 @@ export async function reconcilePageTokens({
 					},
 				})
 
-				const responseText = response.candidates?.[0]?.content?.parts?.[0]?.text
+				const responseText = response.text
 				if (!responseText) {
 					logger.error(TAG, "Gemini reconciliation returned no text", {
 						jobId,
@@ -139,29 +139,52 @@ export async function reconcilePageTokens({
 				}
 
 				const corrections = JSON.parse(responseText) as Array<{
-					token_idx: number
+					text_raw: string
 					text_corrected: string
 				}>
 
-				// Write corrections to DB and collect into the in-memory map.
+				// Build a queue of tokens grouped by raw text for order-of-appearance matching.
+				const tokenQueue = new Map<string, PageToken[]>()
+				for (const t of pageTokens) {
+					const list = tokenQueue.get(t.text_raw) ?? []
+					list.push(t)
+					tokenQueue.set(t.text_raw, list)
+				}
+
+				// Match corrections to tokens by raw text, consuming in reading order.
+				const pageCorrections: Array<{ tokenId: string; text: string }> = []
+				let skipped = 0
+				for (const c of corrections) {
+					if (c.text_raw === c.text_corrected) continue
+
+					const candidates = tokenQueue.get(c.text_raw)
+					const token = candidates?.shift()
+					if (!token) {
+						skipped++
+						continue
+					}
+
+					correctionById.set(token.id, c.text_corrected)
+					pageCorrections.push({ tokenId: token.id, text: c.text_corrected })
+				}
+
+				// Write corrections to DB in parallel.
 				await Promise.all(
-					corrections.map(async (c) => {
-						const token = pageTokens[c.token_idx]
-						if (!token) return
-						correctionById.set(token.id, c.text_corrected)
+					pageCorrections.map(async ({ tokenId, text }) => {
 						await db.studentPaperPageToken.update({
-							where: { id: token.id },
-							data: { text_corrected: c.text_corrected },
+							where: { id: tokenId },
+							data: { text_corrected: text },
 						})
 					}),
 				)
 
-				totalCorrected += corrections.length
+				totalCorrected += pageCorrections.length
 
 				logger.info(TAG, "Token reconciliation complete for page", {
 					jobId,
 					pageOrder: page.order,
-					tokens_corrected: corrections.length,
+					tokens_corrected: pageCorrections.length,
+					tokens_skipped: skipped,
 				})
 			} catch (err) {
 				logger.error(TAG, "Token reconciliation failed for page", {

@@ -122,10 +122,6 @@ export async function handler(
 			const [extraction, ...visionResults] = await Promise.all([
 				extractStudentPaper(pageData, questionSeeds),
 				...sortedPages.map((page, i) => {
-					// Skip Vision for PDF pages (Cloud Vision requires raster images)
-					if (page.mime_type === "application/pdf") {
-						return Promise.resolve(null)
-					}
 					const pageEntry = pageData[i]
 					if (!pageEntry) {
 						throw new Error(

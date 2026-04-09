@@ -58,7 +58,7 @@ function statusBadgeVariant(
 
 function submissionHref(sub: SubmissionHistoryItem): string | null {
 	if (sub.exam_paper_id) {
-		return `/teacher/mark/papers/${sub.exam_paper_id}/submissions/${sub.id}`
+		return `/teacher/exam-papers/${sub.exam_paper_id}?job=${sub.id}`
 	}
 	return null
 }

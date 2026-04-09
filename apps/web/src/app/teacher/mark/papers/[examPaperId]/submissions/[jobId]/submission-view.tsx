@@ -43,6 +43,8 @@ export function SubmissionView({
 	pageTokens: initialPageTokens,
 	initialPhase,
 	debugMode = false,
+	onNavigateToJob,
+	onVersionChange,
 }: {
 	examPaperId: string
 	jobId: string
@@ -51,6 +53,8 @@ export function SubmissionView({
 	pageTokens: PageToken[]
 	initialPhase: MarkingPhase
 	debugMode?: boolean
+	onNavigateToJob?: (newJobId: string) => void
+	onVersionChange?: (newJobId: string) => void
 }) {
 	const queryClient = useQueryClient()
 	const [showOcr, setShowOcr] = useState(false)
@@ -161,11 +165,6 @@ export function SubmissionView({
 		prevEnrichStatusRef.current = data.enrichment_status
 	}, [data.enrichment_status, jobId, queryClient])
 
-	const enrichmentLoading =
-		data.enrichment_status === "pending" ||
-		data.enrichment_status === "processing" ||
-		enrichMutation.isPending
-
 	// When OCR completes (scan_processing → marking_in_progress), invalidate the
 	// scan URLs query so page.analysis data is fetched. This replaces the old
 	// router.refresh() which re-ran the entire server component just for this.
@@ -199,8 +198,9 @@ export function SubmissionView({
 				onToggleMarks={() => setShowMarks((v) => !v)}
 				onToggleChains={() => setShowChains((v) => !v)}
 				onGenerateAnnotations={() => enrichMutation.mutate()}
-				enrichmentLoading={enrichmentLoading}
 				annotationCount={annotations.length}
+				onNavigateToJob={onNavigateToJob}
+				onVersionChange={onVersionChange}
 			/>
 
 			{/* Mobile: scan/results tabs */}

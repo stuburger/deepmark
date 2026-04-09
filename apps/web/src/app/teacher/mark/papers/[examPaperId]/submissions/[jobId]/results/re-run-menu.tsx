@@ -10,25 +10,24 @@ import { buttonVariants } from "@/components/ui/button-variants"
 import { retriggerGrading, retriggerOcr } from "@/lib/marking/mutations"
 import { cn } from "@/lib/utils"
 import { useMutation } from "@tanstack/react-query"
-import { ChevronDown, Loader2, RefreshCw, ScanText } from "lucide-react"
-import { useRouter } from "next/navigation"
+import {
+	ChevronDown,
+	Loader2,
+	RefreshCw,
+	ScanText,
+	Sparkles,
+} from "lucide-react"
 import { toast } from "sonner"
 
-export function ReMarkButton({
+export function ReRunMenu({
 	jobId,
-	examPaperId,
+	onNavigateToJob,
+	onReAnnotate,
 }: {
 	jobId: string
-	examPaperId: string
+	onNavigateToJob: (newJobId: string) => void
+	onReAnnotate?: () => void
 }) {
-	const router = useRouter()
-
-	function navigateToNewJob(newJobId: string) {
-		router.push(
-			`/teacher/mark/papers/${examPaperId}/submissions/${newJobId}`,
-		)
-	}
-
 	const gradingMutation = useMutation({
 		mutationFn: () => retriggerGrading(jobId),
 		onSuccess: (result) => {
@@ -36,9 +35,9 @@ export function ReMarkButton({
 				toast.error(result.error)
 				return
 			}
-			navigateToNewJob(result.newJobId)
+			onNavigateToJob(result.newJobId)
 		},
-		onError: () => toast.error("Failed to re-run marking"),
+		onError: () => toast.error("Failed to re-grade"),
 	})
 
 	const ocrMutation = useMutation({
@@ -48,9 +47,9 @@ export function ReMarkButton({
 				toast.error(result.error)
 				return
 			}
-			navigateToNewJob(result.newJobId)
+			onNavigateToJob(result.newJobId)
 		},
-		onError: () => toast.error("Failed to re-run answer detection"),
+		onError: () => toast.error("Failed to re-scan"),
 	})
 
 	const isPending = gradingMutation.isPending || ocrMutation.isPending
@@ -69,18 +68,24 @@ export function ReMarkButton({
 				) : (
 					<RefreshCw className="h-3.5 w-3.5 mr-1.5" />
 				)}
-				Re-mark
+				Re-run
 				<ChevronDown className="h-3 w-3 ml-1 opacity-50" />
 			</DropdownMenuTrigger>
-			<DropdownMenuContent align="end">
-				<DropdownMenuItem onClick={() => gradingMutation.mutate()}>
-					<RefreshCw className="h-3.5 w-3.5 mr-2" />
-					Re-run marking only
+			<DropdownMenuContent align="end" className="w-auto min-w-0">
+				<DropdownMenuItem className="whitespace-nowrap" onClick={() => ocrMutation.mutate()}>
+					<ScanText className="h-3.5 w-3.5 mr-2 shrink-0" />
+					Re-scan
 				</DropdownMenuItem>
-				<DropdownMenuItem onClick={() => ocrMutation.mutate()}>
-					<ScanText className="h-3.5 w-3.5 mr-2" />
-					Re-run answer detection
+				<DropdownMenuItem className="whitespace-nowrap" onClick={() => gradingMutation.mutate()}>
+					<RefreshCw className="h-3.5 w-3.5 mr-2 shrink-0" />
+					Re-grade
 				</DropdownMenuItem>
+				{onReAnnotate && (
+					<DropdownMenuItem className="whitespace-nowrap" onClick={onReAnnotate}>
+						<Sparkles className="h-3.5 w-3.5 mr-2 shrink-0" />
+						Re-annotate
+					</DropdownMenuItem>
+				)}
 			</DropdownMenuContent>
 		</DropdownMenu>
 	)

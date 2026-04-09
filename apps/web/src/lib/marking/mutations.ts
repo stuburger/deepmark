@@ -328,7 +328,7 @@ export async function retriggerGrading(
 
 		await tx.studentSubmission.update({
 			where: { id: jobId },
-			data: { superseded_at: new Date() },
+			data: { superseded_at: new Date(), supersede_reason: "re-grade" },
 		})
 
 		return created
@@ -388,7 +388,7 @@ export async function retriggerOcr(jobId: string): Promise<RetriggerOcrResult> {
 
 		await tx.studentSubmission.update({
 			where: { id: jobId },
-			data: { superseded_at: new Date() },
+			data: { superseded_at: new Date(), supersede_reason: "re-scan" },
 		})
 
 		return created

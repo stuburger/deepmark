@@ -4,18 +4,15 @@ import { Button } from "@/components/ui/button"
 import { retriggerOcr } from "@/lib/marking/mutations"
 import { useMutation } from "@tanstack/react-query"
 import { Loader2 } from "lucide-react"
-import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 
 export function ReScanButton({
 	jobId,
-	examPaperId,
+	onNavigateToJob,
 }: {
 	jobId: string
-	examPaperId: string
+	onNavigateToJob: (newJobId: string) => void
 }) {
-	const router = useRouter()
-
 	const { mutate, isPending } = useMutation({
 		mutationFn: () => retriggerOcr(jobId),
 		onSuccess: (result) => {
@@ -23,10 +20,9 @@ export function ReScanButton({
 				toast.error(result.error)
 				return
 			}
-			router.push(
-				`/teacher/mark/papers/${examPaperId}/submissions/${result.newJobId}`,
-			)
+			onNavigateToJob(result.newJobId)
 		},
+		onError: () => toast.error("Failed to re-scan"),
 	})
 
 	return (

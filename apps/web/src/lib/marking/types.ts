@@ -102,6 +102,11 @@ export type TriggerEnrichmentResult =
 
 // ─── Grading types ───────────────────────────────────────────────────────────
 
+export type McqOption = {
+	option_label: string
+	option_text: string
+}
+
 export type GradingResult = {
 	question_id: string
 	question_text: string
@@ -117,6 +122,10 @@ export type GradingResult = {
 	even_better_if?: string[]
 	/** Spatial regions on the scan where this answer was written. Empty for older jobs. */
 	answer_regions?: AnswerRegion[]
+	/** MCQ only: available options for this question. */
+	multiple_choice_options?: McqOption[]
+	/** MCQ only: the correct option label(s) from the mark scheme. */
+	correct_option_labels?: string[]
 }
 
 export type TriggerGradingResult = { ok: true } | { ok: false; error: string }

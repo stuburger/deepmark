@@ -57,7 +57,30 @@ function mergeRegionsIntoResults(
 
 const submissionDetailInclude = {
 	exam_paper: {
-		select: { id: true, title: true, level_descriptors: true },
+		select: {
+			id: true,
+			title: true,
+			level_descriptors: true,
+			sections: {
+				select: {
+					exam_section_questions: {
+						select: {
+							question: {
+								select: {
+									id: true,
+									question_type: true,
+									multiple_choice_options: true,
+									mark_schemes: {
+										select: { correct_option_labels: true },
+										take: 1,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	},
 	answer_regions: {
 		select: {
@@ -119,6 +142,16 @@ function toJobPayload(sub: {
 		id: string
 		title: string
 		level_descriptors: string | null
+		sections: Array<{
+			exam_section_questions: Array<{
+				question: {
+					id: string
+					question_type: string
+					multiple_choice_options: unknown
+					mark_schemes: Array<{ correct_option_labels: string[] }>
+				}
+			}>
+		}>
 	} | null
 	answer_regions: RegionRow[]
 	ocr_runs: Array<{
@@ -150,7 +183,37 @@ function toJobPayload(sub: {
 
 	const pages = (sub.pages ?? []) as PageEntry[]
 	const rawResults = (latestGrading?.grading_results ?? []) as GradingResult[]
-	const gradingResults = mergeRegionsIntoResults(rawResults, sub.answer_regions)
+	const withRegions = mergeRegionsIntoResults(rawResults, sub.answer_regions)
+
+	// Enrich MCQ results with options and correct labels from the exam paper
+	type McqOption = { option_label: string; option_text: string }
+	const mcqLookup = new Map<
+		string,
+		{ options: McqOption[]; correctLabels: string[] }
+	>()
+	for (const section of sub.exam_paper?.sections ?? []) {
+		for (const esq of section.exam_section_questions) {
+			const q = esq.question
+			if (q.question_type === "multiple_choice") {
+				const options = Array.isArray(q.multiple_choice_options)
+					? (q.multiple_choice_options as McqOption[])
+					: []
+				mcqLookup.set(q.id, {
+					options,
+					correctLabels: q.mark_schemes[0]?.correct_option_labels ?? [],
+				})
+			}
+		}
+	}
+	const gradingResults = withRegions.map((r) => {
+		const mcq = mcqLookup.get(r.question_id)
+		if (!mcq) return r
+		return {
+			...r,
+			multiple_choice_options: mcq.options,
+			correct_option_labels: mcq.correctLabels,
+		}
+	})
 	const totalAwarded = gradingResults.reduce((s, r) => s + r.awarded_score, 0)
 	const totalMax = gradingResults.reduce((s, r) => s + r.max_score, 0)
 	const rawExtracted = latestOcr?.extracted_answers_raw as RawExtracted | null
@@ -237,6 +300,7 @@ export type SubmissionVersion = {
 	id: string
 	created_at: Date
 	superseded_at: Date | null
+	supersede_reason: string | null
 	status: string
 }
 
@@ -271,6 +335,7 @@ export async function getSubmissionVersions(
 			id: true,
 			created_at: true,
 			superseded_at: true,
+			supersede_reason: true,
 			ocr_runs: {
 				orderBy: { created_at: "desc" as const },
 				take: 1,
@@ -290,6 +355,7 @@ export async function getSubmissionVersions(
 			id: s.id,
 			created_at: s.created_at,
 			superseded_at: s.superseded_at,
+			supersede_reason: s.supersede_reason,
 			status: deriveScanStatus(
 				(s.ocr_runs[0]?.status ?? null) as Parameters<typeof deriveScanStatus>[0],
 				(s.grading_runs[0]?.status ?? null) as Parameters<typeof deriveScanStatus>[1],

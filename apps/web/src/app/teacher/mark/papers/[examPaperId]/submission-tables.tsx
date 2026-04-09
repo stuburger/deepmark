@@ -125,7 +125,7 @@ export function SubmissionTables({
 											</TableCell>
 											<TableCell className="text-right">
 												<Link
-													href={`/teacher/mark/papers/${examPaperId}/submissions/${sub.id}`}
+													href={`/teacher/exam-papers/${examPaperId}?job=${sub.id}`}
 													className="text-sm text-primary underline underline-offset-4 hover:no-underline"
 												>
 													View →

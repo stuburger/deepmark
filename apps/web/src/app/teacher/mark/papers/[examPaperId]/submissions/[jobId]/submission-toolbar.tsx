@@ -16,16 +16,14 @@ import {
 	ChevronRight,
 	FileText,
 	Link2,
-	Loader2,
 	MapPin,
 	PlusCircle,
 	ScanText,
-	Sparkles,
 	StickyNote,
 } from "lucide-react"
 import Link from "next/link"
 import { DownloadPdfButton } from "./results/download-pdf-button"
-import { ReMarkButton } from "./results/re-mark-button"
+import { ReRunMenu } from "./results/re-run-menu"
 import { StudentNameEditor } from "./results/student-name-editor"
 import type { MarkingPhase } from "./phase"
 import { ReScanButton } from "./re-scan-button"
@@ -50,8 +48,9 @@ export function SubmissionToolbar({
 	onToggleMarks,
 	onToggleChains,
 	onGenerateAnnotations,
-	enrichmentLoading = false,
 	annotationCount,
+	onNavigateToJob,
+	onVersionChange,
 }: {
 	examPaperId: string
 	jobId: string
@@ -67,9 +66,9 @@ export function SubmissionToolbar({
 	onToggleMarks?: () => void
 	onToggleChains?: () => void
 	onGenerateAnnotations?: () => void
-	enrichmentLoading?: boolean
-	/** Number of annotation rows fetched — used to gate Marks/Chains/Legend controls. */
 	annotationCount?: number
+	onNavigateToJob?: (newJobId: string) => void
+	onVersionChange?: (newJobId: string) => void
 }) {
 	const hasOcr = scanPages.some((p) => p.analysis != null)
 	const hasRegions = data.grading_results.some(
@@ -143,7 +142,9 @@ export function SubmissionToolbar({
 
 				<ChevronRight className="h-3.5 w-3.5 text-muted-foreground/40 shrink-0" />
 				<StudentNameEditor jobId={jobId} initialName={data.student_name} />
-				<VersionSwitcher examPaperId={examPaperId} jobId={jobId} />
+				{onVersionChange && (
+					<VersionSwitcher jobId={jobId} onVersionChange={onVersionChange} />
+				)}
 
 				{phase === "completed" && data.total_max > 0 && (
 					<span className="ml-2">
@@ -288,38 +289,15 @@ export function SubmissionToolbar({
 				{/* Spacer */}
 				<div className="flex-1" />
 
-				{/* Generate / Re-generate Annotations button */}
-				{canGenerate && onGenerateAnnotations && (
-					<button
-						type="button"
-						onClick={onGenerateAnnotations}
-						disabled={enrichmentLoading}
-						className={cn(
-							"inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors",
-							"bg-background text-muted-foreground hover:bg-muted hover:text-foreground",
-							enrichmentLoading && "opacity-60 pointer-events-none",
-						)}
-					>
-						{enrichmentLoading ? (
-							<Loader2 className="h-3.5 w-3.5 animate-spin" />
-						) : (
-							<Sparkles className="h-3.5 w-3.5" />
-						)}
-						<span className="hidden sm:inline">
-							{enrichmentLoading
-								? "Annotating..."
-								: hasAnnotations
-									? "Re-annotate"
-									: "Annotate"}
-						</span>
-					</button>
-				)}
-
 				{/* Phase-conditional actions */}
 				{phase === "completed" && (
 					<div className="flex items-center gap-2">
 						<DownloadPdfButton data={data} />
-						<ReMarkButton jobId={jobId} examPaperId={examPaperId} />
+						<ReRunMenu
+							jobId={jobId}
+							onNavigateToJob={onNavigateToJob ?? (() => {})}
+							onReAnnotate={canGenerate ? onGenerateAnnotations : undefined}
+						/>
 						<Link
 							href={`/teacher/exam-papers/${examPaperId}`}
 							className={buttonVariants({ size: "sm" })}
@@ -332,7 +310,7 @@ export function SubmissionToolbar({
 
 				{data.pages_count > 0 &&
 					(phase === "scan_processing" || phase === "failed") && (
-						<ReScanButton jobId={jobId} examPaperId={examPaperId} />
+						<ReScanButton jobId={jobId} onNavigateToJob={onNavigateToJob ?? (() => {})} />
 					)}
 			</div>
 		</TooltipProvider>

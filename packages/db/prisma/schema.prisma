@@ -523,7 +523,9 @@ model StudentSubmission {
   staged_script_id String?
   created_at       DateTime @default(now())
   /// Set when this submission is superseded by a re-scan/re-mark. Superseded submissions are excluded from lists and analytics.
-  superseded_at    DateTime?
+  superseded_at     DateTime?
+  /// Why this submission was superseded (e.g. "re-scan", "re-grade"). Null for the current (non-superseded) version.
+  supersede_reason  String?
 
   uploader      User                       @relation("SubmissionUploader", fields: [uploaded_by], references: [id])
   exam_paper    ExamPaper                  @relation("SubmissionExamPaper", fields: [exam_paper_id], references: [id])

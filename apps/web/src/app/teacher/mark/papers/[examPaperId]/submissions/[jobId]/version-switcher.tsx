@@ -10,16 +10,17 @@ import { getSubmissionVersions } from "@/lib/marking/submissions/queries"
 import type { SubmissionVersion } from "@/lib/marking/submissions/queries"
 import { queryKeys } from "@/lib/query-keys"
 import { useQuery } from "@tanstack/react-query"
-import { ChevronDown, Clock, History } from "lucide-react"
-import { useRouter } from "next/navigation"
+import { ChevronDown, History } from "lucide-react"
 
 function formatDate(date: Date): string {
-	return new Intl.DateTimeFormat("en-GB", {
-		day: "2-digit",
-		month: "short",
+	const d = new Date(date)
+	const day = String(d.getDate()).padStart(2, "0")
+	const month = d.toLocaleDateString("en-GB", { month: "short" })
+	const time = d.toLocaleTimeString("en-GB", {
 		hour: "2-digit",
 		minute: "2-digit",
-	}).format(new Date(date))
+	})
+	return `${day} ${month}, ${time}`
 }
 
 function versionLabel(
@@ -29,18 +30,17 @@ function versionLabel(
 ): string {
 	const vNum = total - index
 	if (version.superseded_at === null) return `v${vNum} (latest)`
+	if (version.supersede_reason) return `v${vNum} · ${version.supersede_reason}`
 	return `v${vNum}`
 }
 
 export function VersionSwitcher({
-	examPaperId,
 	jobId,
+	onVersionChange,
 }: {
-	examPaperId: string
 	jobId: string
+	onVersionChange: (newJobId: string) => void
 }) {
-	const router = useRouter()
-
 	const { data: versions } = useQuery({
 		queryKey: queryKeys.jobVersions(jobId),
 		queryFn: async () => {
@@ -52,8 +52,8 @@ export function VersionSwitcher({
 
 	if (!versions || versions.length <= 1) return null
 
-	const current = versions.find((v) => v.id === jobId)
 	const currentIndex = versions.findIndex((v) => v.id === jobId)
+	const current = versions[currentIndex]
 	const currentLabel = current
 		? versionLabel(current, currentIndex, versions.length)
 		: "—"
@@ -65,7 +65,7 @@ export function VersionSwitcher({
 				{currentLabel}
 				<ChevronDown className="h-3 w-3 opacity-50" />
 			</DropdownMenuTrigger>
-			<DropdownMenuContent align="start">
+			<DropdownMenuContent align="start" className="w-auto min-w-0">
 				{versions.map((v, i) => {
 					const label = versionLabel(v, i, versions.length)
 					const isCurrent = v.id === jobId
@@ -74,21 +74,14 @@ export function VersionSwitcher({
 							key={v.id}
 							disabled={isCurrent}
 							onClick={() => {
-								if (!isCurrent) {
-									router.push(
-										`/teacher/mark/papers/${examPaperId}/submissions/${v.id}`,
-									)
-								}
+								if (!isCurrent) onVersionChange(v.id)
 							}}
-							className={isCurrent ? "font-medium" : ""}
+							className={`whitespace-nowrap ${isCurrent ? "font-medium" : ""}`}
 						>
-							<div className="flex items-center gap-2 w-full">
-								<span>{label}</span>
-								<span className="ml-auto flex items-center gap-1 text-muted-foreground">
-									<Clock className="h-3 w-3" />
-									{formatDate(v.created_at)}
-								</span>
-							</div>
+							<span>{label}</span>
+							<span className="ml-auto text-muted-foreground pl-4 tabular-nums text-[11px]">
+								{formatDate(v.created_at)}
+							</span>
 						</DropdownMenuItem>
 					)
 				})}

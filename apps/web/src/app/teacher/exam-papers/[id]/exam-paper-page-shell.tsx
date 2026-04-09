@@ -383,10 +383,10 @@ export function ExamPaperPageShell({
 				onOpenChange={(v) => {
 					if (!v) {
 						void setMarkingJobId(null)
-						// Clear the question deep-link param set by SubmissionView
 						void setQuestionParam(null)
 					}
 				}}
+				onJobChange={(newJobId) => void setMarkingJobId(newJobId)}
 			/>
 
 			<StagingReviewDialog

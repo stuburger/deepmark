@@ -291,6 +291,7 @@ export async function retriggerGrading(
 		const oldTokens = await tx.studentPaperPageToken.findMany({
 			where: { submission_id: jobId },
 		})
+		
 		if (oldTokens.length > 0) {
 			await tx.studentPaperPageToken.createMany({
 				data: oldTokens.map((t) => ({

@@ -4,7 +4,7 @@ import { getStudentPaperJob } from "@/lib/marking/submissions/queries"
 import type { StudentPaperJobPayload } from "@/lib/marking/types"
 import { queryKeys } from "@/lib/query-keys"
 import { useQuery } from "@tanstack/react-query"
-import { derivePhase } from "./phase"
+import { derivePhase } from "../phase"
 
 const TERMINAL_PHASES = new Set(["completed", "failed", "cancelled"])
 

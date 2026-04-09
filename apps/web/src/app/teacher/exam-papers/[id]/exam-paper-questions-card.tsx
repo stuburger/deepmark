@@ -50,11 +50,15 @@ export function ExamPaperQuestionsCard({
 		)
 	}
 
+	const allQuestions = paper.sections.flatMap((s) =>
+		s.questions.map((q) => ({ ...q, section_title: s.title })),
+	)
+
 	const duplicateIds = new Set(
 		similarPairs.flatMap((p) => [p.questionId, p.similarToId]),
 	)
 
-	const sortedQuestions = [...paper.questions].sort((a, b) => {
+	const sortedQuestions = [...allQuestions].sort((a, b) => {
 		let cmp = 0
 		if (sort.key === "number") {
 			cmp = naturalCompare(a.question_number, b.question_number)
@@ -120,7 +124,7 @@ export function ExamPaperQuestionsCard({
 			<CardContent>
 				{view === "paper" ? (
 					<ExamPaperPaperView paper={paper} paperId={paper.id} />
-				) : paper.questions.length === 0 ? (
+				) : allQuestions.length === 0 ? (
 					<div className="py-8 text-center text-sm text-muted-foreground">
 						No questions yet. Upload a question paper or mark scheme PDF to
 						populate this paper.

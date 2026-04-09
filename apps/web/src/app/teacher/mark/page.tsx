@@ -56,12 +56,11 @@ function statusBadgeVariant(
 	}
 }
 
-function submissionHref(sub: SubmissionHistoryItem): string {
+function submissionHref(sub: SubmissionHistoryItem): string | null {
 	if (sub.exam_paper_id) {
 		return `/teacher/mark/papers/${sub.exam_paper_id}/submissions/${sub.id}`
 	}
-	// Fallback: old route will redirect to new URL once exam_paper_id is known
-	return `/teacher/mark/${sub.id}`
+	return null
 }
 
 function SubmissionRow({ sub }: { sub: SubmissionHistoryItem }) {
@@ -72,17 +71,23 @@ function SubmissionRow({ sub }: { sub: SubmissionHistoryItem }) {
 			: null
 
 	return (
-		<TableRow className="cursor-pointer hover:bg-muted/50">
+		<TableRow className={href ? "cursor-pointer hover:bg-muted/50" : ""}>
 			<TableCell>
-				<Link href={href} className="block">
-					{sub.student_name ? (
-						<span className="font-medium">{sub.student_name}</span>
-					) : (
-						<span className="text-muted-foreground italic">
-							Unknown student
-						</span>
-					)}
-				</Link>
+				{href ? (
+					<Link href={href} className="block">
+						{sub.student_name ? (
+							<span className="font-medium">{sub.student_name}</span>
+						) : (
+							<span className="text-muted-foreground italic">
+								Unknown student
+							</span>
+						)}
+					</Link>
+				) : (
+					<span className={sub.student_name ? "font-medium" : "text-muted-foreground italic"}>
+						{sub.student_name || "Unknown student"}
+					</span>
+				)}
 			</TableCell>
 			<TableCell className="max-w-xs">
 				{sub.exam_paper_id ? (
@@ -119,12 +124,16 @@ function SubmissionRow({ sub }: { sub: SubmissionHistoryItem }) {
 				{formatDate(sub.created_at)}
 			</TableCell>
 			<TableCell>
-				<Link
-					href={href}
-					className="text-sm text-primary underline underline-offset-4 hover:no-underline"
-				>
-					{sub.status === "ocr_complete" ? "View" : "Details"}
-				</Link>
+				{href ? (
+					<Link
+						href={href}
+						className="text-sm text-primary underline underline-offset-4 hover:no-underline"
+					>
+						{sub.status === "ocr_complete" ? "View" : "Details"}
+					</Link>
+				) : (
+					<span className="text-sm text-muted-foreground">—</span>
+				)}
 			</TableCell>
 		</TableRow>
 	)

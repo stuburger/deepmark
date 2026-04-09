@@ -103,21 +103,21 @@ export function ExamPaperPageShell({
 	const [uploadOpen, setUploadOpen] = useState(false)
 	const [stagingOpen, setStagingOpen] = useState(false)
 	const [markingJobId, setMarkingJobId] = useQueryState("job", parseAsString)
+	const [, setQuestionParam] = useQueryState("question", parseAsString)
 
 	// Batch + submissions (polling, commit, derived lists)
 	const {
-		activeBatch,
-		refetchActiveBatch,
+		scriptsWorkflow,
+		refetchWorkflow,
 		submissions,
 		markedSubmissions,
 		inProgressSubmissions,
 		committingBatch,
 		handleCommitAll,
+		handleSplitScript,
 	} = useBatchSubmissions({
 		paperId: paper.id,
 		initialSubmissions,
-		stagingOpen,
-		setStagingOpen,
 	})
 
 	// Delete exam paper
@@ -140,12 +140,14 @@ export function ExamPaperPageShell({
 		useLinkMarkScheme(paper.id)
 
 	// Derived readiness state
+	const allQuestions = paper.sections.flatMap((s) => s.questions)
+
 	const hasQuestionPaper =
 		completedDocs.some((d) => d.document_type === "question_paper") ||
-		paper.questions.some((q) => q.origin === "question_paper")
+		allQuestions.some((q) => q.origin === "question_paper")
 
-	const totalQuestions = paper.questions.length
-	const questionsWithMarkScheme = paper.questions.filter(
+	const totalQuestions = allQuestions.length
+	const questionsWithMarkScheme = allQuestions.filter(
 		(q) =>
 			q.mark_scheme_status === "linked" ||
 			q.mark_scheme_status === "auto_linked",
@@ -155,9 +157,12 @@ export function ExamPaperPageShell({
 
 	const hasExemplar =
 		completedDocs.some((d) => d.document_type === "exemplar") ||
-		paper.questions.some((q) => q.origin === "exemplar")
+		allQuestions.some((q) => q.origin === "exemplar")
 
 	const readyForSubmissions = hasQuestionPaper && allQuestionsHaveMarkSchemes
+	const stagedCount = scriptsWorkflow?.isReadyForReview
+		? scriptsWorkflow.allScripts.length
+		: 0
 
 	const tabTriggerClass =
 		"rounded-none px-4 h-full after:bg-primary data-active:text-primary data-active:bg-transparent data-active:shadow-none"
@@ -223,9 +228,13 @@ export function ExamPaperPageShell({
 						</TabsTrigger>
 						<TabsTrigger value="submissions" className={tabTriggerClass}>
 							Submissions
-							{activeBatch && (
+							{stagedCount > 0 ? (
+								<span className="ml-1.5 inline-flex items-center justify-center rounded-full bg-amber-500 text-white px-1.5 py-0.5 text-[10px] font-semibold tabular-nums leading-none">
+									{stagedCount}
+								</span>
+							) : scriptsWorkflow?.isProcessing ? (
 								<span className="ml-1.5 h-1.5 w-1.5 rounded-full bg-primary animate-pulse shrink-0" />
-							)}
+							) : null}
 							{submissions.length > 0 && (
 								<span className="ml-1.5 inline-flex items-center justify-center rounded-full bg-muted px-1.5 py-0.5 text-xs tabular-nums leading-none">
 									{submissions.length}
@@ -319,7 +328,7 @@ export function ExamPaperPageShell({
 				{/* ── Submissions tab ── */}
 				<TabsContent value="submissions" className="space-y-6 mt-10">
 					<SubmissionsTabContent
-						activeBatch={activeBatch ?? null}
+						workflow={scriptsWorkflow}
 						inProgressSubmissions={inProgressSubmissions}
 						markedSubmissions={markedSubmissions}
 						totalSubmissions={submissions.length}
@@ -354,7 +363,7 @@ export function ExamPaperPageShell({
 				setLinkingTargetId={setLinkingTargetId}
 				linkingBusy={linkingBusy}
 				doLinkMarkScheme={doLinkMarkScheme}
-				questions={paper.questions}
+				questions={allQuestions}
 			/>
 
 			<ConfirmDialog
@@ -372,14 +381,18 @@ export function ExamPaperPageShell({
 				jobId={markingJobId}
 				open={markingJobId !== null}
 				onOpenChange={(v) => {
-					if (!v) setMarkingJobId(null)
+					if (!v) {
+						void setMarkingJobId(null)
+						// Clear the question deep-link param set by SubmissionView
+						void setQuestionParam(null)
+					}
 				}}
 			/>
 
 			<StagingReviewDialog
 				open={stagingOpen}
 				onOpenChange={setStagingOpen}
-				activeBatch={activeBatch}
+				workflow={scriptsWorkflow}
 				committingBatch={committingBatch}
 				viewMode={stagingView}
 				onViewModeChange={setStagingView}
@@ -391,11 +404,10 @@ export function ExamPaperPageShell({
 					await updateStagedScript(id, {
 						status: status === "confirmed" ? "excluded" : "confirmed",
 					})
-					void refetchActiveBatch()
 				}}
-				onDeleteScript={() => void refetchActiveBatch()}
+				onSplitScript={handleSplitScript}
+				onDeleteScript={() => {}}
 				onJobDeleted={() => {
-					void refetchActiveBatch()
 					void queryClient.invalidateQueries({
 						queryKey: queryKeys.submissions(paper.id),
 					})
@@ -411,7 +423,7 @@ export function ExamPaperPageShell({
 				open={uploadOpen}
 				onOpenChange={setUploadOpen}
 				onBatchStarted={() => {
-					void refetchActiveBatch()
+					void refetchWorkflow()
 					void setActiveTab("submissions")
 				}}
 			/>

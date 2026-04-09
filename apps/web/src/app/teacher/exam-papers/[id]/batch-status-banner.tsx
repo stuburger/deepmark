@@ -1,15 +1,15 @@
 import { Button } from "@/components/ui/button"
-import type { ActiveBatchInfo } from "@/lib/batch/types"
+import type { ScriptsWorkflowState } from "@/lib/batch/types"
 import { Loader2 } from "lucide-react"
 
 export function BatchStatusBanner({
-	activeBatch,
+	workflow,
 	onReviewClick,
 }: {
-	activeBatch: NonNullable<ActiveBatchInfo>
+	workflow: ScriptsWorkflowState
 	onReviewClick: () => void
 }) {
-	if (activeBatch.status === "classifying") {
+	if (workflow.isProcessing) {
 		return (
 			<div className="flex items-center gap-3 rounded-lg border bg-muted/30 px-4 py-3">
 				<Loader2 className="h-4 w-4 animate-spin text-muted-foreground shrink-0" />
@@ -20,11 +20,11 @@ export function BatchStatusBanner({
 		)
 	}
 
-	if (activeBatch.status === "staging") {
-		const pendingCount = activeBatch.staged_scripts.filter(
+	if (workflow.isReadyForReview) {
+		const pendingCount = workflow.allScripts.filter(
 			(s) => s.status !== "confirmed",
 		).length
-		const totalCount = activeBatch.staged_scripts.length
+		const totalCount = workflow.allScripts.length
 
 		return (
 			<div className="flex items-center justify-between gap-4 rounded-lg border bg-muted/20 px-4 py-3">
@@ -50,19 +50,9 @@ export function BatchStatusBanner({
 		)
 	}
 
-	if (activeBatch.status === "marking") {
-		const completedCount = activeBatch.student_jobs.filter(
-			(j) => j.status === "ocr_complete",
-		).length
-		const total = activeBatch.total_student_jobs
-		const percent = total > 0 ? Math.round((completedCount / total) * 100) : 0
-
-		const unsubmittedCount = activeBatch.staged_scripts.filter((s) => {
-			const submittedIds = new Set(
-				activeBatch.student_jobs.map((j) => j.staged_script_id),
-			)
-			return !submittedIds.has(s.id)
-		}).length
+	if (workflow.isMarking) {
+		const { completed, total, percent } = workflow.markingProgress
+		const unsubmittedCount = workflow.unsubmittedScripts.length
 
 		return (
 			<div className="rounded-lg border bg-muted/20 px-4 py-3 space-y-2">
@@ -70,7 +60,7 @@ export function BatchStatusBanner({
 					<div className="flex items-center gap-3">
 						<Loader2 className="h-4 w-4 animate-spin text-muted-foreground shrink-0" />
 						<p className="text-sm font-medium">
-							Marking · {completedCount} of {total} scripts done
+							Marking · {completed} of {total} scripts done
 						</p>
 					</div>
 					<div className="flex items-center gap-3">

@@ -46,6 +46,13 @@ export type JobEvent =
 			questions_annotated?: number
 	  }
 	| {
+			type: "region_attribution_failed"
+			at: string
+			page_order: number
+			reason: string
+			detail?: string
+	  }
+	| {
 			type: "job_failed"
 			at: string
 			phase: "ocr" | "grading" | "enrich"

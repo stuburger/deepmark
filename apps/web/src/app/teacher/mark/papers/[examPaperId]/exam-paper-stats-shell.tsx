@@ -19,7 +19,6 @@ import {
 	TableRow,
 } from "@/components/ui/table"
 import { getActiveBatchForPaper } from "@/lib/batch/queries"
-import type { ActiveBatchInfo } from "@/lib/batch/types"
 import { listMySubmissions } from "@/lib/marking/listing/queries"
 import { getExamPaperStats } from "@/lib/marking/stats/queries"
 import type { ExamPaperStats, SubmissionHistoryItem } from "@/lib/marking/types"
@@ -75,16 +74,21 @@ export function ExamPaperStatsShell({
 		staleTime: 30 * 1000,
 	})
 
-	const { data: activeBatch } = useQuery<ActiveBatchInfo>({
+	const { data: batchProgress } = useQuery({
 		queryKey: ["activeBatch", examPaperId],
 		queryFn: async () => {
 			const r = await getActiveBatchForPaper(examPaperId)
-			return r.ok ? r.batch : null
+			if (!r.ok || !r.batch || r.batch.status !== "marking") return null
+			const completed = r.batch.student_jobs.filter(
+				(j) => j.status === "ocr_complete",
+			).length
+			return {
+				completed,
+				total: r.batch.total_student_jobs,
+				remaining: r.batch.total_student_jobs - completed,
+			}
 		},
-		refetchInterval: (q) => {
-			const b = q.state.data
-			return b?.status === "marking" ? 3000 : false
-		},
+		refetchInterval: (q) => (q.state.data ? 3000 : false),
 	})
 
 	const prevStatusesRef = useRef<Record<string, string>>({})
@@ -125,9 +129,6 @@ export function ExamPaperStatsShell({
 		color: BAND_COLORS[i]!,
 	}))
 
-	const batchCompleteCount =
-		activeBatch?.student_jobs.filter((j) => j.status === "ocr_complete")
-			.length ?? 0
 
 	return (
 		<div className="space-y-6">
@@ -195,30 +196,28 @@ export function ExamPaperStatsShell({
 				</Card>
 			</div>
 
-			{/* Active batch progress */}
-			{activeBatch?.status === "marking" &&
-				activeBatch.total_student_jobs > 0 && (
-					<Card>
-						<CardHeader>
-							<CardTitle className="flex items-center gap-2">
-								<Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-								Batch marking in progress
-							</CardTitle>
-							<CardDescription>
-								{batchCompleteCount} of {activeBatch.total_student_jobs} scripts
-								marked · {activeBatch.total_student_jobs - batchCompleteCount}{" "}
-								in progress
-							</CardDescription>
-						</CardHeader>
-						<CardContent>
-							<Progress
-								value={
-									(batchCompleteCount / activeBatch.total_student_jobs) * 100
-								}
-							/>
-						</CardContent>
-					</Card>
-				)}
+			{/* Marking progress */}
+			{batchProgress && batchProgress.total > 0 && (
+				<Card>
+					<CardHeader>
+						<CardTitle className="flex items-center gap-2">
+							<Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+							Marking in progress
+						</CardTitle>
+						<CardDescription>
+							{batchProgress.completed} of {batchProgress.total} scripts
+							marked · {batchProgress.remaining} in progress
+						</CardDescription>
+					</CardHeader>
+					<CardContent>
+						<Progress
+							value={
+								(batchProgress.completed / batchProgress.total) * 100
+							}
+						/>
+					</CardContent>
+				</Card>
+			)}
 
 			{/* Grade distribution chart */}
 			{completedSubmissions.length >= 3 && (

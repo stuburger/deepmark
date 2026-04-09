@@ -33,8 +33,6 @@ export type ExamPaperQuestion = {
 	mark_scheme_correct_option_labels: string[]
 	mark_scheme_points_total: number | null
 	order: number
-	exam_section_id: string
-	section_title: string
 	question_number: string | null
 	multiple_choice_options: { option_label: string; option_text: string }[]
 }
@@ -42,6 +40,7 @@ export type ExamPaperQuestion = {
 export type ExamPaperSection = {
 	id: string
 	title: string
+	questions: ExamPaperQuestion[]
 }
 
 export type ExamPaperDetail = {
@@ -57,7 +56,6 @@ export type ExamPaperDetail = {
 	is_public: boolean
 	created_at: Date
 	sections: ExamPaperSection[]
-	questions: ExamPaperQuestion[]
 	section_count: number
 	level_descriptors: string | null
 }

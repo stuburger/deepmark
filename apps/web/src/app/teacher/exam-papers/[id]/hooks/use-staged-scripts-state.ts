@@ -4,8 +4,7 @@ import {
 	deleteStagedScript,
 	updateStagedScriptPageKeys,
 } from "@/lib/batch/mutations"
-import { getStagedScriptPageUrls } from "@/lib/batch/queries"
-import type { BatchIngestJobData } from "@/lib/batch/types"
+import type { StagedScript } from "@/lib/batch/types"
 import { PointerSensor, useSensor, useSensors } from "@dnd-kit/core"
 import { useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
@@ -25,8 +24,8 @@ type ActiveDragState = {
 export type { CarouselState, ActiveDragState }
 
 export function useStagedScriptsState(
-	batchId: string,
-	scripts: BatchIngestJobData["staged_scripts"],
+	urls: Record<string, string>,
+	scripts: StagedScript[],
 	onDeleteScript?: (scriptId: string) => void,
 ) {
 	const [localScripts, setLocalScripts] = useState(scripts)
@@ -35,7 +34,6 @@ export function useStagedScriptsState(
 			scripts.map((s) => [s.id, s.confirmed_name ?? s.proposed_name ?? ""]),
 		),
 	)
-	const [urls, setUrls] = useState<Record<string, string>>({})
 	const [activeDrag, setActiveDrag] = useState<ActiveDragState | null>(null)
 	const [carousel, setCarousel] = useState<CarouselState | null>(null)
 	const isDraggingRef = useRef(false)
@@ -51,15 +49,8 @@ export function useStagedScriptsState(
 		}
 	}, [scripts])
 
-	// Load presigned GET URLs for all pages in the batch once
-	useEffect(() => {
-		getStagedScriptPageUrls(batchId).then((r) => {
-			if (r.ok) setUrls(r.urls)
-		})
-	}, [batchId])
-
 	function openCarousel(
-		script: BatchIngestJobData["staged_scripts"][number],
+		script: StagedScript,
 		startIndex: number,
 	) {
 		const pageKeys = script.page_keys.slice().sort((a, b) => a.order - b.order)
@@ -75,7 +66,7 @@ export function useStagedScriptsState(
 	}
 
 	async function persistPageKeys(
-		script: BatchIngestJobData["staged_scripts"][number],
+		script: StagedScript,
 	) {
 		const r = await updateStagedScriptPageKeys(script.id, script.page_keys)
 		if (!r.ok) toast.error(r.error)

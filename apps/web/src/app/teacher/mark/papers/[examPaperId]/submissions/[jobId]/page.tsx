@@ -1,7 +1,7 @@
 import { getJobPageTokens, getJobScanPageUrls } from "@/lib/marking/scan/queries"
 import { getStudentPaperJobForPaper } from "@/lib/marking/submissions/queries"
 import { notFound } from "next/navigation"
-import { derivePhase } from "../../../../[jobId]/shared/phase"
+import { derivePhase } from "./phase"
 import { SubmissionView } from "./submission-view"
 
 export default async function SubmissionPage({
@@ -28,14 +28,16 @@ export default async function SubmissionPage({
 	const phase = derivePhase(data)
 
 	return (
-		<SubmissionView
-			examPaperId={examPaperId}
-			jobId={jobId}
-			initialData={data}
-			scanPages={scanPages}
-			pageTokens={pageTokens}
-			initialPhase={phase}
-			debugMode={debugMode}
-		/>
+		<div className="-m-6 h-dvh">
+			<SubmissionView
+				examPaperId={examPaperId}
+				jobId={jobId}
+				initialData={data}
+				scanPages={scanPages}
+				pageTokens={pageTokens}
+				initialPhase={phase}
+				debugMode={debugMode}
+			/>
+		</div>
 	)
 }

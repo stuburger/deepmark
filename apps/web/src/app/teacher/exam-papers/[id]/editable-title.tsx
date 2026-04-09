@@ -3,7 +3,7 @@
 import { updateExamPaperTitle } from "@/lib/exam-paper/paper/mutations"
 import { queryKeys } from "@/lib/query-keys"
 import { useQueryClient } from "@tanstack/react-query"
-import { useRef, useState } from "react"
+import { useState } from "react"
 
 export function EditableTitle({
 	id,
@@ -14,24 +14,18 @@ export function EditableTitle({
 }) {
 	const queryClient = useQueryClient()
 	const [editing, setEditing] = useState(false)
-	const [title, setTitle] = useState(initialTitle)
+	const [draft, setDraft] = useState("")
 	const [pending, setPending] = useState(false)
-	const inputRef = useRef<HTMLInputElement>(null)
 
-	function handleClick() {
+	function startEditing() {
+		setDraft(initialTitle)
 		setEditing(true)
-		setTimeout(() => inputRef.current?.focus(), 0)
 	}
 
 	async function handleBlur() {
 		if (pending) return
-		const trimmed = title.trim()
-		if (!trimmed) {
-			setTitle(initialTitle)
-			setEditing(false)
-			return
-		}
-		if (trimmed === initialTitle) {
+		const trimmed = draft.trim()
+		if (!trimmed || trimmed === initialTitle) {
 			setEditing(false)
 			return
 		}
@@ -39,20 +33,16 @@ export function EditableTitle({
 		const result = await updateExamPaperTitle(id, trimmed)
 		setPending(false)
 		setEditing(false)
-		if (!result.ok) {
-			setTitle(initialTitle)
-		} else {
-			setTitle(trimmed)
+		if (result.ok) {
 			void queryClient.invalidateQueries({ queryKey: queryKeys.examPaper(id) })
 		}
 	}
 
 	function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
 		if (e.key === "Enter") {
-			inputRef.current?.blur()
+			e.currentTarget.blur()
 		}
 		if (e.key === "Escape") {
-			setTitle(initialTitle)
 			setEditing(false)
 		}
 	}
@@ -60,9 +50,8 @@ export function EditableTitle({
 	if (editing) {
 		return (
 			<input
-				ref={inputRef}
-				value={title}
-				onChange={(e) => setTitle(e.target.value)}
+				value={draft}
+				onChange={(e) => setDraft(e.target.value)}
 				onBlur={handleBlur}
 				onKeyDown={handleKeyDown}
 				disabled={pending}
@@ -75,10 +64,10 @@ export function EditableTitle({
 	return (
 		<h1
 			className="text-2xl font-semibold cursor-pointer hover:text-foreground/70 transition-colors truncate min-w-0"
-			onClick={handleClick}
-			title={title}
+			onClick={startEditing}
+			title={initialTitle}
 		>
-			{title}
+			{initialTitle}
 		</h1>
 	)
 }

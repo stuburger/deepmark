@@ -2,18 +2,15 @@
 
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
-import { getStagedScriptPageUrls } from "@/lib/batch/queries"
-import type { BatchIngestJobData } from "@/lib/batch/types"
+import type { StagedScript } from "@/lib/batch/types"
 import { AnimatePresence, motion } from "framer-motion"
 import { FileStack, X } from "lucide-react"
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { ListViewLockedStack } from "./list-view-locked-stack"
 import { PageCarousel, type PageItem } from "./staged-script-page-editor"
 
-type StagedScript = BatchIngestJobData["staged_scripts"][number]
-
 type PaperTrayPanelProps = {
-	batchId: string
+	urls: Record<string, string>
 	confirmedScripts: StagedScript[]
 	committingBatch: boolean
 	onCommitAll: () => Promise<void>
@@ -21,24 +18,17 @@ type PaperTrayPanelProps = {
 }
 
 export function PaperTrayPanel({
-	batchId,
+	urls,
 	confirmedScripts,
 	committingBatch,
 	onCommitAll,
 	onToggleExclude,
 }: PaperTrayPanelProps) {
-	const [urls, setUrls] = useState<Record<string, string>>({})
 	const [carousel, setCarousel] = useState<{
 		pages: PageItem[]
 		index: number
 		scriptName: string
 	} | null>(null)
-
-	useEffect(() => {
-		getStagedScriptPageUrls(batchId).then((r) => {
-			if (r.ok) setUrls(r.urls)
-		})
-	}, [batchId])
 
 	function openCarousel(script: StagedScript, startIndex: number) {
 		const sorted = script.page_keys.slice().sort((a, b) => a.order - b.order)

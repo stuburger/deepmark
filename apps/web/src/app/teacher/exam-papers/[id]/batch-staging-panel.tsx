@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
-import type { ActiveBatchInfo } from "@/lib/batch/types"
+import type { MarkingJob, ScriptsWorkflowState, StagedScript } from "@/lib/batch/types"
 import { deleteSubmission } from "@/lib/marking/mutations"
 import { Eye, LayoutGrid, Rows3, Trash2 } from "lucide-react"
 import { useState } from "react"
@@ -13,17 +13,16 @@ import { StagedScriptReviewList } from "./staged-script-review-list"
 import { ViewToggle } from "./view-toggle"
 
 type BatchStagingPanelProps = {
-	activeBatch: ActiveBatchInfo | undefined
+	workflow: ScriptsWorkflowState
 	committingBatch: boolean
 	viewMode: "list" | "grid"
 	onViewModeChange: (v: "list" | "grid") => void
 	onCommitAll: () => Promise<void>
 	onUpdateScriptName: (id: string, name: string) => Promise<void>
 	onToggleExclude: (id: string, status: string) => Promise<void>
+	onSplitScript: (scriptId: string, splitAfterIndex: number) => void
 	onDeleteScript: () => void
-	/** Called after a marking job is deleted, so the parent can refetch */
 	onJobDeleted?: () => void
-	/** Called when the teacher wants to view a completed job's results */
 	onViewJob?: (id: string) => void
 }
 
@@ -37,178 +36,160 @@ const BACKLOG_VIEW_OPTIONS = [
 ]
 
 export function BatchStagingPanel({
-	activeBatch,
+	workflow,
 	committingBatch,
 	viewMode,
 	onViewModeChange,
 	onCommitAll,
 	onUpdateScriptName,
 	onToggleExclude,
+	onSplitScript,
 	onDeleteScript,
 	onJobDeleted,
 	onViewJob,
 }: BatchStagingPanelProps) {
-	if (!activeBatch) return null
+	const scripts =
+		workflow.isMarking ? workflow.unsubmittedScripts : workflow.allScripts
 
-	if (activeBatch.status === "staging") {
-		const confirmedScripts = activeBatch.staged_scripts.filter(
-			(s) => s.status === "confirmed",
-		)
-		const pendingScripts = activeBatch.staged_scripts.filter(
-			(s) => s.status !== "confirmed",
-		)
-
-		const stagingBody = (
-			<div className="space-y-4">
-				{/* Header: label + view toggle */}
-				<div className="flex items-center gap-3">
-					<p className="text-sm font-medium text-muted-foreground">
-						Review each script, then include it in the marking run
-					</p>
-					<ViewToggle
-						value={viewMode}
-						onChange={onViewModeChange}
-						options={BACKLOG_VIEW_OPTIONS}
-					/>
-				</div>
-
-				{/* Two-column equal split */}
-				<div className="grid grid-cols-2 gap-8 items-start">
-					{/* LEFT: scripts to review */}
-					<div>
-						{pendingScripts.length === 0 ? (
-							<div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed py-16 text-center">
-								<p className="text-sm font-medium">All scripts confirmed</p>
-								<p className="text-xs text-muted-foreground">
-									Click &ldquo;Start marking&rdquo; on the right to begin
-								</p>
-							</div>
-						) : viewMode === "list" ? (
-							<StagedScriptReviewList
-								batchId={activeBatch.id}
-								scripts={pendingScripts}
-								onUpdateName={async (id, name) => {
-									await onUpdateScriptName(id, name)
-								}}
-								onToggleExclude={async (id, status) => {
-									await onToggleExclude(id, status)
-								}}
-								onDeleteScript={() => onDeleteScript()}
-							/>
-						) : (
-							<StagedScriptReviewCards
-								batchId={activeBatch.id}
-								scripts={pendingScripts}
-								onUpdateName={async (id, name) => {
-									await onUpdateScriptName(id, name)
-								}}
-								onToggleExclude={async (id, status) => {
-									await onToggleExclude(id, status)
-								}}
-								onDeleteScript={() => onDeleteScript()}
-							/>
-						)}
-					</div>
-
-					{/* RIGHT: confirmed scripts */}
-					<div>
-						<PaperTrayPanel
-							batchId={activeBatch.id}
-							confirmedScripts={confirmedScripts}
-							committingBatch={committingBatch}
-							onCommitAll={onCommitAll}
-							onToggleExclude={onToggleExclude}
-						/>
-					</div>
-				</div>
-			</div>
-		)
-
-		return stagingBody
-	}
-
-	if (activeBatch.status === "marking") {
-		const submittedScriptIds = new Set(
-			activeBatch.student_jobs.map((j) => j.staged_script_id).filter(Boolean),
-		)
-		const unsubmittedScripts = activeBatch.staged_scripts.filter(
-			(s) => !submittedScriptIds.has(s.id),
-		)
-		const pendingScripts = unsubmittedScripts.filter(
-			(s) => s.status !== "confirmed",
-		)
-		const confirmedScripts = unsubmittedScripts.filter(
-			(s) => s.status === "confirmed",
-		)
-
+	if (workflow.isMarking) {
 		return (
 			<div className="space-y-6">
-				{/* Per-job status list */}
 				<MarkingJobList
-					jobs={activeBatch.student_jobs}
+					jobs={workflow.markingJobs}
 					onViewJob={onViewJob}
 					onJobDeleted={onJobDeleted}
 				/>
 
-				{/* Unsubmitted scripts — only shown when there are still staged scripts to commit */}
-				{unsubmittedScripts.length > 0 && (
-					<div className="space-y-4">
-						<div className="flex items-center gap-3">
-							<p className="text-sm font-medium text-muted-foreground">
-								Review remaining scripts, then submit them for marking
-							</p>
-							<ViewToggle
-								value={viewMode}
-								onChange={onViewModeChange}
-								options={BACKLOG_VIEW_OPTIONS}
-							/>
-						</div>
-
-						<div className="grid grid-cols-2 gap-8 items-start">
-							<div>
-								{pendingScripts.length === 0 ? (
-									<div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed py-16 text-center">
-										<p className="text-sm font-medium">All scripts confirmed</p>
-										<p className="text-xs text-muted-foreground">
-											Click &ldquo;Start marking&rdquo; on the right to begin
-										</p>
-									</div>
-								) : viewMode === "list" ? (
-									<StagedScriptReviewList
-										batchId={activeBatch.id}
-										scripts={pendingScripts}
-										onUpdateName={onUpdateScriptName}
-										onToggleExclude={onToggleExclude}
-										onDeleteScript={onDeleteScript}
-									/>
-								) : (
-									<StagedScriptReviewCards
-										batchId={activeBatch.id}
-										scripts={pendingScripts}
-										onUpdateName={onUpdateScriptName}
-										onToggleExclude={onToggleExclude}
-										onDeleteScript={onDeleteScript}
-									/>
-								)}
-							</div>
-
-							<div>
-								<PaperTrayPanel
-									batchId={activeBatch.id}
-									confirmedScripts={confirmedScripts}
-									committingBatch={committingBatch}
-									onCommitAll={onCommitAll}
-									onToggleExclude={onToggleExclude}
-								/>
-							</div>
-						</div>
-					</div>
+				{scripts.length > 0 && (
+					<ScriptReviewLayout
+						label="Review remaining scripts, then submit them for marking"
+						scripts={scripts}
+						urls={workflow.urls}
+						viewMode={viewMode}
+						onViewModeChange={onViewModeChange}
+						committingBatch={committingBatch}
+						onCommitAll={onCommitAll}
+						onUpdateScriptName={onUpdateScriptName}
+						onToggleExclude={onToggleExclude}
+						onSplitScript={onSplitScript}
+						onDeleteScript={onDeleteScript}
+						pagesPerScript={workflow.pagesPerScript}
+						classificationMode={workflow.classificationMode}
+					/>
 				)}
 			</div>
 		)
 	}
 
-	return null
+	return (
+		<ScriptReviewLayout
+			label="Review each script, then include it in the marking run"
+			scripts={scripts}
+			urls={workflow.urls}
+			viewMode={viewMode}
+			onViewModeChange={onViewModeChange}
+			committingBatch={committingBatch}
+			onCommitAll={onCommitAll}
+			onUpdateScriptName={onUpdateScriptName}
+			onToggleExclude={onToggleExclude}
+			onSplitScript={onSplitScript}
+			onDeleteScript={onDeleteScript}
+			pagesPerScript={workflow.pagesPerScript}
+			classificationMode={workflow.classificationMode}
+		/>
+	)
+}
+
+// ── Shared two-column review layout ──────────────────────────────────────────
+
+function ScriptReviewLayout({
+	label,
+	scripts,
+	urls,
+	viewMode,
+	onViewModeChange,
+	committingBatch,
+	onCommitAll,
+	onUpdateScriptName,
+	onToggleExclude,
+	onSplitScript,
+	onDeleteScript,
+	pagesPerScript,
+	classificationMode,
+}: {
+	label: string
+	scripts: StagedScript[]
+	urls: Record<string, string>
+	viewMode: "list" | "grid"
+	onViewModeChange: (v: "list" | "grid") => void
+	committingBatch: boolean
+	onCommitAll: () => Promise<void>
+	onUpdateScriptName: (id: string, name: string) => Promise<void>
+	onToggleExclude: (id: string, status: string) => Promise<void>
+	onSplitScript: (scriptId: string, splitAfterIndex: number) => void
+	onDeleteScript: () => void
+	pagesPerScript: number
+	classificationMode: string
+}) {
+	const pendingScripts = scripts.filter((s) => s.status !== "confirmed")
+	const confirmedScripts = scripts.filter((s) => s.status === "confirmed")
+
+	return (
+		<div className="space-y-4">
+			<div className="flex items-center gap-3">
+				<p className="text-sm font-medium text-muted-foreground">{label}</p>
+				<ViewToggle
+					value={viewMode}
+					onChange={onViewModeChange}
+					options={BACKLOG_VIEW_OPTIONS}
+				/>
+			</div>
+
+			<div className="grid grid-cols-2 gap-8 items-start">
+				{/* LEFT: scripts to review */}
+				<div>
+					{pendingScripts.length === 0 ? (
+						<div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed py-16 text-center">
+							<p className="text-sm font-medium">All scripts confirmed</p>
+							<p className="text-xs text-muted-foreground">
+								Click &ldquo;Start marking&rdquo; on the right to begin
+							</p>
+						</div>
+					) : viewMode === "list" ? (
+						<StagedScriptReviewList
+							urls={urls}
+							scripts={pendingScripts}
+							onUpdateName={onUpdateScriptName}
+							onToggleExclude={onToggleExclude}
+							onDeleteScript={() => onDeleteScript()}
+						/>
+					) : (
+						<StagedScriptReviewCards
+							urls={urls}
+							scripts={pendingScripts}
+							pagesPerScript={pagesPerScript}
+							classificationMode={classificationMode}
+							onUpdateName={onUpdateScriptName}
+							onToggleExclude={onToggleExclude}
+							onSplitScript={onSplitScript}
+							onDeleteScript={() => onDeleteScript()}
+						/>
+					)}
+				</div>
+
+				{/* RIGHT: confirmed scripts */}
+				<div>
+					<PaperTrayPanel
+						urls={urls}
+						confirmedScripts={confirmedScripts}
+						committingBatch={committingBatch}
+						onCommitAll={onCommitAll}
+						onToggleExclude={onToggleExclude}
+					/>
+				</div>
+			</div>
+		</div>
+	)
 }
 
 // ── MarkingJobList ─────────────────────────────────────────────────────────
@@ -242,14 +223,12 @@ function jobStatusClass(status: string): string {
 	return "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
 }
 
-type StudentJob = NonNullable<ActiveBatchInfo>["student_jobs"][number]
-
 function MarkingJobList({
 	jobs,
 	onViewJob,
 	onJobDeleted,
 }: {
-	jobs: StudentJob[]
+	jobs: MarkingJob[]
 	onViewJob?: (id: string) => void
 	onJobDeleted?: () => void
 }) {

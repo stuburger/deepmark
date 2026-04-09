@@ -15,6 +15,18 @@ import {
 
 const TAG = "vision-attribute"
 
+class AttributionError extends Error {
+	constructor(
+		message: string,
+		readonly pageOrder: number,
+		readonly reason: string,
+		readonly detail?: string,
+	) {
+		super(message)
+		this.name = "AttributionError"
+	}
+}
+
 export type VisionAttributeQuestion = {
 	question_id: string
 	question_number: string
@@ -151,12 +163,19 @@ export async function visionAttributeRegions({
 			try {
 				imageBase64 = await getFileBase64(s3Bucket, page.key)
 			} catch (err) {
-				logger.error(TAG, "Failed to fetch page image for vision attribution", {
-					jobId,
-					pageOrder: page.order,
-					error: String(err),
+				void logOcrRunEvent(db, jobId, {
+					type: "region_attribution_failed",
+					at: new Date().toISOString(),
+					page_order: page.order,
+					reason: "image_fetch_failed",
+					detail: String(err),
 				})
-				return
+				throw new AttributionError(
+					`Failed to fetch page image for vision attribution (page ${page.order})`,
+					page.order,
+					"image_fetch_failed",
+					String(err),
+				)
 			}
 
 			// Build the token list shown to Gemini — use corrected text where available.
@@ -186,21 +205,34 @@ export async function visionAttributeRegions({
 					},
 				})
 			} catch (err) {
-				logger.error(TAG, "Gemini attribution call failed for page", {
-					jobId,
-					pageOrder: page.order,
-					error: String(err),
+				void logOcrRunEvent(db, jobId, {
+					type: "region_attribution_failed",
+					at: new Date().toISOString(),
+					page_order: page.order,
+					reason: "gemini_call_failed",
+					detail: String(err),
 				})
-				return
+				throw new AttributionError(
+					`Gemini attribution call failed for page ${page.order}`,
+					page.order,
+					"gemini_call_failed",
+					String(err),
+				)
 			}
 
 			const responseText = response.candidates?.[0]?.content?.parts?.[0]?.text
 			if (!responseText) {
-				logger.error(TAG, "Gemini attribution returned no text", {
-					jobId,
-					pageOrder: page.order,
+				void logOcrRunEvent(db, jobId, {
+					type: "region_attribution_failed",
+					at: new Date().toISOString(),
+					page_order: page.order,
+					reason: "empty_response",
 				})
-				return
+				throw new AttributionError(
+					`Gemini attribution returned no text for page ${page.order}`,
+					page.order,
+					"empty_response",
+				)
 			}
 
 			type AssignmentResponse = {
@@ -214,17 +246,24 @@ export async function visionAttributeRegions({
 			try {
 				parsed = JSON.parse(responseText) as AssignmentResponse
 			} catch {
-				logger.error(TAG, "Failed to parse Gemini attribution response", {
-					jobId,
-					pageOrder: page.order,
+				void logOcrRunEvent(db, jobId, {
+					type: "region_attribution_failed",
+					at: new Date().toISOString(),
+					page_order: page.order,
+					reason: "json_parse_failed",
+					detail: responseText.slice(0, 500),
 				})
-				return
+				throw new AttributionError(
+					`Failed to parse Gemini attribution response for page ${page.order}`,
+					page.order,
+					"json_parse_failed",
+					responseText.slice(0, 500),
+				)
 			}
 
 			// Expand ranges into individual token indices and validate.
-			// parsed.assignments must be an array — if Gemini returned a different
-			// shape the per-page catch above already handles the JSON.parse failure.
-			const validAssignments = (parsed.assignments ?? [])
+			const rawAssignments = parsed.assignments ?? []
+			const validAssignments = rawAssignments
 				.filter(
 					(a) => questionNumberById.has(a.question_id) && a.ranges?.length > 0,
 				)
@@ -238,7 +277,30 @@ export async function visionAttributeRegions({
 				})
 				.filter((a) => a.token_indices.length > 0)
 
-			if (validAssignments.length === 0) return
+			if (validAssignments.length === 0) {
+				// Gemini returned assignments but none matched valid question IDs —
+				// this is a data integrity failure, not a blank page.
+				if (rawAssignments.length > 0) {
+					const returnedIds = rawAssignments.map((a) => a.question_id)
+					const expectedIds = [...questionNumberById.keys()]
+					void logOcrRunEvent(db, jobId, {
+						type: "region_attribution_failed",
+						at: new Date().toISOString(),
+						page_order: page.order,
+						reason: "no_valid_assignments",
+						detail: `Gemini returned ${rawAssignments.length} assignment(s) but none matched known question IDs. Returned: [${returnedIds.join(", ")}]. Expected: [${expectedIds.join(", ")}]`,
+					})
+					throw new AttributionError(
+						`Gemini attribution returned ${rawAssignments.length} assignment(s) for page ${page.order} but none matched known question IDs`,
+						page.order,
+						"no_valid_assignments",
+						`Returned IDs: [${returnedIds.join(", ")}]`,
+					)
+				}
+				// Gemini returned an empty assignments array — page may genuinely
+				// have no student answers. Skip silently.
+				return
+			}
 
 			// 1. Update question_id on assigned token rows.
 			await Promise.all(

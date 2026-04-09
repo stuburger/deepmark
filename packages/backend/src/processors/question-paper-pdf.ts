@@ -1,13 +1,21 @@
 import { db } from "@/db"
+import { linkJobQuestionsToExamPaper } from "@/lib/grading/link-job-questions"
+import { normalizeQuestionNumber } from "@/lib/grading/normalize-question-number"
 import {
 	type CancellationToken,
 	createCancellationToken,
 } from "@/lib/infra/cancellation"
 import { embedQuestionText } from "@/lib/infra/google-generative-ai"
-import { linkJobQuestionsToExamPaper } from "@/lib/grading/link-job-questions"
 import { logger } from "@/lib/infra/logger"
-import { normalizeQuestionNumber } from "@/lib/grading/normalize-question-number"
-import { getPdfBase64, parseJobIdFromKey } from "@/lib/infra/processor-s3"
+import {
+	embeddingToVectorStr,
+	getPdfBase64,
+	parsePdfIngestionTrigger,
+} from "@/lib/infra/processor-s3"
+import {
+	type SqsEvent,
+	markPdfIngestionFailed,
+} from "@/lib/infra/sqs-job-runner"
 import { GoogleGenAI } from "@google/genai"
 import type { ScanStatus } from "@mcp-gcse/db"
 import { Resource } from "sst"
@@ -22,23 +30,6 @@ import {
 
 const TAG = "question-paper-pdf"
 
-interface S3Record {
-	s3: { bucket: { name: string }; object: { key: string } }
-}
-
-interface SqsRecord {
-	messageId: string
-	body: string
-}
-
-interface SqsEvent {
-	Records: SqsRecord[]
-}
-
-function embeddingToVectorStr(vec: number[]): string {
-	return `[${vec.join(",")}]`
-}
-
 export async function handler(
 	event: SqsEvent,
 ): Promise<{ batchItemFailures?: { itemIdentifier: string }[] }> {
@@ -49,43 +40,19 @@ export async function handler(
 		const messageId = record.messageId
 		let cancellation: CancellationToken | undefined
 		try {
-			const body = JSON.parse(record.body) as
-				| { Records?: S3Record[] }
-				| { job_id: string }
-
-			let bucket: string
-			let key: string
-			let jobId: string
-
 			logger.info(TAG, "Message received", { messageId })
 
-			if ("job_id" in body && typeof body.job_id === "string") {
-				jobId = body.job_id
-				const job = await db.pdfIngestionJob.findUniqueOrThrow({
-					where: { id: jobId },
-				})
-				if (job.document_type !== "question_paper") {
-					logger.warn(TAG, "Job is not question_paper — skipping", {
-						jobId,
-						document_type: job.document_type,
-					})
-					continue
-				}
-				bucket = job.s3_bucket
-				key = job.s3_key
-			} else {
-				const s3Event = body as { Records?: S3Record[] }
-				const s3Records = s3Event.Records ?? []
-				const s3Record = s3Records[0]
-				if (!s3Record) {
-					logger.warn(TAG, "No S3 record in SQS message", { messageId })
-					continue
-				}
-				bucket = s3Record.s3.bucket.name
-				key = decodeURIComponent(s3Record.s3.object.key)
-				jobId = parseJobIdFromKey(key, "question-papers")
-				logger.info(TAG, "Triggered by S3 event", { jobId, bucket, key })
+			const trigger = await parsePdfIngestionTrigger(
+				record,
+				"question_paper",
+				"question-papers",
+				TAG,
+			)
+			if (trigger.kind === "skip") {
+				logger.info(TAG, trigger.reason, { messageId })
+				continue
 			}
+			const { jobId, bucket, key } = trigger
 
 			const job = await db.pdfIngestionJob.findUniqueOrThrow({
 				where: { id: jobId },
@@ -306,33 +273,7 @@ export async function handler(
 				},
 			})
 		} catch (err) {
-			logger.error(TAG, "Job failed with unhandled error", {
-				error: String(err),
-			})
-			const message = err instanceof Error ? err.message : String(err)
-			try {
-				const body = JSON.parse(record.body) as
-					| { job_id?: string }
-					| { Records?: S3Record[] }
-				const jobId =
-					"job_id" in body && body.job_id
-						? body.job_id
-						: parseJobIdFromKey(
-								(record.body &&
-									(JSON.parse(record.body) as { Records?: S3Record[] })
-										.Records?.[0]?.s3?.object?.key) ??
-									"",
-								"question-papers",
-							)
-				if (jobId) {
-					await db.pdfIngestionJob.update({
-						where: { id: jobId },
-						data: { status: "failed" satisfies ScanStatus, error: message },
-					})
-				}
-			} catch {
-				// ignore
-			}
+			await markPdfIngestionFailed(record, "question-papers", TAG, err)
 			failures.push({ itemIdentifier: messageId })
 		} finally {
 			cancellation?.stop()

@@ -3,7 +3,7 @@
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import type { BatchIngestJobData } from "@/lib/batch/types"
+import type { StagedScript } from "@/lib/batch/types"
 import { useDroppable } from "@dnd-kit/core"
 import { Trash2, X } from "lucide-react"
 import { DraggablePageThumb } from "./draggable-page-thumb"
@@ -31,12 +31,12 @@ export function DndScriptCard({
 	onToggleExclude,
 	onDelete,
 }: {
-	script: BatchIngestJobData["staged_scripts"][number]
+	script: StagedScript
 	localNames: Record<string, string>
 	urls: Record<string, string>
 	activeDragKey: string | null
 	onOpenCarousel: (
-		script: BatchIngestJobData["staged_scripts"][number],
+		script: StagedScript,
 		idx: number,
 	) => void
 	onUpdateLocalName: (id: string, value: string) => void

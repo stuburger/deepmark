@@ -21,12 +21,13 @@ import type {
 } from "@/lib/marking/types"
 import { queryKeys } from "@/lib/query-keys"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { parseAsString, useQueryState } from "nuqs"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
-import { AnnotatedScanColumn } from "../../../../[jobId]/phases/results/annotated-scan-column"
-import type { MarkingPhase } from "../../../../[jobId]/shared/phase"
-import { derivePhase } from "../../../../[jobId]/shared/phase"
-import { useJobQuery } from "../../../../[jobId]/shared/use-job-query"
+import { AnnotatedScanColumn } from "./results/annotated-scan-column"
+import type { MarkingPhase } from "./phase"
+import { derivePhase } from "./phase"
+import { useJobQuery } from "./hooks/use-job-query"
 import { useScrollToQuestion } from "./hooks/use-scroll-to-question"
 import { ResultsPanel } from "./results-panel"
 import { ScanPanel } from "./scan-panel"
@@ -42,7 +43,6 @@ export function SubmissionView({
 	pageTokens: initialPageTokens,
 	initialPhase,
 	debugMode = false,
-	mode = "page",
 }: {
 	examPaperId: string
 	jobId: string
@@ -51,14 +51,17 @@ export function SubmissionView({
 	pageTokens: PageToken[]
 	initialPhase: MarkingPhase
 	debugMode?: boolean
-	mode?: "page" | "dialog"
 }) {
 	const queryClient = useQueryClient()
 	const [showOcr, setShowOcr] = useState(false)
 	const [showRegions, setShowRegions] = useState(true)
 	const [showMarks, setShowMarks] = useState(false)
 	const [showChains, setShowChains] = useState(false)
-	const { activeQuestionNumber, scrollToQuestion } = useScrollToQuestion()
+	const [activeQuestionNumber, setActiveQuestionNumber] = useQueryState(
+		"question",
+		parseAsString,
+	)
+	const scrollToQuestion = useScrollToQuestion(setActiveQuestionNumber)
 
 	const isTerminalPhase =
 		initialPhase === "completed" ||
@@ -180,13 +183,7 @@ export function SubmissionView({
 	}, [phase, jobId, queryClient])
 
 	return (
-		<div
-			className={
-				mode === "dialog"
-					? "flex flex-col overflow-hidden h-full"
-					: "-m-6 flex flex-col overflow-hidden h-dvh"
-			}
-		>
+		<div className="flex flex-col overflow-hidden h-full">
 			<SubmissionToolbar
 				examPaperId={examPaperId}
 				jobId={jobId}

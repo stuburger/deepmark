@@ -4,7 +4,14 @@ import {
 	createCancellationToken,
 } from "@/lib/infra/cancellation"
 import { logger } from "@/lib/infra/logger"
-import { getPdfBase64, parseJobIdFromKey } from "@/lib/infra/processor-s3"
+import {
+	getPdfBase64,
+	parsePdfIngestionTrigger,
+} from "@/lib/infra/processor-s3"
+import {
+	type SqsEvent,
+	markPdfIngestionFailed,
+} from "@/lib/infra/sqs-job-runner"
 import { validateWithExemplars } from "@/services/validate-with-exemplars"
 import { GoogleGenAI } from "@google/genai"
 import type { ScanStatus } from "@mcp-gcse/db"
@@ -13,19 +20,6 @@ import { EXTRACT_EXEMPLARS_PROMPT } from "./exemplar-pdf/prompts"
 import { EXEMPLAR_SCHEMA } from "./exemplar-pdf/schema"
 
 const TAG = "exemplar-pdf"
-
-interface S3Record {
-	s3: { bucket: { name: string }; object: { key: string } }
-}
-
-interface SqsRecord {
-	messageId: string
-	body: string
-}
-
-interface SqsEvent {
-	Records: SqsRecord[]
-}
 
 export async function handler(
 	event: SqsEvent,
@@ -37,43 +31,19 @@ export async function handler(
 		const messageId = record.messageId
 		let cancellation: CancellationToken | undefined
 		try {
-			const body = JSON.parse(record.body) as
-				| { Records?: S3Record[] }
-				| { job_id: string }
-
-			let bucket: string
-			let key: string
-			let jobId: string
-
 			logger.info(TAG, "Message received", { messageId })
 
-			if ("job_id" in body && typeof body.job_id === "string") {
-				jobId = body.job_id
-				const job = await db.pdfIngestionJob.findUniqueOrThrow({
-					where: { id: jobId },
-				})
-				if (job.document_type !== "exemplar") {
-					logger.warn(TAG, "Job is not exemplar — skipping", {
-						jobId,
-						document_type: job.document_type,
-					})
-					continue
-				}
-				bucket = job.s3_bucket
-				key = job.s3_key
-			} else {
-				const s3Event = body as { Records?: S3Record[] }
-				const s3Records = s3Event.Records ?? []
-				const s3Record = s3Records[0]
-				if (!s3Record) {
-					logger.warn(TAG, "No S3 record in SQS message", { messageId })
-					continue
-				}
-				bucket = s3Record.s3.bucket.name
-				key = decodeURIComponent(s3Record.s3.object.key)
-				jobId = parseJobIdFromKey(key, "exemplars")
-				logger.info(TAG, "Triggered by S3 event", { jobId, bucket, key })
+			const trigger = await parsePdfIngestionTrigger(
+				record,
+				"exemplar",
+				"exemplars",
+				TAG,
+			)
+			if (trigger.kind === "skip") {
+				logger.info(TAG, trigger.reason, { messageId })
+				continue
 			}
+			const { jobId, bucket, key } = trigger
 
 			const job = await db.pdfIngestionJob.findUniqueOrThrow({
 				where: { id: jobId },
@@ -294,33 +264,7 @@ export async function handler(
 				},
 			})
 		} catch (err) {
-			logger.error(TAG, "Job failed with unhandled error", {
-				error: String(err),
-			})
-			const message = err instanceof Error ? err.message : String(err)
-			try {
-				const body = JSON.parse(record.body) as
-					| { job_id?: string }
-					| { Records?: S3Record[] }
-				const jobId =
-					"job_id" in body && body.job_id
-						? body.job_id
-						: parseJobIdFromKey(
-								(record.body &&
-									(JSON.parse(record.body) as { Records?: S3Record[] })
-										.Records?.[0]?.s3?.object?.key) ??
-									"",
-								"exemplars",
-							)
-				if (jobId) {
-					await db.pdfIngestionJob.update({
-						where: { id: jobId },
-						data: { status: "failed" satisfies ScanStatus, error: message },
-					})
-				}
-			} catch {
-				// ignore
-			}
+			await markPdfIngestionFailed(record, "exemplars", TAG, err)
 			failures.push({ itemIdentifier: messageId })
 		} finally {
 			cancellation?.stop()

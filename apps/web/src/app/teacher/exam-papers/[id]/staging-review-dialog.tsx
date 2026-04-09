@@ -2,20 +2,21 @@
 
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent } from "@/components/ui/dialog"
-import type { ActiveBatchInfo } from "@/lib/batch/types"
+import type { ScriptsWorkflowState } from "@/lib/batch/types"
 import { X } from "lucide-react"
 import { BatchStagingPanel } from "./batch-staging-panel"
 
 type StagingReviewDialogProps = {
 	open: boolean
 	onOpenChange: (open: boolean) => void
-	activeBatch: ActiveBatchInfo | undefined
+	workflow: ScriptsWorkflowState | null
 	committingBatch: boolean
 	viewMode: "list" | "grid"
 	onViewModeChange: (v: "list" | "grid") => void
 	onCommitAll: () => Promise<void>
 	onUpdateScriptName: (id: string, name: string) => Promise<void>
 	onToggleExclude: (id: string, status: string) => Promise<void>
+	onSplitScript: (scriptId: string, splitAfterIndex: number) => void
 	onDeleteScript: () => void
 	onJobDeleted?: () => void
 	onViewJob?: (id: string) => void
@@ -24,13 +25,14 @@ type StagingReviewDialogProps = {
 export function StagingReviewDialog({
 	open,
 	onOpenChange,
-	activeBatch,
+	workflow,
 	committingBatch,
 	viewMode,
 	onViewModeChange,
 	onCommitAll,
 	onUpdateScriptName,
 	onToggleExclude,
+	onSplitScript,
 	onDeleteScript,
 	onJobDeleted,
 	onViewJob,
@@ -62,18 +64,21 @@ export function StagingReviewDialog({
 
 				{/* Content */}
 				<div className="flex-1 overflow-y-auto px-6 py-6">
-					<BatchStagingPanel
-						activeBatch={activeBatch}
-						committingBatch={committingBatch}
-						viewMode={viewMode}
-						onViewModeChange={onViewModeChange}
-						onCommitAll={onCommitAll}
-						onUpdateScriptName={onUpdateScriptName}
-						onToggleExclude={onToggleExclude}
-						onDeleteScript={onDeleteScript}
-						onJobDeleted={onJobDeleted}
-						onViewJob={onViewJob}
-					/>
+					{workflow && (
+						<BatchStagingPanel
+							workflow={workflow}
+							committingBatch={committingBatch}
+							viewMode={viewMode}
+							onViewModeChange={onViewModeChange}
+							onCommitAll={onCommitAll}
+							onUpdateScriptName={onUpdateScriptName}
+							onToggleExclude={onToggleExclude}
+							onSplitScript={onSplitScript}
+							onDeleteScript={onDeleteScript}
+							onJobDeleted={onJobDeleted}
+							onViewJob={onViewJob}
+						/>
+					)}
 				</div>
 			</DialogContent>
 		</Dialog>

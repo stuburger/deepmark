@@ -189,6 +189,8 @@ export type SubmissionHistoryItem = {
 	total_max: number
 	status: string
 	created_at: Date
+	/** Number of versions (including superseded). 1 means no re-scans. */
+	version_count?: number
 }
 
 export type ListMySubmissionsResult =

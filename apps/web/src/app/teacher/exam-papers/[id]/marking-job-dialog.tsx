@@ -7,7 +7,7 @@ import type { StudentPaperJobPayload } from "@/lib/marking/types"
 import { queryKeys } from "@/lib/query-keys"
 import { useQuery } from "@tanstack/react-query"
 import { Loader2 } from "lucide-react"
-import { derivePhase } from "../../mark/[jobId]/shared/phase"
+import { derivePhase } from "../../mark/papers/[examPaperId]/submissions/[jobId]/phase"
 import { SubmissionView } from "../../mark/papers/[examPaperId]/submissions/[jobId]/submission-view"
 
 export function MarkingJobDialog({
@@ -70,7 +70,6 @@ export function MarkingJobDialog({
 					</div>
 				) : (
 					<SubmissionView
-						mode="dialog"
 						examPaperId={examPaperId}
 						jobId={jobId}
 						initialData={jobData}

@@ -7,10 +7,10 @@ import type {
 	StudentPaperJobPayload,
 } from "@/lib/marking/types"
 import { Loader2 } from "lucide-react"
-import { CancelledPanel } from "../../../../[jobId]/phases/cancelled"
-import { FailedPanel } from "../../../../[jobId]/phases/failed"
-import { MarkingResults } from "../../../../[jobId]/phases/results/index"
-import type { MarkingPhase } from "../../../../[jobId]/shared/phase"
+import { CancelledPanel } from "./cancelled"
+import { FailedPanel } from "./failed"
+import { MarkingResults } from "./results/index"
+import type { MarkingPhase } from "./phase"
 import { EventLog } from "./event-log"
 
 const STATUS_LABELS: Record<string, string> = {

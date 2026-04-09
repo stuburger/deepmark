@@ -2,9 +2,11 @@
 
 import { Button } from "@/components/ui/button"
 import { getSimilarQuestionsForPaper } from "@/lib/exam-paper/similarity"
+import { queryKeys } from "@/lib/query-keys"
+import { useQuery } from "@tanstack/react-query"
 import { AlertTriangle, GitMerge } from "lucide-react"
 import Link from "next/link"
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { MergeQuestionsDialog } from "./merge-questions-dialog"
 
 type SimilarQuestion = {
@@ -39,25 +41,24 @@ export function SimilarQuestionsSection({
 	/** The current page's question details for the merge dialog */
 	currentQuestion: CurrentQuestion
 }) {
-	const [similarIds, setSimilarIds] = useState<string[] | null>(null)
 	const [mergeTarget, setMergeTarget] = useState<SimilarQuestion | null>(null)
 
-	useEffect(() => {
-		getSimilarQuestionsForPaper(examPaperId).then((r) => {
-			if (!r.ok) return
-			const ids = r.pairs
+	const { data: similarIds } = useQuery({
+		queryKey: queryKeys.similarQuestions(examPaperId),
+		queryFn: async () => {
+			const r = await getSimilarQuestionsForPaper(examPaperId)
+			if (!r.ok) return []
+			return r.pairs
 				.filter(
 					(p) => p.questionId === questionId || p.similarToId === questionId,
 				)
 				.map((p) =>
 					p.questionId === questionId ? p.similarToId : p.questionId,
 				)
-			setSimilarIds(ids)
-		})
-	}, [questionId, examPaperId])
+		},
+	})
 
-	if (similarIds === null) return null
-	if (similarIds.length === 0) return null
+	if (!similarIds || similarIds.length === 0) return null
 
 	const similarQuestions = similarIds
 		.map((id) => questions.find((q) => q.id === id))

@@ -35,6 +35,8 @@ function eventIcon(type: JobEvent["type"]) {
 		case "region_attribution_started":
 		case "region_attribution_complete":
 			return <MapPin className="h-3.5 w-3.5 text-teal-500" />
+		case "region_attribution_failed":
+			return <AlertCircle className="h-3.5 w-3.5 text-amber-500" />
 		case "grading_complete":
 			return <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />
 		case "token_reconciliation_complete":
@@ -67,6 +69,8 @@ function eventLabel(event: JobEvent): string {
 			return "Locating answers on scan…"
 		case "region_attribution_complete":
 			return `${event.questions_located} answer region${event.questions_located !== 1 ? "s" : ""} located`
+		case "region_attribution_failed":
+			return `Page ${event.page_order}: answer region detection failed — ${event.reason}${event.detail ? ` (${event.detail.slice(0, 120)})` : ""}`
 		case "grading_complete":
 			return `Marking complete · ${event.total_awarded}/${event.total_max}`
 		case "token_reconciliation_complete":

@@ -1,8 +1,10 @@
 import { db } from "@/db"
 import { logger } from "@/lib/infra/logger"
+import { type S3Record, parseJobIdFromKey } from "@/lib/infra/processor-s3"
 import {
 	type GradingStatus,
 	type OcrStatus,
+	type ScanStatus,
 	logGradingRunEvent,
 	logOcrRunEvent,
 } from "@mcp-gcse/db"
@@ -73,4 +75,42 @@ export async function markJobFailed(
 		// ignore — don't mask the original error
 	}
 	// Enrichment failures are handled by the enrich processor directly (never touches main job status)
+}
+
+/**
+ * Marks a PdfIngestionJob as failed. Used in the catch block of PDF ingestion
+ * handlers (mark-scheme, question-paper, exemplar).
+ *
+ * Re-parses the SQS record body to extract the jobId (since it may not be in
+ * scope in the catch block). Safe to call — DB errors are swallowed.
+ */
+export async function markPdfIngestionFailed(
+	record: SqsRecord,
+	s3Folder: string,
+	tag: string,
+	err: unknown,
+): Promise<void> {
+	logger.error(tag, "Job failed with unhandled error", { error: String(err) })
+	const message = err instanceof Error ? err.message : String(err)
+	try {
+		const body = JSON.parse(record.body) as
+			| { job_id?: string }
+			| { Records?: S3Record[] }
+		const jobId =
+			"job_id" in body && body.job_id
+				? body.job_id
+				: parseJobIdFromKey(
+						(body as { Records?: S3Record[] }).Records?.[0]?.s3?.object?.key ??
+							"",
+						s3Folder,
+					)
+		if (jobId) {
+			await db.pdfIngestionJob.update({
+				where: { id: jobId },
+				data: { status: "failed" satisfies ScanStatus, error: message },
+			})
+		}
+	} catch {
+		// ignore — don't mask the original error
+	}
 }

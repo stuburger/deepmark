@@ -2,7 +2,7 @@
 
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card"
 import type { SubmissionHistoryItem } from "@/lib/marking/types"
-import { Trash2 } from "lucide-react"
+import { History, Trash2 } from "lucide-react"
 import {
 	formatDate,
 	scoreColour,
@@ -62,6 +62,16 @@ export function ScriptCard({
 							>
 								<Trash2 className="h-3.5 w-3.5" />
 							</button>
+							{/* Version badge */}
+							{(sub.version_count ?? 1) > 1 && (
+								<span
+									className="inline-flex items-center gap-0.5 text-[10px] font-medium text-muted-foreground"
+									title={`${sub.version_count} versions`}
+								>
+									<History className="h-3 w-3" />
+									v{sub.version_count}
+								</span>
+							)}
 							{/* Status dot */}
 							<span
 								className={`mt-0.5 h-2.5 w-2.5 rounded-full ${dot}`}

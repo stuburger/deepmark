@@ -230,3 +230,70 @@ export async function getStudentPaperJobForPaper(
 
 	return { ok: true, data: toJobPayload(sub) }
 }
+
+// ─── getSubmissionVersions ──────────────────────────────────────────────────
+
+export type SubmissionVersion = {
+	id: string
+	created_at: Date
+	superseded_at: Date | null
+	status: string
+}
+
+export type GetSubmissionVersionsResult =
+	| { ok: true; versions: SubmissionVersion[] }
+	| { ok: false; error: string }
+
+/**
+ * Finds all versions of a submission (current + superseded).
+ * Groups by s3_key — re-scans and re-marks copy the same s3_key,
+ * so all versions of the same student's paper share it.
+ */
+export async function getSubmissionVersions(
+	jobId: string,
+): Promise<GetSubmissionVersionsResult> {
+	const session = await auth()
+	if (!session) return { ok: false, error: "Not authenticated" }
+
+	const current = await db.studentSubmission.findFirst({
+		where: { id: jobId },
+		select: { s3_key: true, exam_paper_id: true },
+	})
+	if (!current) return { ok: false, error: "Submission not found" }
+
+	const siblings = await db.studentSubmission.findMany({
+		where: {
+			s3_key: current.s3_key,
+			exam_paper_id: current.exam_paper_id,
+		},
+		orderBy: { created_at: "desc" },
+		select: {
+			id: true,
+			created_at: true,
+			superseded_at: true,
+			ocr_runs: {
+				orderBy: { created_at: "desc" as const },
+				take: 1,
+				select: { status: true },
+			},
+			grading_runs: {
+				orderBy: { created_at: "desc" as const },
+				take: 1,
+				select: { status: true },
+			},
+		},
+	})
+
+	return {
+		ok: true,
+		versions: siblings.map((s) => ({
+			id: s.id,
+			created_at: s.created_at,
+			superseded_at: s.superseded_at,
+			status: deriveScanStatus(
+				(s.ocr_runs[0]?.status ?? null) as Parameters<typeof deriveScanStatus>[0],
+				(s.grading_runs[0]?.status ?? null) as Parameters<typeof deriveScanStatus>[1],
+			),
+		})),
+	}
+}

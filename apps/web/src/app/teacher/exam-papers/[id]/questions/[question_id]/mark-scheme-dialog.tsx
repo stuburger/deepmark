@@ -18,7 +18,7 @@ import {
 	updateMarkScheme,
 } from "@/lib/mark-scheme/manual"
 import { CheckCircle2, Sparkles } from "lucide-react"
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { LorMarkSchemeEditForm } from "./lor-mark-scheme-edit-form"
 import { MarkSchemeFormWithAutofill } from "./mark-scheme-form-with-autofill"
 
@@ -127,6 +127,13 @@ export function MarkSchemeDialog(props: MarkSchemeDialogProps) {
 	const [quickSaving, setQuickSaving] = useState(false)
 	const [quickSaved, setQuickSaved] = useState(false)
 	const [quickError, setQuickError] = useState<string | null>(null)
+	const quickSavedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+	useEffect(() => {
+		return () => {
+			if (quickSavedTimerRef.current) clearTimeout(quickSavedTimerRef.current)
+		}
+	}, [])
 
 	const isLor =
 		props.mode === "edit" && props.markingMethod === "level_of_response"
@@ -193,7 +200,8 @@ export function MarkSchemeDialog(props: MarkSchemeDialogProps) {
 
 		setQuickSaved(true)
 		props.onSuccess?.()
-		setTimeout(() => setQuickSaved(false), 3000)
+		if (quickSavedTimerRef.current) clearTimeout(quickSavedTimerRef.current)
+		quickSavedTimerRef.current = setTimeout(() => setQuickSaved(false), 3000)
 	}
 
 	function handleOpenChange(next: boolean) {

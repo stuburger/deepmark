@@ -1,4 +1,4 @@
-import type { ActiveBatchInfo } from "@/lib/batch/types"
+import type { ScriptsWorkflowState } from "@/lib/batch/types"
 import type { SubmissionHistoryItem } from "@/lib/marking/types"
 import { BatchStatusBanner } from "./batch-status-banner"
 import { SubmissionGrid } from "./submission-grid"
@@ -48,7 +48,7 @@ function SubmissionSection({
 }
 
 export function SubmissionsTabContent({
-	activeBatch,
+	workflow,
 	inProgressSubmissions,
 	markedSubmissions,
 	totalSubmissions,
@@ -58,7 +58,7 @@ export function SubmissionsTabContent({
 	onViewJob,
 	onDeleteSubmission,
 }: {
-	activeBatch: ActiveBatchInfo
+	workflow: ScriptsWorkflowState | null
 	inProgressSubmissions: SubmissionHistoryItem[]
 	markedSubmissions: SubmissionHistoryItem[]
 	totalSubmissions: number
@@ -70,9 +70,9 @@ export function SubmissionsTabContent({
 }) {
 	return (
 		<>
-			{activeBatch && (
+			{workflow && (
 				<BatchStatusBanner
-					activeBatch={activeBatch}
+					workflow={workflow}
 					onReviewClick={onOpenStaging}
 				/>
 			)}
@@ -95,7 +95,7 @@ export function SubmissionsTabContent({
 				onDelete={onDeleteSubmission}
 			/>
 
-			{!activeBatch && totalSubmissions === 0 && (
+			{!workflow && totalSubmissions === 0 && (
 				<div className="rounded-lg border border-dashed py-16 text-center text-sm text-muted-foreground">
 					No submissions yet. Click &ldquo;Upload scripts&rdquo; to mark your
 					first student script.

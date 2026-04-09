@@ -24,13 +24,14 @@ import {
 	StickyNote,
 } from "lucide-react"
 import Link from "next/link"
-import { DownloadPdfButton } from "../../../../[jobId]/phases/results/download-pdf-button"
-import { ReMarkButton } from "../../../../[jobId]/phases/results/re-mark-button"
-import { StudentNameEditor } from "../../../../[jobId]/phases/results/student-name-editor"
-import type { MarkingPhase } from "../../../../[jobId]/shared/phase"
-import { ReScanButton } from "../../../../[jobId]/shared/re-scan-button"
+import { DownloadPdfButton } from "./results/download-pdf-button"
+import { ReMarkButton } from "./results/re-mark-button"
+import { StudentNameEditor } from "./results/student-name-editor"
+import type { MarkingPhase } from "./phase"
+import { ReScanButton } from "./re-scan-button"
 import { ObservationsSheet, TranscriptSheet } from "./ocr-sheets"
 import { GroupToggle, ScoreBadge } from "./submission-toolbar-controls"
+import { VersionSwitcher } from "./version-switcher"
 
 // ─── Main toolbar ─────────────────────────────────────────────────────────────
 
@@ -142,6 +143,7 @@ export function SubmissionToolbar({
 
 				<ChevronRight className="h-3.5 w-3.5 text-muted-foreground/40 shrink-0" />
 				<StudentNameEditor jobId={jobId} initialName={data.student_name} />
+				<VersionSwitcher examPaperId={examPaperId} jobId={jobId} />
 
 				{phase === "completed" && data.total_max > 0 && (
 					<span className="ml-2">

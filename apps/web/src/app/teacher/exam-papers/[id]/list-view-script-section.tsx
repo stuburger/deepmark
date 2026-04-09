@@ -3,19 +3,19 @@
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import type { BatchIngestJobData } from "@/lib/batch/types"
+import type { StagedScript } from "@/lib/batch/types"
 import { useDroppable } from "@dnd-kit/core"
 import { SortableContext, rectSortingStrategy } from "@dnd-kit/sortable"
 import { CheckCircle2, Trash2 } from "lucide-react"
 import { ListViewPageItem } from "./list-view-page-item"
 
 type ListViewScriptSectionProps = {
-	script: BatchIngestJobData["staged_scripts"][number]
+	script: StagedScript
 	localName: string
 	urls: Record<string, string>
 	onToggleInclude: () => void
 	onOpenCarousel: (
-		script: BatchIngestJobData["staged_scripts"][number],
+		script: StagedScript,
 		index: number,
 	) => void
 	onUpdateLocalName: (value: string) => void

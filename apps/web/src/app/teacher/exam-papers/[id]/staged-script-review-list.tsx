@@ -1,6 +1,6 @@
 "use client"
 
-import type { BatchIngestJobData } from "@/lib/batch/types"
+import type { StagedScript } from "@/lib/batch/types"
 import { DndContext, DragOverlay, closestCenter } from "@dnd-kit/core"
 import type { DragEndEvent, DragOverEvent, DragStartEvent } from "@dnd-kit/core"
 import { arrayMove } from "@dnd-kit/sortable"
@@ -12,22 +12,19 @@ import { ListViewScriptSection } from "./list-view-script-section"
 import { PageCarousel } from "./staged-script-page-editor"
 
 type StagedScriptListProps = {
-	batchId: string
-	scripts: BatchIngestJobData["staged_scripts"]
+	urls: Record<string, string>
+	scripts: StagedScript[]
 	onUpdateName: (scriptId: string, name: string) => void
 	onToggleExclude: (scriptId: string, currentStatus: string) => void
 	onDeleteScript?: (scriptId: string) => void
 }
 
-function findScriptByPageKey(
-	key: string,
-	pool: BatchIngestJobData["staged_scripts"],
-) {
+function findScriptByPageKey(key: string, pool: StagedScript[]) {
 	return pool.find((s) => s.page_keys.some((pk) => pk.s3_key === key))
 }
 
 export function StagedScriptReviewList({
-	batchId,
+	urls,
 	scripts,
 	onUpdateName,
 	onToggleExclude,
@@ -38,7 +35,6 @@ export function StagedScriptReviewList({
 		setLocalScripts,
 		localNames,
 		setLocalNames,
-		urls,
 		activeDrag,
 		setActiveDrag,
 		carousel,
@@ -48,14 +44,14 @@ export function StagedScriptReviewList({
 		openCarousel,
 		persistPageKeys,
 		handleDelete,
-	} = useStagedScriptsState(batchId, scripts, onDeleteScript)
+	} = useStagedScriptsState(urls, scripts, onDeleteScript)
 
 	// IDs of scripts optimistically removed from the list (flying to tray)
 	const [optimisticConfirmedIds, setOptimisticConfirmedIds] = useState<
 		Set<string>
 	>(new Set())
 
-	const dragSnapshotRef = useRef<BatchIngestJobData["staged_scripts"] | null>(
+	const dragSnapshotRef = useRef<StagedScript[] | null>(
 		null,
 	)
 

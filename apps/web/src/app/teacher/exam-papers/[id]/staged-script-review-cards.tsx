@@ -1,6 +1,6 @@
 "use client"
 
-import type { BatchIngestJobData } from "@/lib/batch/types"
+import type { StagedScript } from "@/lib/batch/types"
 import { DndContext, DragOverlay } from "@dnd-kit/core"
 import type { DragEndEvent, DragStartEvent } from "@dnd-kit/core"
 import { arrayMove } from "@dnd-kit/sortable"
@@ -10,8 +10,8 @@ import { OversizedScriptBanner } from "./oversized-script-banner"
 import { PageCarousel } from "./staged-script-page-editor"
 
 type StagedScriptCardProps = {
-	batchId: string
-	scripts: BatchIngestJobData["staged_scripts"]
+	urls: Record<string, string>
+	scripts: StagedScript[]
 	pagesPerScript?: number
 	classificationMode?: string
 	onUpdateName: (scriptId: string, name: string) => void
@@ -21,7 +21,7 @@ type StagedScriptCardProps = {
 }
 
 export function StagedScriptReviewCards({
-	batchId,
+	urls,
 	scripts,
 	pagesPerScript,
 	classificationMode,
@@ -35,7 +35,6 @@ export function StagedScriptReviewCards({
 		setLocalScripts,
 		localNames,
 		setLocalNames,
-		urls,
 		activeDrag,
 		setActiveDrag,
 		carousel,
@@ -45,7 +44,7 @@ export function StagedScriptReviewCards({
 		openCarousel,
 		persistPageKeys,
 		handleDelete,
-	} = useStagedScriptsState(batchId, scripts, onDeleteScript)
+	} = useStagedScriptsState(urls, scripts, onDeleteScript)
 
 	// ── DnD handlers ──────────────────────────────────────────────────────────
 

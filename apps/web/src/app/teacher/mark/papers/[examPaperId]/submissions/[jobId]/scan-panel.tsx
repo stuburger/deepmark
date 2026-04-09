@@ -7,7 +7,7 @@ import type {
 	StudentPaperAnnotation,
 	StudentPaperJobPayload,
 } from "@/lib/marking/types"
-import { AnnotatedScanColumn } from "../../../../[jobId]/phases/results/annotated-scan-column"
+import { AnnotatedScanColumn } from "./results/annotated-scan-column"
 
 export function ScanPanel({
 	scanPages,

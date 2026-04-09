@@ -88,5 +88,26 @@ export async function listSubmissionsForPaper(
 		include: listingInclude,
 	})
 
-	return { ok: true, submissions: subs.map(mapSubmissionToListItem) }
+	// Count superseded siblings per s3_key in a single query
+	const s3Keys = subs.map((s) => s.s3_key)
+	const versionCounts =
+		s3Keys.length > 0
+			? await db.studentSubmission.groupBy({
+					by: ["s3_key"],
+					where: {
+						exam_paper_id: examPaperId,
+						s3_key: { in: s3Keys },
+					},
+					_count: true,
+				})
+			: []
+	const countByKey = new Map(versionCounts.map((v) => [v.s3_key, v._count]))
+
+	return {
+		ok: true,
+		submissions: subs.map((sub) => ({
+			...mapSubmissionToListItem(sub),
+			version_count: countByKey.get(sub.s3_key) ?? 1,
+		})),
+	}
 }

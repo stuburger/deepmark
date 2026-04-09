@@ -1,9 +1,8 @@
 import { db } from "@/db"
+import { embeddingToVectorStr } from "@/lib/infra/processor-s3"
 import type { ExistingQuestionContext } from "./prompts"
 
-export function embeddingToVectorStr(vec: number[]): string {
-	return `[${vec.join(",")}]`
-}
+export { embeddingToVectorStr }
 
 /**
  * Fetches existing questions for the exam paper (or recent question_paper uploads

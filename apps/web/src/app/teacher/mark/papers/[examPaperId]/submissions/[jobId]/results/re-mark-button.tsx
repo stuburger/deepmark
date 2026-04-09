@@ -38,6 +38,7 @@ export function ReMarkButton({
 			}
 			navigateToNewJob(result.newJobId)
 		},
+		onError: () => toast.error("Failed to re-run marking"),
 	})
 
 	const ocrMutation = useMutation({
@@ -49,6 +50,7 @@ export function ReMarkButton({
 			}
 			navigateToNewJob(result.newJobId)
 		},
+		onError: () => toast.error("Failed to re-run answer detection"),
 	})
 
 	const isPending = gradingMutation.isPending || ocrMutation.isPending

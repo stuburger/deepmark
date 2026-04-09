@@ -6,6 +6,7 @@ import {
 } from "@/lib/exam-paper/questions/mutations"
 import type {
 	ExamPaperDetail,
+	ExamPaperQuestion,
 	UnlinkedMarkScheme,
 	UpdateQuestionInput,
 } from "@/lib/exam-paper/types"
@@ -38,6 +39,34 @@ function patchExamPaper(
 	return previous
 }
 
+/** Map over questions nested inside sections. */
+function mapQuestions(
+	paper: ExamPaperDetail,
+	fn: (q: ExamPaperQuestion) => ExamPaperQuestion,
+): ExamPaperDetail {
+	return {
+		...paper,
+		sections: paper.sections.map((s) => ({
+			...s,
+			questions: s.questions.map(fn),
+		})),
+	}
+}
+
+/** Filter out a question from whichever section contains it. */
+function filterQuestions(
+	paper: ExamPaperDetail,
+	predicate: (q: ExamPaperQuestion) => boolean,
+): ExamPaperDetail {
+	return {
+		...paper,
+		sections: paper.sections.map((s) => ({
+			...s,
+			questions: s.questions.filter(predicate),
+		})),
+	}
+}
+
 // ─── useUpdateQuestion ────────────────────────────────────────────────────────
 
 export function useUpdateQuestion(paperId: string) {
@@ -59,9 +88,8 @@ export function useUpdateQuestion(paperId: string) {
 			await queryClient.cancelQueries({
 				queryKey: queryKeys.examPaper(paperId),
 			})
-			const previous = patchExamPaper(queryClient, paperId, (old) => ({
-				...old,
-				questions: old.questions.map((q) =>
+			const previous = patchExamPaper(queryClient, paperId, (old) =>
+				mapQuestions(old, (q) =>
 					q.id === questionId
 						? {
 								...q,
@@ -73,7 +101,7 @@ export function useUpdateQuestion(paperId: string) {
 							}
 						: q,
 				),
-			}))
+			)
 			return { previous }
 		},
 		onError: (err, _, context) => {
@@ -105,10 +133,9 @@ export function useDeleteQuestion(paperId: string) {
 			await queryClient.cancelQueries({
 				queryKey: queryKeys.examPaper(paperId),
 			})
-			const previous = patchExamPaper(queryClient, paperId, (old) => ({
-				...old,
-				questions: old.questions.filter((q) => q.id !== questionId),
-			}))
+			const previous = patchExamPaper(queryClient, paperId, (old) =>
+				filterQuestions(old, (q) => q.id !== questionId),
+			)
 			return { previous }
 		},
 		onError: (err, _, context) => {
@@ -146,12 +173,11 @@ export function useCreateMarkScheme(paperId: string) {
 			await queryClient.cancelQueries({
 				queryKey: queryKeys.examPaper(paperId),
 			})
-			const previous = patchExamPaper(queryClient, paperId, (old) => ({
-				...old,
-				questions: old.questions.map((q) =>
+			const previous = patchExamPaper(queryClient, paperId, (old) =>
+				mapQuestions(old, (q) =>
 					q.id === questionId ? { ...q, mark_scheme_status: "linked" } : q,
 				),
-			}))
+			)
 			return { previous }
 		},
 		onError: (err, _, context) => {
@@ -236,14 +262,11 @@ export function useLinkMarkScheme(paperId: string) {
 			if (previousPaper) {
 				queryClient.setQueryData<ExamPaperDetail>(
 					queryKeys.examPaper(paperId),
-					{
-						...previousPaper,
-						questions: previousPaper.questions.map((q) =>
-							q.id === targetQuestionId
-								? { ...q, mark_scheme_status: "linked" }
-								: q,
-						),
-					},
+					mapQuestions(previousPaper, (q) =>
+						q.id === targetQuestionId
+							? { ...q, mark_scheme_status: "linked" }
+							: q,
+					),
 				)
 			}
 

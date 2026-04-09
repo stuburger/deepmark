@@ -6,8 +6,6 @@ import type {
 	CatalogExamPaper,
 	ExamPaperDetail,
 	ExamPaperListItem,
-	ExamPaperQuestion,
-	ExamPaperSection,
 } from "../types"
 
 const db = createPrismaClient(Resource.NeonPostgres.databaseUrl)
@@ -101,42 +99,6 @@ export async function getExamPaperDetail(
 		})
 		if (!paper) return { ok: false, error: "Exam paper not found" }
 
-		const sections: ExamPaperSection[] = paper.sections.map((s) => ({
-			id: s.id,
-			title: s.title,
-		}))
-
-		const questions: ExamPaperQuestion[] = []
-		for (const section of paper.sections) {
-			for (const esq of section.exam_section_questions) {
-				const ms = esq.question.mark_schemes[0]
-				const mcqOptions = Array.isArray(esq.question.multiple_choice_options)
-					? (esq.question.multiple_choice_options as {
-							option_label: string
-							option_text: string
-						}[])
-					: []
-				questions.push({
-					id: esq.question.id,
-					text: esq.question.text,
-					question_type: esq.question.question_type,
-					points: esq.question.points,
-					origin: esq.question.origin,
-					question_number: esq.question.question_number,
-					multiple_choice_options: mcqOptions,
-					mark_scheme_count: esq.question.mark_schemes.length,
-					mark_scheme_status: ms?.link_status ?? null,
-					mark_scheme_id: ms?.id ?? null,
-					mark_scheme_description: ms?.description ?? null,
-					mark_scheme_correct_option_labels: ms?.correct_option_labels ?? [],
-					mark_scheme_points_total: ms?.points_total ?? null,
-					order: esq.order,
-					exam_section_id: section.id,
-					section_title: section.title,
-				})
-			}
-		}
-
 		return {
 			ok: true,
 			paper: {
@@ -151,8 +113,38 @@ export async function getExamPaperDetail(
 				is_active: paper.is_active,
 				is_public: paper.is_public,
 				created_at: paper.created_at,
-				sections,
-				questions,
+				sections: paper.sections.map((section) => ({
+					id: section.id,
+					title: section.title,
+					questions: section.exam_section_questions.map((esq) => {
+						const ms = esq.question.mark_schemes[0]
+						const mcqOptions = Array.isArray(
+							esq.question.multiple_choice_options,
+						)
+							? (esq.question.multiple_choice_options as {
+									option_label: string
+									option_text: string
+								}[])
+							: []
+						return {
+							id: esq.question.id,
+							text: esq.question.text,
+							question_type: esq.question.question_type,
+							points: esq.question.points,
+							origin: esq.question.origin,
+							question_number: esq.question.question_number,
+							multiple_choice_options: mcqOptions,
+							mark_scheme_count: esq.question.mark_schemes.length,
+							mark_scheme_status: ms?.link_status ?? null,
+							mark_scheme_id: ms?.id ?? null,
+							mark_scheme_description: ms?.description ?? null,
+							mark_scheme_correct_option_labels:
+								ms?.correct_option_labels ?? [],
+							mark_scheme_points_total: ms?.points_total ?? null,
+							order: esq.order,
+						}
+					}),
+				})),
 				section_count: paper.sections.length,
 				level_descriptors: paper.level_descriptors ?? null,
 			},

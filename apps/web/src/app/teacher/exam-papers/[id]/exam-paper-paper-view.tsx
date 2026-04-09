@@ -4,11 +4,7 @@ import {
 	reorderQuestionsInSection,
 	reorderSections,
 } from "@/lib/exam-paper/questions/mutations"
-import type {
-	ExamPaperDetail,
-	ExamPaperQuestion,
-	ExamPaperSection,
-} from "@/lib/exam-paper/types"
+import type { ExamPaperDetail, ExamPaperSection } from "@/lib/exam-paper/types"
 import { queryKeys } from "@/lib/query-keys"
 import {
 	DndContext,
@@ -27,22 +23,9 @@ import {
 import { CSS } from "@dnd-kit/utilities"
 import { useQueryClient } from "@tanstack/react-query"
 import { Clock, GripVertical } from "lucide-react"
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { toast } from "sonner"
 import { SortableQuestion } from "./sortable-question"
-
-// ─── Types ──────────────────────────────────────────────────────────────────
-
-type LocalSection = ExamPaperSection & { questions: ExamPaperQuestion[] }
-
-function buildSections(paper: ExamPaperDetail): LocalSection[] {
-	return paper.sections.map((section) => ({
-		...section,
-		questions: paper.questions
-			.filter((q) => q.exam_section_id === section.id)
-			.sort((a, b) => a.order - b.order),
-	}))
-}
 
 // ─── Sortable section ───────────────────────────────────────────────────────
 
@@ -51,7 +34,7 @@ function SortableSection({
 	paperId,
 	onQuestionDeleted,
 }: {
-	section: LocalSection
+	section: ExamPaperSection
 	paperId: string
 	onQuestionDeleted: () => void
 }) {
@@ -121,18 +104,11 @@ export function ExamPaperPaperView({
 	paperId: string
 }) {
 	const queryClient = useQueryClient()
-	const [localSections, setLocalSections] = useState<LocalSection[]>(() =>
-		buildSections(paper),
-	)
-
-	const questionFingerprint = paper.questions
-		.map((q) => `${q.id}:${q.mark_scheme_status ?? "none"}`)
-		.sort()
-		.join(",")
-	// biome-ignore lint/correctness/useExhaustiveDependencies: fingerprint intentionally used instead of full paper object
-	useEffect(() => {
-		setLocalSections(buildSections(paper))
-	}, [questionFingerprint])
+	// Optimistic override during drag — null means "use paper.sections as-is"
+	const [optimisticSections, setOptimisticSections] = useState<
+		ExamPaperSection[] | null
+	>(null)
+	const sections = optimisticSections ?? paper.sections
 
 	const sensors = useSensors(
 		useSensor(PointerSensor, {
@@ -147,15 +123,15 @@ export function ExamPaperPaperView({
 		const activeId = String(active.id)
 		const overId = String(over.id)
 
-		const isSectionDrag = localSections.some((s) => s.id === activeId)
+		const isSectionDrag = sections.some((s) => s.id === activeId)
 
 		if (isSectionDrag) {
-			const oldIndex = localSections.findIndex((s) => s.id === activeId)
-			const newIndex = localSections.findIndex((s) => s.id === overId)
+			const oldIndex = sections.findIndex((s) => s.id === activeId)
+			const newIndex = sections.findIndex((s) => s.id === overId)
 			if (oldIndex === -1 || newIndex === -1) return
 
-			const newOrder = arrayMove(localSections, oldIndex, newIndex)
-			setLocalSections(newOrder)
+			const newOrder = arrayMove(sections, oldIndex, newIndex)
+			setOptimisticSections(newOrder)
 
 			const result = await reorderSections(
 				paper.id,
@@ -163,13 +139,13 @@ export function ExamPaperPaperView({
 			)
 			if (!result.ok) {
 				toast.error(result.error)
-			} else {
-				void queryClient.invalidateQueries({
-					queryKey: queryKeys.examPaper(paperId),
-				})
 			}
+			setOptimisticSections(null)
+			void queryClient.invalidateQueries({
+				queryKey: queryKeys.examPaper(paperId),
+			})
 		} else {
-			const section = localSections.find((s) =>
+			const section = sections.find((s) =>
 				s.questions.some((q) => q.id === activeId),
 			)
 			if (!section) return
@@ -184,8 +160,8 @@ export function ExamPaperPaperView({
 			if (oldIndex === -1 || newIndex === -1) return
 
 			const newQuestions = arrayMove(section.questions, oldIndex, newIndex)
-			setLocalSections((prev) =>
-				prev.map((s) =>
+			setOptimisticSections(
+				sections.map((s) =>
 					s.id === section.id ? { ...s, questions: newQuestions } : s,
 				),
 			)
@@ -196,15 +172,17 @@ export function ExamPaperPaperView({
 			)
 			if (!result.ok) {
 				toast.error(result.error)
-			} else {
-				void queryClient.invalidateQueries({
-					queryKey: queryKeys.examPaper(paperId),
-				})
 			}
+			setOptimisticSections(null)
+			void queryClient.invalidateQueries({
+				queryKey: queryKeys.examPaper(paperId),
+			})
 		}
 	}
 
-	if (paper.questions.length === 0) {
+	const allQuestions = paper.sections.flatMap((s) => s.questions)
+
+	if (allQuestions.length === 0) {
 		return (
 			<div className="py-8 text-center text-sm text-muted-foreground">
 				No questions yet. Upload a question paper or mark scheme PDF to populate
@@ -238,8 +216,8 @@ export function ExamPaperPaperView({
 					</span>
 					<span>Total marks: {paper.total_marks}</span>
 					<span>
-						{paper.questions.length} question
-						{paper.questions.length !== 1 ? "s" : ""}
+						{allQuestions.length} question
+						{allQuestions.length !== 1 ? "s" : ""}
 					</span>
 				</div>
 			</div>
@@ -252,10 +230,10 @@ export function ExamPaperPaperView({
 					onDragEnd={onDragEnd}
 				>
 					<SortableContext
-						items={localSections.map((s) => s.id)}
+						items={sections.map((s) => s.id)}
 						strategy={verticalListSortingStrategy}
 					>
-						{localSections.map((section) => (
+						{sections.map((section) => (
 							<SortableSection
 								key={section.id}
 								section={section}

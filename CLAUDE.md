@@ -583,6 +583,38 @@ Types are declared in `sst-env.d.ts`.
 
 Never import runtime values from `@mcp-gcse/db` into client components — only `import type`.
 
+### Querying via Neon MCP
+
+Use the `mcp__Neon__run_sql` tool to query the database directly. Key things to know:
+
+**Project & org:**
+- `NEON_PROJECT_ID`: `snowy-bar-65699801`
+- `NEON_ORG_ID`: `org-ancient-mud-15177616`
+
+**Branching:** Each SST stage gets its own Neon branch (see `infra/database.ts`). Production uses the `main` branch; dev/PR stages create named branches where the branch **name** equals the SST stage (e.g. `stuartbourhill`). The Neon MCP `branchId` parameter requires the branch **ID** (e.g. `br-round-dawn-abu36m2h`), not the name. To find the right branch:
+1. Try running the query without `branchId` first (hits the default/main branch).
+2. If the data isn't there, use `mcp__Neon__list_branch_computes` to list all branches and their IDs, then try each until you find the one with the data.
+
+**Table & column naming:** Prisma models use PascalCase (`StudentSubmission`) but all tables are mapped to **snake_case** in Postgres via `@@map()`. Always use the snake_case table names in SQL:
+
+| Prisma model | Postgres table |
+|---|---|
+| `StudentSubmission` | `student_submissions` |
+| `StudentPaperPageToken` | `student_paper_page_tokens` |
+| `StudentPaperAnswerRegion` | `student_paper_answer_regions` |
+| `StudentPaperAnnotation` | `student_paper_annotations` |
+| `ExamPaper` | `exam_papers` |
+| `Question` | `questions` |
+| `MarkScheme` | `mark_schemes` |
+| `Answer` | `answers` |
+| `MarkingResult` | `marking_results` |
+| `OcrRun` | `ocr_runs` |
+| `GradingRun` | `grading_runs` |
+| `BatchIngestJob` | `batch_ingest_jobs` |
+| `PdfIngestionJob` | `pdf_ingestion_jobs` |
+
+Column names are already snake_case in the Prisma schema — use them as-is in SQL (e.g. `exam_paper_id`, `marking_job_id`, `question_number`).
+
 ---
 
 ## MCP Server

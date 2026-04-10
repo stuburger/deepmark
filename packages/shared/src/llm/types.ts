@@ -89,6 +89,8 @@ export const LLM_CALL_SITE_DEFAULTS: Array<{
 	description: string
 	input_type: LlmInputType
 	phase: LlmPhase
+	/** Step number within the phase. Same step = runs in parallel. */
+	step: number
 	models: LlmModelEntry[]
 }> = [
 	// ── PDF Ingestion ────────────────────────────────────────────────────
@@ -100,6 +102,7 @@ export const LLM_CALL_SITE_DEFAULTS: Array<{
 			"Detects document type, subject, and metadata when uploading PDFs from the web UI.",
 		input_type: "pdf",
 		phase: "pdf-ingestion",
+		step: 1,
 		models: [
 			{ provider: "google", model: "gemini-2.5-flash", temperature: 0.1 },
 		],
@@ -110,6 +113,7 @@ export const LLM_CALL_SITE_DEFAULTS: Array<{
 		description: "Detects exam paper metadata from question paper cover page.",
 		input_type: "pdf",
 		phase: "pdf-ingestion",
+		step: 2, // parallel with question-paper-extraction
 		models: [
 			{ provider: "google", model: "gemini-2.5-flash", temperature: 0.1 },
 		],
@@ -121,6 +125,7 @@ export const LLM_CALL_SITE_DEFAULTS: Array<{
 			"Extracts questions, types, and marks from uploaded question paper PDFs.",
 		input_type: "pdf",
 		phase: "pdf-ingestion",
+		step: 2, // parallel with question-paper-metadata
 		models: [
 			{ provider: "google", model: "gemini-2.5-flash", temperature: 0.2 },
 		],
@@ -132,6 +137,7 @@ export const LLM_CALL_SITE_DEFAULTS: Array<{
 			"Detects exam paper title, subject, board, and year from mark scheme cover page.",
 		input_type: "pdf",
 		phase: "pdf-ingestion",
+		step: 3, // parallel with mark-scheme-extraction
 		models: [
 			{ provider: "google", model: "gemini-2.5-flash", temperature: 0.1 },
 		],
@@ -143,6 +149,7 @@ export const LLM_CALL_SITE_DEFAULTS: Array<{
 			"Extracts questions, mark points, and level descriptors from uploaded mark scheme PDFs.",
 		input_type: "pdf",
 		phase: "pdf-ingestion",
+		step: 3, // parallel with mark-scheme-metadata
 		models: [
 			{ provider: "google", model: "gemini-2.5-flash", temperature: 0.2 },
 		],
@@ -153,6 +160,7 @@ export const LLM_CALL_SITE_DEFAULTS: Array<{
 		description: "Extracts exemplar answers from uploaded exemplar PDFs.",
 		input_type: "pdf",
 		phase: "pdf-ingestion",
+		step: 4,
 		models: [
 			{ provider: "google", model: "gemini-2.5-flash", temperature: 0.2 },
 		],
@@ -164,6 +172,7 @@ export const LLM_CALL_SITE_DEFAULTS: Array<{
 			"Auto-generates mark scheme suggestions from question text in the editor.",
 		input_type: "text",
 		phase: "pdf-ingestion",
+		step: 5,
 		models: [
 			{ provider: "google", model: "gemini-2.5-flash", temperature: 0.2 },
 		],
@@ -178,6 +187,7 @@ export const LLM_CALL_SITE_DEFAULTS: Array<{
 			"Classifies whether a page starts a new student script during batch segmentation.",
 		input_type: "vision",
 		phase: "batch-classification",
+		step: 1, // parallel with blank-page-classification
 		models: [
 			{ provider: "google", model: "gemini-2.5-flash", temperature: 0.2 },
 		],
@@ -189,6 +199,7 @@ export const LLM_CALL_SITE_DEFAULTS: Array<{
 			"Classifies blank pages as separators, script pages, or artifacts.",
 		input_type: "vision",
 		phase: "batch-classification",
+		step: 1, // parallel with script-boundary-classification
 		models: [
 			{ provider: "google", model: "gemini-2.5-flash", temperature: 0.2 },
 		],
@@ -200,6 +211,7 @@ export const LLM_CALL_SITE_DEFAULTS: Array<{
 			"Extracts student name from the first page of a script during batch classification.",
 		input_type: "vision",
 		phase: "batch-classification",
+		step: 2,
 		models: [
 			{ provider: "google", model: "gemini-2.5-flash", temperature: 0.2 },
 		],
@@ -209,11 +221,12 @@ export const LLM_CALL_SITE_DEFAULTS: Array<{
 	// Phase 1 of the marking pipeline: extract answers from scanned scripts.
 	{
 		key: "student-paper-extraction",
-		display_name: "Student Paper Answer Extraction",
+		display_name: "Answer Extraction",
 		description:
 			"Extracts student name, subject, and per-question answers from scanned exam pages.",
 		input_type: "vision",
 		phase: "ocr",
+		step: 1, // parallel with handwriting-ocr
 		models: [
 			{ provider: "google", model: "gemini-2.5-flash", temperature: 0.1 },
 		],
@@ -225,39 +238,43 @@ export const LLM_CALL_SITE_DEFAULTS: Array<{
 			"Transcribes handwritten text and provides handwriting analysis from page images.",
 		input_type: "vision",
 		phase: "ocr",
+		step: 1, // parallel with student-paper-extraction
 		models: [
 			{ provider: "google", model: "gemini-2.5-flash", temperature: 0.2 },
 		],
 	},
 	{
 		key: "vision-token-reconciliation",
-		display_name: "Vision Token Reconciliation",
+		display_name: "Token Reconciliation",
 		description:
 			"Corrects Cloud Vision OCR tokens against original page images for accuracy.",
 		input_type: "vision",
 		phase: "ocr",
+		step: 2,
 		models: [
 			{ provider: "google", model: "gemini-2.5-pro", temperature: 0.1 },
 		],
 	},
 	{
 		key: "vision-attribution",
-		display_name: "Vision Attribution",
+		display_name: "Answer Region Attribution",
 		description:
 			"Assigns OCR tokens to questions and derives answer region bounding boxes.",
 		input_type: "vision",
 		phase: "ocr",
+		step: 3,
 		models: [
 			{ provider: "google", model: "gemini-2.5-pro", temperature: 0.1 },
 		],
 	},
 	{
 		key: "vision-attribution-mcq-fallback",
-		display_name: "Vision Attribution MCQ Fallback",
+		display_name: "MCQ Region Fallback",
 		description:
-			"Fallback model for locating MCQ answers when primary attribution fails.",
+			"Fallback for locating MCQ answers when primary attribution misses them.",
 		input_type: "vision",
 		phase: "ocr",
+		step: 4,
 		models: [
 			{ provider: "google", model: "gemini-2.5-flash", temperature: 0.1 },
 		],
@@ -269,6 +286,7 @@ export const LLM_CALL_SITE_DEFAULTS: Array<{
 			"LLM fallback to align OCR-extracted answers to exam questions when string matching fails.",
 		input_type: "text",
 		phase: "ocr",
+		step: 5,
 		models: [
 			{ provider: "google", model: "gemini-2.5-flash", temperature: 0.3 },
 		],
@@ -283,6 +301,7 @@ export const LLM_CALL_SITE_DEFAULTS: Array<{
 			"Grades student answers via the MarkerOrchestrator (point-based and level-of-response).",
 		input_type: "text",
 		phase: "grading",
+		step: 1,
 		models: [
 			{ provider: "google", model: "gemini-2.5-flash", temperature: 0.3 },
 		],
@@ -297,6 +316,7 @@ export const LLM_CALL_SITE_DEFAULTS: Array<{
 			"Generates inline annotations on student scripts after grading (enrichment phase).",
 		input_type: "text",
 		phase: "enrichment",
+		step: 1,
 		models: [
 			{ provider: "google", model: "gemini-2.5-flash", temperature: 0.7 },
 		],
@@ -311,6 +331,7 @@ export const LLM_CALL_SITE_DEFAULTS: Array<{
 			"Generates diverse test cases for mark scheme validation via MCP tools.",
 		input_type: "text",
 		phase: "tools",
+		step: 1,
 		models: [
 			{ provider: "google", model: "gemini-2.5-flash", temperature: 0.8 },
 		],

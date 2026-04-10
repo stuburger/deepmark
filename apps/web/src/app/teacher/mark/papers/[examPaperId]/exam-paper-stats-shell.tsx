@@ -18,7 +18,6 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table"
-import { getActiveBatchForPaper } from "@/lib/batch/queries"
 import { listMySubmissions } from "@/lib/marking/listing/queries"
 import { getExamPaperStats } from "@/lib/marking/stats/queries"
 import type { ExamPaperStats, SubmissionHistoryItem } from "@/lib/marking/types"
@@ -72,23 +71,6 @@ export function ExamPaperStatsShell({
 		},
 		initialData: initialStats,
 		staleTime: 30 * 1000,
-	})
-
-	const { data: batchProgress } = useQuery({
-		queryKey: ["activeBatch", examPaperId],
-		queryFn: async () => {
-			const r = await getActiveBatchForPaper(examPaperId)
-			if (!r.ok || !r.batch || r.batch.status !== "marking") return null
-			const completed = r.batch.student_jobs.filter(
-				(j) => j.status === "ocr_complete",
-			).length
-			return {
-				completed,
-				total: r.batch.total_student_jobs,
-				remaining: r.batch.total_student_jobs - completed,
-			}
-		},
-		refetchInterval: (q) => (q.state.data ? 3000 : false),
 	})
 
 	const prevStatusesRef = useRef<Record<string, string>>({})
@@ -195,29 +177,6 @@ export function ExamPaperStatsShell({
 					</CardContent>
 				</Card>
 			</div>
-
-			{/* Marking progress */}
-			{batchProgress && batchProgress.total > 0 && (
-				<Card>
-					<CardHeader>
-						<CardTitle className="flex items-center gap-2">
-							<Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-							Marking in progress
-						</CardTitle>
-						<CardDescription>
-							{batchProgress.completed} of {batchProgress.total} scripts
-							marked · {batchProgress.remaining} in progress
-						</CardDescription>
-					</CardHeader>
-					<CardContent>
-						<Progress
-							value={
-								(batchProgress.completed / batchProgress.total) * 100
-							}
-						/>
-					</CardContent>
-				</Card>
-			)}
 
 			{/* Grade distribution chart */}
 			{completedSubmissions.length >= 3 && (

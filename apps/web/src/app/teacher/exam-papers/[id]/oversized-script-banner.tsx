@@ -1,3 +1,4 @@
+import { Button } from "@/components/ui/button"
 import { AlertTriangle, Scissors } from "lucide-react"
 
 export function OversizedScriptBanner({
@@ -18,14 +19,15 @@ export function OversizedScriptBanner({
 			<span>
 				{pageCount} pages — expected ~{pagesPerScript}
 			</span>
-			<button
-				type="button"
+			<Button
+				variant="ghost"
+				size="xs"
 				onClick={() => onSplit(scriptId, midpoint)}
-				className="ml-auto flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium hover:bg-amber-500/20 transition-colors"
+				className="ml-auto hover:bg-amber-500/20"
 			>
 				<Scissors className="h-3 w-3" />
 				Split at midpoint
-			</button>
+			</Button>
 		</div>
 	)
 }

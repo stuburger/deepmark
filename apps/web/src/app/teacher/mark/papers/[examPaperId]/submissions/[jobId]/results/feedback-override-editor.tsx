@@ -2,104 +2,83 @@
 
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
-import { Pencil, RotateCcw } from "lucide-react"
-import { useState } from "react"
+import { RotateCcw } from "lucide-react"
+import { useEffect, useState } from "react"
 
 export function FeedbackOverrideEditor({
 	aiFeedback,
 	overrideFeedback,
+	isEditing,
 	onSave,
 	onReset,
 }: {
 	aiFeedback: string | null
 	overrideFeedback: string | null
+	isEditing: boolean
 	onSave: (text: string) => void
 	onReset: () => void
 }) {
-	const [editing, setEditing] = useState(false)
 	const effectiveFeedback = overrideFeedback ?? aiFeedback
 	const isOverridden = overrideFeedback !== null
+	const [text, setText] = useState(effectiveFeedback ?? "")
 
-	function handleStartEdit() {
-		setEditing(true)
+	// Sync when override changes externally
+	useEffect(() => {
+		setText(overrideFeedback ?? aiFeedback ?? "")
+	}, [overrideFeedback, aiFeedback])
+
+	function handleBlur() {
+		const trimmed = text.trim()
+		if (trimmed !== (effectiveFeedback ?? "")) {
+			onSave(trimmed)
+		}
 	}
 
-	if (!effectiveFeedback && !editing) return null
+	if (!effectiveFeedback && !isEditing) return null
 
-	if (editing) {
+	if (isEditing) {
 		return (
-			<FeedbackEditForm
-				initial={effectiveFeedback ?? ""}
-				onSave={(text) => {
-					onSave(text)
-					setEditing(false)
-				}}
-				onCancel={() => setEditing(false)}
-			/>
+			<div className="space-y-1">
+				<div className="flex items-center gap-1.5">
+					<p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+						Feedback
+					</p>
+					{isOverridden && (
+						<span className="text-[9px] font-medium text-blue-500">Edited</span>
+					)}
+					{isOverridden && (
+						<Button
+							variant="ghost"
+							size="icon-xs"
+							onClick={onReset}
+							className="text-muted-foreground hover:text-destructive ml-auto"
+							title="Reset to AI feedback"
+						>
+							<RotateCcw className="h-2.5 w-2.5" />
+						</Button>
+					)}
+				</div>
+				<Textarea
+					value={text}
+					onChange={(e) => setText(e.target.value)}
+					onBlur={handleBlur}
+					className="text-xs min-h-16 resize-y"
+					placeholder="Override feedback..."
+				/>
+			</div>
 		)
 	}
 
 	return (
-		<div className="group/feedback relative">
-			<p className="text-muted-foreground leading-relaxed bg-zinc-50 dark:bg-zinc-900 rounded-md px-3 py-2 pr-8">
-				{effectiveFeedback}
-			</p>
+		<div className="relative">
 			{isOverridden && (
-				<span className="absolute top-1.5 left-3 text-[9px] font-medium text-blue-500 -mt-4">
+				<span className="text-[9px] font-medium text-blue-500 -mt-3 block mb-0.5">
 					Edited
 				</span>
 			)}
-			<div className="absolute top-1.5 right-1.5 flex items-center gap-0.5 opacity-0 group-hover/feedback:opacity-100 transition-opacity">
-				<button
-					type="button"
-					onClick={handleStartEdit}
-					className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-background transition-all"
-					title="Edit feedback"
-				>
-					<Pencil className="h-3 w-3" />
-				</button>
-				{isOverridden && (
-					<button
-						type="button"
-						onClick={onReset}
-						className="rounded p-1 text-muted-foreground hover:text-destructive transition-all"
-						title="Reset to AI feedback"
-					>
-						<RotateCcw className="h-3 w-3" />
-					</button>
-				)}
-			</div>
-		</div>
-	)
-}
-
-function FeedbackEditForm({
-	initial,
-	onSave,
-	onCancel,
-}: {
-	initial: string
-	onSave: (text: string) => void
-	onCancel: () => void
-}) {
-	const [text, setText] = useState(initial)
-
-	return (
-		<div className="space-y-2">
-			<Textarea
-				value={text}
-				onChange={(e) => setText(e.target.value)}
-				className="text-sm min-h-16 resize-y"
-				autoFocus
-			/>
-			<div className="flex items-center gap-2">
-				<Button size="sm" onClick={() => onSave(text.trim())}>
-					Save
-				</Button>
-				<Button size="sm" variant="ghost" onClick={onCancel}>
-					Cancel
-				</Button>
-			</div>
+			<p className="text-muted-foreground leading-relaxed bg-zinc-50 dark:bg-zinc-900 rounded-md px-3 py-2">
+				{effectiveFeedback}
+			</p>
 		</div>
 	)
 }

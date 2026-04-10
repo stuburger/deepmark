@@ -246,32 +246,21 @@ export type GetExamPaperStatsResult =
 
 // ─── Teacher Override types ─────────────────────────────────────────────────
 
-export type MarkPointCorrection = {
-	point: number
-	awarded: boolean
-}
-
 export type TeacherOverride = {
 	id: string
 	submission_id: string
 	question_id: string
 	score_override: number
-	reason: string
+	reason: string | null
 	feedback_override: string | null
-	www_override: string[] | null
-	ebi_override: string[] | null
-	mark_point_corrections: MarkPointCorrection[] | null
 	created_at: Date
 	updated_at: Date
 }
 
 export type UpsertTeacherOverrideInput = {
 	score_override: number
-	reason: string
+	reason?: string | null
 	feedback_override?: string | null
-	www_override?: string[] | null
-	ebi_override?: string[] | null
-	mark_point_corrections?: MarkPointCorrection[] | null
 }
 
 export type UpsertTeacherOverrideResult =

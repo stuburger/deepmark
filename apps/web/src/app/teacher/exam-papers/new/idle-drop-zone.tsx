@@ -1,5 +1,6 @@
 "use client"
 
+import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Upload } from "lucide-react"
 import { useRef, useState } from "react"
@@ -69,13 +70,9 @@ export function IdleDropZone({ onFileSelected, onManual }: IdleDropZoneProps) {
 				/>
 				<p className="mt-4 text-center text-sm text-muted-foreground">
 					Creating a new paper from scratch?{" "}
-					<button
-						type="button"
-						onClick={onManual}
-						className="underline underline-offset-4 hover:text-foreground"
-					>
+					<Button variant="link" className="p-0 h-auto" onClick={onManual}>
 						Fill in manually
-					</button>
+					</Button>
 				</p>
 			</CardContent>
 		</Card>

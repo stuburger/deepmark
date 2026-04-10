@@ -1,9 +1,11 @@
 "use client"
 
+import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card"
 import type { SubmissionHistoryItem } from "@/lib/marking/types"
-import { History, Trash2 } from "lucide-react"
+import { History, Loader2, Trash2 } from "lucide-react"
 import {
+	TERMINAL_STATUSES,
 	formatDate,
 	scoreColour,
 	statusDot,
@@ -25,6 +27,7 @@ export function ScriptCard({
 			: null
 	const colours = scoreColour(pct)
 	const dot = statusDot(sub.status, pct)
+	const isInProgress = !TERMINAL_STATUSES.has(sub.status)
 
 	return (
 		<div
@@ -51,25 +54,25 @@ export function ScriptCard({
 						</p>
 						<div className="flex items-center gap-1.5 shrink-0">
 							{/* Delete button */}
-							<button
-								type="button"
+							<Button
+								variant="ghost"
+								size="icon-xs"
 								onClick={(e) => {
 									e.stopPropagation()
 									onDeleteRequest()
 								}}
-								className="opacity-0 group-hover/script:opacity-100 transition-opacity p-0.5 rounded text-muted-foreground hover:text-destructive"
+								className="opacity-0 group-hover/script:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
 								title="Delete submission"
 							>
 								<Trash2 className="h-3.5 w-3.5" />
-							</button>
+							</Button>
 							{/* Version badge */}
 							{(sub.version_count ?? 1) > 1 && (
 								<span
 									className="inline-flex items-center gap-0.5 text-[10px] font-medium text-muted-foreground"
 									title={`${sub.version_count} versions`}
 								>
-									<History className="h-3 w-3" />
-									v{sub.version_count}
+									<History className="h-3 w-3" />v{sub.version_count}
 								</span>
 							)}
 							{/* Status dot */}
@@ -98,7 +101,10 @@ export function ScriptCard({
 							<span className="font-bold">{pct}%</span>
 						</span>
 					) : (
-						<span className="text-xs text-muted-foreground capitalize">
+						<span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground capitalize">
+							{isInProgress && (
+								<Loader2 className="h-3 w-3 animate-spin" />
+							)}
 							{statusLabel(sub.status)}
 						</span>
 					)}

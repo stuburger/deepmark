@@ -11,8 +11,13 @@ import {
 	TableRow,
 } from "@/components/ui/table"
 import type { SubmissionHistoryItem } from "@/lib/marking/types"
-import { Trash2 } from "lucide-react"
-import { formatDate, scoreColour, statusLabel } from "./submission-grid-config"
+import { Loader2, Trash2 } from "lucide-react"
+import {
+	TERMINAL_STATUSES,
+	formatDate,
+	scoreColour,
+	statusLabel,
+} from "./submission-grid-config"
 
 export function SubmissionTable({
 	submissions,
@@ -44,6 +49,7 @@ export function SubmissionTable({
 									? Math.round((sub.total_awarded / sub.total_max) * 100)
 									: null
 							const colours = scoreColour(pct)
+							const isInProgress = !TERMINAL_STATUSES.has(sub.status)
 							return (
 								<TableRow key={sub.id} className="group">
 									<TableCell className="text-sm">
@@ -61,7 +67,10 @@ export function SubmissionTable({
 												{sub.total_awarded}/{sub.total_max} · {pct}%
 											</span>
 										) : (
-											<span className="text-xs text-muted-foreground capitalize">
+											<span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground capitalize">
+												{isInProgress && (
+													<Loader2 className="h-3 w-3 animate-spin" />
+												)}
 												{statusLabel(sub.status)}
 											</span>
 										)}

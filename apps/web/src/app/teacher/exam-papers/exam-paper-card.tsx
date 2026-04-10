@@ -1,6 +1,7 @@
 "use client"
 
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import {
 	Card,
 	CardContent,
@@ -148,18 +149,19 @@ export function ExamPaperCard({ paper }: { paper: ExamPaperListItem }) {
 
 				<CardFooter className="flex items-center justify-between text-xs text-muted-foreground">
 					<span>{formatDate(paper.created_at)}</span>
-					<button
-						type="button"
+					<Button
+						variant="ghost"
+						size="icon-xs"
 						onClick={(e) => {
 							e.preventDefault()
 							e.stopPropagation()
 							setConfirmOpen(true)
 						}}
-						className="relative z-10 opacity-0 group-hover/paper:opacity-100 rounded p-1 text-muted-foreground hover:text-destructive transition-opacity"
+						className="relative z-10 opacity-0 group-hover/paper:opacity-100 text-muted-foreground hover:text-destructive transition-opacity"
 						aria-label={`Delete ${paper.title}`}
 					>
 						<Trash2 className="h-4 w-4" />
-					</button>
+					</Button>
 				</CardFooter>
 			</Card>
 

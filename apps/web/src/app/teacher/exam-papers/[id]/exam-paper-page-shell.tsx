@@ -7,7 +7,10 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { updateStagedScript } from "@/lib/batch/mutations"
 import { deleteExamPaper } from "@/lib/exam-paper/paper/mutations"
-import type { ExamPaperDetail, UnlinkedMarkScheme } from "@/lib/exam-paper/types"
+import type {
+	ExamPaperDetail,
+	UnlinkedMarkScheme,
+} from "@/lib/exam-paper/types"
 import type { ExamPaperStats, SubmissionHistoryItem } from "@/lib/marking/types"
 import type {
 	ActiveExamPaperIngestionJob,
@@ -26,7 +29,9 @@ import { EditableTitle } from "./editable-title"
 import { ExamPaperAnalyticsTab } from "./exam-paper-analytics-tab"
 import { capitalize } from "./exam-paper-helpers"
 import { ExamPaperQuestionsCard } from "./exam-paper-questions-card"
-import { useBatchSubmissions } from "./hooks/use-batch-submissions"
+import { useBatchIngestion } from "./hooks/use-batch-ingestion"
+import { useSubmissions } from "./hooks/use-submissions"
+import { useSwMessages } from "./hooks/use-sw-messages"
 import { useExamPaperLiveQueries } from "./hooks/use-exam-paper-live-queries"
 import { useLinkMarkScheme } from "./hooks/use-exam-paper-mutations"
 import { useSimilarQuestions } from "./hooks/use-similar-questions"
@@ -105,20 +110,29 @@ export function ExamPaperPageShell({
 	const [markingJobId, setMarkingJobId] = useQueryState("job", parseAsString)
 	const [, setQuestionParam] = useQueryState("question", parseAsString)
 
-	// Batch + submissions (polling, commit, derived lists)
+	// Batch ingestion (classifying, staging) — independent of submissions
 	const {
-		scriptsWorkflow,
-		refetchWorkflow,
-		submissions,
-		markedSubmissions,
-		inProgressSubmissions,
+		ingestion,
+		refetchIngestion,
 		committingBatch,
 		handleCommitAll,
 		handleSplitScript,
-	} = useBatchSubmissions({
+	} = useBatchIngestion(paper.id)
+
+	// Submissions — flat list, 60s poll + SW-triggered refresh
+	const {
+		submissions,
+		markedCount,
+		inProgressCount,
+		refetch: refetchSubmissions,
+		isFetching: isRefreshingSubmissions,
+	} = useSubmissions({
 		paperId: paper.id,
 		initialSubmissions,
 	})
+
+	// Instant refresh when service worker receives batch-complete push
+	useSwMessages(paper.id)
 
 	// Delete exam paper
 	const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
@@ -160,8 +174,8 @@ export function ExamPaperPageShell({
 		allQuestions.some((q) => q.origin === "exemplar")
 
 	const readyForSubmissions = hasQuestionPaper && allQuestionsHaveMarkSchemes
-	const stagedCount = scriptsWorkflow?.isReadyForReview
-		? scriptsWorkflow.allScripts.length
+	const stagedCount = ingestion?.isReadyForReview
+		? ingestion.allScripts.length
 		: 0
 
 	const tabTriggerClass =
@@ -232,7 +246,7 @@ export function ExamPaperPageShell({
 								<span className="ml-1.5 inline-flex items-center justify-center rounded-full bg-amber-500 text-white px-1.5 py-0.5 text-[10px] font-semibold tabular-nums leading-none">
 									{stagedCount}
 								</span>
-							) : scriptsWorkflow?.isProcessing ? (
+							) : ingestion?.isProcessing ? (
 								<span className="ml-1.5 h-1.5 w-1.5 rounded-full bg-primary animate-pulse shrink-0" />
 							) : null}
 							{submissions.length > 0 && (
@@ -299,13 +313,14 @@ export function ExamPaperPageShell({
 								with a dot may need review. Sort by the similarity column to
 								group them.
 							</span>
-							<button
-								type="button"
-								className="shrink-0 text-xs text-amber-600 hover:text-amber-900 dark:text-amber-400"
+							<Button
+								variant="ghost"
+								size="xs"
+								className="shrink-0 text-amber-600 hover:text-amber-900 dark:text-amber-400"
 								onClick={() => setDuplicateBannerDismissed(true)}
 							>
 								Dismiss
-							</button>
+							</Button>
 						</div>
 					)}
 
@@ -328,10 +343,10 @@ export function ExamPaperPageShell({
 				{/* ── Submissions tab ── */}
 				<TabsContent value="submissions" className="space-y-6 mt-10">
 					<SubmissionsTabContent
-						workflow={scriptsWorkflow}
-						inProgressSubmissions={inProgressSubmissions}
-						markedSubmissions={markedSubmissions}
-						totalSubmissions={submissions.length}
+						ingestion={ingestion}
+						submissions={submissions}
+						markedCount={markedCount}
+						inProgressCount={inProgressCount}
 						view={subView}
 						onViewChange={setSubView}
 						onOpenStaging={() => setStagingOpen(true)}
@@ -343,6 +358,8 @@ export function ExamPaperPageShell({
 									prev.filter((s) => s.id !== id),
 							)
 						}
+						onRefresh={() => void refetchSubmissions()}
+						isRefreshing={isRefreshingSubmissions}
 					/>
 				</TabsContent>
 
@@ -392,11 +409,12 @@ export function ExamPaperPageShell({
 			<StagingReviewDialog
 				open={stagingOpen}
 				onOpenChange={setStagingOpen}
-				workflow={scriptsWorkflow}
+				ingestion={ingestion}
 				committingBatch={committingBatch}
-				viewMode={stagingView}
-				onViewModeChange={setStagingView}
-				onCommitAll={handleCommitAll}
+				onCommitAll={async () => {
+					await handleCommitAll()
+					void refetchSubmissions()
+				}}
 				onUpdateScriptName={async (id, name) => {
 					await updateStagedScript(id, { confirmedName: name })
 				}}
@@ -407,15 +425,6 @@ export function ExamPaperPageShell({
 				}}
 				onSplitScript={handleSplitScript}
 				onDeleteScript={() => {}}
-				onJobDeleted={() => {
-					void queryClient.invalidateQueries({
-						queryKey: queryKeys.submissions(paper.id),
-					})
-				}}
-				onViewJob={(id) => {
-					setStagingOpen(false)
-					void setMarkingJobId(id)
-				}}
 			/>
 
 			<UploadScriptsDialog
@@ -423,7 +432,7 @@ export function ExamPaperPageShell({
 				open={uploadOpen}
 				onOpenChange={setUploadOpen}
 				onBatchStarted={() => {
-					void refetchWorkflow()
+					void refetchIngestion()
 					void setActiveTab("submissions")
 				}}
 			/>
@@ -441,15 +450,14 @@ export function ExamPaperPageShell({
 						: undefined
 				}
 			>
-				<button
-					type="button"
+				<Button
 					onClick={() => readyForSubmissions && setUploadOpen(true)}
 					disabled={!readyForSubmissions}
-					className="flex items-center gap-2 rounded-full bg-primary px-5 py-3.5 text-sm font-medium text-primary-foreground shadow-lg transition-all hover:bg-primary/90 hover:shadow-sm active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+					className="rounded-full px-5 py-3.5 shadow-lg hover:shadow-sm active:scale-95"
 				>
 					<PenLine className="h-4 w-4" />
 					Upload scripts
-				</button>
+				</Button>
 			</div>
 		</>
 	)

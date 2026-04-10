@@ -48,7 +48,6 @@ export type ActiveBatchInfo = {
 	pages_per_script: number
 	total_student_jobs: number
 	staged_scripts: BatchIngestJobData["staged_scripts"]
-	student_jobs: BatchIngestJobData["student_jobs"]
 } | null
 
 // ─── UI domain types ────────────────────────────────────────────────────────
@@ -62,28 +61,16 @@ export type StagedScript = {
 	status: string
 }
 
-export type MarkingJob = {
-	id: string
-	status: string
-	student_name: string | null
-	grading_results: unknown
-	staged_script_id: string | null
-}
-
-export type ScriptsWorkflowState = {
+export type BatchIngestionState = {
 	/** Processing phase visible to the teacher */
 	phase: "classifying" | "staging" | "marking"
 	isProcessing: boolean
 	isReadyForReview: boolean
-	isMarking: boolean
 
 	/** All staged scripts for the current upload */
 	allScripts: StagedScript[]
-	/** Marking phase only: scripts not yet committed as submissions */
+	/** Scripts not yet committed as submissions (status !== "submitted") */
 	unsubmittedScripts: StagedScript[]
-
-	markingJobs: MarkingJob[]
-	markingProgress: { completed: number; total: number; percent: number }
 
 	/** Presigned S3 URLs for all page images, keyed by s3_key */
 	urls: Record<string, string>

@@ -145,6 +145,7 @@ enum StagedScriptStatus {
   proposed
   confirmed
   excluded
+  submitted
 }
 
 enum ClassificationMode {
@@ -694,11 +695,8 @@ model TeacherOverride {
   submission_id          String
   question_id            String
   score_override         Int
-  reason                 String
+  reason                 String?
   feedback_override      String?
-  www_override           Json?
-  ebi_override           Json?
-  mark_point_corrections Json?
   created_by             String
   created_at             DateTime @default(now())
   updated_at             DateTime @updatedAt

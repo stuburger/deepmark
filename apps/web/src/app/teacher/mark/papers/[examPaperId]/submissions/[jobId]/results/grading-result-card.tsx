@@ -13,9 +13,7 @@ import { cn } from "@/lib/utils"
 import { ChevronDown } from "lucide-react"
 import { AnswerEditor } from "./answer-editor"
 import { FeedbackOverrideEditor } from "./feedback-override-editor"
-import { MarkPointCorrections } from "./mark-point-corrections"
 import { ScoreOverrideEditor } from "./score-override-editor"
-import { WwwEbiOverrideEditor } from "./www-ebi-override-editor"
 
 export function GradingResultCard({
 	jobId,
@@ -37,28 +35,14 @@ export function GradingResultCard({
 	onOverrideChange?: (input: UpsertTeacherOverrideInput | null) => void
 }) {
 	const r = result
+	const isEditing = !!onOverrideChange
 
-	// Effective values: override wins when present
 	const effectiveScore = override?.score_override ?? r.awarded_score
-	const effectiveWww = override?.www_override ?? r.what_went_well ?? []
-	const effectiveEbi = override?.ebi_override ?? r.even_better_if ?? []
+	const www = r.what_went_well ?? []
+	const ebi = r.even_better_if ?? []
 
 	const qPercent =
 		r.max_score > 0 ? Math.round((effectiveScore / r.max_score) * 100) : 0
-
-	// Helper to upsert — merges with existing override fields
-	function saveOverride(partial: Partial<UpsertTeacherOverrideInput>) {
-		if (!onOverrideChange) return
-		onOverrideChange({
-			score_override: override?.score_override ?? r.awarded_score,
-			reason: override?.reason ?? "",
-			feedback_override: override?.feedback_override,
-			www_override: override?.www_override,
-			ebi_override: override?.ebi_override,
-			mark_point_corrections: override?.mark_point_corrections,
-			...partial,
-		})
-	}
 
 	return (
 		<div
@@ -80,37 +64,27 @@ export function GradingResultCard({
 						</p>
 					)}
 				</div>
-				{onOverrideChange ? (
-					<ScoreOverrideEditor
-						aiScore={r.awarded_score}
-						maxScore={r.max_score}
-						override={
-							override
-								? {
-										score_override: override.score_override,
-										reason: override.reason,
-									}
-								: null
-						}
-						onSave={(score, reason) =>
-							saveOverride({ score_override: score, reason })
-						}
-						onReset={() => onOverrideChange(null)}
-					/>
-				) : (
-					<span
-						className={cn(
-							"inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-xs font-semibold text-white tabular-nums",
-							r.max_score > 0 && effectiveScore / r.max_score >= 0.7
-								? "bg-green-500"
-								: r.max_score > 0 && effectiveScore / r.max_score >= 0.4
-									? "bg-amber-500"
-									: "bg-red-500",
-						)}
-					>
-						{effectiveScore}/{r.max_score}
-					</span>
-				)}
+				<ScoreOverrideEditor
+					aiScore={r.awarded_score}
+					maxScore={r.max_score}
+					override={
+						override
+							? {
+									score_override: override.score_override,
+									reason: override.reason,
+								}
+							: null
+					}
+					isEditing={isEditing}
+					onSave={(score, reason) =>
+						onOverrideChange?.({
+							score_override: score,
+							reason,
+							feedback_override: override?.feedback_override,
+						})
+					}
+					onReset={() => onOverrideChange?.(null)}
+				/>
 			</div>
 
 			{/* Student answer — MCQ or written */}
@@ -163,123 +137,80 @@ export function GradingResultCard({
 				</div>
 			)}
 
-			{/* WWW / EBI — editable when overrides enabled */}
+			{/* WWW / EBI — always read-only */}
 			{r.marking_method !== "deterministic" && (
 				<div className="space-y-2 text-xs">
-					{onOverrideChange ? (
-						<>
-							<WwwEbiOverrideEditor
-								aiItems={r.what_went_well ?? []}
-								overrideItems={override?.www_override ?? null}
-								label="What went well"
-								variant="www"
-								onSave={(items) => saveOverride({ www_override: items })}
-								onReset={() => saveOverride({ www_override: undefined })}
-							/>
-							<WwwEbiOverrideEditor
-								aiItems={r.even_better_if ?? []}
-								overrideItems={override?.ebi_override ?? null}
-								label="Even better if"
-								variant="ebi"
-								onSave={(items) => saveOverride({ ebi_override: items })}
-								onReset={() => saveOverride({ ebi_override: undefined })}
-							/>
-						</>
-					) : (
-						<>
-							{effectiveWww.length > 0 && (
-								<div>
-									<p className="text-[10px] font-semibold uppercase tracking-wide text-green-600 dark:text-green-400 mb-0.5">
-										What went well
-									</p>
-									<ul className="space-y-0.5">
-										{effectiveWww.map((item, i) => (
-											<li
-												key={i}
-												className="text-muted-foreground flex items-start gap-1"
-											>
-												<span className="text-green-500 shrink-0">{"\u2713"}</span>
-												{item}
-											</li>
-										))}
-									</ul>
-								</div>
-							)}
-							{effectiveEbi.length > 0 && (
-								<div>
-									<p className="text-[10px] font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400 mb-0.5">
-										Even better if
-									</p>
-									<ul className="space-y-0.5">
-										{effectiveEbi.map((item, i) => (
-											<li
-												key={i}
-												className="text-muted-foreground flex items-start gap-1"
-											>
-												<span className="text-amber-500 shrink-0">{"\u2192"}</span>
-												{item}
-											</li>
-										))}
-									</ul>
-								</div>
-							)}
-						</>
+					{www.length > 0 && (
+						<div>
+							<p className="text-[10px] font-semibold uppercase tracking-wide text-green-600 dark:text-green-400 mb-0.5">
+								What went well
+							</p>
+							<ul className="space-y-0.5">
+								{www.map((item, i) => (
+									<li
+										key={i}
+										className="text-muted-foreground flex items-start gap-1"
+									>
+										<span className="text-green-500 shrink-0">{"\u2713"}</span>
+										{item}
+									</li>
+								))}
+							</ul>
+						</div>
+					)}
+					{ebi.length > 0 && (
+						<div>
+							<p className="text-[10px] font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400 mb-0.5">
+								Even better if
+							</p>
+							<ul className="space-y-0.5">
+								{ebi.map((item, i) => (
+									<li
+										key={i}
+										className="text-muted-foreground flex items-start gap-1"
+									>
+										<span className="text-amber-500 shrink-0">{"\u2192"}</span>
+										{item}
+									</li>
+								))}
+							</ul>
+						</div>
 					)}
 				</div>
 			)}
 
-			{/* Collapsible feedback + examiner reasoning — with override support */}
+			{/* Feedback + examiner reasoning */}
 			{r.marking_method !== "deterministic" &&
 				(r.feedback_summary || r.llm_reasoning) && (
-					<details className="text-xs">
+					<details className="text-xs" open={isEditing}>
 						<summary className="cursor-pointer text-muted-foreground hover:text-foreground list-none flex items-center gap-1 w-fit">
 							Feedback <ChevronDown className="h-3 w-3" />
 						</summary>
 						<div className="mt-2 space-y-3">
-							{onOverrideChange ? (
-								<FeedbackOverrideEditor
-									aiFeedback={r.feedback_summary}
-									overrideFeedback={override?.feedback_override ?? null}
-									onSave={(text) =>
-										saveOverride({ feedback_override: text })
-									}
-									onReset={() =>
-										saveOverride({ feedback_override: undefined })
-									}
-								/>
-							) : (
-								r.feedback_summary && (
-									<p className="text-muted-foreground leading-relaxed bg-zinc-50 dark:bg-zinc-900 rounded-md px-3 py-2">
-										{override?.feedback_override ?? r.feedback_summary}
-									</p>
-								)
-							)}
+							<FeedbackOverrideEditor
+								aiFeedback={r.feedback_summary}
+								overrideFeedback={override?.feedback_override ?? null}
+								isEditing={isEditing}
+								onSave={(text) =>
+									onOverrideChange?.({
+										score_override: override?.score_override ?? r.awarded_score,
+										reason: override?.reason,
+										feedback_override: text,
+									})
+								}
+								onReset={() =>
+									onOverrideChange?.({
+										score_override: override?.score_override ?? r.awarded_score,
+										reason: override?.reason,
+										feedback_override: undefined,
+									})
+								}
+							/>
 							{r.llm_reasoning && r.llm_reasoning !== r.feedback_summary && (
 								<p className="text-muted-foreground whitespace-pre-wrap leading-relaxed pl-2 border-l">
 									{r.llm_reasoning}
 								</p>
 							)}
-						</div>
-					</details>
-				)}
-
-			{/* Mark point corrections — only for point_based with results */}
-			{onOverrideChange &&
-				r.marking_method === "point_based" &&
-				r.mark_points_results &&
-				r.mark_points_results.length > 0 && (
-					<details className="text-xs">
-						<summary className="cursor-pointer text-muted-foreground hover:text-foreground list-none flex items-center gap-1 w-fit">
-							Mark points <ChevronDown className="h-3 w-3" />
-						</summary>
-						<div className="mt-2">
-							<MarkPointCorrections
-								markPointsResults={r.mark_points_results}
-								corrections={override?.mark_point_corrections ?? null}
-								onChange={(corrections) =>
-									saveOverride({ mark_point_corrections: corrections })
-								}
-							/>
 						</div>
 					</details>
 				)}

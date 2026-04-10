@@ -1,6 +1,7 @@
 "use client"
 
 import { AnnotationLegend } from "@/components/BoundingBoxViewer/annotation-legend"
+import { Button } from "@/components/ui/button"
 import { buttonVariants } from "@/components/ui/button-variants"
 import {
 	Tooltip,
@@ -17,17 +18,18 @@ import {
 	FileText,
 	Link2,
 	MapPin,
+	Pencil,
 	PlusCircle,
 	ScanText,
 	StickyNote,
 } from "lucide-react"
 import Link from "next/link"
+import { ObservationsSheet, TranscriptSheet } from "./ocr-sheets"
+import type { MarkingPhase } from "./phase"
+import { ReScanButton } from "./re-scan-button"
 import { DownloadPdfButton } from "./results/download-pdf-button"
 import { ReRunMenu } from "./results/re-run-menu"
 import { StudentNameEditor } from "./results/student-name-editor"
-import type { MarkingPhase } from "./phase"
-import { ReScanButton } from "./re-scan-button"
-import { ObservationsSheet, TranscriptSheet } from "./ocr-sheets"
 import { GroupToggle, ScoreBadge } from "./submission-toolbar-controls"
 import { VersionSwitcher } from "./version-switcher"
 
@@ -51,6 +53,8 @@ export function SubmissionToolbar({
 	annotationCount,
 	onNavigateToJob,
 	onVersionChange,
+	isEditing = false,
+	onToggleEditing,
 }: {
 	examPaperId: string
 	jobId: string
@@ -69,6 +73,8 @@ export function SubmissionToolbar({
 	annotationCount?: number
 	onNavigateToJob?: (newJobId: string) => void
 	onVersionChange?: (newJobId: string) => void
+	isEditing?: boolean
+	onToggleEditing?: () => void
 }) {
 	const hasOcr = scanPages.some((p) => p.analysis != null)
 	const hasRegions = data.grading_results.some(
@@ -89,7 +95,7 @@ export function SubmissionToolbar({
 			? "Generating annotations..."
 			: data.enrichment_status === "failed"
 				? "Annotation generation failed — try again"
-				: "Click Annotate to generate"
+				: "Waiting for annotations..."
 
 	// Annotations are available for all question types after Phase 4c/4d:
 	// LoR → Gemini annotations; point_based + MCQ → deterministic tick/cross.
@@ -292,6 +298,16 @@ export function SubmissionToolbar({
 				{/* Phase-conditional actions */}
 				{phase === "completed" && (
 					<div className="flex items-center gap-2">
+						{onToggleEditing && (
+							<Button
+								size="sm"
+								variant={isEditing ? "default" : "outline"}
+								onClick={onToggleEditing}
+							>
+								<Pencil className="h-3.5 w-3.5 mr-1.5" />
+								{isEditing ? "Done editing" : "Edit marking"}
+							</Button>
+						)}
 						<DownloadPdfButton data={data} />
 						<ReRunMenu
 							jobId={jobId}
@@ -310,7 +326,10 @@ export function SubmissionToolbar({
 
 				{data.pages_count > 0 &&
 					(phase === "scan_processing" || phase === "failed") && (
-						<ReScanButton jobId={jobId} onNavigateToJob={onNavigateToJob ?? (() => {})} />
+						<ReScanButton
+							jobId={jobId}
+							onNavigateToJob={onNavigateToJob ?? (() => {})}
+						/>
 					)}
 			</div>
 		</TooltipProvider>

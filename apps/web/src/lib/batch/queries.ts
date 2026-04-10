@@ -124,7 +124,6 @@ export async function getActiveBatchForPaper(
 		orderBy: { created_at: "desc" },
 		include: {
 			staged_scripts: { orderBy: { created_at: "asc" } },
-			...submissionInclude,
 		},
 	})
 
@@ -146,7 +145,6 @@ export async function getActiveBatchForPaper(
 				confidence: s.confidence,
 				status: s.status,
 			})),
-			student_jobs: batch.student_submissions.map(mapSubmission),
 		},
 	}
 }

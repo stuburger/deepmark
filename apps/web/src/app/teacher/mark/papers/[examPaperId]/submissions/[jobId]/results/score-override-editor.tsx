@@ -2,7 +2,6 @@
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
 import {
 	Tooltip,
 	TooltipContent,
@@ -10,27 +9,79 @@ import {
 	TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
-import { Pencil, RotateCcw, X } from "lucide-react"
-import { useState } from "react"
+import { Pencil, RotateCcw } from "lucide-react"
+import { useEffect, useState } from "react"
 
 export function ScoreOverrideEditor({
 	aiScore,
 	maxScore,
 	override,
+	isEditing,
 	onSave,
 	onReset,
 }: {
 	aiScore: number
 	maxScore: number
-	override: { score_override: number; reason: string } | null
-	onSave: (score: number, reason: string) => void
+	override: { score_override: number; reason: string | null } | null
+	isEditing: boolean
+	onSave: (score: number, reason: string | null) => void
 	onReset: () => void
 }) {
-	const [editing, setEditing] = useState(false)
-	const [score, setScore] = useState(override?.score_override ?? aiScore)
+	const effectiveScore = override?.score_override ?? aiScore
+	const [score, setScore] = useState(effectiveScore)
 	const [reason, setReason] = useState(override?.reason ?? "")
 
-	const effectiveScore = override?.score_override ?? aiScore
+	// Sync local state when override changes externally
+	useEffect(() => {
+		setScore(override?.score_override ?? aiScore)
+		setReason(override?.reason ?? "")
+	}, [override?.score_override, override?.reason, aiScore])
+
+	function handleScoreBlur() {
+		const clamped = Math.max(0, Math.min(maxScore, score))
+		if (
+			clamped !== effectiveScore ||
+			reason.trim() !== (override?.reason ?? "")
+		) {
+			onSave(clamped, reason.trim() || null)
+		}
+	}
+
+	function handleReasonBlur() {
+		if (override && reason.trim() !== (override.reason ?? "")) {
+			onSave(score, reason.trim() || null)
+		}
+	}
+
+	if (isEditing) {
+		return (
+			<div className="flex items-center gap-2 shrink-0">
+				<Input
+					type="number"
+					min={0}
+					max={maxScore}
+					value={score}
+					onChange={(e) => setScore(Number(e.target.value))}
+					onBlur={handleScoreBlur}
+					className="h-7 w-16 text-sm text-center tabular-nums"
+				/>
+				<span className="text-xs text-muted-foreground">/ {maxScore}</span>
+				{override && (
+					<Button
+						variant="ghost"
+						size="icon-xs"
+						onClick={onReset}
+						className="text-muted-foreground hover:text-destructive"
+						title="Reset to AI score"
+					>
+						<RotateCcw className="h-3 w-3" />
+					</Button>
+				)}
+			</div>
+		)
+	}
+
+	// Read-only badge
 	const pct = maxScore > 0 ? effectiveScore / maxScore : 0
 	const color = override
 		? "bg-blue-500"
@@ -40,115 +91,33 @@ export function ScoreOverrideEditor({
 				? "bg-amber-500"
 				: "bg-red-500"
 
-	function handleSave() {
-		if (!reason.trim()) return
-		onSave(score, reason.trim())
-		setEditing(false)
-	}
-
-	function handleCancel() {
-		setScore(override?.score_override ?? aiScore)
-		setReason(override?.reason ?? "")
-		setEditing(false)
-	}
-
-	function handleStartEdit() {
-		setScore(override?.score_override ?? aiScore)
-		setReason(override?.reason ?? "")
-		setEditing(true)
-	}
-
-	if (editing) {
-		return (
-			<div className="space-y-2 rounded-lg border bg-muted/30 p-3">
-				<div className="flex items-center gap-2">
-					<label className="text-xs font-medium text-muted-foreground">
-						Score
-					</label>
-					<Input
-						type="number"
-						min={0}
-						max={maxScore}
-						value={score}
-						onChange={(e) => setScore(Number(e.target.value))}
-						className="h-7 w-20 text-sm"
-						autoFocus
-					/>
-					<span className="text-xs text-muted-foreground">/ {maxScore}</span>
-				</div>
-				<div className="space-y-1">
-					<label className="text-xs font-medium text-muted-foreground">
-						Reason (required)
-					</label>
-					<Textarea
-						value={reason}
-						onChange={(e) => setReason(e.target.value)}
-						placeholder="Why are you changing this score?"
-						className="text-sm min-h-16 resize-y"
-					/>
-				</div>
-				<div className="flex items-center gap-2">
-					<Button
-						size="sm"
-						disabled={!reason.trim() || score < 0 || score > maxScore}
-						onClick={handleSave}
-					>
-						Save
-					</Button>
-					<Button size="sm" variant="ghost" onClick={handleCancel}>
-						Cancel
-					</Button>
-				</div>
-			</div>
-		)
-	}
-
 	return (
 		<TooltipProvider>
-			<div className="group/score inline-flex items-center gap-1">
-				<Tooltip>
-					<TooltipTrigger>
-						<span
-							className={cn(
-								"inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold text-white tabular-nums",
-								color,
-							)}
-						>
-							{override && <Pencil className="h-2.5 w-2.5" />}
-							{effectiveScore}/{maxScore}
-						</span>
-					</TooltipTrigger>
-					{override && (
-						<TooltipContent>
-							<p className="text-xs">
-								<span className="font-medium">Teacher override:</span>{" "}
-								{override.reason}
-							</p>
-							<p className="text-xs text-muted-foreground mt-0.5">
-								AI score: {aiScore}/{maxScore}
-							</p>
-						</TooltipContent>
-					)}
-				</Tooltip>
-				<button
-					type="button"
-					onClick={handleStartEdit}
-					className="opacity-0 group-hover/score:opacity-100 rounded p-0.5 text-muted-foreground hover:text-foreground transition-all"
-					title="Override score"
-				>
-					<Pencil className="h-3 w-3" />
-				</button>
-				{override && (
-					<button
-						type="button"
-						onClick={onReset}
-						className="opacity-0 group-hover/score:opacity-100 rounded p-0.5 text-muted-foreground hover:text-destructive transition-all"
-						title="Reset to AI score"
+			<Tooltip>
+				<TooltipTrigger>
+					<span
+						className={cn(
+							"inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold text-white tabular-nums",
+							color,
+						)}
 					>
-						<RotateCcw className="h-3 w-3" />
-					</button>
+						{override && <Pencil className="h-2.5 w-2.5" />}
+						{effectiveScore}/{maxScore}
+					</span>
+				</TooltipTrigger>
+				{override && (
+					<TooltipContent>
+						{override.reason && (
+							<p className="text-xs">
+								<span className="font-medium">Reason:</span> {override.reason}
+							</p>
+						)}
+						<p className="text-xs text-muted-foreground mt-0.5">
+							AI score: {aiScore}/{maxScore}
+						</p>
+					</TooltipContent>
 				)}
-			</div>
+			</Tooltip>
 		</TooltipProvider>
 	)
 }

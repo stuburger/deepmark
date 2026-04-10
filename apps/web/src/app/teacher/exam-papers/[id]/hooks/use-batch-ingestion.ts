@@ -3,57 +3,31 @@ import {
 	getActiveBatchForPaper,
 	getStagedScriptPageUrls,
 } from "@/lib/batch/queries"
-import type {
-	ActiveBatchInfo,
-	ScriptsWorkflowState,
-} from "@/lib/batch/types"
-import { listSubmissionsForPaper } from "@/lib/marking/listing/queries"
-import type { SubmissionHistoryItem } from "@/lib/marking/types"
-import { queryKeys } from "@/lib/query-keys"
+import type { ActiveBatchInfo, BatchIngestionState } from "@/lib/batch/types"
 import { useQuery } from "@tanstack/react-query"
 import { useMemo, useState } from "react"
 import { toast } from "sonner"
-import { TERMINAL_STATUSES } from "../submission-grid-config"
 
 // ─── Pure mapper ────────────────────────────────────────────────────────────
 
-function mapBatchToWorkflow(
+function mapBatchToIngestionState(
 	batch: ActiveBatchInfo,
 	urls: Record<string, string>,
-): ScriptsWorkflowState | null {
+): BatchIngestionState | null {
 	if (!batch) return null
 
 	const phase = batch.status as "classifying" | "staging" | "marking"
 
-	const submittedIds = new Set(
-		batch.student_jobs
-			.map((j) => j.staged_script_id)
-			.filter(Boolean),
-	)
 	const unsubmittedScripts = batch.staged_scripts.filter(
-		(s) => !submittedIds.has(s.id),
+		(s) => s.status !== "submitted",
 	)
-
-	const completedCount = batch.student_jobs.filter(
-		(j) => j.status === "ocr_complete",
-	).length
 
 	return {
 		phase,
 		isProcessing: phase === "classifying",
 		isReadyForReview: phase === "staging",
-		isMarking: phase === "marking",
 		allScripts: batch.staged_scripts,
 		unsubmittedScripts,
-		markingJobs: batch.student_jobs,
-		markingProgress: {
-			completed: completedCount,
-			total: batch.total_student_jobs,
-			percent:
-				batch.total_student_jobs > 0
-					? Math.round((completedCount / batch.total_student_jobs) * 100)
-					: 0,
-		},
 		urls,
 		pagesPerScript: batch.pages_per_script,
 		classificationMode: batch.classification_mode,
@@ -62,16 +36,10 @@ function mapBatchToWorkflow(
 
 // ─── Hook ───────────────────────────────────────────────────────────────────
 
-export function useBatchSubmissions({
-	paperId,
-	initialSubmissions,
-}: {
-	paperId: string
-	initialSubmissions: SubmissionHistoryItem[]
-}) {
+export function useBatchIngestion(paperId: string) {
 	const [committingBatch, setCommittingBatch] = useState(false)
 
-	// Active batch — polls every 3s while classifying, staging, or marking
+	// Active batch — polls every 3s while classifying or staging (short-lived phases)
 	const { data: activeBatch, refetch: refetchActiveBatch } =
 		useQuery<ActiveBatchInfo>({
 			queryKey: ["activeBatch", paperId],
@@ -81,9 +49,7 @@ export function useBatchSubmissions({
 			},
 			refetchInterval: (q) => {
 				const b = q.state.data
-				return b?.status === "classifying" ||
-					b?.status === "staging" ||
-					b?.status === "marking"
+				return b?.status === "classifying" || b?.status === "staging"
 					? 3000
 					: false
 			},
@@ -102,22 +68,11 @@ export function useBatchSubmissions({
 		staleTime: Number.POSITIVE_INFINITY,
 	})
 
-	// Derive the UI-facing workflow state
-	const scriptsWorkflow = useMemo(
-		() => mapBatchToWorkflow(activeBatch ?? null, urls),
+	// Derive the UI-facing ingestion state
+	const ingestion = useMemo(
+		() => mapBatchToIngestionState(activeBatch ?? null, urls),
 		[activeBatch, urls],
 	)
-
-	// Live submissions list — polls every 3s while marking is active
-	const { data: submissions = [] } = useQuery({
-		queryKey: queryKeys.submissions(paperId),
-		queryFn: async () => {
-			const r = await listSubmissionsForPaper(paperId)
-			return r.ok ? r.submissions : []
-		},
-		initialData: initialSubmissions,
-		refetchInterval: scriptsWorkflow?.isMarking ? 3000 : false,
-	})
 
 	async function handleCommitAll() {
 		if (!activeBatch) return
@@ -131,10 +86,7 @@ export function useBatchSubmissions({
 		void refetchActiveBatch()
 	}
 
-	async function handleSplitScript(
-		scriptId: string,
-		splitAfterIndex: number,
-	) {
+	async function handleSplitScript(scriptId: string, splitAfterIndex: number) {
 		const r = await splitStagedScript(scriptId, splitAfterIndex)
 		if (!r.ok) {
 			toast.error(r.error)
@@ -143,20 +95,9 @@ export function useBatchSubmissions({
 		void refetchActiveBatch()
 	}
 
-	// Split submissions into terminal (marked) and in-progress sections
-	const markedSubmissions = submissions.filter((s) =>
-		TERMINAL_STATUSES.has(s.status),
-	)
-	const inProgressSubmissions = submissions.filter(
-		(s) => !TERMINAL_STATUSES.has(s.status),
-	)
-
 	return {
-		scriptsWorkflow,
-		refetchWorkflow: refetchActiveBatch,
-		submissions,
-		markedSubmissions,
-		inProgressSubmissions,
+		ingestion,
+		refetchIngestion: refetchActiveBatch,
 		committingBatch,
 		handleCommitAll,
 		handleSplitScript,

@@ -290,6 +290,12 @@ export async function commitBatchService(
 			}),
 		)
 
+		// Mark staged scripts as submitted so the batch query doesn't need to join submissions
+		await tx.stagedScript.updateMany({
+			where: { id: { in: confirmedScripts.map((s) => s.id) } },
+			data: { status: "submitted" },
+		})
+
 		await tx.batchIngestJob.update({
 			where: { id: batchJobId },
 			data: {

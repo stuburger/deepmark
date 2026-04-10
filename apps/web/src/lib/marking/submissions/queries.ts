@@ -357,8 +357,12 @@ export async function getSubmissionVersions(
 			superseded_at: s.superseded_at,
 			supersede_reason: s.supersede_reason,
 			status: deriveScanStatus(
-				(s.ocr_runs[0]?.status ?? null) as Parameters<typeof deriveScanStatus>[0],
-				(s.grading_runs[0]?.status ?? null) as Parameters<typeof deriveScanStatus>[1],
+				(s.ocr_runs[0]?.status ?? null) as Parameters<
+					typeof deriveScanStatus
+				>[0],
+				(s.grading_runs[0]?.status ?? null) as Parameters<
+					typeof deriveScanStatus
+				>[1],
 			),
 		})),
 	}
@@ -388,11 +392,6 @@ export async function getTeacherOverrides(
 			score_override: r.score_override,
 			reason: r.reason,
 			feedback_override: r.feedback_override,
-			www_override: r.www_override as string[] | null,
-			ebi_override: r.ebi_override as string[] | null,
-			mark_point_corrections: r.mark_point_corrections as
-				| { point: number; awarded: boolean }[]
-				| null,
 			created_at: r.created_at,
 			updated_at: r.updated_at,
 		})),

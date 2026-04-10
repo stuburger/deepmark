@@ -93,6 +93,14 @@ bunx shadcn@latest add <component-name>
 
 Only build a custom component when shadcn genuinely cannot cover the use case (e.g. drag-and-drop canvas, bounding box overlay).
 
+**Never use vanilla `<button>` when `<Button>` from `@/components/ui/button` will do.** The `Button` component provides consistent styling, focus rings, disabled states, and variant/size props. Use it for all clickable actions — primary CTAs, icon buttons (`size="icon"`), destructive actions (`variant="destructive"`), subtle actions (`variant="ghost"`).
+
+Vanilla `<button>` is only acceptable when:
+- A compound component API requires a plain element as a render prop / trigger (e.g. Sheet, Tooltip, dnd-kit drag handles).
+- The button is an overlay control with absolute positioning and fully custom styling that `Button` variants can't express.
+
+When touching a file that has vanilla `<button>` where `<Button>` should be used, convert it as part of your change (campsite rule).
+
 ---
 
 ### State Management

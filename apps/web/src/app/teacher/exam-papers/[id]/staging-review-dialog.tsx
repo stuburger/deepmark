@@ -2,40 +2,32 @@
 
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent } from "@/components/ui/dialog"
-import type { ScriptsWorkflowState } from "@/lib/batch/types"
+import type { BatchIngestionState } from "@/lib/batch/types"
 import { X } from "lucide-react"
 import { BatchStagingPanel } from "./batch-staging-panel"
 
 type StagingReviewDialogProps = {
 	open: boolean
 	onOpenChange: (open: boolean) => void
-	workflow: ScriptsWorkflowState | null
+	ingestion: BatchIngestionState | null
 	committingBatch: boolean
-	viewMode: "list" | "grid"
-	onViewModeChange: (v: "list" | "grid") => void
 	onCommitAll: () => Promise<void>
 	onUpdateScriptName: (id: string, name: string) => Promise<void>
 	onToggleExclude: (id: string, status: string) => Promise<void>
 	onSplitScript: (scriptId: string, splitAfterIndex: number) => void
 	onDeleteScript: () => void
-	onJobDeleted?: () => void
-	onViewJob?: (id: string) => void
 }
 
 export function StagingReviewDialog({
 	open,
 	onOpenChange,
-	workflow,
+	ingestion,
 	committingBatch,
-	viewMode,
-	onViewModeChange,
 	onCommitAll,
 	onUpdateScriptName,
 	onToggleExclude,
 	onSplitScript,
 	onDeleteScript,
-	onJobDeleted,
-	onViewJob,
 }: StagingReviewDialogProps) {
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
@@ -64,19 +56,15 @@ export function StagingReviewDialog({
 
 				{/* Content */}
 				<div className="flex-1 overflow-y-auto px-6 py-6">
-					{workflow && (
+					{ingestion && (
 						<BatchStagingPanel
-							workflow={workflow}
+							ingestion={ingestion}
 							committingBatch={committingBatch}
-							viewMode={viewMode}
-							onViewModeChange={onViewModeChange}
 							onCommitAll={onCommitAll}
 							onUpdateScriptName={onUpdateScriptName}
 							onToggleExclude={onToggleExclude}
 							onSplitScript={onSplitScript}
 							onDeleteScript={onDeleteScript}
-							onJobDeleted={onJobDeleted}
-							onViewJob={onViewJob}
 						/>
 					)}
 				</div>

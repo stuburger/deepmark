@@ -1,6 +1,7 @@
 import { AppNavbar } from "@/components/app-navbar"
 import { PushRegistration } from "@/components/push-registration"
 import { TeacherSidebarNav } from "@/components/teacher-sidebar-nav"
+import { Button } from "@/components/ui/button"
 import {
 	Sidebar,
 	SidebarFooter,
@@ -54,12 +55,14 @@ export default async function TeacherLayout({
 						Switch to admin
 					</Link>
 					<form action={logout}>
-						<button
+						<Button
 							type="submit"
-							className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+							variant="ghost"
+							size="sm"
+							className="w-full justify-start text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
 						>
 							Logout
-						</button>
+						</Button>
 					</form>
 				</SidebarFooter>
 			</Sidebar>

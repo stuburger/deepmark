@@ -34,14 +34,15 @@ export function StudentNameEditor({
 						</span>
 					)}
 				</span>
-				<button
-					type="button"
+				<Button
+					variant="ghost"
+					size="icon-xs"
 					onClick={() => setEditing(true)}
-					className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+					className="text-muted-foreground hover:text-foreground"
 					aria-label="Edit student name"
 				>
 					<Pencil className="h-3 w-3" />
-				</button>
+				</Button>
 			</div>
 		)
 	}

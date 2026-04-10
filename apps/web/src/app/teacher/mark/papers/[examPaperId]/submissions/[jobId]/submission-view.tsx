@@ -66,6 +66,7 @@ export function SubmissionView({
 	const [showRegions, setShowRegions] = useState(true)
 	const [showMarks, setShowMarks] = useState(false)
 	const [showChains, setShowChains] = useState(false)
+	const [isEditing, setIsEditing] = useState(false)
 	const [activeQuestionNumber, setActiveQuestionNumber] = useQueryState(
 		"question",
 		parseAsString,
@@ -228,6 +229,8 @@ export function SubmissionView({
 				annotationCount={annotations.length}
 				onNavigateToJob={onNavigateToJob}
 				onVersionChange={onVersionChange}
+				isEditing={isEditing}
+				onToggleEditing={() => setIsEditing((v) => !v)}
 			/>
 
 			{/* Mobile: scan/results tabs */}
@@ -276,7 +279,7 @@ export function SubmissionView({
 							activeQuestionNumber={activeQuestionNumber}
 							annotations={annotations}
 							overridesByQuestionId={overridesByQuestionId}
-							onOverrideChange={handleOverrideChange}
+							onOverrideChange={isEditing ? handleOverrideChange : undefined}
 						/>
 					</TabsContent>
 				</Tabs>
@@ -311,7 +314,7 @@ export function SubmissionView({
 						phase={phase}
 						activeQuestionNumber={activeQuestionNumber}
 						overridesByQuestionId={overridesByQuestionId}
-						onOverrideChange={handleOverrideChange}
+						onOverrideChange={isEditing ? handleOverrideChange : undefined}
 					/>
 				</ResizablePanel>
 			</ResizablePanelGroup>

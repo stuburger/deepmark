@@ -1,6 +1,7 @@
 "use client"
 
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import type { StagedScript } from "@/lib/batch/types"
@@ -35,10 +36,7 @@ export function DndScriptCard({
 	localNames: Record<string, string>
 	urls: Record<string, string>
 	activeDragKey: string | null
-	onOpenCarousel: (
-		script: StagedScript,
-		idx: number,
-	) => void
+	onOpenCarousel: (script: StagedScript, idx: number) => void
 	onUpdateLocalName: (id: string, value: string) => void
 	onUpdateName: (id: string, name: string) => void
 	onToggleExclude: (id: string, status: string) => void
@@ -136,23 +134,25 @@ export function DndScriptCard({
 					<span>
 						{pageKeys.length} page{pageKeys.length === 1 ? "" : "s"}
 					</span>
-					<div className="flex items-center gap-3">
-						<button
-							type="button"
+					<div className="flex items-center gap-1">
+						<Button
+							variant="ghost"
+							size="xs"
 							onClick={() => onToggleExclude(script.id, script.status)}
-							className="flex items-center gap-1 hover:text-foreground transition-colors"
+							className="text-muted-foreground hover:text-foreground"
 						>
 							<X className="h-3 w-3" />
 							{script.status === "excluded" ? "Restore" : "Exclude"}
-						</button>
-						<button
-							type="button"
+						</Button>
+						<Button
+							variant="ghost"
+							size="xs"
 							onClick={() => onDelete(script.id)}
-							className="flex items-center gap-1 hover:text-destructive transition-colors"
+							className="text-muted-foreground hover:text-destructive"
 						>
 							<Trash2 className="h-3 w-3" />
 							Delete
-						</button>
+						</Button>
 					</div>
 				</div>
 			</CardContent>

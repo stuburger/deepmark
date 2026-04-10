@@ -14,7 +14,15 @@ self.addEventListener("push", (event) => {
     data: { batchJobId: data.batchJobId ?? null },
   };
 
-  event.waitUntil(self.registration.showNotification(title, options));
+  event.waitUntil(
+    self.registration.showNotification(title, options).then(() =>
+      self.clients.matchAll({ type: "window" }).then((cls) => {
+        for (const c of cls) {
+          c.postMessage({ type: "batch-complete", batchJobId: data.batchJobId ?? null });
+        }
+      })
+    )
+  );
 });
 
 self.addEventListener("notificationclick", (event) => {

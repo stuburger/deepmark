@@ -7,8 +7,7 @@ import {
 import { annotateOneQuestion } from "@/lib/enrichment/llm-annotations"
 import { persistAnnotations } from "@/lib/enrichment/persist-annotations"
 import type { PendingAnnotation } from "@/lib/enrichment/types"
-import { getLlmConfig } from "@/lib/infra/llm-config"
-import { resolveModel } from "@/lib/infra/llm-runtime"
+import { createLlmRunner } from "@/lib/infra/llm-runtime"
 import { logger } from "@/lib/infra/logger"
 import { type SqsEvent, parseSqsJobId } from "@/lib/infra/sqs-job-runner"
 import type { EnrichmentStatus } from "@mcp-gcse/db"
@@ -70,8 +69,7 @@ export async function handler(
 				levelDescriptors,
 				subject,
 			} = data
-			const annotationConfig = await getLlmConfig("llm-annotations")
-			const model = resolveModel(annotationConfig[0])
+			const llm = createLlmRunner()
 
 			// ── Deterministic annotations (no LLM) ───────────────────────────
 
@@ -110,7 +108,7 @@ export async function handler(
 						markScheme: result.mark_scheme_id
 							? (markSchemeMap.get(result.mark_scheme_id) ?? null)
 							: null,
-						model,
+						llm,
 						jobId,
 					}),
 				),
@@ -142,6 +140,7 @@ export async function handler(
 				where: { id: enrichmentRun.id },
 				data: {
 					status: "complete" satisfies EnrichmentStatus,
+					llm_snapshot: llm.toSnapshot(),
 					completed_at: new Date(),
 				},
 			})

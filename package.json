@@ -29,7 +29,7 @@
 	},
 	"workspaces": ["packages/*", "apps/*"],
 	"scripts": {
-		"test:unit": "vitest run --project backend:unit",
+		"test:unit": "vitest run --project shared:unit --project backend:unit",
 		"test:integration": "sst shell -- vitest run --project 'backend:integration' --project 'web:integration'",
 		"process-logo": "bun scripts/process-logo.ts",
 		"build": "turbo build",

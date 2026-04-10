@@ -1,9 +1,11 @@
 import { db } from "@/db"
+import {
+	isValidSubject,
+	loadQuestionSeeds,
+	parsePages,
+} from "@/lib/grading/question-seeds"
 import { createCancellationToken } from "@/lib/infra/cancellation"
-import { runVisionOcr } from "@/lib/scan-extraction/cloud-vision-ocr"
-import { type PageMimeType, extractStudentPaper } from "@/lib/scan-extraction/gemini-extract"
-import { persistTokens } from "@/lib/scan-extraction/persist-tokens"
-import { saveVisionRaw } from "@/lib/scan-extraction/save-vision-raw"
+import { createLlmRunner } from "@/lib/infra/llm-runtime"
 import { logger } from "@/lib/infra/logger"
 import { getFileBase64 } from "@/lib/infra/s3"
 import {
@@ -11,22 +13,20 @@ import {
 	markJobFailed,
 	parseSqsJobId,
 } from "@/lib/infra/sqs-job-runner"
+import { runVisionOcr } from "@/lib/scan-extraction/cloud-vision-ocr"
 import {
-	isValidSubject,
-	loadQuestionSeeds,
-	parsePages,
-} from "@/lib/grading/question-seeds"
+	type PageMimeType,
+	extractStudentPaper,
+} from "@/lib/scan-extraction/gemini-extract"
+import { persistTokens } from "@/lib/scan-extraction/persist-tokens"
+import { saveVisionRaw } from "@/lib/scan-extraction/save-vision-raw"
 import {
 	type VisionAttributeQuestion,
 	visionAttributeRegions,
 } from "@/lib/scan-extraction/vision-attribute"
 import { reconcilePageTokens } from "@/lib/scan-extraction/vision-reconcile"
 import { SQSClient, SendMessageCommand } from "@aws-sdk/client-sqs"
-import {
-	type OcrStatus,
-	type Subject,
-	logOcrRunEvent,
-} from "@mcp-gcse/db"
+import { type OcrStatus, type Subject, logOcrRunEvent } from "@mcp-gcse/db"
 import { Resource } from "sst"
 
 const TAG = "student-paper-extract"
@@ -43,6 +43,7 @@ export async function handler(
 		if (!jobId) continue
 
 		const cancellation = createCancellationToken(jobId)
+		const llm = createLlmRunner()
 		try {
 			logger.info(TAG, "OCR job received", {
 				jobId,
@@ -120,7 +121,7 @@ export async function handler(
 			// Fan out: Gemini answer extraction (all pages), per-page Gemini transcript,
 			// and per-page Cloud Vision word token detection — all in parallel.
 			const [extraction, ...visionResults] = await Promise.all([
-				extractStudentPaper(pageData, questionSeeds),
+				extractStudentPaper(pageData, questionSeeds, llm),
 				...sortedPages.map((page, i) => {
 					const pageEntry = pageData[i]
 					if (!pageEntry) {
@@ -227,6 +228,7 @@ export async function handler(
 				pages: sortedPages,
 				tokens: insertedTokens,
 				jobId,
+				llm,
 			})
 
 			// Phase 2b — assign corrected tokens to questions, derive answer regions.
@@ -249,6 +251,7 @@ export async function handler(
 				s3Bucket: bucket,
 				tokens: correctedTokens,
 				jobId,
+				llm,
 			})
 
 			await db.ocrRun.update({
@@ -256,6 +259,7 @@ export async function handler(
 				data: {
 					status: "complete" satisfies OcrStatus,
 					vision_raw_s3_key: visionRawKey,
+					llm_snapshot: llm.toSnapshot(),
 					completed_at: new Date(),
 					error: null,
 				},

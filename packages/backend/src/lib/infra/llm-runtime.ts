@@ -5,6 +5,7 @@ import { createOpenAI } from "@ai-sdk/openai"
 import {
 	type LlmModelEntry,
 	type LlmProvider,
+	LlmRunner,
 	type ProviderClient,
 	createModelResolver,
 	callWithFallback as sharedCallWithFallback,
@@ -51,6 +52,12 @@ export function resolveModel(entry: LlmModelEntry): LanguageModel {
  *
  * Combines getLlmConfig (DB + cache) → resolveModel (SST secrets) → callWithFallback (shared logic).
  */
+/**
+ * Loads the model config for a call site and executes with fallback.
+ *
+ * For call sites that are NOT part of a run (MCP tools, autofill, etc.).
+ * For run-scoped calls, use `createLlmRunner()` instead.
+ */
 export async function callLlmWithFallback<T>(
 	callSiteKey: string,
 	fn: (model: LanguageModel, entry: LlmModelEntry) => Promise<T>,
@@ -60,4 +67,17 @@ export async function callLlmWithFallback<T>(
 		callSiteKey,
 		logger,
 	})
+}
+
+/**
+ * Creates a per-run LlmRunner that records which models were configured
+ * and which actually executed, for snapshot persistence on run records.
+ */
+export function createLlmRunner(
+	overrides?: Record<string, LlmModelEntry[]>,
+): LlmRunner {
+	return new LlmRunner(
+		{ getConfig: getLlmConfig, resolveModel, logger },
+		overrides,
+	)
 }

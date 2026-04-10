@@ -1,12 +1,13 @@
 import { db } from "@/db"
 import { createMarkerOrchestrator } from "@/lib/grading/grader-config"
+import { createLlmRunner } from "@/lib/infra/llm-runtime"
 import type { MarkerOrchestrator } from "@mcp-gcse/shared"
 import { buildQuestionWithMarkScheme } from "@mcp-gcse/shared"
 
 let _orchestrator: MarkerOrchestrator | null = null
 async function getOrchestrator(): Promise<MarkerOrchestrator> {
 	if (!_orchestrator) {
-		_orchestrator = await createMarkerOrchestrator()
+		_orchestrator = await createMarkerOrchestrator(createLlmRunner())
 	}
 	return _orchestrator
 }

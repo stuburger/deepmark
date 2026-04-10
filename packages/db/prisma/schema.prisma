@@ -556,6 +556,8 @@ model OcrRun {
   vision_raw_s3_key     String?
   // Ordered append-only event log
   job_events            Json?
+  // LlmRunSnapshot — which models were configured and which executed
+  llm_snapshot          Json?
   started_at            DateTime?
   completed_at          DateTime?
   created_at            DateTime  @default(now())
@@ -576,6 +578,8 @@ model GradingRun {
   grading_results Json?
   // Ordered append-only event log
   job_events    Json?
+  // LlmRunSnapshot — which models were configured and which executed
+  llm_snapshot  Json?
   started_at    DateTime?
   completed_at  DateTime?
   created_at    DateTime      @default(now())
@@ -594,6 +598,8 @@ model EnrichmentRun {
   grading_run_id String
   status         EnrichmentStatus @default(pending)
   error          String?
+  // LlmRunSnapshot — which models were configured and which executed
+  llm_snapshot   Json?
   completed_at   DateTime?
   created_at     DateTime         @default(now())
 

@@ -13,6 +13,15 @@ export default defineConfig({
 	test: {
 		projects: [
 			{
+				test: {
+					name: "shared:unit",
+					root: path.resolve(__dirname, "packages/shared"),
+					include: ["tests/unit/**/*.test.ts"],
+					testTimeout: 10_000,
+					hookTimeout: 5_000,
+				},
+			},
+			{
 				plugins: [backendTsconfigPaths],
 				test: {
 					name: "backend:unit",

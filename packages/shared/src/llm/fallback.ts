@@ -22,6 +22,8 @@ export async function callWithFallback<T>(
 	opts?: {
 		callSiteKey?: string
 		logger?: FallbackLogger
+		/** Called with the winning entry and its index when a model succeeds. */
+		onEffective?: (entry: LlmModelEntry, attemptIndex: number) => void
 	},
 ): Promise<T> {
 	if (models.length === 0) {
@@ -37,6 +39,7 @@ export async function callWithFallback<T>(
 		const isPrimary = i === 0
 		try {
 			const result = await fn(model, entry)
+			opts?.onEffective?.(entry, i)
 			if (!isPrimary) {
 				opts?.logger?.info("llm-fallback", "Fallback succeeded", {
 					callSite: opts?.callSiteKey,

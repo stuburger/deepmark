@@ -19,7 +19,7 @@ export async function annotateOneQuestion(
 		levelDescriptors,
 		subject,
 		markScheme,
-		model,
+		llm,
 		jobId,
 	} = args
 
@@ -70,22 +70,24 @@ export async function annotateOneQuestion(
 		levelDescriptors,
 	})
 
-	const { output } = await generateText({
-		model,
-		messages: [
-			{
-				role: "system",
-				content:
-					"You are an expert GCSE examiner producing structured annotations for a student's exam script. Output valid JSON matching the schema. Be precise and concise.",
-			},
-			{ role: "user", content: prompt },
-		],
-		output: Output.object({
-			schema: AnnotationPlanSchema,
-		}),
+	const plan = await llm.call("llm-annotations", async (model, entry) => {
+		const { output } = await generateText({
+			model,
+			temperature: entry.temperature,
+			messages: [
+				{
+					role: "system",
+					content:
+						"You are an expert GCSE examiner producing structured annotations for a student's exam script. Output valid JSON matching the schema. Be precise and concise.",
+				},
+				{ role: "user", content: prompt },
+			],
+			output: Output.object({
+				schema: AnnotationPlanSchema,
+			}),
+		})
+		return output
 	})
-
-	const plan = output
 
 	// Resolve token indices to spans and build pending records
 	const pending: PendingAnnotation[] = []

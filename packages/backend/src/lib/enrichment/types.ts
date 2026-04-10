@@ -1,6 +1,5 @@
 import type { GradingResult } from "@/lib/grading/grade-questions"
-import type { NormalisedBox } from "@mcp-gcse/shared"
-import type { LanguageModel } from "ai"
+import type { LlmRunner, NormalisedBox } from "@mcp-gcse/shared"
 
 export type PendingAnnotation = {
 	questionId: string
@@ -45,6 +44,6 @@ export type AnnotateOneQuestionArgs = {
 	levelDescriptors: string | null
 	subject: string | null
 	markScheme: MarkSchemeForAnnotation | null
-	model: LanguageModel
+	llm: LlmRunner
 	jobId: string
 }

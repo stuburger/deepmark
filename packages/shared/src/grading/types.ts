@@ -172,4 +172,9 @@ export interface GradeSingleResponseInput {
 
 export interface GraderOptions {
 	systemPrompt?: string
+	/** Called when a model succeeds in the fallback chain, with the winning entry and its index. */
+	onEffective?: (
+		entry: { model: import("ai").LanguageModel; temperature: number },
+		attemptIndex: number,
+	) => void
 }

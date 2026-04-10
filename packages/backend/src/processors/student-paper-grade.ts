@@ -14,6 +14,7 @@ import {
 	type CancellationToken,
 	createCancellationToken,
 } from "@/lib/infra/cancellation"
+import { createLlmRunner } from "@/lib/infra/llm-runtime"
 import { logger } from "@/lib/infra/logger"
 import { sendBatchCompleteNotification } from "@/lib/infra/push-notification"
 import {
@@ -23,7 +24,7 @@ import {
 } from "@/lib/infra/sqs-job-runner"
 import { SQSClient, SendMessageCommand } from "@aws-sdk/client-sqs"
 import { type GradingStatus, logGradingRunEvent } from "@mcp-gcse/db"
-import type { MarkerOrchestrator } from "@mcp-gcse/shared"
+import type { LlmRunner, MarkerOrchestrator } from "@mcp-gcse/shared"
 import { Resource } from "sst"
 
 const TAG = "student-paper-grade"
@@ -45,7 +46,6 @@ export async function handler(
 	event: SqsEvent,
 ): Promise<{ batchItemFailures?: { itemIdentifier: string }[] }> {
 	const failures: { itemIdentifier: string }[] = []
-	const orchestrator = await createMarkerOrchestrator()
 
 	for (const record of event.Records) {
 		const jobId = parseSqsJobId(record, TAG)
@@ -53,7 +53,9 @@ export async function handler(
 
 		const cancellation = createCancellationToken(jobId)
 		try {
-			await gradeJob({ jobId, orchestrator, cancellation })
+			const llm = createLlmRunner()
+			const orchestrator = await createMarkerOrchestrator(llm)
+			await gradeJob({ jobId, orchestrator, llm, cancellation })
 		} catch (err) {
 			await markJobFailed(jobId, TAG, "grading", err)
 			failures.push({ itemIdentifier: record.messageId })
@@ -70,12 +72,14 @@ export async function handler(
 type GradeJobArgs = {
 	jobId: string
 	orchestrator: MarkerOrchestrator
+	llm: LlmRunner
 	cancellation: CancellationToken
 }
 
 async function gradeJob({
 	jobId,
 	orchestrator,
+	llm,
 	cancellation,
 }: GradeJobArgs): Promise<void> {
 	logger.info(TAG, "Grading job received", { jobId })
@@ -131,6 +135,19 @@ async function gradeJob({
 	}
 
 	await completeGradingJob({ sub, ocrRun: latestOcr!, gradingResults, jobId })
+
+	// Write LLM snapshot — informational, not critical
+	await db.gradingRun
+		.update({
+			where: { id: jobId },
+			data: { llm_snapshot: llm.toSnapshot() },
+		})
+		.catch((err) =>
+			logger.warn(TAG, "Failed to write LLM snapshot", {
+				jobId,
+				error: String(err),
+			}),
+		)
 }
 
 // ─── Job lifecycle steps ──────────────────────────────────────────────────────

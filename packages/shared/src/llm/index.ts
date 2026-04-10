@@ -6,6 +6,14 @@ export {
 } from "./fallback"
 export { createModelResolver, type ProviderClient } from "./resolve"
 export {
+	LlmRunner,
+	LlmModelEntrySchema,
+	LlmRunSnapshotSchema,
+	type EffectiveSummary,
+	type LlmRunSnapshot,
+	type LlmRunnerDeps,
+} from "./runner"
+export {
 	LLM_CALL_SITE_DEFAULTS,
 	PROVIDER_MODELS,
 	type LlmCallSiteRow,

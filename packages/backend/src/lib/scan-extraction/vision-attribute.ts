@@ -4,8 +4,8 @@ import { logger } from "@/lib/infra/logger"
 import { getFileBase64 } from "@/lib/infra/s3"
 import type { CorrectedPageToken } from "@/lib/scan-extraction/vision-reconcile"
 import { logOcrRunEvent } from "@mcp-gcse/db"
-import { computeBboxHull } from "@mcp-gcse/shared"
-import { Output, generateText } from "ai"
+import { type LlmRunner, computeBboxHull } from "@mcp-gcse/shared"
+import { type LanguageModel, Output, generateText } from "ai"
 import {
 	AttributionSchema,
 	McqFallbackSchema,
@@ -51,6 +51,7 @@ export type VisionAttributeArgs = {
 	/** Corrected token rows from reconcilePageTokens — must be provided by the
 	 *  caller. Attribution does not read tokens from the DB. */
 	tokens: CorrectedPageToken[]
+	llm?: LlmRunner
 }
 
 /**
@@ -86,6 +87,7 @@ export async function visionAttributeRegions({
 	s3Bucket,
 	jobId,
 	tokens,
+	llm,
 }: VisionAttributeArgs): Promise<void> {
 	if (questions.length === 0) return
 
@@ -170,28 +172,32 @@ export async function visionAttributeRegions({
 				}>
 			}
 			try {
-				const { output } = await callLlmWithFallback(
-					"vision-attribution",
-					async (model, entry) =>
-						generateText({
-							model,
-							temperature: entry.temperature,
-							messages: [
-								{
-									role: "user",
-									content: [
-										{
-											type: "image",
-											image: imageBase64,
-											mediaType: page.mime_type,
-										},
-										{ type: "text", text: prompt },
-									],
-								},
-							],
-							output: Output.object({ schema: AttributionSchema }),
-						}),
-				)
+				const attrCallFn = async (
+					model: LanguageModel,
+					entry: { temperature: number },
+				) =>
+					generateText({
+						model,
+						temperature: entry.temperature,
+						messages: [
+							{
+								role: "user",
+								content: [
+									{
+										type: "image",
+										image: imageBase64,
+										mediaType: page.mime_type,
+									},
+									{ type: "text", text: prompt },
+								],
+							},
+						],
+						output: Output.object({ schema: AttributionSchema }),
+					})
+
+				const { output } = llm
+					? await llm.call("vision-attribution", attrCallFn)
+					: await callLlmWithFallback("vision-attribution", attrCallFn)
 				parsed = output
 			} catch (err) {
 				void logOcrRunEvent(db, jobId, {
@@ -331,6 +337,7 @@ export async function visionAttributeRegions({
 			pages,
 			s3Bucket,
 			jobId,
+			llm,
 		})
 		totalLocated += fallbackLocated
 	}
@@ -350,6 +357,7 @@ type McqFallbackArgs = {
 	pages: VisionAttributePageEntry[]
 	s3Bucket: string
 	jobId: string
+	llm?: LlmRunner
 }
 
 async function runMcqFallback({
@@ -358,6 +366,7 @@ async function runMcqFallback({
 	pages,
 	s3Bucket,
 	jobId,
+	llm,
 }: McqFallbackArgs): Promise<number> {
 	const extractedAnswerById = new Map(
 		extractedAnswers.map((a) => [a.question_id, a.answer_text]),
@@ -394,28 +403,35 @@ async function runMcqFallback({
 			const prompt = buildMcqFallbackPrompt(questionsText)
 
 			try {
-				const { output: parsed } = await callLlmWithFallback(
-					"vision-attribution-mcq-fallback",
-					async (model, entry) =>
-						generateText({
-							model,
-							temperature: entry.temperature,
-							messages: [
-								{
-									role: "user",
-									content: [
-										{
-											type: "image",
-											image: imageBase64,
-											mediaType: page.mime_type,
-										},
-										{ type: "text", text: prompt },
-									],
-								},
-							],
-							output: Output.object({ schema: McqFallbackSchema }),
-						}),
-				)
+				const mcqCallFn = async (
+					model: LanguageModel,
+					entry: { temperature: number },
+				) =>
+					generateText({
+						model,
+						temperature: entry.temperature,
+						messages: [
+							{
+								role: "user",
+								content: [
+									{
+										type: "image",
+										image: imageBase64,
+										mediaType: page.mime_type,
+									},
+									{ type: "text", text: prompt },
+								],
+							},
+						],
+						output: Output.object({ schema: McqFallbackSchema }),
+					})
+
+				const { output: parsed } = llm
+					? await llm.call("vision-attribution-mcq-fallback", mcqCallFn)
+					: await callLlmWithFallback(
+							"vision-attribution-mcq-fallback",
+							mcqCallFn,
+						)
 
 				const found = (parsed.regions ?? []).filter(
 					(r) =>

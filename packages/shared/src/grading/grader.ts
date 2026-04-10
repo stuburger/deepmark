@@ -39,6 +39,7 @@ export type GraderModelEntry = {
 export class Grader {
 	private entries: GraderModelEntry[]
 	private systemPrompt: string
+	private onEffective?: GraderOptions["onEffective"]
 
 	constructor(
 		models:
@@ -59,6 +60,7 @@ export class Grader {
 			throw new Error("Grader requires at least one model")
 		}
 		this.systemPrompt = options?.systemPrompt ?? DEFAULT_SYSTEM_PROMPT
+		this.onEffective = options?.onEffective
 	}
 
 	/** Try each model in the fallback chain until one succeeds. */
@@ -66,9 +68,12 @@ export class Grader {
 		fn: (model: LanguageModel, temperature: number) => Promise<T>,
 	): Promise<T> {
 		let lastError: unknown
-		for (const entry of this.entries) {
+		for (let i = 0; i < this.entries.length; i++) {
+			const entry = this.entries[i]
 			try {
-				return await fn(entry.model, entry.temperature)
+				const result = await fn(entry.model, entry.temperature)
+				this.onEffective?.(entry, i)
+				return result
 			} catch (err) {
 				lastError = err
 			}

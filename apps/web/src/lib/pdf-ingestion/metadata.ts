@@ -7,11 +7,13 @@ import {
 	S3Client,
 } from "@aws-sdk/client-s3"
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner"
-import { GoogleGenAI, Type } from "@google/genai"
 import { createPrismaClient } from "@mcp-gcse/db"
 import type { Subject } from "@mcp-gcse/db"
+import { Output, generateText } from "ai"
 import { Resource } from "sst"
+import { z } from "zod"
 import { auth } from "../auth"
+import { callLlmWithFallback } from "../llm-runtime"
 import { log } from "../logger"
 
 const db = createPrismaClient(Resource.NeonPostgres.databaseUrl)
@@ -26,60 +28,49 @@ const bucketName = Resource.ScansBucket.name
  */
 const METADATA_TEMP_PREFIX = "pdfs/metadata-temp"
 
-const METADATA_SCHEMA = {
-	type: Type.OBJECT,
-	properties: {
-		title: {
-			type: Type.STRING,
-			description:
-				"Full exam paper title, e.g. 'AQA Biology Paper 1 Higher Tier'",
-		},
-		subject: {
-			type: Type.STRING,
-			description:
-				"Subject as a lowercase slug: biology, chemistry, physics, english, english_literature, mathematics, history, geography, computer_science, french, spanish, religious_studies, business",
-		},
-		exam_board: {
-			type: Type.STRING,
-			description: "Exam board name, e.g. AQA, OCR, Edexcel, WJEC, Cambridge",
-		},
-		year: {
-			type: Type.INTEGER,
-			description: "Year the exam was sat, e.g. 2023. Null if not found.",
-			nullable: true,
-		},
-		paper_number: {
-			type: Type.INTEGER,
-			description:
-				"Paper number (1, 2, 3…). Null if not found or not applicable.",
-			nullable: true,
-		},
-		total_marks: {
-			type: Type.INTEGER,
-			description: "Total marks available for the paper",
-		},
-		duration_minutes: {
-			type: Type.INTEGER,
-			description: "Allowed time in minutes",
-		},
-		document_type: {
-			type: Type.STRING,
-			description:
-				"Type of document: 'mark_scheme' if this is a mark scheme or marking guide, 'question_paper' if this is a question paper or exam paper for students, 'exemplar' if this contains exemplar or sample student answers",
-		},
-	},
-	required: [
-		"title",
-		"subject",
-		"exam_board",
-		"total_marks",
-		"duration_minutes",
-		"document_type",
-	],
-}
+const MetadataSchema = z.object({
+	title: z
+		.string()
+		.describe("Full exam paper title, e.g. 'AQA Biology Paper 1 Higher Tier'"),
+	subject: z
+		.string()
+		.describe(
+			"Subject as a lowercase slug: biology, chemistry, physics, english, english_literature, mathematics, history, geography, computer_science, french, spanish, religious_studies, business",
+		),
+	exam_board: z
+		.string()
+		.describe("Exam board name, e.g. AQA, OCR, Edexcel, WJEC, Cambridge"),
+	year: z
+		.number()
+		.int()
+		.nullable()
+		.optional()
+		.describe("Year the exam was sat, e.g. 2023. Null if not found."),
+	paper_number: z
+		.number()
+		.int()
+		.nullable()
+		.optional()
+		.describe("Paper number (1, 2, 3…). Null if not found or not applicable."),
+	total_marks: z.number().int().describe("Total marks available for the paper"),
+	duration_minutes: z.number().int().describe("Allowed time in minutes"),
+	document_type: z
+		.string()
+		.describe(
+			"Type of document: 'mark_scheme' if this is a mark scheme or marking guide, 'question_paper' if this is a question paper or exam paper for students, 'exemplar' if this contains exemplar or sample student answers",
+		),
+})
 
-import type { DetectedPdfMetadata, IngestionSlot, PdfDocumentType } from "./types"
-export type { DetectedPdfMetadata, IngestionSlot, PdfDocumentType } from "./types"
+import type {
+	DetectedPdfMetadata,
+	IngestionSlot,
+	PdfDocumentType,
+} from "./types"
+export type {
+	DetectedPdfMetadata,
+	IngestionSlot,
+	PdfDocumentType,
+} from "./types"
 
 export type RequestMetadataUploadResult =
 	| { ok: true; url: string; s3Key: string }
@@ -142,43 +133,30 @@ export async function extractPdfMetadata(
 			return { ok: false, error: "Could not read uploaded PDF" }
 		const pdfBase64 = Buffer.from(body).toString("base64")
 
-		const gemini = new GoogleGenAI({ apiKey: Resource.GeminiApiKey.value })
-
-		const result = await gemini.models.generateContent({
-			model: "gemini-2.5-flash",
-			contents: [
-				{
-					role: "user",
-					parts: [
+		const { output: raw } = await callLlmWithFallback(
+			"pdf-metadata-detection",
+			async (model) =>
+				generateText({
+					model,
+					messages: [
 						{
-							inlineData: { data: pdfBase64, mimeType: "application/pdf" },
-						},
-						{
-							text: "Look at the header, cover page, and overall structure of this document. Extract the exam paper metadata. For subject, use the lowercase slug that best matches: biology, chemistry, physics, english, english_literature, mathematics, history, geography, computer_science, french, spanish, religious_studies, or business. For document_type: use 'mark_scheme' if this is a mark scheme or marking guide, 'question_paper' if this is a question paper for students to answer, or 'exemplar' if it contains sample student answers.",
+							role: "user",
+							content: [
+								{
+									type: "file",
+									data: pdfBase64,
+									mediaType: "application/pdf",
+								},
+								{
+									type: "text",
+									text: "Look at the header, cover page, and overall structure of this document. Extract the exam paper metadata. For subject, use the lowercase slug that best matches: biology, chemistry, physics, english, english_literature, mathematics, history, geography, computer_science, french, spanish, religious_studies, or business. For document_type: use 'mark_scheme' if this is a mark scheme or marking guide, 'question_paper' if this is a question paper for students to answer, or 'exemplar' if it contains sample student answers.",
+								},
+							],
 						},
 					],
-				},
-			],
-			config: {
-				responseMimeType: "application/json",
-				responseSchema: METADATA_SCHEMA,
-				temperature: 0.1,
-			},
-		})
-
-		const text = result.text
-		if (!text) return { ok: false, error: "No response from Gemini" }
-
-		const raw = JSON.parse(text) as {
-			title: string
-			subject: string
-			exam_board: string
-			year?: number | null
-			paper_number?: number | null
-			total_marks: number
-			duration_minutes: number
-			document_type: string
-		}
+					output: Output.object({ schema: MetadataSchema }),
+				}),
+		)
 
 		const documentType: PdfDocumentType =
 			raw.document_type === "mark_scheme" ||

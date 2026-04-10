@@ -6,6 +6,7 @@ import {
 	createCancellationToken,
 } from "@/lib/infra/cancellation"
 import { embedQuestionText } from "@/lib/infra/google-generative-ai"
+import { callLlmWithFallback } from "@/lib/infra/llm-runtime"
 import { logger } from "@/lib/infra/logger"
 import {
 	embeddingToVectorStr,
@@ -16,16 +17,15 @@ import {
 	type SqsEvent,
 	markPdfIngestionFailed,
 } from "@/lib/infra/sqs-job-runner"
-import { GoogleGenAI } from "@google/genai"
 import type { ScanStatus } from "@mcp-gcse/db"
-import { Resource } from "sst"
+import { Output, generateText } from "ai"
 import {
 	EXTRACT_METADATA_PROMPT,
 	EXTRACT_QUESTIONS_PROMPT,
 } from "./question-paper-pdf/prompts"
 import {
-	EXAM_PAPER_METADATA_SCHEMA,
-	QUESTION_PAPER_SCHEMA,
+	QuestionPaperMetadataSchema,
+	QuestionPaperSchema,
 } from "./question-paper-pdf/schema"
 
 const TAG = "question-paper-pdf"
@@ -34,7 +34,6 @@ export async function handler(
 	event: SqsEvent,
 ): Promise<{ batchItemFailures?: { itemIdentifier: string }[] }> {
 	const failures: { itemIdentifier: string }[] = []
-	const gemini = new GoogleGenAI({ apiKey: Resource.GeminiApiKey.value })
 
 	for (const record of event.Records) {
 		const messageId = record.messageId
@@ -104,61 +103,55 @@ export async function handler(
 			logger.info(TAG, "Fetching PDF from S3", { jobId, bucket, key })
 			const pdfBase64 = await getPdfBase64(bucket, key)
 
-			logger.info(TAG, "Calling Gemini for question extraction + metadata", {
+			logger.info(TAG, "Calling LLM for question extraction + metadata", {
 				jobId,
 			})
-			const [questionsResponse, metadataResponse] = await Promise.all([
-				gemini.models.generateContent({
-					model: "gemini-2.5-flash",
-					contents: [
-						{
-							role: "user",
-							parts: [
-								{
-									inlineData: {
-										data: pdfBase64,
-										mimeType: "application/pdf",
-									},
-								},
-								{ text: EXTRACT_QUESTIONS_PROMPT },
-							],
-						},
-					],
-					config: {
-						responseMimeType: "application/json",
-						responseSchema: QUESTION_PAPER_SCHEMA,
-						temperature: 0.2,
-					},
-				}),
-				gemini.models.generateContent({
-					model: "gemini-2.5-flash",
-					contents: [
-						{
-							role: "user",
-							parts: [
-								{
-									inlineData: {
-										data: pdfBase64,
-										mimeType: "application/pdf",
-									},
-								},
-								{ text: EXTRACT_METADATA_PROMPT },
-							],
-						},
-					],
-					config: {
-						responseMimeType: "application/json",
-						responseSchema: EXAM_PAPER_METADATA_SCHEMA,
-						temperature: 0.1,
-					},
-				}),
+
+			const pdfContent = [
+				{
+					type: "file" as const,
+					data: pdfBase64,
+					mediaType: "application/pdf",
+				},
+			]
+
+			const [questionsResult, metadataResult] = await Promise.all([
+				callLlmWithFallback("question-paper-extraction", async (model) =>
+					generateText({
+						model,
+						messages: [
+							{
+								role: "user",
+								content: [
+									...pdfContent,
+									{ type: "text", text: EXTRACT_QUESTIONS_PROMPT },
+								],
+							},
+						],
+						output: Output.object({ schema: QuestionPaperSchema }),
+					}),
+				),
+				callLlmWithFallback("question-paper-metadata", async (model) =>
+					generateText({
+						model,
+						messages: [
+							{
+								role: "user",
+								content: [
+									...pdfContent,
+									{ type: "text", text: EXTRACT_METADATA_PROMPT },
+								],
+							},
+						],
+						output: Output.object({
+							schema: QuestionPaperMetadataSchema,
+						}),
+					}),
+				),
 			])
 
-			const questionsText = questionsResponse.text
-			if (!questionsText) throw new Error("No questions response from Gemini")
-
-			logger.info(TAG, "Gemini extraction complete", { jobId })
-			const parsed = JSON.parse(questionsText) as {
+			logger.info(TAG, "LLM extraction complete", { jobId })
+			const parsed = questionsResult.output as {
 				questions?: Array<{
 					question_text: string
 					question_type?: string
@@ -178,14 +171,10 @@ export async function handler(
 				paper_number?: number | null
 			}
 			let detectedMetadata: DetectedMetadata | null = null
-			if (metadataResponse.text) {
-				try {
-					detectedMetadata = JSON.parse(
-						metadataResponse.text,
-					) as DetectedMetadata
-				} catch {
-					// ignore
-				}
+			try {
+				detectedMetadata = metadataResult.output as DetectedMetadata
+			} catch {
+				// ignore
 			}
 
 			const questionCount = parsed.questions?.length ?? 0

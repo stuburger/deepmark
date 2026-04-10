@@ -3,6 +3,7 @@ import {
 	type CancellationToken,
 	createCancellationToken,
 } from "@/lib/infra/cancellation"
+import { callLlmWithFallback } from "@/lib/infra/llm-runtime"
 import { logger } from "@/lib/infra/logger"
 import {
 	getPdfBase64,
@@ -13,11 +14,10 @@ import {
 	markPdfIngestionFailed,
 } from "@/lib/infra/sqs-job-runner"
 import { validateWithExemplars } from "@/services/validate-with-exemplars"
-import { GoogleGenAI } from "@google/genai"
 import type { ScanStatus } from "@mcp-gcse/db"
-import { Resource } from "sst"
+import { Output, generateText } from "ai"
 import { EXTRACT_EXEMPLARS_PROMPT } from "./exemplar-pdf/prompts"
-import { EXEMPLAR_SCHEMA } from "./exemplar-pdf/schema"
+import { ExemplarSchema } from "./exemplar-pdf/schema"
 
 const TAG = "exemplar-pdf"
 
@@ -25,7 +25,6 @@ export async function handler(
 	event: SqsEvent,
 ): Promise<{ batchItemFailures?: { itemIdentifier: string }[] }> {
 	const failures: { itemIdentifier: string }[] = []
-	const gemini = new GoogleGenAI({ apiKey: Resource.GeminiApiKey.value })
 
 	for (const record of event.Records) {
 		const messageId = record.messageId
@@ -95,37 +94,31 @@ export async function handler(
 			logger.info(TAG, "Fetching PDF from S3", { jobId, bucket, key })
 			const pdfBase64 = await getPdfBase64(bucket, key)
 
-			logger.info(TAG, "Calling Gemini to extract exemplar answers", { jobId })
-			const response = await gemini.models.generateContent({
-				model: "gemini-2.5-flash",
-				contents: [
-					{
-						role: "user",
-						parts: [
+			logger.info(TAG, "Calling LLM to extract exemplar answers", { jobId })
+			const { output } = await callLlmWithFallback(
+				"exemplar-extraction",
+				async (model) =>
+					generateText({
+						model,
+						messages: [
 							{
-								inlineData: {
-									data: pdfBase64,
-									mimeType: "application/pdf",
-								},
-							},
-							{
-								text: EXTRACT_EXEMPLARS_PROMPT,
+								role: "user",
+								content: [
+									{
+										type: "file",
+										data: pdfBase64,
+										mediaType: "application/pdf",
+									},
+									{ type: "text", text: EXTRACT_EXEMPLARS_PROMPT },
+								],
 							},
 						],
-					},
-				],
-				config: {
-					responseMimeType: "application/json",
-					responseSchema: EXEMPLAR_SCHEMA,
-					temperature: 0.2,
-				},
-			})
+						output: Output.object({ schema: ExemplarSchema }),
+					}),
+			)
 
-			const responseText = response.text
-			if (!responseText) throw new Error("No response from Gemini")
-
-			logger.info(TAG, "Gemini extraction complete", { jobId })
-			const parsed = JSON.parse(responseText) as {
+			logger.info(TAG, "LLM extraction complete", { jobId })
+			const parsed = output as {
 				questions?: Array<{
 					question_text: string
 					exemplars: Array<{

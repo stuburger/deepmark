@@ -4,7 +4,7 @@ import {
 	createCancellationToken,
 } from "@/lib/infra/cancellation"
 import { getLlmConfig } from "@/lib/infra/llm-config"
-import { resolveModel } from "@/lib/infra/llm-runtime"
+import { callLlmWithFallback, resolveModel } from "@/lib/infra/llm-runtime"
 import { logger } from "@/lib/infra/logger"
 import {
 	getPdfBase64,
@@ -14,10 +14,9 @@ import {
 	type SqsEvent,
 	markPdfIngestionFailed,
 } from "@/lib/infra/sqs-job-runner"
-import { GoogleGenAI } from "@google/genai"
 import type { ScanStatus } from "@mcp-gcse/db"
 import { Grader } from "@mcp-gcse/shared"
-import { Resource } from "sst"
+import { Output, generateText } from "ai"
 import { linkJobQuestionsToExamPaper } from "./mark-scheme-pdf/linking"
 import {
 	type ExtractedQuestion,
@@ -29,8 +28,8 @@ import {
 } from "./mark-scheme-pdf/prompts"
 import { fetchExistingQuestionsForJob } from "./mark-scheme-pdf/queries"
 import {
-	EXAM_PAPER_METADATA_SCHEMA,
-	MARK_SCHEME_SCHEMA,
+	ExamPaperMetadataSchema,
+	MarkSchemeSchema,
 } from "./mark-scheme-pdf/schema"
 
 import { normalizeQuestionNumber } from "@/lib/grading/normalize-question-number"
@@ -51,8 +50,6 @@ export async function handler(
 	event: SqsEvent,
 ): Promise<{ batchItemFailures?: { itemIdentifier: string }[] }> {
 	const failures: { itemIdentifier: string }[] = []
-	const gemini = new GoogleGenAI({ apiKey: Resource.GeminiApiKey.value })
-	const bucketName = Resource.ScansBucket.name
 
 	for (const record of event.Records) {
 		const messageId = record.messageId
@@ -121,79 +118,74 @@ export async function handler(
 				existingQuestionsForContext,
 			)
 
-			logger.info(TAG, "Calling Gemini for mark scheme + metadata extraction", {
+			logger.info(TAG, "Calling LLM for mark scheme + metadata extraction", {
 				jobId,
 				auto_create_exam_paper: job.auto_create_exam_paper,
 				existing_questions_in_context: existingQuestionsForContext.length,
 			})
 
-			const [markSchemeResponse, metadataResponse] = await Promise.all([
-				gemini.models.generateContent({
-					model: "gemini-2.5-flash",
-					contents: [
-						{
-							role: "user",
-							parts: [
-								{
-									inlineData: {
-										data: pdfBase64,
-										mimeType: "application/pdf",
+			const pdfContent = [
+				{
+					type: "file" as const,
+					data: pdfBase64,
+					mediaType: "application/pdf",
+				},
+			]
+
+			const [markSchemeResult, metadataResult] = await Promise.all([
+				callLlmWithFallback("mark-scheme-extraction", async (model) =>
+					generateText({
+						model,
+						messages: [
+							{
+								role: "user",
+								content: [
+									...pdfContent,
+									{
+										type: "text",
+										text: buildExtractionPrompt(existingQuestionsBlock),
 									},
-								},
-								{ text: buildExtractionPrompt(existingQuestionsBlock) },
-							],
-						},
-					],
-					config: {
-						responseMimeType: "application/json",
-						responseSchema: MARK_SCHEME_SCHEMA,
-						temperature: 0.2,
-					},
-				}),
-				job.auto_create_exam_paper
-					? gemini.models.generateContent({
-							model: "gemini-2.5-flash",
-							contents: [
-								{
-									role: "user",
-									parts: [
-										{
-											inlineData: {
-												data: pdfBase64,
-												mimeType: "application/pdf",
-											},
-										},
-										{
-											text: "From the document header or cover, extract: title (exam paper title), subject, exam_board, total_marks, duration_minutes, and year if visible. Return only these fields.",
-										},
-									],
-								},
-							],
-							config: {
-								responseMimeType: "application/json",
-								responseSchema: EXAM_PAPER_METADATA_SCHEMA,
-								temperature: 0.1,
+								],
 							},
-						})
+						],
+						output: Output.object({ schema: MarkSchemeSchema }),
+					}),
+				),
+				job.auto_create_exam_paper
+					? callLlmWithFallback("mark-scheme-metadata", async (model) =>
+							generateText({
+								model,
+								messages: [
+									{
+										role: "user",
+										content: [
+											...pdfContent,
+											{
+												type: "text",
+												text: "From the document header or cover, extract: title (exam paper title), subject, exam_board, total_marks, duration_minutes, and year if visible. Return only these fields.",
+											},
+										],
+									},
+								],
+								output: Output.object({
+									schema: ExamPaperMetadataSchema,
+								}),
+							}),
+						)
 					: Promise.resolve(null),
 			])
 
 			// ── Parse response ────────────────────────────────────────────────
 
-			logger.info(TAG, "Gemini extraction complete", { jobId })
-			const markSchemeText = markSchemeResponse.text
-			if (!markSchemeText)
-				throw new Error("No mark scheme response from Gemini")
-			const parsed = JSON.parse(markSchemeText) as {
+			logger.info(TAG, "LLM extraction complete", { jobId })
+			const parsed = markSchemeResult.output as {
 				questions: ExtractedQuestion[]
 			}
 
 			let detectedMetadata: DetectedMetadata | null = null
-			if (metadataResponse?.text) {
+			if (metadataResult) {
 				try {
-					detectedMetadata = JSON.parse(
-						metadataResponse.text,
-					) as DetectedMetadata
+					detectedMetadata = metadataResult.output as DetectedMetadata
 				} catch {
 					// ignore
 				}

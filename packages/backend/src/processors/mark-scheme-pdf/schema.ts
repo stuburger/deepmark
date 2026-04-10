@@ -1,152 +1,100 @@
-import { Type } from "@google/genai"
+import { z } from "zod"
 
-export const MARK_SCHEME_SCHEMA = {
-	type: Type.OBJECT,
-	properties: {
-		questions: {
-			type: Type.ARRAY,
-			items: {
-				type: Type.OBJECT,
-				properties: {
-					question_text: { type: Type.STRING },
-					question_type: { type: Type.STRING },
-					total_marks: { type: Type.INTEGER },
-					ao_allocations: {
-						type: Type.ARRAY,
-						nullable: true,
-						description:
-							"AO codes and mark values from the 'Marks for this question:' header line. Include ONLY codes explicitly printed in the document — do NOT infer or add codes not present.",
-						items: {
-							type: Type.OBJECT,
-							properties: {
-								ao_code: {
-									type: Type.STRING,
-									description:
-										"The AO code exactly as printed, e.g. AO1, AO2, AO3",
-								},
-								marks: {
-									type: Type.INTEGER,
-									description: "Number of marks allocated to this AO",
-								},
-							},
-							required: ["ao_code", "marks"],
-						},
-					},
-					mark_points: {
-						type: Type.ARRAY,
-						items: {
-							type: Type.OBJECT,
-							properties: {
-								description: { type: Type.STRING },
-								criteria: { type: Type.STRING },
-								points: { type: Type.INTEGER },
-							},
-							required: ["description", "criteria", "points"],
-						},
-					},
-					acceptable_answers: {
-						type: Type.ARRAY,
-						items: { type: Type.STRING },
-					},
-					guidance: { type: Type.STRING },
-					question_number: { type: Type.STRING },
-					correct_option: { type: Type.STRING },
-					options: {
-						type: Type.ARRAY,
-						nullable: true,
-						description:
-							"For multiple choice questions: the answer options (A, B, C, D). Only include when question_type is multiple_choice.",
-						items: {
-							type: Type.OBJECT,
-							properties: {
-								option_label: {
-									type: Type.STRING,
-									description: "The option label, e.g. A, B, C, D",
-								},
-								option_text: {
-									type: Type.STRING,
-									description: "The full text of this answer option",
-								},
-							},
-							required: ["option_label", "option_text"],
-						},
-					},
-					marking_method: {
-						type: Type.STRING,
-						nullable: true,
-						description: "multiple_choice | level_of_response | point_based",
-					},
-					command_word: { type: Type.STRING, nullable: true },
-					items_required: { type: Type.INTEGER, nullable: true },
-					levels: {
-						type: Type.ARRAY,
-						nullable: true,
-						items: {
-							type: Type.OBJECT,
-							properties: {
-								level: { type: Type.INTEGER },
-								mark_range: {
-									type: Type.ARRAY,
-									items: { type: Type.INTEGER },
-								},
-								descriptor: { type: Type.STRING },
-								ao_requirements: {
-									type: Type.ARRAY,
-									items: { type: Type.STRING },
-									nullable: true,
-								},
-							},
-							required: ["level", "mark_range", "descriptor"],
-						},
-					},
-					caps: {
-						type: Type.ARRAY,
-						nullable: true,
-						items: {
-							type: Type.OBJECT,
-							properties: {
-								condition: { type: Type.STRING },
-								max_level: { type: Type.INTEGER, nullable: true },
-								max_mark: { type: Type.INTEGER, nullable: true },
-								reason: { type: Type.STRING },
-							},
-							required: ["condition", "reason"],
-						},
-					},
-					matched_question_id: {
-						type: Type.STRING,
-						nullable: true,
-						description:
-							"The id of the matching question from the EXISTING QUESTIONS list provided in the prompt, or null if no match was found. Only set this when you are confident the question numbers and/or content match.",
-					},
-				},
-				required: [
-					"question_text",
-					"question_type",
-					"total_marks",
-					"mark_points",
-				],
-			},
-		},
-	},
-	required: ["questions"],
-}
+export const MarkSchemeSchema = z.object({
+	questions: z.array(
+		z.object({
+			question_text: z.string(),
+			question_type: z.string(),
+			total_marks: z.number().int(),
+			ao_allocations: z
+				.array(
+					z.object({
+						ao_code: z
+							.string()
+							.describe("The AO code exactly as printed, e.g. AO1, AO2, AO3"),
+						marks: z
+							.number()
+							.int()
+							.describe("Number of marks allocated to this AO"),
+					}),
+				)
+				.nullable()
+				.optional()
+				.describe(
+					"AO codes and mark values from the 'Marks for this question:' header line. Include ONLY codes explicitly printed in the document — do NOT infer or add codes not present.",
+				),
+			mark_points: z.array(
+				z.object({
+					description: z.string(),
+					criteria: z.string(),
+					points: z.number().int(),
+				}),
+			),
+			acceptable_answers: z.array(z.string()).optional(),
+			guidance: z.string().optional(),
+			question_number: z.string().optional(),
+			correct_option: z.string().optional(),
+			options: z
+				.array(
+					z.object({
+						option_label: z
+							.string()
+							.describe("The option label, e.g. A, B, C, D"),
+						option_text: z
+							.string()
+							.describe("The full text of this answer option"),
+					}),
+				)
+				.nullable()
+				.optional()
+				.describe(
+					"For multiple choice questions: the answer options (A, B, C, D). Only include when question_type is multiple_choice.",
+				),
+			marking_method: z
+				.string()
+				.nullable()
+				.optional()
+				.describe("multiple_choice | level_of_response | point_based"),
+			command_word: z.string().nullable().optional(),
+			items_required: z.number().int().nullable().optional(),
+			levels: z
+				.array(
+					z.object({
+						level: z.number().int(),
+						mark_range: z.array(z.number().int()),
+						descriptor: z.string(),
+						ao_requirements: z.array(z.string()).nullable().optional(),
+					}),
+				)
+				.nullable()
+				.optional(),
+			caps: z
+				.array(
+					z.object({
+						condition: z.string(),
+						max_level: z.number().int().nullable().optional(),
+						max_mark: z.number().int().nullable().optional(),
+						reason: z.string(),
+					}),
+				)
+				.nullable()
+				.optional(),
+			matched_question_id: z
+				.string()
+				.nullable()
+				.optional()
+				.describe(
+					"The id of the matching question from the EXISTING QUESTIONS list provided in the prompt, or null if no match was found.",
+				),
+		}),
+	),
+})
 
-export const EXAM_PAPER_METADATA_SCHEMA = {
-	type: Type.OBJECT,
-	properties: {
-		title: { type: Type.STRING },
-		subject: { type: Type.STRING },
-		exam_board: { type: Type.STRING },
-		total_marks: { type: Type.INTEGER },
-		duration_minutes: { type: Type.INTEGER },
-		year: { type: Type.INTEGER, nullable: true },
-	},
-	required: [
-		"title",
-		"subject",
-		"exam_board",
-		"total_marks",
-		"duration_minutes",
-	],
-}
+export const ExamPaperMetadataSchema = z.object({
+	title: z.string(),
+	subject: z.string(),
+	exam_board: z.string(),
+	total_marks: z.number().int(),
+	duration_minutes: z.number().int(),
+	year: z.number().int().nullable().optional(),
+})

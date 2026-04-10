@@ -8,7 +8,6 @@ import {
 	LlmRunner,
 	type ProviderClient,
 	createModelResolver,
-	callWithFallback as sharedCallWithFallback,
 } from "@mcp-gcse/shared"
 import type { LanguageModel } from "ai"
 import { Resource } from "sst"
@@ -47,26 +46,34 @@ export function resolveModel(entry: LlmModelEntry): LanguageModel {
 	return resolve(entry)
 }
 
+// ── Default runner (singleton for non-run call sites) ───────────────────────
+
+let _defaultRunner: LlmRunner | null = null
+
+function getDefaultRunner(): LlmRunner {
+	if (!_defaultRunner) {
+		_defaultRunner = new LlmRunner({
+			getConfig: getLlmConfig,
+			resolveModel,
+			logger,
+		})
+	}
+	return _defaultRunner
+}
+
 /**
  * Loads the model config for a call site and executes with fallback.
  *
- * Combines getLlmConfig (DB + cache) → resolveModel (SST secrets) → callWithFallback (shared logic).
- */
-/**
- * Loads the model config for a call site and executes with fallback.
- *
- * For call sites that are NOT part of a run (MCP tools, autofill, etc.).
- * For run-scoped calls, use `createLlmRunner()` instead.
+ * When `llm` is provided (run-scoped), delegates to the runner which
+ * records selected/effective config for the snapshot. When omitted,
+ * uses a shared default runner (no snapshot persistence).
  */
 export async function callLlmWithFallback<T>(
 	callSiteKey: string,
 	fn: (model: LanguageModel, entry: LlmModelEntry) => Promise<T>,
+	llm?: LlmRunner,
 ): Promise<T> {
-	const models = await getLlmConfig(callSiteKey)
-	return sharedCallWithFallback(models, resolveModel, fn, {
-		callSiteKey,
-		logger,
-	})
+	return (llm ?? getDefaultRunner()).call(callSiteKey, fn)
 }
 
 /**

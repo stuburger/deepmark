@@ -98,34 +98,26 @@ describe("LlmRunner", () => {
 		expect(snapshot.effective.grading).toBeUndefined()
 	})
 
-	it("prepareGrader() records selected config", async () => {
-		const { runner } = createRunner({ grading: [GOOGLE_FLASH, OPENAI_GPT4O] })
+	it("tracks multiple call sites independently", async () => {
+		const { runner } = createRunner({
+			grading: [GOOGLE_FLASH],
+			ocr: [OPENAI_GPT4O],
+		})
 
-		const { entries } = await runner.prepareGrader("grading")
-
-		expect(entries).toHaveLength(2)
-		expect(entries[0].temperature).toBe(0.1)
-		expect(entries[1].temperature).toBe(0.7)
-
-		const snapshot = runner.toSnapshot()
-		expect(snapshot.selected.grading).toEqual([GOOGLE_FLASH, OPENAI_GPT4O])
-	})
-
-	it("prepareGrader() onEffective wires to snapshot", async () => {
-		const { runner } = createRunner({ grading: [GOOGLE_FLASH, OPENAI_GPT4O] })
-
-		const { entries, onEffective } = await runner.prepareGrader("grading")
-
-		// Simulate Grader calling onEffective: 3 primary successes, 1 fallback
-		onEffective(entries[0], 0)
-		onEffective(entries[0], 0)
-		onEffective(entries[0], 0)
-		onEffective(entries[1], 1)
+		await runner.call("grading", async () => "a")
+		await runner.call("grading", async () => "b")
+		await runner.call("ocr", async () => "c")
 
 		const snapshot = runner.toSnapshot()
+		expect(snapshot.selected.grading).toEqual([GOOGLE_FLASH])
+		expect(snapshot.selected.ocr).toEqual([OPENAI_GPT4O])
 		expect(snapshot.effective.grading).toEqual({
-			total_calls: 4,
-			fallback_calls: 1,
+			total_calls: 2,
+			fallback_calls: 0,
+		})
+		expect(snapshot.effective.ocr).toEqual({
+			total_calls: 1,
+			fallback_calls: 0,
 		})
 	})
 

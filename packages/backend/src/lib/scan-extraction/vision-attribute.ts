@@ -5,7 +5,7 @@ import { getFileBase64 } from "@/lib/infra/s3"
 import type { CorrectedPageToken } from "@/lib/scan-extraction/vision-reconcile"
 import { logOcrRunEvent } from "@mcp-gcse/db"
 import { type LlmRunner, computeBboxHull } from "@mcp-gcse/shared"
-import { type LanguageModel, Output, generateText } from "ai"
+import { Output, generateText } from "ai"
 import {
 	AttributionSchema,
 	McqFallbackSchema,
@@ -172,32 +172,29 @@ export async function visionAttributeRegions({
 				}>
 			}
 			try {
-				const attrCallFn = async (
-					model: LanguageModel,
-					entry: { temperature: number },
-				) =>
-					generateText({
-						model,
-						temperature: entry.temperature,
-						messages: [
-							{
-								role: "user",
-								content: [
-									{
-										type: "image",
-										image: imageBase64,
-										mediaType: page.mime_type,
-									},
-									{ type: "text", text: prompt },
-								],
-							},
-						],
-						output: Output.object({ schema: AttributionSchema }),
-					})
-
-				const { output } = llm
-					? await llm.call("vision-attribution", attrCallFn)
-					: await callLlmWithFallback("vision-attribution", attrCallFn)
+				const { output } = await callLlmWithFallback(
+					"vision-attribution",
+					async (model, entry) =>
+						generateText({
+							model,
+							temperature: entry.temperature,
+							messages: [
+								{
+									role: "user",
+									content: [
+										{
+											type: "image",
+											image: imageBase64,
+											mediaType: page.mime_type,
+										},
+										{ type: "text", text: prompt },
+									],
+								},
+							],
+							output: Output.object({ schema: AttributionSchema }),
+						}),
+					llm,
+				)
 				parsed = output
 			} catch (err) {
 				void logOcrRunEvent(db, jobId, {
@@ -403,35 +400,29 @@ async function runMcqFallback({
 			const prompt = buildMcqFallbackPrompt(questionsText)
 
 			try {
-				const mcqCallFn = async (
-					model: LanguageModel,
-					entry: { temperature: number },
-				) =>
-					generateText({
-						model,
-						temperature: entry.temperature,
-						messages: [
-							{
-								role: "user",
-								content: [
-									{
-										type: "image",
-										image: imageBase64,
-										mediaType: page.mime_type,
-									},
-									{ type: "text", text: prompt },
-								],
-							},
-						],
-						output: Output.object({ schema: McqFallbackSchema }),
-					})
-
-				const { output: parsed } = llm
-					? await llm.call("vision-attribution-mcq-fallback", mcqCallFn)
-					: await callLlmWithFallback(
-							"vision-attribution-mcq-fallback",
-							mcqCallFn,
-						)
+				const { output: parsed } = await callLlmWithFallback(
+					"vision-attribution-mcq-fallback",
+					async (model, entry) =>
+						generateText({
+							model,
+							temperature: entry.temperature,
+							messages: [
+								{
+									role: "user",
+									content: [
+										{
+											type: "image",
+											image: imageBase64,
+											mediaType: page.mime_type,
+										},
+										{ type: "text", text: prompt },
+									],
+								},
+							],
+							output: Output.object({ schema: McqFallbackSchema }),
+						}),
+					llm,
+				)
 
 				const found = (parsed.regions ?? []).filter(
 					(r) =>

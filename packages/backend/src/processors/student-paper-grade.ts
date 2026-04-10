@@ -54,7 +54,7 @@ export async function handler(
 		const cancellation = createCancellationToken(jobId)
 		try {
 			const llm = createLlmRunner()
-			const orchestrator = await createMarkerOrchestrator(llm)
+			const orchestrator = createMarkerOrchestrator(llm)
 			await gradeJob({ jobId, orchestrator, llm, cancellation })
 		} catch (err) {
 			await markJobFailed(jobId, TAG, "grading", err)

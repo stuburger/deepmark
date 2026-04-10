@@ -1,6 +1,5 @@
 import { db } from "@/db"
-import { getLlmConfig } from "@/lib/infra/llm-config"
-import { resolveModel } from "@/lib/infra/llm-runtime"
+import { createLlmRunner } from "@/lib/infra/llm-runtime"
 import { Grader, buildQuestionWithMarkScheme } from "@mcp-gcse/shared"
 
 export interface ExemplarValidationSummary {
@@ -47,12 +46,7 @@ export async function validateWithExemplars(
 		return { markSchemeId, totalTested: 0, passCount: 0, accuracyPercent: 0 }
 	}
 
-	const config = await getLlmConfig("grading")
-	const entries = config.map((e) => ({
-		model: resolveModel(e),
-		temperature: e.temperature,
-	}))
-	const grader = new Grader(entries, {
+	const grader = new Grader(createLlmRunner(), {
 		systemPrompt:
 			"You are an expert GCSE examiner. Mark the student's answer against the provided mark scheme. Return valid JSON matching the schema. Be consistent and conservative.",
 	})

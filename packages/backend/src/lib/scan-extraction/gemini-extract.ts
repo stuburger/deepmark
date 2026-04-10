@@ -5,7 +5,7 @@ import {
 	runOcr,
 } from "@/lib/scan-extraction/gemini-ocr"
 import type { LlmRunner } from "@mcp-gcse/shared"
-import { type LanguageModel, Output, generateText } from "ai"
+import { Output, generateText } from "ai"
 import { z } from "zod"
 
 const TAG = "gemini-extract"
@@ -103,32 +103,29 @@ export async function extractStudentPaper(
 	}))
 
 	// Fan out: answer extraction (all pages combined) + per-page runOcr in parallel.
-	const extractionCallFn = async (
-		model: LanguageModel,
-		entry: { temperature: number },
-	) =>
-		generateText({
-			model,
-			temperature: entry.temperature,
-			messages: [
-				{
-					role: "user",
-					content: [
-						...imageParts,
+	const [extractionResult, ...ocrResults] = await Promise.all([
+		callLlmWithFallback(
+			"student-paper-extraction",
+			async (model, entry) =>
+				generateText({
+					model,
+					temperature: entry.temperature,
+					messages: [
 						{
-							type: "text",
-							text: buildExtractionPrompt(pageData.length, questions),
+							role: "user",
+							content: [
+								...imageParts,
+								{
+									type: "text",
+									text: buildExtractionPrompt(pageData.length, questions),
+								},
+							],
 						},
 					],
-				},
-			],
-			output: Output.object({ schema: StudentPaperSchema }),
-		})
-
-	const [extractionResult, ...ocrResults] = await Promise.all([
-		llm
-			? llm.call("student-paper-extraction", extractionCallFn)
-			: callLlmWithFallback("student-paper-extraction", extractionCallFn),
+					output: Output.object({ schema: StudentPaperSchema }),
+				}),
+			llm,
+		),
 		...pageData.map((p) => runOcr(p.data, p.mimeType, {}, llm)),
 	])
 

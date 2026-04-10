@@ -5,9 +5,9 @@ import type { MarkerOrchestrator } from "@mcp-gcse/shared"
 import { buildQuestionWithMarkScheme } from "@mcp-gcse/shared"
 
 let _orchestrator: MarkerOrchestrator | null = null
-async function getOrchestrator(): Promise<MarkerOrchestrator> {
+function getOrchestrator(): MarkerOrchestrator {
 	if (!_orchestrator) {
-		_orchestrator = await createMarkerOrchestrator(createLlmRunner())
+		_orchestrator = createMarkerOrchestrator(createLlmRunner())
 	}
 	return _orchestrator
 }
@@ -79,7 +79,7 @@ export async function markAnswerById(answer_id: string): Promise<{
 		},
 	})
 
-	const orchestrator = await getOrchestrator()
+	const orchestrator = getOrchestrator()
 	const grade = await orchestrator.mark(
 		questionWithMarkScheme,
 		answer.student_answer,

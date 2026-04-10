@@ -1,6 +1,5 @@
 "use server"
 
-import { createGoogleGenerativeAI } from "@ai-sdk/google"
 import { createPrismaClient } from "@mcp-gcse/db"
 import {
 	DeterministicMarker,
@@ -129,11 +128,8 @@ export async function evaluateStudentAnswer(
 			markingRules,
 		}
 
-		const gemini = createGoogleGenerativeAI({
-			apiKey: Resource.GeminiApiKey.value,
-		})
-
-		const grader = new Grader(gemini("gemini-2.5-flash"), {
+		const { getDefaultRunner } = await import("@/lib/llm-runtime")
+		const grader = new Grader(getDefaultRunner(), {
 			systemPrompt:
 				"You are an expert GCSE examiner. Mark the student's answer against the provided mark scheme. Return valid JSON matching the schema. Be consistent and conservative: only award marks when there is clear evidence.",
 		})

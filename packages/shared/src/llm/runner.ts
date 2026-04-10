@@ -87,35 +87,6 @@ export class LlmRunner {
 		})
 	}
 
-	/**
-	 * Build GraderModelEntry[] with an onEffective callback wired to
-	 * the snapshot. Used when constructing a Grader, which has its own
-	 * internal fallback loop separate from `callWithFallback`.
-	 */
-	async prepareGrader(callSiteKey: string): Promise<{
-		entries: Array<{ model: LanguageModel; temperature: number }>
-		onEffective: (
-			entry: { model: LanguageModel; temperature: number },
-			attemptIndex: number,
-		) => void
-	}> {
-		const models = await this.resolveConfig(callSiteKey)
-
-		const entries = models.map((e) => ({
-			model: this.deps.resolveModel(e),
-			temperature: e.temperature,
-		}))
-
-		const onEffective = (
-			_entry: { model: LanguageModel; temperature: number },
-			attemptIndex: number,
-		) => {
-			this.recordEffective(callSiteKey, attemptIndex)
-		}
-
-		return { entries, onEffective }
-	}
-
 	/** Returns a Zod-validated deep clone of the accumulated snapshot. */
 	toSnapshot(): LlmRunSnapshot {
 		return LlmRunSnapshotSchema.parse({

@@ -23,9 +23,9 @@ type MarkPointResultItem = {
 }
 
 let _orchestrator: MarkerOrchestrator | null = null
-async function getOrchestrator(): Promise<MarkerOrchestrator> {
+function getOrchestrator(): MarkerOrchestrator {
 	if (!_orchestrator) {
-		_orchestrator = await createMarkerOrchestrator(createLlmRunner())
+		_orchestrator = createMarkerOrchestrator(createLlmRunner())
 	}
 	return _orchestrator
 }
@@ -97,7 +97,7 @@ export const handler = tool(EvaluateAnswerSchema, async (args, extra) => {
 		},
 	})
 
-	const orchestrator = await getOrchestrator()
+	const orchestrator = getOrchestrator()
 	const grade = await orchestrator.mark(questionWithMarkScheme, student_answer)
 
 	const markingResult: {

@@ -1,6 +1,6 @@
 import { callLlmWithFallback } from "@/lib/infra/llm-runtime"
 import type { LlmRunner } from "@mcp-gcse/shared"
-import { type LanguageModel, Output, generateText } from "ai"
+import { Output, generateText } from "ai"
 import { z } from "zod"
 
 export type HandwritingAnalysis = {
@@ -38,34 +38,34 @@ export async function runOcr(
 		? `Focus specifically on: ${options.analysisFocus}.`
 		: "Cover individual words, lines, corrections, crossed-out text, punctuation, and any diagrams."
 
-	const callFn = async (model: LanguageModel, entry: { temperature: number }) =>
-		generateText({
-			model,
-			temperature: entry.temperature,
-			system:
-				"You are an expert at analysing handwritten text. Provide a full transcript and concise observations.",
-			messages: [
-				{
-					role: "user",
-					content: [
-						{
-							type: "image",
-							image: imageBase64,
-							mediaType: mimeType,
-						},
-						{
-							type: "text",
-							text: `Transcribe all handwritten text in reading order and provide observations about the handwriting quality and style. ${focusInstruction}`,
-						},
-					],
-				},
-			],
-			output: Output.object({ schema: TranscriptSchema }),
-		})
-
-	const { output } = llm
-		? await llm.call("handwriting-ocr", callFn)
-		: await callLlmWithFallback("handwriting-ocr", callFn)
+	const { output } = await callLlmWithFallback(
+		"handwriting-ocr",
+		async (model, entry) =>
+			generateText({
+				model,
+				temperature: entry.temperature,
+				system:
+					"You are an expert at analysing handwritten text. Provide a full transcript and concise observations.",
+				messages: [
+					{
+						role: "user",
+						content: [
+							{
+								type: "image",
+								image: imageBase64,
+								mediaType: mimeType,
+							},
+							{
+								type: "text",
+								text: `Transcribe all handwritten text in reading order and provide observations about the handwriting quality and style. ${focusInstruction}`,
+							},
+						],
+					},
+				],
+				output: Output.object({ schema: TranscriptSchema }),
+			}),
+		llm,
+	)
 
 	return { transcript: output.transcript, observations: output.observations }
 }

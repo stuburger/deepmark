@@ -1,6 +1,6 @@
 import { db } from "@/db"
 import { getLlmConfig } from "@/lib/infra/llm-config"
-import { resolveModel } from "@/lib/infra/llm-runtime"
+import { createLlmRunner, resolveModel } from "@/lib/infra/llm-runtime"
 import { tool } from "@/tools/shared/tool-utils"
 import {
 	Grader,
@@ -47,20 +47,18 @@ export const handler = tool(TestAndRefineMarkSchemeSchema, async (args) => {
 	})
 
 	const scores = target_scores ?? probeBoundaries(markScheme.points_total)
-	const config = await getLlmConfig("grading")
-	const entries = config.map((e) => ({
-		model: resolveModel(e),
-		temperature: e.temperature,
-	}))
-	const grader = new Grader(entries, {
+	const llm = createLlmRunner()
+	const grader = new Grader(llm, {
 		systemPrompt:
 			"You are an expert GCSE examiner. Mark the student's answer against the provided mark scheme. Return valid JSON matching the schema. Be consistent and conservative.",
 	})
 
+	// Adversarial student agent needs a raw LanguageModel
+	const studentConfig = await getLlmConfig("test-dataset-generation")
 	const testResults = await runAdversarialLoop(
 		questionWithScheme,
 		grader,
-		resolveModel(config[0]),
+		resolveModel(studentConfig[0]),
 		{ targetScores: scores, maxIterations: max_iterations },
 	)
 

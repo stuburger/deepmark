@@ -3,8 +3,7 @@ import {
 	type CancellationToken,
 	createCancellationToken,
 } from "@/lib/infra/cancellation"
-import { getLlmConfig } from "@/lib/infra/llm-config"
-import { callLlmWithFallback, resolveModel } from "@/lib/infra/llm-runtime"
+import { callLlmWithFallback, createLlmRunner } from "@/lib/infra/llm-runtime"
 import { logger } from "@/lib/infra/logger"
 import {
 	getPdfBase64,
@@ -187,12 +186,7 @@ export async function handler(
 
 			let grader: Grader | null = null
 			if (job.run_adversarial_loop) {
-				const gradingConfig = await getLlmConfig("grading")
-				const gradingEntries = gradingConfig.map((e) => ({
-					model: resolveModel(e),
-					temperature: e.temperature,
-				}))
-				grader = new Grader(gradingEntries, {
+				grader = new Grader(createLlmRunner(), {
 					systemPrompt:
 						"You are an expert GCSE examiner. Mark the student's answer against the provided mark scheme. Return valid JSON matching the schema. Be consistent and conservative.",
 				})

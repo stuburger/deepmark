@@ -5,9 +5,9 @@ import { createPrismaClient } from "@mcp-gcse/db"
 import {
 	type LlmModelEntry,
 	type LlmProvider,
+	LlmRunner,
 	type ProviderClient,
 	createModelResolver,
-	callWithFallback as sharedCallWithFallback,
 	getLlmConfig as sharedGetLlmConfig,
 } from "@mcp-gcse/shared"
 import type { LanguageModel } from "ai"
@@ -52,6 +52,20 @@ export function resolveModel(entry: LlmModelEntry): LanguageModel {
 	return resolve(entry)
 }
 
+// ── Default runner (singleton for non-run call sites) ───────────────────────
+
+let _defaultRunner: LlmRunner | null = null
+
+export function getDefaultRunner(): LlmRunner {
+	if (!_defaultRunner) {
+		_defaultRunner = new LlmRunner({
+			getConfig: getLlmConfig,
+			resolveModel,
+		})
+	}
+	return _defaultRunner
+}
+
 /**
  * Loads the model config for a call site and executes with fallback.
  * Web-side equivalent of the backend callLlmWithFallback.
@@ -59,9 +73,7 @@ export function resolveModel(entry: LlmModelEntry): LanguageModel {
 export async function callLlmWithFallback<T>(
 	callSiteKey: string,
 	fn: (model: LanguageModel, entry: LlmModelEntry) => Promise<T>,
+	llm?: LlmRunner,
 ): Promise<T> {
-	const models = await getLlmConfig(callSiteKey)
-	return sharedCallWithFallback(models, resolveModel, fn, {
-		callSiteKey,
-	})
+	return (llm ?? getDefaultRunner()).call(callSiteKey, fn)
 }

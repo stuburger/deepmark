@@ -1,4 +1,5 @@
-import { type LanguageModel, Output, generateText } from "ai"
+import { Output, generateText } from "ai"
+import type { LlmRunner } from "../llm/runner"
 import { buildBatchPrompt } from "./prompts/batch"
 import { buildLoRPrompt } from "./prompts/lor"
 import { buildPointBasedPrompt } from "./prompts/point-based"
@@ -21,64 +22,26 @@ import type {
 const DEFAULT_SYSTEM_PROMPT =
 	"You are an expert GCSE examiner. Mark the student's answer against the provided mark scheme. Return valid JSON matching the schema. Ignore spelling and grammar; focus on understanding and correct science. Be consistent and conservative: only award marks when there is clear evidence."
 
-export type GraderModelEntry = {
-	model: LanguageModel
-	temperature: number
-}
+const DEFAULT_CALL_SITE_KEY = "grading"
 
 /**
  * Thin LLM wrapper for grading student answers.
  * Prompt construction is delegated to pure functions in prompts/.
  * Score computation is delegated to score.ts.
  *
- * Accepts a single LanguageModel, an array of LanguageModels, or an
- * array of { model, temperature } entries for config-driven usage.
- * When multiple models are provided, each generateText call tries
- * the primary model first, then falls back to the next on error.
+ * Accepts an LlmRunner which handles config loading, model resolution,
+ * fallback, and snapshot recording. Each generateText call goes through
+ * runner.call() — the same path as every other LLM call site.
  */
 export class Grader {
-	private entries: GraderModelEntry[]
+	private runner: LlmRunner
+	private callSiteKey: string
 	private systemPrompt: string
-	private onEffective?: GraderOptions["onEffective"]
 
-	constructor(
-		models:
-			| LanguageModel
-			| LanguageModel[]
-			| GraderModelEntry[]
-			| GraderModelEntry,
-		options?: GraderOptions,
-	) {
-		const arr = Array.isArray(models) ? models : [models]
-		this.entries = arr.map((m) => {
-			if (typeof m === "object" && m !== null && "temperature" in m) {
-				return m as GraderModelEntry
-			}
-			return { model: m as LanguageModel, temperature: 0.7 }
-		})
-		if (this.entries.length === 0) {
-			throw new Error("Grader requires at least one model")
-		}
+	constructor(runner: LlmRunner, options?: GraderOptions) {
+		this.runner = runner
+		this.callSiteKey = options?.callSiteKey ?? DEFAULT_CALL_SITE_KEY
 		this.systemPrompt = options?.systemPrompt ?? DEFAULT_SYSTEM_PROMPT
-		this.onEffective = options?.onEffective
-	}
-
-	/** Try each model in the fallback chain until one succeeds. */
-	private async generate<T>(
-		fn: (model: LanguageModel, temperature: number) => Promise<T>,
-	): Promise<T> {
-		let lastError: unknown
-		for (let i = 0; i < this.entries.length; i++) {
-			const entry = this.entries[i]
-			try {
-				const result = await fn(entry.model, entry.temperature)
-				this.onEffective?.(entry, i)
-				return result
-			} catch (err) {
-				lastError = err
-			}
-		}
-		throw lastError
 	}
 
 	/** Grade multiple questions in a single LLM call (point-based only). */
@@ -86,16 +49,20 @@ export class Grader {
 		const { questions, responses, learningContent = [] } = input
 		const prompt = buildBatchPrompt(questions, responses, learningContent)
 
-		const { output } = await this.generate((model, temperature) =>
-			generateText({
-				model,
-				temperature,
-				messages: [
-					{ role: "system", content: this.systemPrompt },
-					{ role: "user", content: prompt },
-				],
-				output: Output.object({ schema: BatchGradeSchema }),
-			}),
+		const output = await this.runner.call(
+			this.callSiteKey,
+			async (model, entry) => {
+				const result = await generateText({
+					model,
+					temperature: entry.temperature,
+					messages: [
+						{ role: "system", content: this.systemPrompt },
+						{ role: "user", content: prompt },
+					],
+					output: Output.object({ schema: BatchGradeSchema }),
+				})
+				return result.output
+			},
 		)
 
 		const grades: QuestionGrade[] = output.questionGrades.map((aiGrade) => {
@@ -143,16 +110,20 @@ export class Grader {
 			learningContent,
 		)
 
-		const { output } = await this.generate((model, temperature) =>
-			generateText({
-				model,
-				temperature,
-				messages: [
-					{ role: "system", content: this.systemPrompt },
-					{ role: "user", content: prompt },
-				],
-				output: Output.object({ schema: QuestionGradeSchema }),
-			}),
+		const output = await this.runner.call(
+			this.callSiteKey,
+			async (model, entry) => {
+				const result = await generateText({
+					model,
+					temperature: entry.temperature,
+					messages: [
+						{ role: "system", content: this.systemPrompt },
+						{ role: "user", content: prompt },
+					],
+					output: Output.object({ schema: QuestionGradeSchema }),
+				})
+				return result.output
+			},
 		)
 
 		const metrics = computeGradeMetrics(output, question)
@@ -185,16 +156,20 @@ export class Grader {
 			levelDescriptors,
 		)
 
-		const { output } = await this.generate((model, temperature) =>
-			generateText({
-				model,
-				temperature,
-				messages: [
-					{ role: "system", content: this.systemPrompt },
-					{ role: "user", content: prompt },
-				],
-				output: Output.object({ schema: LoRQuestionGradeSchema }),
-			}),
+		const output = await this.runner.call(
+			this.callSiteKey,
+			async (model, entry) => {
+				const result = await generateText({
+					model,
+					temperature: entry.temperature,
+					messages: [
+						{ role: "system", content: this.systemPrompt },
+						{ role: "user", content: prompt },
+					],
+					output: Output.object({ schema: LoRQuestionGradeSchema }),
+				})
+				return result.output
+			},
 		)
 
 		const maxPossibleScore = question.totalPoints

@@ -4,7 +4,7 @@ import { logger } from "@/lib/infra/logger"
 import { getFileBase64 } from "@/lib/infra/s3"
 import { logOcrRunEvent } from "@mcp-gcse/db"
 import type { LlmRunner } from "@mcp-gcse/shared"
-import { type LanguageModel, Output, generateText } from "ai"
+import { Output, generateText } from "ai"
 import { Resource } from "sst"
 import {
 	ReconcileSchema,
@@ -113,38 +113,32 @@ export async function reconcilePageTokens({
 
 				const tokenList = pageTokens.map((t) => `"${t.text_raw}"`).join(", ")
 
-				const reconcileCallFn = async (
-					model: LanguageModel,
-					entry: { temperature: number },
-				) =>
-					generateText({
-						model,
-						temperature: entry.temperature,
-						messages: [
-							{
-								role: "user",
-								content: [
-									{
-										type: "image",
-										image: imageBase64,
-										mediaType: page.mime_type,
-									},
-									{
-										type: "text",
-										text: buildReconciliationPrompt(tokenList),
-									},
-								],
-							},
-						],
-						output: Output.object({ schema: ReconcileSchema }),
-					})
-
-				const { output } = llm
-					? await llm.call("vision-token-reconciliation", reconcileCallFn)
-					: await callLlmWithFallback(
-							"vision-token-reconciliation",
-							reconcileCallFn,
-						)
+				const { output } = await callLlmWithFallback(
+					"vision-token-reconciliation",
+					async (model, entry) =>
+						generateText({
+							model,
+							temperature: entry.temperature,
+							messages: [
+								{
+									role: "user",
+									content: [
+										{
+											type: "image",
+											image: imageBase64,
+											mediaType: page.mime_type,
+										},
+										{
+											type: "text",
+											text: buildReconciliationPrompt(tokenList),
+										},
+									],
+								},
+							],
+							output: Output.object({ schema: ReconcileSchema }),
+						}),
+					llm,
+				)
 				const corrections = output.corrections
 
 				// Build a queue of tokens grouped by raw text for order-of-appearance matching.

@@ -25,6 +25,9 @@ const listingInclude = {
 		take: 1,
 		select: { status: true },
 	},
+	teacher_overrides: {
+		select: { question_id: true, score_override: true },
+	},
 } as const
 
 function mapSubmissionToListItem(sub: {
@@ -39,6 +42,7 @@ function mapSubmissionToListItem(sub: {
 		grading_results: unknown
 	}>
 	ocr_runs: Array<{ status: OcrStatus }>
+	teacher_overrides: Array<{ question_id: string; score_override: number }>
 }): SubmissionHistoryItem {
 	const latestGrading = sub.grading_runs[0]
 	const latestOcr = sub.ocr_runs[0]
@@ -47,13 +51,21 @@ function mapSubmissionToListItem(sub: {
 		latestOcr?.status ?? null,
 		latestGrading?.status ?? null,
 	)
+
+	const overrideByQuestion = new Map(
+		sub.teacher_overrides.map((o) => [o.question_id, o.score_override]),
+	)
+
 	return {
 		id: sub.id,
 		student_name: sub.student_name,
 		exam_paper_id: sub.exam_paper_id,
 		exam_paper_title: sub.exam_paper?.title ?? null,
 		detected_subject: sub.detected_subject,
-		total_awarded: results.reduce((s, r) => s + r.awarded_score, 0),
+		total_awarded: results.reduce((s, r) => {
+			const override = overrideByQuestion.get(r.question_id)
+			return s + (override ?? r.awarded_score)
+		}, 0),
 		total_max: results.reduce((s, r) => s + r.max_score, 0),
 		status,
 		created_at: sub.created_at,

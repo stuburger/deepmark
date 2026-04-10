@@ -2,21 +2,11 @@ import { createGoogleGenerativeAI } from "@ai-sdk/google"
 import { embed } from "ai"
 import { Resource } from "sst"
 
-/**
- * Default Gemini 3 chat model for all AI SDK chat usage (grading, tools, adversarial loop).
- * Change this one constant to retarget every call site using `defaultChatModel()`.
- */
-export const DEFAULT_GEMINI_CHAT_MODEL = "gemini-3-pro-preview" as const
-
 const QUESTION_EMBEDDING_DIMENSIONS = 1536
 
 const gemini = createGoogleGenerativeAI({
 	apiKey: Resource.GeminiApiKey.value,
 })
-
-export function defaultChatModel() {
-	return gemini(DEFAULT_GEMINI_CHAT_MODEL)
-}
 
 /**
  * Embedding for question deduplication / linking. Matches `vector(1536)` in Prisma.

@@ -42,6 +42,21 @@ export async function updateLlmCallSiteModels(
 			}
 		}
 
+		// Validate provider compatibility with input type
+		const existing = await db.llmCallSite.findUnique({ where: { id } })
+		if (!existing) return { ok: false, error: "Call site not found" }
+
+		if (existing.input_type === "pdf") {
+			const unsupported = models.filter((m) => m.provider === "openai")
+			if (unsupported.length > 0) {
+				return {
+					ok: false,
+					error:
+						"OpenAI does not support PDF file inputs. Use Google or Anthropic for PDF call sites.",
+				}
+			}
+		}
+
 		const row = await db.llmCallSite.update({
 			where: { id },
 			data: {

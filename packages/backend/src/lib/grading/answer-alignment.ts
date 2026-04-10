@@ -1,8 +1,11 @@
-import { defaultChatModel } from "@/lib/infra/google-generative-ai"
-import { logger } from "@/lib/infra/logger"
 import type { QuestionListItem } from "@/lib/grading/question-list"
+import { callLlmWithFallback } from "@/lib/infra/llm-runtime"
+import { logger } from "@/lib/infra/logger"
 import { Output, generateText } from "ai"
-import { AlignmentSchema, buildAlignmentPrompt } from "./answer-alignment-prompt"
+import {
+	AlignmentSchema,
+	buildAlignmentPrompt,
+} from "./answer-alignment-prompt"
 
 const TAG = "answer-alignment"
 
@@ -15,7 +18,6 @@ const TAG = "answer-alignment"
 export function normaliseQNum(s: string): string {
 	return s.replace(/^q/i, "").replace(/[\s.]/g, "").toLowerCase()
 }
-
 
 export type AlignAnswersWithLlmArgs = {
 	unmatchedQuestions: Array<{
@@ -59,11 +61,15 @@ export async function alignAnswersWithLlm(
 	const prompt = buildAlignmentPrompt(questionsText, answersText)
 
 	try {
-		const { output } = await generateText({
-			model: defaultChatModel(),
-			messages: [{ role: "user", content: prompt }],
-			output: Output.object({ schema: AlignmentSchema }),
-		})
+		const { output } = await callLlmWithFallback(
+			"answer-alignment",
+			async (model) =>
+				generateText({
+					model,
+					messages: [{ role: "user", content: prompt }],
+					output: Output.object({ schema: AlignmentSchema }),
+				}),
+		)
 
 		for (const alignment of output.alignments) {
 			result.set(alignment.question_id, alignment.answer_text)

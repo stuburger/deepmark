@@ -3,6 +3,7 @@ import { createMarkerOrchestrator } from "@/lib/grading/grader-config"
 import { tool } from "@/tools/shared/tool-utils"
 import type { MarkScheme } from "@mcp-gcse/db"
 import {
+	type MarkerOrchestrator,
 	buildQuestionWithMarkScheme,
 	parseMarkPointsFromPrisma,
 } from "@mcp-gcse/shared"
@@ -20,15 +21,16 @@ type MarkPointResultItem = {
 	student_covered: string
 }
 
-const orchestrator = createMarkerOrchestrator()
+let _orchestrator: MarkerOrchestrator | null = null
+async function getOrchestrator(): Promise<MarkerOrchestrator> {
+	if (!_orchestrator) {
+		_orchestrator = await createMarkerOrchestrator()
+	}
+	return _orchestrator
+}
 
 export const handler = tool(EvaluateAnswerSchema, async (args, extra) => {
-	const {
-		question_id,
-		student_answer,
-		mark_scheme_id,
-		expected_score,
-	} = args
+	const { question_id, student_answer, mark_scheme_id, expected_score } = args
 
 	console.log("[evaluate-answer] Handler invoked", {
 		question_id,
@@ -94,6 +96,7 @@ export const handler = tool(EvaluateAnswerSchema, async (args, extra) => {
 		},
 	})
 
+	const orchestrator = await getOrchestrator()
 	const grade = await orchestrator.mark(questionWithMarkScheme, student_answer)
 
 	const markingResult: {

@@ -1,7 +1,7 @@
 import { db } from "@/db"
-import { defaultChatModel } from "@/lib/infra/google-generative-ai"
+import { callLlmWithFallback } from "@/lib/infra/llm-runtime"
 import { tool } from "@/tools/shared/tool-utils"
-import { type LanguageModel, Output, generateText } from "ai"
+import { Output, generateText } from "ai"
 import z from "zod"
 import { CreateTestDatasetSchema } from "./schema"
 
@@ -224,22 +224,24 @@ For each test case, provide:
 Ensure the generated cases complement the provided examples and create a comprehensive test dataset.
 </Task>`
 
-	const chatModel: LanguageModel = defaultChatModel()
-	const { output } = await generateText({
-		model: chatModel,
-		messages: [
-			{
-				role: "system",
-				content:
-					"You are an expert in creating GCSE assessment test datasets. Generate clear, diverse test cases with realistic student answers and grading criteria.",
-			},
-			{ role: "user", content: prompt },
-		],
-		output: Output.object({
-			schema: additionalTestCasesSchema,
-		}),
-		temperature: 0.7, // Higher temperature for diversity
-	})
+	const { output } = await callLlmWithFallback(
+		"test-dataset-generation",
+		async (model) =>
+			generateText({
+				model,
+				messages: [
+					{
+						role: "system",
+						content:
+							"You are an expert in creating GCSE assessment test datasets. Generate clear, diverse test cases with realistic student answers and grading criteria.",
+					},
+					{ role: "user", content: prompt },
+				],
+				output: Output.object({
+					schema: additionalTestCasesSchema,
+				}),
+			}),
+	)
 
 	return {
 		test_cases: output.test_cases.map((tc) => ({

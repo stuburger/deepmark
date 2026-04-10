@@ -1,4 +1,4 @@
-import { cloudVisionApiKey, geminiApiKey, openAiApiKey } from "./config"
+import { anthropicApiKey, cloudVisionApiKey, geminiApiKey, openAiApiKey } from "./config"
 import { neonPostgres } from "./database"
 import { scansBucket } from "./storage"
 
@@ -89,7 +89,7 @@ export const batchClassifyQueue = new sst.aws.Queue("BatchClassifyQueue", {
 
 batchClassifyQueue.subscribe({
 	handler: "packages/backend/src/processors/batch-classify.handler",
-	link: [neonPostgres, geminiApiKey, scansBucket, studentPaperOcrQueue],
+	link: [neonPostgres, geminiApiKey, openAiApiKey, anthropicApiKey, scansBucket, studentPaperOcrQueue],
 	timeout: "4 minutes",
 	memory: "1 GB",
 	nodejs: { install: ["sharp"] },
@@ -106,7 +106,7 @@ batchClassifyQueue.subscribe({
 // questions to the exam paper section if the job has an exam_paper_id.
 markSchemePdfQueue.subscribe({
 	handler: "packages/backend/src/processors/mark-scheme-pdf.handler",
-	link: [neonPostgres, geminiApiKey, openAiApiKey, scansBucket],
+	link: [neonPostgres, geminiApiKey, openAiApiKey, anthropicApiKey, scansBucket],
 	timeout: "8 minutes",
 	memory: "1 GB",
 })
@@ -119,7 +119,7 @@ markSchemePdfQueue.subscribe({
 // exemplars through the marking engine to verify the scheme awards the expected scores.
 exemplarQueue.subscribe({
 	handler: "packages/backend/src/processors/exemplar-pdf.handler",
-	link: [neonPostgres, geminiApiKey, openAiApiKey, scansBucket],
+	link: [neonPostgres, geminiApiKey, openAiApiKey, anthropicApiKey, scansBucket],
 	timeout: "8 minutes",
 	memory: "1 GB",
 })
@@ -132,7 +132,7 @@ exemplarQueue.subscribe({
 // questions to the exam paper section if the job has an exam_paper_id attached.
 questionPaperQueue.subscribe({
 	handler: "packages/backend/src/processors/question-paper-pdf.handler",
-	link: [neonPostgres, geminiApiKey, openAiApiKey, scansBucket],
+	link: [neonPostgres, geminiApiKey, openAiApiKey, anthropicApiKey, scansBucket],
 	timeout: "8 minutes",
 	memory: "1 GB",
 })
@@ -152,6 +152,7 @@ studentPaperOcrQueue.subscribe({
 		geminiApiKey,
 		cloudVisionApiKey,
 		openAiApiKey,
+		anthropicApiKey,
 		scansBucket,
 		studentPaperQueue,
 		batchClassifyQueue,
@@ -171,6 +172,7 @@ studentPaperQueue.subscribe({
 		neonPostgres,
 		geminiApiKey,
 		openAiApiKey,
+		anthropicApiKey,
 		scansBucket,
 		vapidPublicKey,
 		vapidPrivateKey,
@@ -185,7 +187,7 @@ studentPaperQueue.subscribe({
 // grading results, and OCR tokens. Annotations are anchored to specific token spans.
 studentPaperEnrichQueue.subscribe({
 	handler: "packages/backend/src/processors/student-paper-enrich.handler",
-	link: [neonPostgres, geminiApiKey, scansBucket],
+	link: [neonPostgres, geminiApiKey, openAiApiKey, anthropicApiKey, scansBucket],
 	timeout: "10 minutes",
 	memory: "1 GB",
 })

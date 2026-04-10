@@ -67,6 +67,10 @@ declare module "sst" {
       "databaseUrl": string
       "type": "sst.sst.Linkable"
     }
+    "AnthropicApiKey": {
+      "type": "sst.sst.Secret"
+      "value": string
+    }
     "OpenAiApiKey": {
       "type": "sst.sst.Secret"
       "value": string

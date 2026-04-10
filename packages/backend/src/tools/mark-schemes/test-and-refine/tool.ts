@@ -1,5 +1,6 @@
 import { db } from "@/db"
-import { defaultChatModel } from "@/lib/infra/google-generative-ai"
+import { getLlmConfig } from "@/lib/infra/llm-config"
+import { resolveModel } from "@/lib/infra/llm-runtime"
 import { tool } from "@/tools/shared/tool-utils"
 import {
 	Grader,
@@ -46,7 +47,9 @@ export const handler = tool(TestAndRefineMarkSchemeSchema, async (args) => {
 	})
 
 	const scores = target_scores ?? probeBoundaries(markScheme.points_total)
-	const grader = new Grader(defaultChatModel(), {
+	const config = await getLlmConfig("grading")
+	const models = config.map(resolveModel)
+	const grader = new Grader(models, {
 		systemPrompt:
 			"You are an expert GCSE examiner. Mark the student's answer against the provided mark scheme. Return valid JSON matching the schema. Be consistent and conservative.",
 	})
@@ -54,7 +57,7 @@ export const handler = tool(TestAndRefineMarkSchemeSchema, async (args) => {
 	const testResults = await runAdversarialLoop(
 		questionWithScheme,
 		grader,
-		defaultChatModel(),
+		models[0],
 		{ targetScores: scores, maxIterations: max_iterations },
 	)
 

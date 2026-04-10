@@ -3,7 +3,8 @@ import {
 	type CancellationToken,
 	createCancellationToken,
 } from "@/lib/infra/cancellation"
-import { defaultChatModel } from "@/lib/infra/google-generative-ai"
+import { getLlmConfig } from "@/lib/infra/llm-config"
+import { resolveModel } from "@/lib/infra/llm-runtime"
 import { logger } from "@/lib/infra/logger"
 import {
 	getPdfBase64,
@@ -200,12 +201,15 @@ export async function handler(
 
 			// ── Process each question ─────────────────────────────────────────
 
-			const grader = job.run_adversarial_loop
-				? new Grader(defaultChatModel(), {
-						systemPrompt:
-							"You are an expert GCSE examiner. Mark the student's answer against the provided mark scheme. Return valid JSON matching the schema. Be consistent and conservative.",
-					})
-				: null
+			let grader: Grader | null = null
+			if (job.run_adversarial_loop) {
+				const gradingConfig = await getLlmConfig("grading")
+				const gradingModels = gradingConfig.map(resolveModel)
+				grader = new Grader(gradingModels, {
+					systemPrompt:
+						"You are an expert GCSE examiner. Mark the student's answer against the provided mark scheme. Return valid JSON matching the schema. Be consistent and conservative.",
+				})
+			}
 
 			const questionCount = parsed.questions?.length ?? 0
 			logger.info(TAG, "Processing questions from mark scheme", {

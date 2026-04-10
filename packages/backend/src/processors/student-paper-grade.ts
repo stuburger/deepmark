@@ -1,26 +1,29 @@
 import { db } from "@/db"
+import { loadExamPaperForGrading } from "@/lib/grading/grade-queries"
+import {
+	type GradingResult,
+	gradeAllQuestions,
+} from "@/lib/grading/grade-questions"
+import { createMarkerOrchestrator } from "@/lib/grading/grader-config"
+import { persistAnswerRows } from "@/lib/grading/persist-answers"
+import {
+	type QuestionListItem,
+	loadQuestionList,
+} from "@/lib/grading/question-list"
 import {
 	type CancellationToken,
 	createCancellationToken,
 } from "@/lib/infra/cancellation"
-import { type GradingResult, gradeAllQuestions } from "@/lib/grading/grade-questions"
 import { logger } from "@/lib/infra/logger"
-import { persistAnswerRows } from "@/lib/grading/persist-answers"
 import { sendBatchCompleteNotification } from "@/lib/infra/push-notification"
-import { type QuestionListItem, loadQuestionList } from "@/lib/grading/question-list"
 import {
 	type SqsEvent,
 	markJobFailed,
 	parseSqsJobId,
 } from "@/lib/infra/sqs-job-runner"
-import { loadExamPaperForGrading } from "@/lib/grading/grade-queries"
-import { createMarkerOrchestrator } from "@/lib/grading/grader-config"
-import type { MarkerOrchestrator } from "@mcp-gcse/shared"
 import { SQSClient, SendMessageCommand } from "@aws-sdk/client-sqs"
-import {
-	type GradingStatus,
-	logGradingRunEvent,
-} from "@mcp-gcse/db"
+import { type GradingStatus, logGradingRunEvent } from "@mcp-gcse/db"
+import type { MarkerOrchestrator } from "@mcp-gcse/shared"
 import { Resource } from "sst"
 
 const TAG = "student-paper-grade"
@@ -42,7 +45,7 @@ export async function handler(
 	event: SqsEvent,
 ): Promise<{ batchItemFailures?: { itemIdentifier: string }[] }> {
 	const failures: { itemIdentifier: string }[] = []
-	const orchestrator = createMarkerOrchestrator()
+	const orchestrator = await createMarkerOrchestrator()
 
 	for (const record of event.Records) {
 		const jobId = parseSqsJobId(record, TAG)
@@ -136,10 +139,15 @@ async function rejectJobMissingOcr(jobId: string): Promise<void> {
 	logger.warn(TAG, "Job has no extracted_answers_raw — run OCR first", {
 		jobId,
 	})
-	await db.ocrRun.update({
-		where: { id: jobId },
-		data: { status: "failed", error: "No extracted answers — run OCR before grading" },
-	}).catch(() => {})
+	await db.ocrRun
+		.update({
+			where: { id: jobId },
+			data: {
+				status: "failed",
+				error: "No extracted answers — run OCR before grading",
+			},
+		})
+		.catch(() => {})
 }
 
 async function markJobAsGrading(jobId: string): Promise<void> {
@@ -160,9 +168,10 @@ async function markJobAsGrading(jobId: string): Promise<void> {
 	})
 }
 
-function extractRawAnswers(
-	source: { extracted_answers_raw: unknown },
-): Array<{ question_id: string; answer_text: string }> {
+function extractRawAnswers(source: { extracted_answers_raw: unknown }): Array<{
+	question_id: string
+	answer_text: string
+}> {
 	const raw = source.extracted_answers_raw as unknown
 	if (
 		typeof raw !== "object" ||
@@ -198,7 +207,9 @@ async function completeGradingJob({
 	})
 
 	// Update student_name on submission if OCR extracted one
-	const extractedName = (ocrRun.extracted_answers_raw as ExtractedAnswersRaw).student_name?.trim()
+	const extractedName = (
+		ocrRun.extracted_answers_raw as ExtractedAnswersRaw
+	).student_name?.trim()
 	if (extractedName && extractedName !== sub.student_name) {
 		await db.studentSubmission.update({
 			where: { id: jobId },

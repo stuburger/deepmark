@@ -1,9 +1,11 @@
 "use server"
 
-import { createGoogleGenerativeAI } from "@ai-sdk/google"
 import { createPrismaClient } from "@mcp-gcse/db"
+import { Output, generateText } from "ai"
 import { Resource } from "sst"
+import { z } from "zod"
 import { auth } from "../auth"
+import { callLlmWithFallback } from "../llm-runtime"
 import { log } from "../logger"
 
 const TAG = "autofill-mark-scheme-actions"
@@ -31,39 +33,26 @@ export type AutofillMarkSchemeResult =
 	| { ok: true; suggestion: AutofillMarkSchemeSuggestion }
 	| { ok: false; error: string }
 
-const MCQ_SCHEMA = {
-	type: "object" as const,
-	properties: {
-		correct_option_label: { type: "string" as const },
-		description: { type: "string" as const },
-	},
-	required: ["correct_option_label", "description"],
-}
+const McqSchema = z.object({
+	correct_option_label: z.string(),
+	description: z.string(),
+})
 
-const WRITTEN_SCHEMA = {
-	type: "object" as const,
-	properties: {
-		description: { type: "string" as const },
-		guidance: { type: "string" as const },
-		mark_points: {
-			type: "array" as const,
-			items: {
-				type: "object" as const,
-				properties: {
-					description: { type: "string" as const },
-					points: { type: "integer" as const },
-				},
-				required: ["description", "points"],
-			},
-		},
-	},
-	required: ["description", "guidance", "mark_points"],
-}
+const WrittenSchema = z.object({
+	description: z.string(),
+	guidance: z.string(),
+	mark_points: z.array(
+		z.object({
+			description: z.string(),
+			points: z.number().int(),
+		}),
+	),
+})
 
 type McqOption = { option_label: string; option_text: string }
 
 /**
- * Calls Gemini to generate a mark scheme suggestion for a question.
+ * Calls the LLM to generate a mark scheme suggestion for a question.
  * Returns suggestion data for the teacher to review in the form before saving.
  * Nothing is persisted by this action.
  */
@@ -94,9 +83,6 @@ export async function autofillMarkScheme(
 
 		if (!question) return { ok: false, error: "Question not found" }
 
-		const { GoogleGenAI } = await import("@google/genai")
-		const gemini = new GoogleGenAI({ apiKey: Resource.GeminiApiKey.value })
-
 		if (question.question_type === "multiple_choice") {
 			const rawOptions = Array.isArray(question.multiple_choice_options)
 				? (question.multiple_choice_options as McqOption[])
@@ -126,25 +112,17 @@ Return JSON with:
 
 Only return the letter for both fields (e.g. "A", "B", "C", or "D").`
 
-			const response = await gemini.models.generateContent({
-				model: "gemini-2.5-flash",
-				contents: [{ role: "user", parts: [{ text: prompt }] }],
-				config: {
-					responseMimeType: "application/json",
-					responseSchema: MCQ_SCHEMA,
-					temperature: 0.1,
-				},
-			})
+			const { output } = await callLlmWithFallback(
+				"mark-scheme-autofill",
+				async (model) =>
+					generateText({
+						model,
+						messages: [{ role: "user", content: prompt }],
+						output: Output.object({ schema: McqSchema }),
+					}),
+			)
 
-			const text = response.text
-			if (!text) return { ok: false, error: "Empty response from AI" }
-
-			const parsed = JSON.parse(text) as {
-				correct_option_label: string
-				description: string
-			}
-
-			const label = parsed.correct_option_label.trim().toUpperCase()
+			const label = output.correct_option_label.trim().toUpperCase()
 			const validLabels = rawOptions.map((o) => o.option_label.toUpperCase())
 			if (!validLabels.includes(label)) {
 				return {
@@ -193,42 +171,33 @@ Return JSON with:
 - guidance: marker guidance notes (or "" if none)
 - mark_points: array of { description: string, points: number } — must sum to ${marksAvailable}`
 
-		const response = await gemini.models.generateContent({
-			model: "gemini-2.5-flash",
-			contents: [{ role: "user", parts: [{ text: prompt }] }],
-			config: {
-				responseMimeType: "application/json",
-				responseSchema: WRITTEN_SCHEMA,
-				temperature: 0.2,
-			},
-		})
+		const { output } = await callLlmWithFallback(
+			"mark-scheme-autofill",
+			async (model) =>
+				generateText({
+					model,
+					messages: [{ role: "user", content: prompt }],
+					output: Output.object({ schema: WrittenSchema }),
+				}),
+		)
 
-		const text = response.text
-		if (!text) return { ok: false, error: "Empty response from AI" }
-
-		const parsed = JSON.parse(text) as {
-			description: string
-			guidance: string
-			mark_points: Array<{ description: string; points: number }>
-		}
-
-		if (!parsed.mark_points || parsed.mark_points.length === 0) {
+		if (!output.mark_points || output.mark_points.length === 0) {
 			return { ok: false, error: "AI did not generate any mark points" }
 		}
 
 		log.info(TAG, "Written autofill complete", {
 			userId: session.userId,
 			questionId,
-			mark_points_count: parsed.mark_points.length,
+			mark_points_count: output.mark_points.length,
 		})
 
 		return {
 			ok: true,
 			suggestion: {
 				marking_method: "point_based",
-				description: parsed.description.trim(),
-				guidance: parsed.guidance.trim(),
-				mark_points: parsed.mark_points.map((mp) => ({
+				description: output.description.trim(),
+				guidance: output.guidance.trim(),
+				mark_points: output.mark_points.map((mp) => ({
 					description: mp.description.trim(),
 					points: Math.max(1, Math.round(mp.points)),
 				})),

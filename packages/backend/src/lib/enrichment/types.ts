@@ -1,6 +1,6 @@
-import type { NormalisedBox } from "@mcp-gcse/shared"
 import type { GradingResult } from "@/lib/grading/grade-questions"
-import type { defaultChatModel } from "@/lib/infra/google-generative-ai"
+import type { NormalisedBox } from "@mcp-gcse/shared"
+import type { LanguageModel } from "ai"
 
 export type PendingAnnotation = {
 	questionId: string
@@ -45,6 +45,6 @@ export type AnnotateOneQuestionArgs = {
 	levelDescriptors: string | null
 	subject: string | null
 	markScheme: MarkSchemeForAnnotation | null
-	model: ReturnType<typeof defaultChatModel>
+	model: LanguageModel
 	jobId: string
 }

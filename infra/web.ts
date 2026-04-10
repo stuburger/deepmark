@@ -1,5 +1,5 @@
 import { auth, authUrl } from "./auth"
-import { domain, geminiApiKey, webUrl } from "./config"
+import { anthropicApiKey, domain, geminiApiKey, openAiApiKey, webUrl } from "./config"
 import { neonPostgres } from "./database"
 import {
 	batchClassifyQueue,
@@ -28,6 +28,8 @@ export const web = new sst.aws.Nextjs("Web", {
 		studentPaperQueue,
 		batchClassifyQueue,
 		geminiApiKey,
+		openAiApiKey,
+		anthropicApiKey,
 		vapidPublicKey,
 		vapidPrivateKey,
 		studentPaperEnrichQueue,

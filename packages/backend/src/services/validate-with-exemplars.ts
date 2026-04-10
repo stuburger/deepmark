@@ -1,5 +1,6 @@
 import { db } from "@/db"
-import { defaultChatModel } from "@/lib/infra/google-generative-ai"
+import { getLlmConfig } from "@/lib/infra/llm-config"
+import { resolveModel } from "@/lib/infra/llm-runtime"
 import { Grader, buildQuestionWithMarkScheme } from "@mcp-gcse/shared"
 
 export interface ExemplarValidationSummary {
@@ -46,7 +47,9 @@ export async function validateWithExemplars(
 		return { markSchemeId, totalTested: 0, passCount: 0, accuracyPercent: 0 }
 	}
 
-	const grader = new Grader(defaultChatModel(), {
+	const config = await getLlmConfig("grading")
+	const models = config.map(resolveModel)
+	const grader = new Grader(models, {
 		systemPrompt:
 			"You are an expert GCSE examiner. Mark the student's answer against the provided mark scheme. Return valid JSON matching the schema. Be consistent and conservative.",
 	})

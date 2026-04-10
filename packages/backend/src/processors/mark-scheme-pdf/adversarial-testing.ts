@@ -1,5 +1,6 @@
 import { db } from "@/db"
-import { defaultChatModel } from "@/lib/infra/google-generative-ai"
+import { getLlmConfig } from "@/lib/infra/llm-config"
+import { resolveModel } from "@/lib/infra/llm-runtime"
 import {
 	type Grader,
 	buildQuestionWithMarkScheme,
@@ -43,10 +44,12 @@ export async function runAndPersistAdversarialTests(args: {
 		},
 	})
 
+	const config = await getLlmConfig("grading")
+	const models = config.map(resolveModel)
 	const testResults = await runAdversarialLoop(
 		questionWithScheme,
 		args.grader,
-		defaultChatModel(),
+		models[0],
 		{
 			targetScores: probeBoundaries(args.pointsTotal),
 			maxIterations: 3,

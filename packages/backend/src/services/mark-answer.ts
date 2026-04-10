@@ -1,8 +1,15 @@
 import { db } from "@/db"
 import { createMarkerOrchestrator } from "@/lib/grading/grader-config"
+import type { MarkerOrchestrator } from "@mcp-gcse/shared"
 import { buildQuestionWithMarkScheme } from "@mcp-gcse/shared"
 
-const orchestrator = createMarkerOrchestrator()
+let _orchestrator: MarkerOrchestrator | null = null
+async function getOrchestrator(): Promise<MarkerOrchestrator> {
+	if (!_orchestrator) {
+		_orchestrator = await createMarkerOrchestrator()
+	}
+	return _orchestrator
+}
 
 type AnswerWithRelations = Awaited<ReturnType<typeof loadAnswer>>
 type MarkSchemeForAnswer = Awaited<ReturnType<typeof loadMarkScheme>>
@@ -71,6 +78,7 @@ export async function markAnswerById(answer_id: string): Promise<{
 		},
 	})
 
+	const orchestrator = await getOrchestrator()
 	const grade = await orchestrator.mark(
 		questionWithMarkScheme,
 		answer.student_answer,

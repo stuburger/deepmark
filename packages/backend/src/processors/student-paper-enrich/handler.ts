@@ -7,7 +7,8 @@ import {
 import { annotateOneQuestion } from "@/lib/enrichment/llm-annotations"
 import { persistAnnotations } from "@/lib/enrichment/persist-annotations"
 import type { PendingAnnotation } from "@/lib/enrichment/types"
-import { defaultChatModel } from "@/lib/infra/google-generative-ai"
+import { getLlmConfig } from "@/lib/infra/llm-config"
+import { resolveModel } from "@/lib/infra/llm-runtime"
 import { logger } from "@/lib/infra/logger"
 import { type SqsEvent, parseSqsJobId } from "@/lib/infra/sqs-job-runner"
 import type { EnrichmentStatus } from "@mcp-gcse/db"
@@ -69,7 +70,8 @@ export async function handler(
 				levelDescriptors,
 				subject,
 			} = data
-			const model = defaultChatModel()
+			const annotationConfig = await getLlmConfig("llm-annotations")
+			const model = resolveModel(annotationConfig[0])
 
 			// ── Deterministic annotations (no LLM) ───────────────────────────
 

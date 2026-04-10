@@ -2,7 +2,11 @@ import { type LanguageModel, Output, generateText } from "ai"
 import { buildBatchPrompt } from "./prompts/batch"
 import { buildLoRPrompt } from "./prompts/lor"
 import { buildPointBasedPrompt } from "./prompts/point-based"
-import { BatchGradeSchema, LoRQuestionGradeSchema, QuestionGradeSchema } from "./schemas"
+import {
+	BatchGradeSchema,
+	LoRQuestionGradeSchema,
+	QuestionGradeSchema,
+} from "./schemas"
 import { computeGradeMetrics } from "./score"
 import type {
 	AssessmentGrade,
@@ -21,14 +25,39 @@ const DEFAULT_SYSTEM_PROMPT =
  * Thin LLM wrapper for grading student answers.
  * Prompt construction is delegated to pure functions in prompts/.
  * Score computation is delegated to score.ts.
+ *
+ * Accepts a single LanguageModel or an ordered fallback chain.
+ * When multiple models are provided, each generateText call tries
+ * the primary model first, then falls back to the next on error.
  */
 export class Grader {
-	private model: LanguageModel
+	private models: LanguageModel[]
 	private systemPrompt: string
 
-	constructor(model: LanguageModel, options?: GraderOptions) {
-		this.model = model
+	constructor(
+		models: LanguageModel | LanguageModel[],
+		options?: GraderOptions,
+	) {
+		this.models = Array.isArray(models) ? models : [models]
+		if (this.models.length === 0) {
+			throw new Error("Grader requires at least one model")
+		}
 		this.systemPrompt = options?.systemPrompt ?? DEFAULT_SYSTEM_PROMPT
+	}
+
+	/** Try each model in the fallback chain until one succeeds. */
+	private async generate<T>(
+		fn: (model: LanguageModel) => Promise<T>,
+	): Promise<T> {
+		let lastError: unknown
+		for (const model of this.models) {
+			try {
+				return await fn(model)
+			} catch (err) {
+				lastError = err
+			}
+		}
+		throw lastError
 	}
 
 	/** Grade multiple questions in a single LLM call (point-based only). */
@@ -36,14 +65,16 @@ export class Grader {
 		const { questions, responses, learningContent = [] } = input
 		const prompt = buildBatchPrompt(questions, responses, learningContent)
 
-		const { output } = await generateText({
-			model: this.model,
-			messages: [
-				{ role: "system", content: this.systemPrompt },
-				{ role: "user", content: prompt },
-			],
-			output: Output.object({ schema: BatchGradeSchema }),
-		})
+		const { output } = await this.generate((model) =>
+			generateText({
+				model,
+				messages: [
+					{ role: "system", content: this.systemPrompt },
+					{ role: "user", content: prompt },
+				],
+				output: Output.object({ schema: BatchGradeSchema }),
+			}),
+		)
 
 		const grades: QuestionGrade[] = output.questionGrades.map((aiGrade) => {
 			const question = questions.find((q) => q.id === aiGrade.questionId)
@@ -75,8 +106,13 @@ export class Grader {
 	async gradeSingleResponse(
 		input: GradeSingleResponseInput,
 	): Promise<PointBasedQuestionGrade> {
-		const { question, answer, questionNumber, totalQuestions, learningContent } =
-			input
+		const {
+			question,
+			answer,
+			questionNumber,
+			totalQuestions,
+			learningContent,
+		} = input
 		const prompt = buildPointBasedPrompt(
 			question,
 			answer,
@@ -85,14 +121,16 @@ export class Grader {
 			learningContent,
 		)
 
-		const { output } = await generateText({
-			model: this.model,
-			messages: [
-				{ role: "system", content: this.systemPrompt },
-				{ role: "user", content: prompt },
-			],
-			output: Output.object({ schema: QuestionGradeSchema }),
-		})
+		const { output } = await this.generate((model) =>
+			generateText({
+				model,
+				messages: [
+					{ role: "system", content: this.systemPrompt },
+					{ role: "user", content: prompt },
+				],
+				output: Output.object({ schema: QuestionGradeSchema }),
+			}),
+		)
 
 		const metrics = computeGradeMetrics(output, question)
 		return {
@@ -124,14 +162,16 @@ export class Grader {
 			levelDescriptors,
 		)
 
-		const { output } = await generateText({
-			model: this.model,
-			messages: [
-				{ role: "system", content: this.systemPrompt },
-				{ role: "user", content: prompt },
-			],
-			output: Output.object({ schema: LoRQuestionGradeSchema }),
-		})
+		const { output } = await this.generate((model) =>
+			generateText({
+				model,
+				messages: [
+					{ role: "system", content: this.systemPrompt },
+					{ role: "user", content: prompt },
+				],
+				output: Output.object({ schema: LoRQuestionGradeSchema }),
+			}),
+		)
 
 		const maxPossibleScore = question.totalPoints
 		const totalScore = Math.min(output.totalScore, maxPossibleScore)

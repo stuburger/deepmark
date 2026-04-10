@@ -45,11 +45,10 @@ export async function runAndPersistAdversarialTests(args: {
 	})
 
 	const config = await getLlmConfig("grading")
-	const models = config.map(resolveModel)
 	const testResults = await runAdversarialLoop(
 		questionWithScheme,
 		args.grader,
-		models[0],
+		resolveModel(config[0]),
 		{
 			targetScores: probeBoundaries(args.pointsTotal),
 			maxIterations: 3,

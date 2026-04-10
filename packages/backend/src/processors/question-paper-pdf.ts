@@ -116,9 +116,10 @@ export async function handler(
 			]
 
 			const [questionsResult, metadataResult] = await Promise.all([
-				callLlmWithFallback("question-paper-extraction", async (model) =>
+				callLlmWithFallback("question-paper-extraction", async (model, entry) =>
 					generateText({
 						model,
+						temperature: entry.temperature,
 						messages: [
 							{
 								role: "user",
@@ -131,9 +132,10 @@ export async function handler(
 						output: Output.object({ schema: QuestionPaperSchema }),
 					}),
 				),
-				callLlmWithFallback("question-paper-metadata", async (model) =>
+				callLlmWithFallback("question-paper-metadata", async (model, entry) =>
 					generateText({
 						model,
+						temperature: entry.temperature,
 						messages: [
 							{
 								role: "user",

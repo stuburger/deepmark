@@ -21,25 +21,41 @@ import type {
 const DEFAULT_SYSTEM_PROMPT =
 	"You are an expert GCSE examiner. Mark the student's answer against the provided mark scheme. Return valid JSON matching the schema. Ignore spelling and grammar; focus on understanding and correct science. Be consistent and conservative: only award marks when there is clear evidence."
 
+export type GraderModelEntry = {
+	model: LanguageModel
+	temperature: number
+}
+
 /**
  * Thin LLM wrapper for grading student answers.
  * Prompt construction is delegated to pure functions in prompts/.
  * Score computation is delegated to score.ts.
  *
- * Accepts a single LanguageModel or an ordered fallback chain.
+ * Accepts a single LanguageModel, an array of LanguageModels, or an
+ * array of { model, temperature } entries for config-driven usage.
  * When multiple models are provided, each generateText call tries
  * the primary model first, then falls back to the next on error.
  */
 export class Grader {
-	private models: LanguageModel[]
+	private entries: GraderModelEntry[]
 	private systemPrompt: string
 
 	constructor(
-		models: LanguageModel | LanguageModel[],
+		models:
+			| LanguageModel
+			| LanguageModel[]
+			| GraderModelEntry[]
+			| GraderModelEntry,
 		options?: GraderOptions,
 	) {
-		this.models = Array.isArray(models) ? models : [models]
-		if (this.models.length === 0) {
+		const arr = Array.isArray(models) ? models : [models]
+		this.entries = arr.map((m) => {
+			if (typeof m === "object" && m !== null && "temperature" in m) {
+				return m as GraderModelEntry
+			}
+			return { model: m as LanguageModel, temperature: 0.7 }
+		})
+		if (this.entries.length === 0) {
 			throw new Error("Grader requires at least one model")
 		}
 		this.systemPrompt = options?.systemPrompt ?? DEFAULT_SYSTEM_PROMPT
@@ -47,12 +63,12 @@ export class Grader {
 
 	/** Try each model in the fallback chain until one succeeds. */
 	private async generate<T>(
-		fn: (model: LanguageModel) => Promise<T>,
+		fn: (model: LanguageModel, temperature: number) => Promise<T>,
 	): Promise<T> {
 		let lastError: unknown
-		for (const model of this.models) {
+		for (const entry of this.entries) {
 			try {
-				return await fn(model)
+				return await fn(entry.model, entry.temperature)
 			} catch (err) {
 				lastError = err
 			}
@@ -65,9 +81,10 @@ export class Grader {
 		const { questions, responses, learningContent = [] } = input
 		const prompt = buildBatchPrompt(questions, responses, learningContent)
 
-		const { output } = await this.generate((model) =>
+		const { output } = await this.generate((model, temperature) =>
 			generateText({
 				model,
+				temperature,
 				messages: [
 					{ role: "system", content: this.systemPrompt },
 					{ role: "user", content: prompt },
@@ -121,9 +138,10 @@ export class Grader {
 			learningContent,
 		)
 
-		const { output } = await this.generate((model) =>
+		const { output } = await this.generate((model, temperature) =>
 			generateText({
 				model,
+				temperature,
 				messages: [
 					{ role: "system", content: this.systemPrompt },
 					{ role: "user", content: prompt },
@@ -162,9 +180,10 @@ export class Grader {
 			levelDescriptors,
 		)
 
-		const { output } = await this.generate((model) =>
+		const { output } = await this.generate((model, temperature) =>
 			generateText({
 				model,
+				temperature,
 				messages: [
 					{ role: "system", content: this.systemPrompt },
 					{ role: "user", content: prompt },

@@ -1,3 +1,4 @@
+export { getLlmConfig } from "./config"
 export {
 	callWithFallback,
 	type FallbackLogger,

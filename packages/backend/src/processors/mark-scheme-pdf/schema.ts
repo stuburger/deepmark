@@ -90,6 +90,11 @@ export const MarkSchemeSchema = z.object({
 	),
 })
 
+/** Derived from MarkSchemeSchema — one question entry from the extraction response. */
+export type ExtractedQuestion = z.infer<
+	typeof MarkSchemeSchema
+>["questions"][number]
+
 export const ExamPaperMetadataSchema = z.object({
 	title: z.string(),
 	subject: z.string(),

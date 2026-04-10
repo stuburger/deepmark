@@ -102,9 +102,10 @@ export async function extractStudentPaper(
 
 	// Fan out: answer extraction (all pages combined) + per-page runOcr in parallel.
 	const [extractionResult, ...ocrResults] = await Promise.all([
-		callLlmWithFallback("student-paper-extraction", async (model) =>
+		callLlmWithFallback("student-paper-extraction", async (model, entry) =>
 			generateText({
 				model,
+				temperature: entry.temperature,
 				messages: [
 					{
 						role: "user",

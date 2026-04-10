@@ -226,9 +226,10 @@ Ensure the generated cases complement the provided examples and create a compreh
 
 	const { output } = await callLlmWithFallback(
 		"test-dataset-generation",
-		async (model) =>
+		async (model, entry) =>
 			generateText({
 				model,
+				temperature: entry.temperature,
 				messages: [
 					{
 						role: "system",

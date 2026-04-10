@@ -172,9 +172,10 @@ export async function visionAttributeRegions({
 			try {
 				const { output } = await callLlmWithFallback(
 					"vision-attribution",
-					async (model) =>
+					async (model, entry) =>
 						generateText({
 							model,
+							temperature: entry.temperature,
 							messages: [
 								{
 									role: "user",
@@ -395,9 +396,10 @@ async function runMcqFallback({
 			try {
 				const { output: parsed } = await callLlmWithFallback(
 					"vision-attribution-mcq-fallback",
-					async (model) =>
+					async (model, entry) =>
 						generateText({
 							model,
+							temperature: entry.temperature,
 							messages: [
 								{
 									role: "user",

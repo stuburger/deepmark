@@ -8,44 +8,11 @@ import { runAndPersistAdversarialTests } from "./adversarial-testing"
 import { formatAoAllocations } from "./formatting"
 import type { ExistingQuestionContext } from "./prompts"
 import { embeddingToVectorStr, findMatchingQuestionId } from "./queries"
+import type { ExtractedQuestion } from "./schema"
+
+export type { ExtractedQuestion }
 
 const TAG = "mark-scheme-pdf"
-
-// ─── Public types ────────────────────────────────────────────────────────────
-
-/** Shape of one question entry from Gemini's mark scheme extraction response. */
-export type ExtractedQuestion = {
-	question_text: string
-	question_type: string
-	total_marks: number
-	ao_allocations?: Array<{ ao_code: string; marks: number }>
-	mark_points: Array<{
-		description: string
-		criteria: string
-		points: number
-	}>
-	acceptable_answers?: string[]
-	guidance?: string
-	question_number?: string
-	correct_option?: string
-	options?: Array<{ option_label: string; option_text: string }>
-	marking_method?: string
-	command_word?: string
-	items_required?: number
-	levels?: Array<{
-		level: number
-		mark_range: [number, number]
-		descriptor: string
-		ao_requirements?: string[]
-	}>
-	caps?: Array<{
-		condition: string
-		max_level?: number
-		max_mark?: number
-		reason: string
-	}>
-	matched_question_id?: string | null
-}
 
 export type ProcessQuestionContext = {
 	jobId: string
@@ -174,8 +141,7 @@ export function resolveMarkSchemeFields(
 	const matchedExisting = match.geminiMatchedId
 		? existingQuestions.find((eq) => eq.id === match.geminiMatchedId)
 		: null
-	const resolvedQuestionType =
-		matchedExisting?.question_type ?? q.question_type
+	const resolvedQuestionType = matchedExisting?.question_type ?? q.question_type
 
 	const correctOptionLabels =
 		resolvedQuestionType === "multiple_choice" && q.correct_option
@@ -304,12 +270,7 @@ async function createNewQuestion(
 		await writeEmbedding(newQuestion.id, r.match.embeddingVecStr)
 	}
 
-	const markSchemeId = await upsertMarkScheme(
-		newQuestion.id,
-		r,
-		ctx,
-		"linked",
-	)
+	const markSchemeId = await upsertMarkScheme(newQuestion.id, r, ctx, "linked")
 
 	await maybeRunAdversarialTests(markSchemeId, newQuestion.id, r, ctx)
 }

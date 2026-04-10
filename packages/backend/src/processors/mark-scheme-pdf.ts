@@ -18,10 +18,7 @@ import type { ScanStatus } from "@mcp-gcse/db"
 import { Grader } from "@mcp-gcse/shared"
 import { Output, generateText } from "ai"
 import { linkJobQuestionsToExamPaper } from "./mark-scheme-pdf/linking"
-import {
-	type ExtractedQuestion,
-	processExtractedQuestion,
-} from "./mark-scheme-pdf/process-question"
+import { processExtractedQuestion } from "./mark-scheme-pdf/process-question"
 import {
 	buildExistingQuestionsBlock,
 	buildExtractionPrompt,
@@ -133,9 +130,10 @@ export async function handler(
 			]
 
 			const [markSchemeResult, metadataResult] = await Promise.all([
-				callLlmWithFallback("mark-scheme-extraction", async (model) =>
+				callLlmWithFallback("mark-scheme-extraction", async (model, entry) =>
 					generateText({
 						model,
+						temperature: entry.temperature,
 						messages: [
 							{
 								role: "user",
@@ -152,9 +150,10 @@ export async function handler(
 					}),
 				),
 				job.auto_create_exam_paper
-					? callLlmWithFallback("mark-scheme-metadata", async (model) =>
+					? callLlmWithFallback("mark-scheme-metadata", async (model, entry) =>
 							generateText({
 								model,
+								temperature: entry.temperature,
 								messages: [
 									{
 										role: "user",
@@ -178,26 +177,22 @@ export async function handler(
 			// ── Parse response ────────────────────────────────────────────────
 
 			logger.info(TAG, "LLM extraction complete", { jobId })
-			const parsed = markSchemeResult.output as {
-				questions: ExtractedQuestion[]
-			}
+			const parsed = markSchemeResult.output
 
-			let detectedMetadata: DetectedMetadata | null = null
-			if (metadataResult) {
-				try {
-					detectedMetadata = metadataResult.output as DetectedMetadata
-				} catch {
-					// ignore
-				}
-			}
+			const detectedMetadata: DetectedMetadata | null = metadataResult
+				? (metadataResult.output as DetectedMetadata)
+				: null
 
 			// ── Process each question ─────────────────────────────────────────
 
 			let grader: Grader | null = null
 			if (job.run_adversarial_loop) {
 				const gradingConfig = await getLlmConfig("grading")
-				const gradingModels = gradingConfig.map(resolveModel)
-				grader = new Grader(gradingModels, {
+				const gradingEntries = gradingConfig.map((e) => ({
+					model: resolveModel(e),
+					temperature: e.temperature,
+				}))
+				grader = new Grader(gradingEntries, {
 					systemPrompt:
 						"You are an expert GCSE examiner. Mark the student's answer against the provided mark scheme. Return valid JSON matching the schema. Be consistent and conservative.",
 				})

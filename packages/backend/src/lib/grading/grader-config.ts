@@ -13,8 +13,11 @@ export const EXAMINER_SYSTEM_PROMPT =
 
 export async function createMarkerOrchestrator(): Promise<MarkerOrchestrator> {
 	const config = await getLlmConfig("grading")
-	const models = config.map(resolveModel)
-	const grader = new Grader(models, {
+	const entries = config.map((entry) => ({
+		model: resolveModel(entry),
+		temperature: entry.temperature,
+	}))
+	const grader = new Grader(entries, {
 		systemPrompt: EXAMINER_SYSTEM_PROMPT,
 	})
 

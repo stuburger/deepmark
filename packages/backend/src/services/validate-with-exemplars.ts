@@ -48,8 +48,11 @@ export async function validateWithExemplars(
 	}
 
 	const config = await getLlmConfig("grading")
-	const models = config.map(resolveModel)
-	const grader = new Grader(models, {
+	const entries = config.map((e) => ({
+		model: resolveModel(e),
+		temperature: e.temperature,
+	}))
+	const grader = new Grader(entries, {
 		systemPrompt:
 			"You are an expert GCSE examiner. Mark the student's answer against the provided mark scheme. Return valid JSON matching the schema. Be consistent and conservative.",
 	})

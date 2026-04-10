@@ -26,6 +26,7 @@ import type { LlmCallSiteRow, LlmModelEntry } from "@/lib/admin/llm-types"
 import { queryKeys } from "@/lib/query-keys"
 import {
 	LLM_CALL_SITE_DEFAULTS,
+	LLM_PHASE_DESCRIPTIONS,
 	LLM_PHASE_LABELS,
 	LLM_PHASE_ORDER,
 } from "@mcp-gcse/shared"
@@ -253,9 +254,14 @@ export function LlmSettingsShell({
 
 						elements.push(
 							<div key={phase} className="space-y-1.5">
-								<h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1">
-									{LLM_PHASE_LABELS[phase]}
-								</h3>
+								<div className="px-1">
+									<h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+										{LLM_PHASE_LABELS[phase]}
+									</h3>
+									<p className="text-xs text-muted-foreground/70 mt-0.5">
+										{LLM_PHASE_DESCRIPTIONS[phase]}
+									</p>
+								</div>
 								<div className="rounded-lg border">
 									<Table>
 										<TableHeader>

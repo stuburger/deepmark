@@ -1,10 +1,14 @@
 import { db } from "@/db"
+import { callLlmWithFallback } from "@/lib/infra/llm-runtime"
 import { logger } from "@/lib/infra/logger"
 import { getFileBase64 } from "@/lib/infra/s3"
-import { GoogleGenAI } from "@google/genai"
 import { logOcrRunEvent } from "@mcp-gcse/db"
+import { Output, generateText } from "ai"
 import { Resource } from "sst"
-import { RECONCILE_SCHEMA, buildReconciliationPrompt } from "./vision-reconcile-prompt"
+import {
+	ReconcileSchema,
+	buildReconciliationPrompt,
+} from "./vision-reconcile-prompt"
 
 const TAG = "vision-reconcile"
 
@@ -30,9 +34,8 @@ export type CorrectedPageToken = PageToken & {
 	text_corrected: string | null
 }
 
-
 /**
- * Corrects Cloud Vision OCR token text against the original page images using Gemini.
+ * Corrects Cloud Vision OCR token text against the original page images using the LLM.
  *
  * Accepts the pre-loaded token rows (returned from the DB insert in the extract
  * pipeline), so no DB read is required. The explicit token input makes the
@@ -83,8 +86,6 @@ export async function reconcilePageTokens({
 		)
 	}
 
-	const gemini = new GoogleGenAI({ apiKey: Resource.GeminiApiKey.value })
-
 	// Collect corrections keyed by token id.
 	const correctionById = new Map<string, string>()
 	let totalCorrected = 0
@@ -107,41 +108,33 @@ export async function reconcilePageTokens({
 					return
 				}
 
-				const tokenList = pageTokens
-					.map((t) => `"${t.text_raw}"`)
-					.join(", ")
+				const tokenList = pageTokens.map((t) => `"${t.text_raw}"`).join(", ")
 
-				const response = await gemini.models.generateContent({
-					model: "gemini-2.5-pro",
-					contents: [
-						{
-							role: "user",
-							parts: [
-								{ inlineData: { data: imageBase64, mimeType: page.mime_type } },
-								{ text: buildReconciliationPrompt(tokenList) },
+				const { output } = await callLlmWithFallback(
+					"vision-token-reconciliation",
+					async (model) =>
+						generateText({
+							model,
+							messages: [
+								{
+									role: "user",
+									content: [
+										{
+											type: "image",
+											image: imageBase64,
+											mediaType: page.mime_type,
+										},
+										{
+											type: "text",
+											text: buildReconciliationPrompt(tokenList),
+										},
+									],
+								},
 							],
-						},
-					],
-					config: {
-						responseMimeType: "application/json",
-						responseSchema: RECONCILE_SCHEMA,
-						temperature: 0.1,
-					},
-				})
-
-				const responseText = response.text
-				if (!responseText) {
-					logger.error(TAG, "Gemini reconciliation returned no text", {
-						jobId,
-						pageOrder: page.order,
-					})
-					return
-				}
-
-				const corrections = JSON.parse(responseText) as Array<{
-					text_raw: string
-					text_corrected: string
-				}>
+							output: Output.object({ schema: ReconcileSchema }),
+						}),
+				)
+				const corrections = output.corrections
 
 				// Build a queue of tokens grouped by raw text for order-of-appearance matching.
 				const tokenQueue = new Map<string, PageToken[]>()

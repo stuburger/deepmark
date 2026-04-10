@@ -1,25 +1,23 @@
-import { Type } from "@google/genai"
+import { z } from "zod"
 
-export const RECONCILE_SCHEMA = {
-	type: Type.ARRAY,
-	description:
-		"Only tokens that need correction — omit tokens that are already correct",
-	items: {
-		type: Type.OBJECT,
-		properties: {
-			text_raw: {
-				type: Type.STRING,
-				description:
-					"The original OCR text exactly as shown in the input list (used to match the correction to the right token)",
-			},
-			text_corrected: {
-				type: Type.STRING,
-				description: "The correctly-read word from the image",
-			},
-		},
-		required: ["text_raw", "text_corrected"],
-	},
-}
+export const ReconcileSchema = z.object({
+	corrections: z
+		.array(
+			z.object({
+				text_raw: z
+					.string()
+					.describe(
+						"The original OCR text exactly as shown in the input list (used to match the correction to the right token)",
+					),
+				text_corrected: z
+					.string()
+					.describe("The correctly-read word from the image"),
+			}),
+		)
+		.describe(
+			"Only tokens that need correction — omit tokens that are already correct",
+		),
+})
 
 export function buildReconciliationPrompt(tokenList: string): string {
 	return `You are correcting OCR errors in a list of words extracted from a student's handwritten exam script.

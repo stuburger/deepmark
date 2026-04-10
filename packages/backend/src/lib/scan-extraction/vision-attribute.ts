@@ -1,14 +1,14 @@
 import { db } from "@/db"
+import { callLlmWithFallback } from "@/lib/infra/llm-runtime"
 import { logger } from "@/lib/infra/logger"
 import { getFileBase64 } from "@/lib/infra/s3"
 import type { CorrectedPageToken } from "@/lib/scan-extraction/vision-reconcile"
-import { GoogleGenAI } from "@google/genai"
 import { logOcrRunEvent } from "@mcp-gcse/db"
 import { computeBboxHull } from "@mcp-gcse/shared"
-import { Resource } from "sst"
+import { Output, generateText } from "ai"
 import {
-	ATTRIBUTION_SCHEMA,
-	MCQ_FALLBACK_SCHEMA,
+	AttributionSchema,
+	McqFallbackSchema,
 	buildAttributionPrompt,
 	buildMcqFallbackPrompt,
 } from "./vision-attribute-prompt"
@@ -43,7 +43,7 @@ export type VisionAttributePageEntry = {
 export type VisionAttributeArgs = {
 	questions: VisionAttributeQuestion[]
 	/** Per-question answer text already extracted by the OCR pass — used as a
-	 *  matching anchor so Gemini can locate short/numeric answers (e.g. calculations). */
+	 *  matching anchor so the LLM can locate short/numeric answers (e.g. calculations). */
 	extractedAnswers: Array<{ question_id: string; answer_text: string }>
 	pages: VisionAttributePageEntry[]
 	s3Bucket: string
@@ -53,11 +53,8 @@ export type VisionAttributeArgs = {
 	tokens: CorrectedPageToken[]
 }
 
-
 /**
  * Narrows an unknown bbox value to [yMin, xMin, yMax, xMax].
- * Throws if the value is not a 4-element numeric array — a malformed bbox is a
- * data integrity error that must not silently propagate NaN into hull arithmetic.
  */
 function parseBbox(
 	raw: unknown,
@@ -73,29 +70,14 @@ function parseBbox(
 	return raw as [number, number, number, number]
 }
 
-// computeBboxHull imported from @mcp-gcse/shared
-
 /**
- * Replaces Gemini direct bounding-box estimation with a two-step approach:
- *
- * 1. For each page, send the page image + Cloud Vision word tokens + question
- *    list (with pre-extracted answer text as a matching anchor) to Gemini.
- *    Gemini assigns token indices to each question — a semantic grouping task,
- *    not a coordinate-guessing task.
- *
- * 2. Derive answer regions deterministically as the hull of assigned token
- *    bboxes. Because the bboxes come from Cloud Vision they are pixel-precise.
- *
- * Including the image is critical for short/numeric answers (e.g. calculations)
- * where the token text alone is too garbled to match semantically.
- * Including the extracted answer text gives Gemini a direct text-alignment
- * anchor, dramatically improving accuracy.
+ * Two-step vision attribution:
+ * 1. Send page image + Cloud Vision tokens + questions to LLM — assigns token ranges to questions.
+ * 2. Derive answer regions deterministically as the hull of assigned token bboxes.
  *
  * Side-effects:
  * - Updates `question_id` on each assigned `StudentPaperPageToken` row.
  * - Upserts rows in `student_paper_answer_regions` (one per question per page).
- *
- * Runs fire-and-forget — grading is never blocked.
  */
 export async function visionAttributeRegions({
 	questions,
@@ -110,7 +92,9 @@ export async function visionAttributeRegions({
 	const imagePages = pages.filter((p) => p.mime_type !== "application/pdf")
 
 	if (tokens.length === 0) {
-		logger.warn(TAG, "No Vision tokens found — skipping attribution", { jobId })
+		logger.warn(TAG, "No Vision tokens found — skipping attribution", {
+			jobId,
+		})
 		return
 	}
 
@@ -121,8 +105,6 @@ export async function visionAttributeRegions({
 		existing.push(t)
 		tokensByPage.set(t.page_order, existing)
 	}
-
-	const gemini = new GoogleGenAI({ apiKey: Resource.GeminiApiKey.value })
 
 	const questionNumberById = new Map(
 		questions.map((q) => [q.question_id, q.question_number]),
@@ -148,7 +130,6 @@ export async function visionAttributeRegions({
 		})
 		.join("\n")
 
-	// biome-ignore lint/style/useConst: mutated inside async lambdas
 	let totalLocated = 0
 
 	await Promise.all(
@@ -156,9 +137,6 @@ export async function visionAttributeRegions({
 			const tokens = tokensByPage.get(page.order) ?? []
 			if (tokens.length === 0) return
 
-			// Fetch the page image — including it gives Gemini visual spatial context,
-			// which is essential for short or numeric answers where OCR token text alone
-			// is too garbled to match to a question reliably.
 			let imageBase64: string
 			try {
 				imageBase64 = await getFileBase64(s3Bucket, page.key)
@@ -178,86 +156,55 @@ export async function visionAttributeRegions({
 				)
 			}
 
-			// Build the token list shown to Gemini — use corrected text where available.
+			// Build the token list shown to the LLM — use corrected text where available.
 			const tokenList = tokens
 				.map((t, i) => `${i}: "${t.text_corrected ?? t.text_raw}"`)
 				.join("\n")
 
 			const prompt = buildAttributionPrompt(tokenList, questionsText)
 
-			let response: Awaited<ReturnType<typeof gemini.models.generateContent>>
-			try {
-				response = await gemini.models.generateContent({
-					model: "gemini-2.5-pro",
-					contents: [
-						{
-							role: "user",
-							parts: [
-								{ inlineData: { data: imageBase64, mimeType: page.mime_type } },
-								{ text: prompt },
-							],
-						},
-					],
-					config: {
-						responseMimeType: "application/json",
-						responseSchema: ATTRIBUTION_SCHEMA,
-						temperature: 0.1,
-					},
-				})
-			} catch (err) {
-				void logOcrRunEvent(db, jobId, {
-					type: "region_attribution_failed",
-					at: new Date().toISOString(),
-					page_order: page.order,
-					reason: "gemini_call_failed",
-					detail: String(err),
-				})
-				throw new AttributionError(
-					`Gemini attribution call failed for page ${page.order}`,
-					page.order,
-					"gemini_call_failed",
-					String(err),
-				)
-			}
-
-			const responseText = response.candidates?.[0]?.content?.parts?.[0]?.text
-			if (!responseText) {
-				void logOcrRunEvent(db, jobId, {
-					type: "region_attribution_failed",
-					at: new Date().toISOString(),
-					page_order: page.order,
-					reason: "empty_response",
-				})
-				throw new AttributionError(
-					`Gemini attribution returned no text for page ${page.order}`,
-					page.order,
-					"empty_response",
-				)
-			}
-
-			type AssignmentResponse = {
+			let parsed: {
 				assignments: Array<{
 					question_id: string
 					ranges: Array<{ start: number; end: number }>
 				}>
 			}
-
-			let parsed: AssignmentResponse
 			try {
-				parsed = JSON.parse(responseText) as AssignmentResponse
-			} catch {
+				const { output } = await callLlmWithFallback(
+					"vision-attribution",
+					async (model) =>
+						generateText({
+							model,
+							messages: [
+								{
+									role: "user",
+									content: [
+										{
+											type: "image",
+											image: imageBase64,
+											mediaType: page.mime_type,
+										},
+										{ type: "text", text: prompt },
+									],
+								},
+							],
+							output: Output.object({ schema: AttributionSchema }),
+						}),
+				)
+				parsed = output
+			} catch (err) {
 				void logOcrRunEvent(db, jobId, {
 					type: "region_attribution_failed",
 					at: new Date().toISOString(),
 					page_order: page.order,
-					reason: "json_parse_failed",
-					detail: responseText.slice(0, 500),
+					reason: "llm_call_failed",
+					detail: String(err),
 				})
 				throw new AttributionError(
-					`Failed to parse Gemini attribution response for page ${page.order}`,
+					`LLM attribution call failed for page ${page.order}`,
 					page.order,
-					"json_parse_failed",
-					responseText.slice(0, 500),
+					"llm_call_failed",
+					String(err),
 				)
 			}
 
@@ -278,8 +225,6 @@ export async function visionAttributeRegions({
 				.filter((a) => a.token_indices.length > 0)
 
 			if (validAssignments.length === 0) {
-				// Gemini returned assignments but none matched valid question IDs —
-				// this is a data integrity failure, not a blank page.
 				if (rawAssignments.length > 0) {
 					const returnedIds = rawAssignments.map((a) => a.question_id)
 					const expectedIds = [...questionNumberById.keys()]
@@ -288,17 +233,15 @@ export async function visionAttributeRegions({
 						at: new Date().toISOString(),
 						page_order: page.order,
 						reason: "no_valid_assignments",
-						detail: `Gemini returned ${rawAssignments.length} assignment(s) but none matched known question IDs. Returned: [${returnedIds.join(", ")}]. Expected: [${expectedIds.join(", ")}]`,
+						detail: `LLM returned ${rawAssignments.length} assignment(s) but none matched known question IDs. Returned: [${returnedIds.join(", ")}]. Expected: [${expectedIds.join(", ")}]`,
 					})
 					throw new AttributionError(
-						`Gemini attribution returned ${rawAssignments.length} assignment(s) for page ${page.order} but none matched known question IDs`,
+						`LLM attribution returned ${rawAssignments.length} assignment(s) for page ${page.order} but none matched known question IDs`,
 						page.order,
 						"no_valid_assignments",
 						`Returned IDs: [${returnedIds.join(", ")}]`,
 					)
 				}
-				// Gemini returned an empty assignments array — page may genuinely
-				// have no student answers. Skip silently.
 				return
 			}
 
@@ -326,8 +269,6 @@ export async function visionAttributeRegions({
 				if (assignedBboxes.length === 0) return []
 
 				const hull = computeBboxHull(assignedBboxes)
-
-				// questionNumberById.has() above guarantees the key is present.
 				const question_number = questionNumberById.get(assignment.question_id)!
 
 				return [
@@ -337,7 +278,7 @@ export async function visionAttributeRegions({
 						question_number,
 						page_order: page.order,
 						box: hull,
-						source: null, // Vision token hull — precise coordinates
+						source: null,
 					},
 				]
 			})
@@ -362,10 +303,7 @@ export async function visionAttributeRegions({
 		}),
 	)
 
-	// ── MCQ Gemini fallback ──────────────────────────────────────────────────────
-	// MCQ answers are circles/ticks drawn on printed options — Cloud Vision
-	// generates no text tokens for them. For any MCQ question that still has no
-	// answer region after the main attribution pass, ask Gemini Vision directly.
+	// ── MCQ fallback ──────────────────────────────────────────────────────
 	const assignedQuestionIds = new Set(
 		await db.studentPaperAnswerRegion
 			.findMany({
@@ -380,19 +318,18 @@ export async function visionAttributeRegions({
 	)
 
 	if (unassignedMcqQuestions.length > 0) {
-		logger.info(TAG, "Running Gemini fallback for unassigned MCQ questions", {
+		logger.info(TAG, "Running LLM fallback for unassigned MCQ questions", {
 			jobId,
 			count: unassignedMcqQuestions.length,
 			question_numbers: unassignedMcqQuestions.map((q) => q.question_number),
 		})
 
-		const fallbackLocated = await runMcqGeminiFallback({
+		const fallbackLocated = await runMcqFallback({
 			questions: unassignedMcqQuestions,
 			extractedAnswers,
 			pages,
 			s3Bucket,
 			jobId,
-			gemini,
 		})
 		totalLocated += fallbackLocated
 	}
@@ -404,8 +341,7 @@ export async function visionAttributeRegions({
 	})
 }
 
-// ── MCQ Gemini fallback ────────────────────────────────────────────────────────
-
+// ── MCQ fallback ────────────────────────────────────────────────────────
 
 type McqFallbackArgs = {
 	questions: VisionAttributeQuestion[]
@@ -413,16 +349,14 @@ type McqFallbackArgs = {
 	pages: VisionAttributePageEntry[]
 	s3Bucket: string
 	jobId: string
-	gemini: GoogleGenAI
 }
 
-async function runMcqGeminiFallback({
+async function runMcqFallback({
 	questions,
 	extractedAnswers,
 	pages,
 	s3Bucket,
 	jobId,
-	gemini,
 }: McqFallbackArgs): Promise<number> {
 	const extractedAnswerById = new Map(
 		extractedAnswers.map((a) => [a.question_id, a.answer_text]),
@@ -458,91 +392,64 @@ async function runMcqGeminiFallback({
 
 			const prompt = buildMcqFallbackPrompt(questionsText)
 
-			let response: Awaited<ReturnType<typeof gemini.models.generateContent>>
 			try {
-				response = await gemini.models.generateContent({
-					model: "gemini-2.5-flash",
-					contents: [
-						{
-							role: "user",
-							parts: [
-								{ inlineData: { data: imageBase64, mimeType: page.mime_type } },
-								{ text: prompt },
+				const { output: parsed } = await callLlmWithFallback(
+					"vision-attribution-mcq-fallback",
+					async (model) =>
+						generateText({
+							model,
+							messages: [
+								{
+									role: "user",
+									content: [
+										{
+											type: "image",
+											image: imageBase64,
+											mediaType: page.mime_type,
+										},
+										{ type: "text", text: prompt },
+									],
+								},
 							],
-						},
-					],
-					config: {
-						responseMimeType: "application/json",
-						responseSchema: MCQ_FALLBACK_SCHEMA,
-						temperature: 0.1,
-					},
+							output: Output.object({ schema: McqFallbackSchema }),
+						}),
+				)
+
+				const found = (parsed.regions ?? []).filter(
+					(r) =>
+						r.found &&
+						questionNumberById.has(r.question_id) &&
+						r.box.some((v) => v > 0),
+				)
+
+				if (found.length === 0) return
+
+				await db.studentPaperAnswerRegion.createMany({
+					data: found.map((r) => ({
+						submission_id: jobId,
+						question_id: r.question_id,
+						question_number: questionNumberById.get(r.question_id)!,
+						page_order: page.order,
+						box: r.box,
+						source: "gemini_fallback",
+					})),
+					skipDuplicates: true,
+				})
+
+				totalLocated += found.length
+
+				logger.info(TAG, "MCQ LLM fallback complete for page", {
+					jobId,
+					pageOrder: page.order,
+					found: found.length,
 				})
 			} catch (err) {
-				logger.error(TAG, "Gemini MCQ fallback call failed", {
+				logger.error(TAG, "LLM MCQ fallback call failed", {
 					jobId,
 					pageOrder: page.order,
 					error: String(err),
 				})
-				return
 			}
-
-			const responseText = response.candidates?.[0]?.content?.parts?.[0]?.text
-			if (!responseText) {
-				logger.error(TAG, "Gemini MCQ fallback returned no text", {
-					jobId,
-					pageOrder: page.order,
-				})
-				return
-			}
-
-			type FallbackResponse = {
-				regions: Array<{
-					question_id: string
-					box: [number, number, number, number]
-					found: boolean
-				}>
-			}
-
-			let parsed: FallbackResponse
-			try {
-				parsed = JSON.parse(responseText) as FallbackResponse
-			} catch {
-				logger.error(TAG, "Failed to parse MCQ fallback response", {
-					jobId,
-					pageOrder: page.order,
-				})
-				return
-			}
-
-			const found = (parsed.regions ?? []).filter(
-				(r) =>
-					r.found &&
-					questionNumberById.has(r.question_id) &&
-					r.box.some((v) => v > 0),
-			)
-
-			if (found.length === 0) return
-
-			// questionNumberById.has() above guarantees the key is present.
-			await db.studentPaperAnswerRegion.createMany({
-				data: found.map((r) => ({
-					submission_id: jobId,
-					question_id: r.question_id,
-					question_number: questionNumberById.get(r.question_id)!,
-					page_order: page.order,
-					box: r.box,
-					source: "gemini_fallback",
-				})),
-				skipDuplicates: true,
-			})
-
-			totalLocated += found.length
-
-			logger.info(TAG, "MCQ Gemini fallback complete for page", {
-				jobId,
-				pageOrder: page.order,
-				found: found.length,
-			})
 		}),
 	)
 

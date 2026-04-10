@@ -1,69 +1,48 @@
-import { Type } from "@google/genai"
+import { z } from "zod"
 
-export const ATTRIBUTION_SCHEMA = {
-	type: Type.OBJECT,
-	properties: {
-		assignments: {
-			type: Type.ARRAY,
-			description:
-				"For each question answered on this page, provide one or more token ranges that cover the full extent of the student's answer",
-			items: {
-				type: Type.OBJECT,
-				properties: {
-					question_id: {
-						type: Type.STRING,
-						description: "The question_id as provided in the question list",
-					},
-					ranges: {
-						type: Type.ARRAY,
-						description:
-							"Contiguous token ranges for this question's answer. Use multiple ranges if the answer is non-contiguous. Each range is [start, end] inclusive (0-based).",
-						items: {
-							type: Type.OBJECT,
-							properties: {
-								start: {
-									type: Type.INTEGER,
-									description: "First token index (0-based, inclusive)",
-								},
-								end: {
-									type: Type.INTEGER,
-									description: "Last token index (0-based, inclusive)",
-								},
-							},
-							required: ["start", "end"],
-						},
-					},
-				},
-				required: ["question_id", "ranges"],
-			},
-		},
-	},
-	required: ["assignments"],
-}
+export const AttributionSchema = z.object({
+	assignments: z
+		.array(
+			z.object({
+				question_id: z
+					.string()
+					.describe("The question_id as provided in the question list"),
+				ranges: z
+					.array(
+						z.object({
+							start: z
+								.number()
+								.int()
+								.describe("First token index (0-based, inclusive)"),
+							end: z
+								.number()
+								.int()
+								.describe("Last token index (0-based, inclusive)"),
+						}),
+					)
+					.describe(
+						"Contiguous token ranges for this question's answer. Use multiple ranges if the answer is non-contiguous. Each range is [start, end] inclusive (0-based).",
+					),
+			}),
+		)
+		.describe(
+			"For each question answered on this page, provide one or more token ranges that cover the full extent of the student's answer",
+		),
+})
 
-export const MCQ_FALLBACK_SCHEMA = {
-	type: Type.OBJECT,
-	properties: {
-		regions: {
-			type: Type.ARRAY,
-			items: {
-				type: Type.OBJECT,
-				properties: {
-					question_id: { type: Type.STRING },
-					box: {
-						type: Type.ARRAY,
-						description:
-							"[yMin, xMin, yMax, xMax] normalised 0–1000 around the selected option",
-						items: { type: Type.INTEGER },
-					},
-					found: { type: Type.BOOLEAN },
-				},
-				required: ["question_id", "box", "found"],
-			},
-		},
-	},
-	required: ["regions"],
-}
+export const McqFallbackSchema = z.object({
+	regions: z.array(
+		z.object({
+			question_id: z.string(),
+			box: z
+				.array(z.number().int())
+				.describe(
+					"[yMin, xMin, yMax, xMax] normalised 0–1000 around the selected option",
+				),
+			found: z.boolean(),
+		}),
+	),
+})
 
 export function buildAttributionPrompt(
 	tokenList: string,

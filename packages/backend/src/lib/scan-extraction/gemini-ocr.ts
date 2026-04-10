@@ -1,5 +1,6 @@
-import { GoogleGenAI, Type } from "@google/genai"
-import { Resource } from "sst"
+import { callLlmWithFallback } from "@/lib/infra/llm-runtime"
+import { Output, generateText } from "ai"
+import { z } from "zod"
 
 export type HandwritingAnalysis = {
 	transcript: string
@@ -10,26 +11,19 @@ export type RunOcrOptions = {
 	analysisFocus?: string
 }
 
-const TRANSCRIPT_SCHEMA = {
-	type: Type.OBJECT,
-	properties: {
-		transcript: {
-			type: Type.STRING,
-			description:
-				"Full transcription of all handwritten text in reading order",
-		},
-		observations: {
-			type: Type.ARRAY,
-			description:
-				"Observations about handwriting style, legibility, and notable characteristics",
-			items: { type: Type.STRING },
-		},
-	},
-	required: ["transcript", "observations"],
-}
+const TranscriptSchema = z.object({
+	transcript: z
+		.string()
+		.describe("Full transcription of all handwritten text in reading order"),
+	observations: z
+		.array(z.string())
+		.describe(
+			"Observations about handwriting style, legibility, and notable characteristics",
+		),
+})
 
 /**
- * Run Gemini OCR on a base64-encoded image to get a full transcript and
+ * Run LLM OCR on a base64-encoded image to get a full transcript and
  * handwriting observations. Precise word-level bounding boxes are obtained
  * separately via Cloud Vision (cloud-vision-ocr.ts).
  */
@@ -38,42 +32,36 @@ export async function runOcr(
 	mimeType: string,
 	options: RunOcrOptions = {},
 ): Promise<HandwritingAnalysis> {
-	const ai = new GoogleGenAI({ apiKey: Resource.GeminiApiKey.value })
-	const imagePart = { inlineData: { data: imageBase64, mimeType } }
-
 	const focusInstruction = options.analysisFocus
 		? `Focus specifically on: ${options.analysisFocus}.`
 		: "Cover individual words, lines, corrections, crossed-out text, punctuation, and any diagrams."
 
-	const response = await ai.models.generateContent({
-		model: "gemini-2.5-flash",
-		contents: [
-			{
-				role: "user",
-				parts: [
-					imagePart,
+	const { output } = await callLlmWithFallback(
+		"handwriting-ocr",
+		async (model) =>
+			generateText({
+				model,
+				system:
+					"You are an expert at analysing handwritten text. Provide a full transcript and concise observations.",
+				messages: [
 					{
-						text: `Transcribe all handwritten text in reading order and provide observations about the handwriting quality and style. ${focusInstruction}`,
+						role: "user",
+						content: [
+							{
+								type: "image",
+								image: imageBase64,
+								mediaType: mimeType,
+							},
+							{
+								type: "text",
+								text: `Transcribe all handwritten text in reading order and provide observations about the handwriting quality and style. ${focusInstruction}`,
+							},
+						],
 					},
 				],
-			},
-		],
-		config: {
-			systemInstruction:
-				"You are an expert at analysing handwritten text. Provide a full transcript and concise observations.",
-			responseMimeType: "application/json",
-			responseSchema: TRANSCRIPT_SCHEMA,
-			temperature: 0.2,
-		},
-	})
+				output: Output.object({ schema: TranscriptSchema }),
+			}),
+	)
 
-	const responseText = response.candidates?.[0]?.content?.parts?.[0]?.text
-	if (!responseText) throw new Error("No transcript response from Gemini")
-
-	const { transcript, observations } = JSON.parse(responseText) as {
-		transcript: string
-		observations: string[]
-	}
-
-	return { transcript, observations }
+	return { transcript: output.transcript, observations: output.observations }
 }

@@ -1,7 +1,11 @@
-import { type HandwritingAnalysis, runOcr } from "@/lib/scan-extraction/gemini-ocr"
+import { callLlmWithFallback } from "@/lib/infra/llm-runtime"
 import { logger } from "@/lib/infra/logger"
-import { GoogleGenAI, Type } from "@google/genai"
-import { Resource } from "sst"
+import {
+	type HandwritingAnalysis,
+	runOcr,
+} from "@/lib/scan-extraction/gemini-ocr"
+import { Output, generateText } from "ai"
+import { z } from "zod"
 
 const TAG = "gemini-extract"
 
@@ -25,25 +29,16 @@ export type StudentPaperExtraction = {
 	ocrResults: HandwritingAnalysis[]
 }
 
-const STUDENT_PAPER_SCHEMA = {
-	type: Type.OBJECT,
-	properties: {
-		student_name: { type: Type.STRING, nullable: true },
-		detected_subject: { type: Type.STRING, nullable: true },
-		answers: {
-			type: Type.ARRAY,
-			items: {
-				type: Type.OBJECT,
-				properties: {
-					question_id: { type: Type.STRING },
-					answer_text: { type: Type.STRING },
-				},
-				required: ["question_id", "answer_text"],
-			},
-		},
-	},
-	required: ["answers"],
-}
+const StudentPaperSchema = z.object({
+	student_name: z.string().nullable().optional(),
+	detected_subject: z.string().nullable().optional(),
+	answers: z.array(
+		z.object({
+			question_id: z.string(),
+			answer_text: z.string(),
+		}),
+	),
+})
 
 function buildExtractionPrompt(
 	pageCount: number,
@@ -82,7 +77,7 @@ Return:
 }
 
 /**
- * Calls Gemini to extract the student's name, detected subject, and answers
+ * Calls the LLM to extract the student's name, detected subject, and answers
  * from one or more base64-encoded exam pages.
  *
  * Requires a list of question seeds so the model returns canonical question_id
@@ -93,50 +88,42 @@ Return:
  * Per-page OCR (transcript + bounding boxes via runOcr) runs concurrently
  * with the extraction call so no latency is added.
  *
- * Throws if Gemini returns an empty response.
+ * Throws if the LLM returns an empty response.
  */
 export async function extractStudentPaper(
 	pageData: PageData[],
 	questions: QuestionSeed[],
 ): Promise<StudentPaperExtraction> {
-	const gemini = new GoogleGenAI({ apiKey: Resource.GeminiApiKey.value })
-
-	const inlineDataParts = pageData.map((p) => ({
-		inlineData: { data: p.data, mimeType: p.mimeType },
+	const imageParts = pageData.map((p) => ({
+		type: "image" as const,
+		image: p.data,
+		mediaType: p.mimeType,
 	}))
 
 	// Fan out: answer extraction (all pages combined) + per-page runOcr in parallel.
-	// runOcr itself makes 2 parallel Gemini calls (transcript + bounding boxes).
-	const [response, ...ocrResults] = await Promise.all([
-		gemini.models.generateContent({
-			model: "gemini-2.5-flash",
-			contents: [
-				{
-					role: "user",
-					parts: [
-						...inlineDataParts,
-						{ text: buildExtractionPrompt(pageData.length, questions) },
-					],
-				},
-			],
-			config: {
-				responseMimeType: "application/json",
-				responseSchema: STUDENT_PAPER_SCHEMA,
-				temperature: 0.1,
-			},
-		}),
+	const [extractionResult, ...ocrResults] = await Promise.all([
+		callLlmWithFallback("student-paper-extraction", async (model) =>
+			generateText({
+				model,
+				messages: [
+					{
+						role: "user",
+						content: [
+							...imageParts,
+							{
+								type: "text",
+								text: buildExtractionPrompt(pageData.length, questions),
+							},
+						],
+					},
+				],
+				output: Output.object({ schema: StudentPaperSchema }),
+			}),
+		),
 		...pageData.map((p) => runOcr(p.data, p.mimeType)),
 	])
 
-	const responseText = response.text
-	if (!responseText) throw new Error("No response from Gemini")
-
-	const parsed = JSON.parse(responseText) as {
-		student_name?: string | null
-		detected_subject?: string | null
-		answers: Array<{ question_id: string; answer_text: string }>
-	}
-
+	const parsed = extractionResult.output
 	const answers = validateAndFillAnswers(parsed.answers ?? [], questions)
 
 	return {

@@ -1,36 +1,49 @@
-import { GoogleGenAI, type Part } from "@google/genai"
-import { Resource } from "sst"
+import { callLlmWithFallback } from "@/lib/infra/llm-runtime"
+import { Output, generateText } from "ai"
+import { z } from "zod"
 import {
 	buildBlankClassificationPrompt,
 	buildNameExtractionPrompt,
 	buildPageBoundaryPrompt,
 } from "./classify-prompts"
-import { extractJsonFromResponse } from "./llm-output"
 import type { PageData } from "./types"
+
+const PageBoundarySchema = z.object({
+	isScriptStart: z.boolean(),
+	confidence: z.number(),
+})
+
+const BlankClassificationSchema = z.object({
+	classification: z.enum(["separator", "script_page", "artifact"]),
+})
+
+const NameExtractionSchema = z.object({
+	name: z.string().nullable(),
+	confidence: z.number(),
+})
 
 export async function callClassifyPageBoundary(
 	prevPage: PageData | null,
 	currentPage: PageData,
 ): Promise<{ isScriptStart: boolean | null; confidence: number }> {
-	const ai = new GoogleGenAI({ apiKey: Resource.GeminiApiKey.value })
-
-	const parts: Part[] = []
+	const content: Array<
+		| { type: "image"; image: string; mediaType: string }
+		| { type: "text"; text: string }
+	> = []
 
 	if (prevPage?.jpegBuffer) {
-		parts.push({
-			inlineData: {
-				mimeType: "image/jpeg",
-				data: prevPage.jpegBuffer.toString("base64"),
-			},
+		content.push({
+			type: "image",
+			image: prevPage.jpegBuffer.toString("base64"),
+			mediaType: "image/jpeg",
 		})
 	}
 
 	if (currentPage.jpegBuffer) {
-		parts.push({
-			inlineData: {
-				mimeType: "image/jpeg",
-				data: currentPage.jpegBuffer.toString("base64"),
-			},
+		content.push({
+			type: "image",
+			image: currentPage.jpegBuffer.toString("base64"),
+			mediaType: "image/jpeg",
 		})
 	}
 
@@ -38,28 +51,25 @@ export async function callClassifyPageBoundary(
 		? "The FIRST image is the PREVIOUS page; the SECOND image is the CURRENT page."
 		: "The image is the CURRENT page (no previous page context)."
 
-	parts.push({ text: buildPageBoundaryPrompt(contextDesc) })
+	content.push({ type: "text", text: buildPageBoundaryPrompt(contextDesc) })
 
 	try {
-		const response = await ai.models.generateContent({
-			model: "gemini-2.5-flash",
-			contents: [{ role: "user", parts }],
-		})
-
-		const rawText = response.candidates?.[0]?.content?.parts?.[0]?.text ?? ""
-		const jsonStr = extractJsonFromResponse(rawText)
-		if (!jsonStr) return { isScriptStart: null, confidence: 0.5 }
-		const parsed = JSON.parse(jsonStr) as {
-			isScriptStart: boolean
-			confidence: number
-		}
+		const { output } = await callLlmWithFallback(
+			"script-boundary-classification",
+			async (model) =>
+				generateText({
+					model,
+					messages: [{ role: "user", content }],
+					output: Output.object({ schema: PageBoundarySchema }),
+				}),
+		)
 
 		return {
 			isScriptStart:
-				typeof parsed.isScriptStart === "boolean" ? parsed.isScriptStart : null,
+				typeof output.isScriptStart === "boolean" ? output.isScriptStart : null,
 			confidence:
-				typeof parsed.confidence === "number"
-					? Math.min(1, Math.max(0, parsed.confidence))
+				typeof output.confidence === "number"
+					? Math.min(1, Math.max(0, output.confidence))
 					: 0.5,
 		}
 	} catch {
@@ -71,24 +81,23 @@ export async function callClassifyBlankPage(
 	prevPage: PageData | null,
 	nextPage: PageData | null,
 ): Promise<"separator" | "script_page" | "artifact"> {
-	const ai = new GoogleGenAI({ apiKey: Resource.GeminiApiKey.value })
-
-	const parts: Part[] = []
+	const content: Array<
+		| { type: "image"; image: string; mediaType: string }
+		| { type: "text"; text: string }
+	> = []
 
 	if (prevPage?.jpegBuffer) {
-		parts.push({
-			inlineData: {
-				mimeType: "image/jpeg",
-				data: prevPage.jpegBuffer.toString("base64"),
-			},
+		content.push({
+			type: "image",
+			image: prevPage.jpegBuffer.toString("base64"),
+			mediaType: "image/jpeg",
 		})
 	}
 	if (nextPage?.jpegBuffer) {
-		parts.push({
-			inlineData: {
-				mimeType: "image/jpeg",
-				data: nextPage.jpegBuffer.toString("base64"),
-			},
+		content.push({
+			type: "image",
+			image: nextPage.jpegBuffer.toString("base64"),
+			mediaType: "image/jpeg",
 		})
 	}
 
@@ -101,24 +110,23 @@ export async function callClassifyBlankPage(
 					? "The image is the page AFTER the blank (nothing precedes)."
 					: "No surrounding pages available."
 
-	parts.push({ text: buildBlankClassificationPrompt(contextDesc) })
+	content.push({
+		type: "text",
+		text: buildBlankClassificationPrompt(contextDesc),
+	})
 
 	try {
-		const response = await ai.models.generateContent({
-			model: "gemini-2.5-flash",
-			contents: [{ role: "user", parts }],
-		})
+		const { output } = await callLlmWithFallback(
+			"blank-page-classification",
+			async (model) =>
+				generateText({
+					model,
+					messages: [{ role: "user", content }],
+					output: Output.object({ schema: BlankClassificationSchema }),
+				}),
+		)
 
-		const rawText = response.candidates?.[0]?.content?.parts?.[0]?.text ?? ""
-		const jsonStr = extractJsonFromResponse(rawText)
-		if (!jsonStr) return "artifact"
-		const parsed = JSON.parse(jsonStr) as { classification: string }
-		const c = parsed.classification
-
-		if (c === "separator" || c === "script_page" || c === "artifact") {
-			return c
-		}
-		return "artifact"
+		return output.classification
 	} catch {
 		return "artifact"
 	}
@@ -127,42 +135,36 @@ export async function callClassifyBlankPage(
 export async function callExtractNameFromPage(
 	jpegBuffer: Buffer,
 ): Promise<{ name: string | null; confidence: number }> {
-	const ai = new GoogleGenAI({ apiKey: Resource.GeminiApiKey.value })
-
 	try {
-		const response = await ai.models.generateContent({
-			model: "gemini-2.5-flash",
-			contents: [
-				{
-					role: "user",
-					parts: [
+		const { output } = await callLlmWithFallback(
+			"student-name-extraction",
+			async (model) =>
+				generateText({
+					model,
+					messages: [
 						{
-							inlineData: {
-								mimeType: "image/jpeg",
-								data: jpegBuffer.toString("base64"),
-							},
+							role: "user",
+							content: [
+								{
+									type: "image",
+									image: jpegBuffer.toString("base64"),
+									mediaType: "image/jpeg",
+								},
+								{ type: "text", text: buildNameExtractionPrompt() },
+							],
 						},
-						{ text: buildNameExtractionPrompt() },
 					],
-				},
-			],
-		})
-
-		const rawText = response.candidates?.[0]?.content?.parts?.[0]?.text ?? ""
-		const jsonStr = extractJsonFromResponse(rawText)
-		if (!jsonStr) return { name: null, confidence: 0.0 }
-		const parsed = JSON.parse(jsonStr) as {
-			name: string | null
-			confidence: number
-		}
+					output: Output.object({ schema: NameExtractionSchema }),
+				}),
+		)
 
 		return {
 			name:
-				typeof parsed.name === "string" && parsed.name.trim()
-					? parsed.name.trim()
+				typeof output.name === "string" && output.name.trim()
+					? output.name.trim()
 					: null,
 			confidence:
-				typeof parsed.confidence === "number" ? parsed.confidence : 0.5,
+				typeof output.confidence === "number" ? output.confidence : 0.5,
 		}
 	} catch {
 		return { name: null, confidence: 0.0 }

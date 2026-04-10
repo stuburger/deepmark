@@ -154,11 +154,15 @@ export type StudentPaperJobPayload = {
 	job_events: JobEvent[] | null
 	enrichment_status: EnrichmentStatus | null
 	level_descriptors: string | null
-	/** Phase 3: IDs of the current domain model run records. Present for jobs processed after the Phase 3 migration. */
+	/** IDs of the current domain model run records. */
 	submission_id?: string
 	ocr_run_id?: string
 	grading_run_id?: string
 	enrichment_run_id?: string
+	/** LLM run snapshots — which models were configured and which executed. */
+	ocr_llm_snapshot?: unknown
+	grading_llm_snapshot?: unknown
+	enrichment_llm_snapshot?: unknown
 }
 
 export type GetStudentPaperJobResult =

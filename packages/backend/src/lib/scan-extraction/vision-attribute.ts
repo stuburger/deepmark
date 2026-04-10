@@ -2,6 +2,7 @@ import { db } from "@/db"
 import { callLlmWithFallback } from "@/lib/infra/llm-runtime"
 import { logger } from "@/lib/infra/logger"
 import { getFileBase64 } from "@/lib/infra/s3"
+import { filterSpatialOutliers } from "@/lib/scan-extraction/filter-spatial-outliers"
 import type { CorrectedPageToken } from "@/lib/scan-extraction/vision-reconcile"
 import { logOcrRunEvent } from "@mcp-gcse/db"
 import { type LlmRunner, computeBboxHull } from "@mcp-gcse/shared"
@@ -264,6 +265,8 @@ export async function visionAttributeRegions({
 			)
 
 			// 2. Compute hull for each question from its assigned token bboxes.
+			// Filter spatial outliers first — a single misattributed token can
+			// stretch the hull across the entire page (see Q01.7 overlap bug).
 			const regionRows = validAssignments.flatMap((assignment) => {
 				const assignedBboxes = assignment.token_indices
 					.map((idx) => tokens[idx])
@@ -272,7 +275,10 @@ export async function visionAttributeRegions({
 
 				if (assignedBboxes.length === 0) return []
 
-				const hull = computeBboxHull(assignedBboxes)
+				const filteredBboxes = filterSpatialOutliers(assignedBboxes)
+				if (filteredBboxes.length === 0) return []
+
+				const hull = computeBboxHull(filteredBboxes)
 				const question_number = questionNumberById.get(assignment.question_id)!
 
 				return [

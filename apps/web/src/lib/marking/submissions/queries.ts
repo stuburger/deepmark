@@ -100,6 +100,7 @@ const submissionDetailInclude = {
 			extracted_answers_raw: true,
 			page_analyses: true,
 			job_events: true,
+			llm_snapshot: true,
 		},
 	},
 	grading_runs: {
@@ -111,10 +112,11 @@ const submissionDetailInclude = {
 			error: true,
 			grading_results: true,
 			job_events: true,
+			llm_snapshot: true,
 			enrichment_runs: {
 				orderBy: { created_at: "desc" as const },
 				take: 1,
-				select: { id: true, status: true },
+				select: { id: true, status: true, llm_snapshot: true },
 			},
 		},
 	},
@@ -161,6 +163,7 @@ function toJobPayload(sub: {
 		extracted_answers_raw: unknown
 		page_analyses: unknown
 		job_events: unknown
+		llm_snapshot: unknown
 	}>
 	grading_runs: Array<{
 		id: string
@@ -168,7 +171,12 @@ function toJobPayload(sub: {
 		error: string | null
 		grading_results: unknown
 		job_events: unknown
-		enrichment_runs: Array<{ id: string; status: EnrichmentStatus }>
+		llm_snapshot: unknown
+		enrichment_runs: Array<{
+			id: string
+			status: EnrichmentStatus
+			llm_snapshot: unknown
+		}>
 	}>
 }) {
 	const latestOcr = sub.ocr_runs[0] ?? null
@@ -247,6 +255,9 @@ function toJobPayload(sub: {
 		ocr_run_id: latestOcr?.id,
 		grading_run_id: latestGrading?.id,
 		enrichment_run_id: latestEnrichment?.id,
+		ocr_llm_snapshot: latestOcr?.llm_snapshot ?? null,
+		grading_llm_snapshot: latestGrading?.llm_snapshot ?? null,
+		enrichment_llm_snapshot: latestEnrichment?.llm_snapshot ?? null,
 	}
 }
 

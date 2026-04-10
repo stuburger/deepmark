@@ -13,6 +13,7 @@ import { CancelledPanel } from "./cancelled"
 import { FailedPanel } from "./failed"
 import type { MarkingPhase } from "./phase"
 import { MarkingResults } from "./results/index"
+import { LlmSnapshotPanel } from "./results/llm-snapshot-panel"
 
 const STATUS_LABELS: Record<string, string> = {
 	pending: "Queued — waiting to start",
@@ -121,6 +122,11 @@ export function ResultsPanel({
 					annotations={annotations}
 					overridesByQuestionId={overridesByQuestionId}
 					onOverrideChange={onOverrideChange}
+				/>
+				<LlmSnapshotPanel
+					ocrSnapshot={data.ocr_llm_snapshot}
+					gradingSnapshot={data.grading_llm_snapshot}
+					enrichmentSnapshot={data.enrichment_llm_snapshot}
 				/>
 			</div>
 		</ScrollArea>

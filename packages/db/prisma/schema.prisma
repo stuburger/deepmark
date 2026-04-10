@@ -736,6 +736,7 @@ model LlmCallSite {
   display_name String
   description  String?
   input_type   String   // "text" | "vision" | "pdf"
+  phase        String?  // pipeline phase for UI grouping: "pdf-ingestion" | "batch-classification" | "ocr" | "grading" | "enrichment" | "tools"
   models       Json     // ordered array of { provider, model, temperature }
   updated_by   String?
   updated_at   DateTime @updatedAt

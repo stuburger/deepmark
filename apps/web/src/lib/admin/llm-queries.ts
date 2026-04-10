@@ -1,10 +1,16 @@
 "use server"
 
 import { createPrismaClient } from "@mcp-gcse/db"
+import { LLM_CALL_SITE_DEFAULTS } from "@mcp-gcse/shared"
 import { Resource } from "sst"
 import type { LlmCallSiteRow, LlmModelEntry } from "./llm-types"
 
 const db = createPrismaClient(Resource.NeonPostgres.databaseUrl)
+
+/** Canonical sort order: matches the phase + temporal order in LLM_CALL_SITE_DEFAULTS. */
+const KEY_ORDER = new Map(
+	LLM_CALL_SITE_DEFAULTS.map((d, i) => [d.key, i]),
+)
 
 export type ListLlmCallSitesResult =
 	| { ok: true; callSites: LlmCallSiteRow[] }
@@ -12,19 +18,23 @@ export type ListLlmCallSitesResult =
 
 export async function listLlmCallSites(): Promise<ListLlmCallSitesResult> {
 	try {
-		const rows = await db.llmCallSite.findMany({
-			orderBy: { display_name: "asc" },
-		})
-		const callSites: LlmCallSiteRow[] = rows.map((r) => ({
-			id: r.id,
-			key: r.key,
-			display_name: r.display_name,
-			description: r.description,
-			input_type: r.input_type,
-			models: r.models as LlmModelEntry[],
-			updated_by: r.updated_by,
-			updated_at: r.updated_at,
-		}))
+		const rows = await db.llmCallSite.findMany()
+		const callSites: LlmCallSiteRow[] = rows
+			.map((r) => ({
+				id: r.id,
+				key: r.key,
+				display_name: r.display_name,
+				description: r.description,
+				input_type: r.input_type,
+				phase: r.phase,
+				models: r.models as LlmModelEntry[],
+				updated_by: r.updated_by,
+				updated_at: r.updated_at,
+			}))
+			.sort(
+				(a, b) =>
+					(KEY_ORDER.get(a.key) ?? 999) - (KEY_ORDER.get(b.key) ?? 999),
+			)
 		return { ok: true, callSites }
 	} catch {
 		return { ok: false, error: "Failed to load LLM call sites" }

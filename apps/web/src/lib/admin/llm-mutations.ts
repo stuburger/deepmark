@@ -75,6 +75,7 @@ export async function updateLlmCallSiteModels(
 				display_name: row.display_name,
 				description: row.description,
 				input_type: row.input_type,
+				phase: row.phase,
 				models: row.models as LlmModelEntry[],
 				updated_by: row.updated_by,
 				updated_at: row.updated_at,
@@ -111,6 +112,7 @@ export async function seedLlmCallSites(): Promise<SeedLlmCallSitesResult> {
 						display_name: def.display_name,
 						description: def.description,
 						input_type: def.input_type,
+						phase: def.phase,
 						models: def.models as unknown as Parameters<
 							typeof db.llmCallSite.create
 						>[0]["data"]["models"],
@@ -119,11 +121,12 @@ export async function seedLlmCallSites(): Promise<SeedLlmCallSitesResult> {
 				})
 				created++
 			} else {
-				// Update display_name and description if they changed, but leave models untouched
+				// Update display_name, description, input_type, and phase if they changed, but leave models untouched
 				if (
 					existing.display_name !== def.display_name ||
 					existing.description !== def.description ||
-					existing.input_type !== def.input_type
+					existing.input_type !== def.input_type ||
+					existing.phase !== def.phase
 				) {
 					await db.llmCallSite.update({
 						where: { key: def.key },
@@ -131,6 +134,7 @@ export async function seedLlmCallSites(): Promise<SeedLlmCallSitesResult> {
 							display_name: def.display_name,
 							description: def.description,
 							input_type: def.input_type,
+							phase: def.phase,
 							updated_by: session.userId,
 						},
 					})
@@ -186,6 +190,7 @@ export async function resetLlmCallSiteToDefault(
 				display_name: row.display_name,
 				description: row.description,
 				input_type: row.input_type,
+				phase: row.phase,
 				models: row.models as LlmModelEntry[],
 				updated_by: row.updated_by,
 				updated_at: row.updated_at,

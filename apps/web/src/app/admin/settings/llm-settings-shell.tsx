@@ -24,6 +24,7 @@ import {
 import { listLlmCallSites } from "@/lib/admin/llm-queries"
 import type { LlmCallSiteRow, LlmModelEntry } from "@/lib/admin/llm-types"
 import { queryKeys } from "@/lib/query-keys"
+import { LLM_PHASE_LABELS, LLM_PHASE_ORDER } from "@mcp-gcse/shared"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import {
 	Eye,
@@ -205,59 +206,76 @@ export function LlmSettingsShell({
 					</Button>
 				</div>
 			) : (
-				<div className="rounded-lg border">
-					<Table>
-						<TableHeader>
-							<TableRow>
-								<TableHead className="w-[280px]">Call Site</TableHead>
-								<TableHead className="w-[80px]">Input</TableHead>
-								<TableHead>Model Chain</TableHead>
-								<TableHead className="w-[60px]" />
-							</TableRow>
-						</TableHeader>
-						<TableBody>
-							{callSites.map((cs) => {
-								const inputConfig = INPUT_TYPE_CONFIG[cs.input_type]
-								const InputIcon = inputConfig?.icon ?? Eye
-								return (
-									<TableRow key={cs.id}>
-										<TableCell>
-											<div>
-												<p className="font-medium text-sm">{cs.display_name}</p>
-												{cs.description && (
-													<p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">
-														{cs.description}
-													</p>
-												)}
-											</div>
-										</TableCell>
-										<TableCell>
-											<Badge
-												variant={inputConfig?.variant ?? "secondary"}
-												className="gap-1"
-											>
-												<InputIcon className="h-3 w-3" />
-												{inputConfig?.label ?? cs.input_type}
-											</Badge>
-										</TableCell>
-										<TableCell>
-											<ModelChainBadges models={cs.models} />
-										</TableCell>
-										<TableCell>
-											<Button
-												variant="ghost"
-												size="icon-xs"
-												onClick={() => setEditingCallSite(cs)}
-												title="Edit models"
-											>
-												<Pencil className="h-3.5 w-3.5" />
-											</Button>
-										</TableCell>
-									</TableRow>
-								)
-							})}
-						</TableBody>
-					</Table>
+				<div className="space-y-6">
+					{LLM_PHASE_ORDER.map((phase) => {
+						const phaseCallSites = callSites.filter(
+							(cs) => cs.phase === phase,
+						)
+						if (phaseCallSites.length === 0) return null
+						return (
+							<div key={phase} className="space-y-1.5">
+								<h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1">
+									{LLM_PHASE_LABELS[phase]}
+								</h3>
+								<div className="rounded-lg border">
+									<Table>
+										<TableHeader>
+											<TableRow>
+												<TableHead className="w-[280px]">Call Site</TableHead>
+												<TableHead className="w-[80px]">Input</TableHead>
+												<TableHead>Model Chain</TableHead>
+												<TableHead className="w-[60px]" />
+											</TableRow>
+										</TableHeader>
+										<TableBody>
+											{phaseCallSites.map((cs) => {
+												const inputConfig = INPUT_TYPE_CONFIG[cs.input_type]
+												const InputIcon = inputConfig?.icon ?? Eye
+												return (
+													<TableRow key={cs.id}>
+														<TableCell>
+															<div>
+																<p className="font-medium text-sm">
+																	{cs.display_name}
+																</p>
+																{cs.description && (
+																	<p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">
+																		{cs.description}
+																	</p>
+																)}
+															</div>
+														</TableCell>
+														<TableCell>
+															<Badge
+																variant={inputConfig?.variant ?? "secondary"}
+																className="gap-1"
+															>
+																<InputIcon className="h-3 w-3" />
+																{inputConfig?.label ?? cs.input_type}
+															</Badge>
+														</TableCell>
+														<TableCell>
+															<ModelChainBadges models={cs.models} />
+														</TableCell>
+														<TableCell>
+															<Button
+																variant="ghost"
+																size="icon-xs"
+																onClick={() => setEditingCallSite(cs)}
+																title="Edit models"
+															>
+																<Pencil className="h-3.5 w-3.5" />
+															</Button>
+														</TableCell>
+													</TableRow>
+												)
+											})}
+										</TableBody>
+									</Table>
+								</div>
+							</div>
+						)
+					})}
 				</div>
 			)}
 

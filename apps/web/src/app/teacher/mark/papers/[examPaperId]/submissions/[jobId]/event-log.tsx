@@ -1,5 +1,6 @@
 "use client"
 
+import { cn } from "@/lib/utils"
 import type { JobEvent } from "@mcp-gcse/db"
 import {
 	AlertCircle,
@@ -106,11 +107,16 @@ export function EventLog({
 	const list = events ?? []
 
 	return (
-		<div className="border-t">
+		<div
+			className={cn(
+				"shrink-0 border-t bg-background flex flex-col",
+				expanded && "h-[50vh]",
+			)}
+		>
 			<button
 				type="button"
 				onClick={() => setExpanded((v) => !v)}
-				className="flex w-full items-center justify-between px-4 py-2.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+				className="flex w-full shrink-0 items-center justify-between px-4 py-2.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
 			>
 				<span className="flex items-center gap-2">
 					{isPolling && (
@@ -131,7 +137,7 @@ export function EventLog({
 			</button>
 
 			{expanded && (
-				<div className="px-4 pb-4 space-y-2">
+				<div className="flex-1 min-h-0 overflow-y-auto px-4 pb-4 space-y-2">
 					{list.length === 0 ? (
 						<p className="text-xs text-muted-foreground italic">
 							No events yet.

@@ -7,6 +7,8 @@ import type {
 	GradingResult,
 	StudentPaperAnnotation,
 	StudentPaperResultPayload,
+	TeacherOverride,
+	UpsertTeacherOverrideInput,
 } from "@/lib/marking/types"
 import { GradingResultCard } from "./grading-result-card"
 
@@ -21,10 +23,6 @@ function scoreBadgeVariant(
 	return "destructive"
 }
 
-/**
- * Displays the total score summary and per-question breakdown.
- * Used inside the results sidebar in the completed phase.
- */
 export function GradingResultsPanel({
 	jobId,
 	data,
@@ -32,6 +30,8 @@ export function GradingResultsPanel({
 	activeQuestionNumber,
 	onAnswerSaved,
 	annotations = [],
+	overridesByQuestionId,
+	onOverrideChange,
 }: {
 	jobId: string
 	data: StudentPaperResultPayload
@@ -39,10 +39,23 @@ export function GradingResultsPanel({
 	activeQuestionNumber: string | null
 	onAnswerSaved: (questionId: string, text: string) => void
 	annotations?: StudentPaperAnnotation[]
+	overridesByQuestionId?: Map<string, TeacherOverride>
+	onOverrideChange?: (
+		questionId: string,
+		input: UpsertTeacherOverrideInput | null,
+	) => void
 }) {
+	// Compute effective totals using overrides where present
+	const effectiveTotalAwarded = data.grading_results.reduce((sum, r) => {
+		const override = overridesByQuestionId?.get(r.question_id)
+		return sum + (override?.score_override ?? r.awarded_score)
+	}, 0)
+
+	const hasOverrides = overridesByQuestionId && overridesByQuestionId.size > 0
+
 	const scorePercent =
 		data.total_max > 0
-			? Math.round((data.total_awarded / data.total_max) * 100)
+			? Math.round((effectiveTotalAwarded / data.total_max) * 100)
 			: 0
 
 	return (
@@ -53,18 +66,26 @@ export function GradingResultsPanel({
 					<CardTitle className="flex items-center justify-between text-base">
 						<span>Total score</span>
 						<Badge
-							variant={scoreBadgeVariant(data.total_awarded, data.total_max)}
+							variant={scoreBadgeVariant(effectiveTotalAwarded, data.total_max)}
 							className="text-sm px-2.5 py-0.5"
 						>
-							{data.total_awarded} / {data.total_max}
+							{effectiveTotalAwarded} / {data.total_max}
 						</Badge>
 					</CardTitle>
 				</CardHeader>
 				<CardContent>
 					<Progress value={scorePercent} className="h-2.5" />
-					<p className="mt-1.5 text-xs text-muted-foreground text-right">
-						{scorePercent}%
-					</p>
+					<div className="mt-1.5 flex items-center justify-between">
+						{hasOverrides && (
+							<p className="text-[10px] text-blue-500">
+								Includes teacher adjustments (AI: {data.total_awarded}/
+								{data.total_max})
+							</p>
+						)}
+						<p className="text-xs text-muted-foreground text-right ml-auto">
+							{scorePercent}%
+						</p>
+					</div>
 				</CardContent>
 			</Card>
 
@@ -96,6 +117,12 @@ export function GradingResultsPanel({
 									annotations={annotations.filter(
 										(a) => a.question_id === r.question_id,
 									)}
+									override={overridesByQuestionId?.get(r.question_id)}
+									onOverrideChange={
+										onOverrideChange
+											? (input) => onOverrideChange(r.question_id, input)
+											: undefined
+									}
 								/>
 							))}
 						</div>

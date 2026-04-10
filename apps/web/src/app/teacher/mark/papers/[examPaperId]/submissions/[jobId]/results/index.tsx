@@ -3,6 +3,8 @@
 import type {
 	StudentPaperAnnotation,
 	StudentPaperJobPayload,
+	TeacherOverride,
+	UpsertTeacherOverrideInput,
 } from "@/lib/marking/types"
 import { useState } from "react"
 import { GradingResultsPanel } from "./grading-results-panel"
@@ -17,11 +19,18 @@ export function MarkingResults({
 	data,
 	activeQuestionNumber,
 	annotations = [],
+	overridesByQuestionId,
+	onOverrideChange,
 }: {
 	jobId: string
 	data: StudentPaperJobPayload
 	activeQuestionNumber?: string | null
 	annotations?: StudentPaperAnnotation[]
+	overridesByQuestionId?: Map<string, TeacherOverride>
+	onOverrideChange?: (
+		questionId: string,
+		input: UpsertTeacherOverrideInput | null,
+	) => void
 }) {
 	const [answers, setAnswers] = useState<Record<string, string>>(
 		Object.fromEntries(
@@ -39,6 +48,8 @@ export function MarkingResults({
 				setAnswers((prev) => ({ ...prev, [id]: text }))
 			}
 			annotations={annotations}
+			overridesByQuestionId={overridesByQuestionId}
+			onOverrideChange={onOverrideChange}
 		/>
 	)
 }

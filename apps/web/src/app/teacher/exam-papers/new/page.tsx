@@ -27,6 +27,7 @@ import {
 	SUBJECT_VALUES,
 	type Subject,
 } from "@/lib/subjects"
+import { validatePdfFile } from "@/lib/upload-validation"
 import { Sparkles } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
@@ -151,8 +152,9 @@ export default function NewExamPaperPage() {
 	// ── First drop on the idle screen ──
 
 	async function processFirstFile(file: File) {
-		if (!file.type.includes("pdf")) {
-			setStage({ kind: "error", message: "Please select a PDF file." })
+		const validation = validatePdfFile(file)
+		if (!validation.ok) {
+			setStage({ kind: "error", message: validation.error })
 			return
 		}
 

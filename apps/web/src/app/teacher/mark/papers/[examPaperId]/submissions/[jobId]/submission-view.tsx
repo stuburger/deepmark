@@ -24,12 +24,17 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { parseAsString, useQueryState } from "nuqs"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
-import { AnnotatedScanColumn } from "./results/annotated-scan-column"
-import type { MarkingPhase } from "./phase"
-import { derivePhase } from "./phase"
+import { EventLog } from "./event-log"
 import { useJobQuery } from "./hooks/use-job-query"
 import { useScrollToQuestion } from "./hooks/use-scroll-to-question"
+import {
+	useTeacherOverrideMutations,
+	useTeacherOverrides,
+} from "./hooks/use-teacher-overrides"
+import type { MarkingPhase } from "./phase"
+import { derivePhase } from "./phase"
 import { ResultsPanel } from "./results-panel"
+import { AnnotatedScanColumn } from "./results/annotated-scan-column"
 import { ScanPanel } from "./scan-panel"
 import { SubmissionToolbar } from "./submission-toolbar"
 
@@ -84,6 +89,28 @@ export function SubmissionView({
 			scrollToQuestion(questionNumber)
 		},
 		[scrollToQuestion],
+	)
+
+	// Teacher overrides
+	const { overridesByQuestionId } = useTeacherOverrides(
+		initialData.submission_id,
+	)
+	const { upsertOverride, deleteOverride } = useTeacherOverrideMutations(
+		initialData.submission_id,
+	)
+
+	const handleOverrideChange = useCallback(
+		(
+			questionId: string,
+			input: import("@/lib/marking/types").UpsertTeacherOverrideInput | null,
+		) => {
+			if (input === null) {
+				deleteOverride(questionId)
+			} else {
+				upsertOverride({ questionId, input })
+			}
+		},
+		[upsertOverride, deleteOverride],
 	)
 
 	// Live job data — replaces useState(initialData) + useJobPoller
@@ -246,9 +273,10 @@ export function SubmissionView({
 							jobId={jobId}
 							data={data}
 							phase={phase}
-							isPolling={isPolling}
 							activeQuestionNumber={activeQuestionNumber}
 							annotations={annotations}
+							overridesByQuestionId={overridesByQuestionId}
+							onOverrideChange={handleOverrideChange}
 						/>
 					</TabsContent>
 				</Tabs>
@@ -281,11 +309,14 @@ export function SubmissionView({
 						jobId={jobId}
 						data={data}
 						phase={phase}
-						isPolling={isPolling}
 						activeQuestionNumber={activeQuestionNumber}
+						overridesByQuestionId={overridesByQuestionId}
+						onOverrideChange={handleOverrideChange}
 					/>
 				</ResizablePanel>
 			</ResizablePanelGroup>
+
+			<EventLog events={data.job_events} isPolling={isPolling} />
 		</div>
 	)
 }

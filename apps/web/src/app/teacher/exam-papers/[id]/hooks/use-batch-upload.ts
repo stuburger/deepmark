@@ -5,6 +5,7 @@ import {
 	updateBatchJobSettings,
 } from "@/lib/batch/mutations"
 import { getBatchIngestJob } from "@/lib/batch/queries"
+import { validateScriptFile } from "@/lib/upload-validation"
 import { useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 
@@ -114,7 +115,29 @@ export function useBatchUpload({
 		if (!fileList || fileList.length === 0) return
 		const incoming = Array.from(fileList)
 
-		const newItems: FileItem[] = incoming.map((f) => ({
+		// Validate all files before starting any uploads
+		const valid: File[] = []
+		const rejected: FileItem[] = []
+		for (const file of incoming) {
+			const result = validateScriptFile(file)
+			if (result.ok) {
+				valid.push(file)
+			} else {
+				rejected.push({
+					name: file.name,
+					mimeType: file.type || "application/octet-stream",
+					uploading: false,
+					error: result.error,
+				})
+			}
+		}
+
+		if (rejected.length > 0) {
+			setFiles((prev) => [...prev, ...rejected])
+			if (valid.length === 0) return
+		}
+
+		const newItems: FileItem[] = valid.map((f) => ({
 			name: f.name,
 			mimeType: f.type || "application/octet-stream",
 			uploading: true,
@@ -138,7 +161,7 @@ export function useBatchUpload({
 			return
 		}
 
-		for (const file of incoming) {
+		for (const file of valid) {
 			try {
 				const result = await addFileToBatch(
 					jid,

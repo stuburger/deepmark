@@ -11,6 +11,7 @@ export const queryKeys = {
 	jobPageTokens: (jobId: string) => ["jobPageTokens", jobId] as const,
 	jobAnnotations: (jobId: string) => ["jobAnnotations", jobId] as const,
 	jobVersions: (jobId: string) => ["jobVersions", jobId] as const,
+	teacherOverrides: (submissionId: string) => ["teacherOverrides", submissionId] as const,
 	ingestionJob: (jobId: string) => ["ingestionJob", jobId] as const,
 	catalogExamPapers: () => ["catalogExamPapers"] as const,
 }

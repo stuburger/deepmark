@@ -126,6 +126,8 @@ export type GradingResult = {
 	multiple_choice_options?: McqOption[]
 	/** MCQ only: the correct option label(s) from the mark scheme. */
 	correct_option_labels?: string[]
+	/** Per-mark-point results from point_based grading. */
+	mark_points_results?: MarkPointResult[]
 }
 
 export type TriggerGradingResult = { ok: true } | { ok: false; error: string }
@@ -240,4 +242,46 @@ export type ExamPaperStats = {
 
 export type GetExamPaperStatsResult =
 	| { ok: true; stats: ExamPaperStats }
+	| { ok: false; error: string }
+
+// ─── Teacher Override types ─────────────────────────────────────────────────
+
+export type MarkPointCorrection = {
+	point: number
+	awarded: boolean
+}
+
+export type TeacherOverride = {
+	id: string
+	submission_id: string
+	question_id: string
+	score_override: number
+	reason: string
+	feedback_override: string | null
+	www_override: string[] | null
+	ebi_override: string[] | null
+	mark_point_corrections: MarkPointCorrection[] | null
+	created_at: Date
+	updated_at: Date
+}
+
+export type UpsertTeacherOverrideInput = {
+	score_override: number
+	reason: string
+	feedback_override?: string | null
+	www_override?: string[] | null
+	ebi_override?: string[] | null
+	mark_point_corrections?: MarkPointCorrection[] | null
+}
+
+export type UpsertTeacherOverrideResult =
+	| { ok: true; override: TeacherOverride }
+	| { ok: false; error: string }
+
+export type DeleteTeacherOverrideResult =
+	| { ok: true }
+	| { ok: false; error: string }
+
+export type GetTeacherOverridesResult =
+	| { ok: true; overrides: TeacherOverride[] }
 	| { ok: false; error: string }

@@ -457,3 +457,94 @@ export async function triggerEnrichment(
 	log.info(TAG, "Enrichment triggered", { userId: session.userId, jobId })
 	return { ok: true }
 }
+
+// ─── Teacher Overrides ──────────────────────────────────────────────────────
+
+export async function upsertTeacherOverride(
+	submissionId: string,
+	questionId: string,
+	input: {
+		score_override: number
+		reason: string
+		feedback_override?: string | null
+		www_override?: string[] | null
+		ebi_override?: string[] | null
+		mark_point_corrections?: { point: number; awarded: boolean }[] | null
+	},
+): Promise<
+	| { ok: true; override: import("./types").TeacherOverride }
+	| { ok: false; error: string }
+> {
+	const session = await auth()
+	if (!session) return { ok: false, error: "Not authenticated" }
+
+	if (input.score_override < 0)
+		return { ok: false, error: "Score cannot be negative" }
+	if (!input.reason.trim())
+		return { ok: false, error: "Reason is required" }
+
+	const jsonFields = {
+		feedback_override: input.feedback_override ?? undefined,
+		www_override: input.www_override ?? undefined,
+		ebi_override: input.ebi_override ?? undefined,
+		mark_point_corrections: input.mark_point_corrections ?? undefined,
+	}
+
+	const override = await db.teacherOverride.upsert({
+		where: {
+			submission_id_question_id: {
+				submission_id: submissionId,
+				question_id: questionId,
+			},
+		},
+		create: {
+			submission_id: submissionId,
+			question_id: questionId,
+			score_override: input.score_override,
+			reason: input.reason.trim(),
+			...jsonFields,
+			created_by: session.userId,
+		},
+		update: {
+			score_override: input.score_override,
+			reason: input.reason.trim(),
+			...jsonFields,
+		},
+	})
+
+	return {
+		ok: true,
+		override: {
+			id: override.id,
+			submission_id: override.submission_id,
+			question_id: override.question_id,
+			score_override: override.score_override,
+			reason: override.reason,
+			feedback_override: override.feedback_override,
+			www_override: override.www_override as string[] | null,
+			ebi_override: override.ebi_override as string[] | null,
+			mark_point_corrections: override.mark_point_corrections as
+				| { point: number; awarded: boolean }[]
+				| null,
+			created_at: override.created_at,
+			updated_at: override.updated_at,
+		},
+	}
+}
+
+export async function deleteTeacherOverride(
+	submissionId: string,
+	questionId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+	const session = await auth()
+	if (!session) return { ok: false, error: "Not authenticated" }
+
+	await db.teacherOverride.deleteMany({
+		where: {
+			submission_id: submissionId,
+			question_id: questionId,
+		},
+	})
+
+	return { ok: true }
+}

@@ -3,6 +3,7 @@
 import { Spinner } from "@/components/ui/spinner";
 import type { PdfDocument } from "@/lib/pdf-ingestion/queries";
 import { createLinkedPdfUpload } from "@/lib/pdf-ingestion/upload";
+import { validatePdfFile } from "@/lib/upload-validation";
 import {
   CheckCircle2,
   FileText,
@@ -83,8 +84,9 @@ function DocCard({
   const canUpload = !isAcquired && !isProcessing && !uploading;
 
   async function handleFile(file: File) {
-    if (!file.type.includes("pdf")) {
-      toast.error("Please select a PDF file.");
+    const validation = validatePdfFile(file);
+    if (!validation.ok) {
+      toast.error(validation.error);
       return;
     }
     setUploading(true);

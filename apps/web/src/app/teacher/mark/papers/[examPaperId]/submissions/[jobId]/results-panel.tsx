@@ -5,13 +5,14 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import type {
 	StudentPaperAnnotation,
 	StudentPaperJobPayload,
+	TeacherOverride,
+	UpsertTeacherOverrideInput,
 } from "@/lib/marking/types"
 import { Loader2 } from "lucide-react"
 import { CancelledPanel } from "./cancelled"
 import { FailedPanel } from "./failed"
-import { MarkingResults } from "./results/index"
 import type { MarkingPhase } from "./phase"
-import { EventLog } from "./event-log"
+import { MarkingResults } from "./results/index"
 
 const STATUS_LABELS: Record<string, string> = {
 	pending: "Queued — waiting to start",
@@ -42,12 +43,19 @@ function DigitalPanelContent({
 	phase,
 	activeQuestionNumber,
 	annotations = [],
+	overridesByQuestionId,
+	onOverrideChange,
 }: {
 	jobId: string
 	data: StudentPaperJobPayload
 	phase: MarkingPhase
 	activeQuestionNumber: string | null
 	annotations?: StudentPaperAnnotation[]
+	overridesByQuestionId?: Map<string, TeacherOverride>
+	onOverrideChange?: (
+		questionId: string,
+		input: UpsertTeacherOverrideInput | null,
+	) => void
 }) {
 	switch (phase) {
 		case "scan_processing":
@@ -69,6 +77,8 @@ function DigitalPanelContent({
 					data={data}
 					activeQuestionNumber={activeQuestionNumber}
 					annotations={annotations}
+					overridesByQuestionId={overridesByQuestionId}
+					onOverrideChange={onOverrideChange}
 				/>
 			)
 
@@ -84,30 +94,34 @@ export function ResultsPanel({
 	jobId,
 	data,
 	phase,
-	isPolling,
 	activeQuestionNumber,
 	annotations = [],
+	overridesByQuestionId,
+	onOverrideChange,
 }: {
 	jobId: string
 	data: StudentPaperJobPayload
 	phase: MarkingPhase
-	isPolling: boolean
 	activeQuestionNumber: string | null
 	annotations?: StudentPaperAnnotation[]
+	overridesByQuestionId?: Map<string, TeacherOverride>
+	onOverrideChange?: (
+		questionId: string,
+		input: UpsertTeacherOverrideInput | null,
+	) => void
 }) {
 	return (
 		<ScrollArea data-results-panel className="h-full w-full">
-			<div className="flex flex-col">
-				<div className="flex-1 p-4 space-y-5 max-w-2xl w-full">
-					<DigitalPanelContent
-						jobId={jobId}
-						data={data}
-						phase={phase}
-						activeQuestionNumber={activeQuestionNumber}
-						annotations={annotations}
-					/>
-				</div>
-				<EventLog events={data.job_events} isPolling={isPolling} />
+			<div className="p-4 space-y-5 max-w-2xl w-full">
+				<DigitalPanelContent
+					jobId={jobId}
+					data={data}
+					phase={phase}
+					activeQuestionNumber={activeQuestionNumber}
+					annotations={annotations}
+					overridesByQuestionId={overridesByQuestionId}
+					onOverrideChange={onOverrideChange}
+				/>
 			</div>
 		</ScrollArea>
 	)

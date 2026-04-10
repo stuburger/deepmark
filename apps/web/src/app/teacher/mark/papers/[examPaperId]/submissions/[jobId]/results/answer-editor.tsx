@@ -44,13 +44,13 @@ export function AnswerEditor({
   if (!editing) {
     return (
       <div className="group relative">
-        <p className="text-base whitespace-pre-wrap rounded-md bg-muted px-3 py-2 pr-8">
+        <div className="text-base whitespace-pre-wrap rounded-md bg-muted px-3 py-2 pr-8">
           {text || (
             <span className="italic text-muted-foreground">
               No answer written
             </span>
           )}
-        </p>
+        </div>
         <button
           type="button"
           onClick={() => setEditing(true)}

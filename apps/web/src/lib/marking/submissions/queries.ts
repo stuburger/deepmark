@@ -363,3 +363,38 @@ export async function getSubmissionVersions(
 		})),
 	}
 }
+
+// ─── getTeacherOverrides ────────────────────────────────────────────────────
+
+export async function getTeacherOverrides(
+	submissionId: string,
+): Promise<
+	| { ok: true; overrides: import("../types").TeacherOverride[] }
+	| { ok: false; error: string }
+> {
+	const session = await auth()
+	if (!session) return { ok: false, error: "Not authenticated" }
+
+	const rows = await db.teacherOverride.findMany({
+		where: { submission_id: submissionId },
+	})
+
+	return {
+		ok: true,
+		overrides: rows.map((r) => ({
+			id: r.id,
+			submission_id: r.submission_id,
+			question_id: r.question_id,
+			score_override: r.score_override,
+			reason: r.reason,
+			feedback_override: r.feedback_override,
+			www_override: r.www_override as string[] | null,
+			ebi_override: r.ebi_override as string[] | null,
+			mark_point_corrections: r.mark_point_corrections as
+				| { point: number; awarded: boolean }[]
+				| null,
+			created_at: r.created_at,
+			updated_at: r.updated_at,
+		})),
+	}
+}

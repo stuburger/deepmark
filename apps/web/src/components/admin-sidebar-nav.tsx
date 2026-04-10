@@ -8,7 +8,7 @@ import {
 	SidebarMenuButton,
 	SidebarMenuItem,
 } from "@/components/ui/sidebar"
-import { BookOpen, GraduationCap, LayoutDashboard } from "lucide-react"
+import { BookOpen, GraduationCap, LayoutDashboard, Settings } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 
@@ -16,6 +16,7 @@ const navItems = [
 	{ href: "/admin/overview", label: "Overview", icon: LayoutDashboard },
 	{ href: "/admin/questions", label: "Questions", icon: BookOpen },
 	{ href: "/admin/exemplars", label: "Exemplar Answers", icon: GraduationCap },
+	{ href: "/admin/settings", label: "Settings", icon: Settings },
 ]
 
 export function AdminSidebarNav() {

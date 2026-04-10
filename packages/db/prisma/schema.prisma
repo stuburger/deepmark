@@ -723,3 +723,16 @@ model UserPushSubscription {
   @@index([user_id])
   @@map("user_push_subscriptions")
 }
+
+model LlmCallSite {
+  id           String   @id @default(cuid())
+  key          String   @unique
+  display_name String
+  description  String?
+  input_type   String   // "text" | "vision" | "pdf"
+  models       Json     // ordered array of { provider, model, temperature }
+  updated_by   String?
+  updated_at   DateTime @updatedAt
+
+  @@map("llm_call_sites")
+}

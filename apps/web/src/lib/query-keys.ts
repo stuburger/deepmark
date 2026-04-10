@@ -14,4 +14,5 @@ export const queryKeys = {
 	teacherOverrides: (submissionId: string) => ["teacherOverrides", submissionId] as const,
 	ingestionJob: (jobId: string) => ["ingestionJob", jobId] as const,
 	catalogExamPapers: () => ["catalogExamPapers"] as const,
+	llmCallSites: () => ["llmCallSites"] as const,
 }

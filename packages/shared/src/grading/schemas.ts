@@ -52,8 +52,7 @@ export const LoRQuestionGradeSchema = z.object({
 	levelAwarded: z
 		.number()
 		.int()
-		.min(0)
-		.describe("The level (1-based) awarded for this response"),
+		.describe("The level (0 if no level reached, otherwise 1-based) awarded for this response"),
 	whyNotNextLevel: z
 		.string()
 		.describe(
@@ -64,15 +63,13 @@ export const LoRQuestionGradeSchema = z.object({
 		.describe("If a cap limited the mark, describe it; otherwise empty string"),
 	whatWentWell: z
 		.array(z.string())
-		.max(3)
 		.describe(
-			"1-3 short bullets on what the student did well. Only credit what is actually present. Max 6 words each.",
+			"1-3 short bullets on what the student did well. Only credit what is actually present. Max 3 items, max 6 words each.",
 		),
 	whatDidntGoWell: z
 		.array(z.string())
-		.max(3)
 		.describe(
-			"1-3 short bullets on what was missing or weak. Actionable, student-facing. Max 6 words each.",
+			"1-3 short bullets on what was missing or weak. Actionable, student-facing. Max 3 items, max 6 words each.",
 		),
 })
 

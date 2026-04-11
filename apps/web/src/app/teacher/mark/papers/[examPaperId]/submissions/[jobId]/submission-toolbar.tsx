@@ -30,6 +30,7 @@ import { ReScanButton } from "./re-scan-button"
 import { DownloadPdfButton } from "./results/download-pdf-button"
 import { ReRunMenu } from "./results/re-run-menu"
 import { StudentNameEditor } from "./results/student-name-editor"
+import { SubmissionFeedbackButton } from "./results/submission-feedback"
 import { GroupToggle, ScoreBadge } from "./submission-toolbar-controls"
 import { VersionSwitcher } from "./version-switcher"
 
@@ -298,6 +299,9 @@ export function SubmissionToolbar({
 				{/* Phase-conditional actions */}
 				{phase === "completed" && (
 					<div className="flex items-center gap-2">
+						{data.submission_id && (
+							<SubmissionFeedbackButton submissionId={data.submission_id} />
+						)}
 						{onToggleEditing && (
 							<Button
 								size="sm"

@@ -16,4 +16,6 @@ export const queryKeys = {
 	ingestionJob: (jobId: string) => ["ingestionJob", jobId] as const,
 	catalogExamPapers: () => ["catalogExamPapers"] as const,
 	llmCallSites: () => ["llmCallSites"] as const,
+	submissionFeedback: (submissionId: string) =>
+		["submissionFeedback", submissionId] as const,
 }

@@ -176,6 +176,7 @@ model User {
   batch_ingest_jobs    BatchIngestJob[]       @relation("BatchIngestJobUploader")
   push_subscriptions   UserPushSubscription[] @relation("UserPushSubscriptions")
   teacher_overrides    TeacherOverride[]      @relation("UserOverrides")
+  submission_feedback  SubmissionFeedback[]   @relation("UserFeedback")
 
   @@map("users")
 }
@@ -539,6 +540,7 @@ model StudentSubmission {
   word_tokens   StudentPaperPageToken[]   @relation("SubmissionWordTokens")
   answer_regions     StudentPaperAnswerRegion[] @relation("SubmissionAnswerRegions")
   teacher_overrides  TeacherOverride[]          @relation("SubmissionOverrides")
+  feedback           SubmissionFeedback[]       @relation("SubmissionFeedback")
 
   @@map("student_submissions")
 }
@@ -584,9 +586,10 @@ model GradingRun {
   completed_at  DateTime?
   created_at    DateTime      @default(now())
 
-  submission      StudentSubmission @relation(fields: [submission_id], references: [id])
-  ocr_run         OcrRun            @relation(fields: [ocr_run_id], references: [id])
+  submission      StudentSubmission    @relation(fields: [submission_id], references: [id])
+  ocr_run         OcrRun               @relation(fields: [ocr_run_id], references: [id])
   enrichment_runs EnrichmentRun[]
+  feedback        SubmissionFeedback[] @relation("GradingRunFeedback")
 
   @@index([submission_id])
   @@index([ocr_run_id])
@@ -694,6 +697,30 @@ model StagedScript {
   student_submissions StudentSubmission[] @relation("StagedScriptSubmission")
 
   @@map("staged_scripts")
+}
+
+model SubmissionFeedback {
+  id            String   @id @default(cuid())
+  submission_id String
+  /// "positive" or "negative" — thumbs up / thumbs down
+  rating        String
+  /// What was wrong (negative only): ["scores", "annotations", "answer_extraction", "feedback_text", "other"]
+  categories    Json?
+  /// Optional free-text comment from the teacher
+  comment       String?
+  /// Snapshot of which grading run was active when feedback was given
+  grading_run_id String?
+  created_by    String
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  submission      StudentSubmission @relation("SubmissionFeedback", fields: [submission_id], references: [id], onDelete: Cascade)
+  grading_run     GradingRun?       @relation("GradingRunFeedback", fields: [grading_run_id], references: [id])
+  created_by_user User              @relation("UserFeedback", fields: [created_by], references: [id])
+
+  @@unique([submission_id, created_by])
+  @@index([submission_id])
+  @@map("submission_feedback")
 }
 
 model TeacherOverride {

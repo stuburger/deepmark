@@ -278,3 +278,47 @@ export type DeleteTeacherOverrideResult =
 export type GetTeacherOverridesResult =
 	| { ok: true; overrides: TeacherOverride[] }
 	| { ok: false; error: string }
+
+// ─── Submission Feedback types ────────────────────────────────────────────────
+
+export type SubmissionFeedbackRating = "positive" | "negative"
+
+export type FeedbackCategory =
+	| "scores"
+	| "annotations"
+	| "answer_extraction"
+	| "feedback_text"
+	| "other"
+
+export const FEEDBACK_CATEGORY_LABELS: Record<FeedbackCategory, string> = {
+	scores: "Scores were wrong",
+	answer_extraction: "Answer text was wrong",
+	feedback_text: "Feedback was unhelpful",
+	annotations: "Annotations were wrong",
+	other: "Something else",
+}
+
+export type SubmissionFeedback = {
+	id: string
+	submission_id: string
+	rating: SubmissionFeedbackRating
+	categories: FeedbackCategory[] | null
+	comment: string | null
+	grading_run_id: string | null
+	created_at: Date
+	updated_at: Date
+}
+
+export type UpsertSubmissionFeedbackInput = {
+	rating: SubmissionFeedbackRating
+	categories?: FeedbackCategory[] | null
+	comment?: string | null
+}
+
+export type UpsertSubmissionFeedbackResult =
+	| { ok: true; feedback: SubmissionFeedback }
+	| { ok: false; error: string }
+
+export type GetSubmissionFeedbackResult =
+	| { ok: true; feedback: SubmissionFeedback | null }
+	| { ok: false; error: string }

@@ -7,13 +7,17 @@ import { auth } from "../auth"
 import { log } from "../logger"
 import type {
 	DeleteSubmissionResult,
+	GetSubmissionFeedbackResult,
 	LinkStudentToJobResult,
 	RetriggerGradingResult,
 	RetriggerOcrResult,
+	SubmissionFeedback,
+	SubmissionFeedbackRating,
 	TriggerEnrichmentResult,
 	TriggerGradingResult,
 	UpdateExtractedAnswerResult,
 	UpdateStudentNameResult,
+	UpsertSubmissionFeedbackResult,
 } from "./types"
 
 const TAG = "mark-actions"
@@ -533,4 +537,107 @@ export async function deleteTeacherOverride(
 	})
 
 	return { ok: true }
+}
+
+// ─── Submission Feedback ────────────────────────────────────────────────────
+
+function toFeedback(row: {
+	id: string
+	submission_id: string
+	rating: string
+	categories: unknown
+	comment: string | null
+	grading_run_id: string | null
+	created_at: Date
+	updated_at: Date
+}): SubmissionFeedback {
+	return {
+		id: row.id,
+		submission_id: row.submission_id,
+		rating: row.rating as SubmissionFeedbackRating,
+		categories: (row.categories as SubmissionFeedback["categories"]) ?? null,
+		comment: row.comment,
+		grading_run_id: row.grading_run_id,
+		created_at: row.created_at,
+		updated_at: row.updated_at,
+	}
+}
+
+export async function getSubmissionFeedback(
+	submissionId: string,
+): Promise<GetSubmissionFeedbackResult> {
+	try {
+		const session = await auth()
+		if (!session) return { ok: false, error: "Not authenticated" }
+
+		const row = await db.submissionFeedback.findUnique({
+			where: {
+				submission_id_created_by: {
+					submission_id: submissionId,
+					created_by: session.userId,
+				},
+			},
+		})
+
+		return { ok: true, feedback: row ? toFeedback(row) : null }
+	} catch {
+		return { ok: false, error: "Failed to fetch feedback" }
+	}
+}
+
+export async function upsertSubmissionFeedback(
+	submissionId: string,
+	input: {
+		rating: SubmissionFeedbackRating
+		categories?: SubmissionFeedback["categories"]
+		comment?: string | null
+	},
+): Promise<UpsertSubmissionFeedbackResult> {
+	try {
+		const session = await auth()
+		if (!session) return { ok: false, error: "Not authenticated" }
+
+		// Find the latest grading run for this submission to link the feedback
+		const latestGradingRun = await db.gradingRun.findFirst({
+			where: { submission_id: submissionId },
+			orderBy: { created_at: "desc" },
+			select: { id: true },
+		})
+
+		const categories =
+			input.categories && input.categories.length > 0
+				? input.categories
+				: undefined
+
+		const row = await db.submissionFeedback.upsert({
+			where: {
+				submission_id_created_by: {
+					submission_id: submissionId,
+					created_by: session.userId,
+				},
+			},
+			create: {
+				submission_id: submissionId,
+				rating: input.rating,
+				categories: categories as unknown as Parameters<
+					typeof db.submissionFeedback.create
+				>[0]["data"]["categories"],
+				comment: input.comment?.trim() || null,
+				grading_run_id: latestGradingRun?.id ?? null,
+				created_by: session.userId,
+			},
+			update: {
+				rating: input.rating,
+				categories: categories as unknown as Parameters<
+					typeof db.submissionFeedback.create
+				>[0]["data"]["categories"],
+				comment: input.comment?.trim() || null,
+				grading_run_id: latestGradingRun?.id ?? null,
+			},
+		})
+
+		return { ok: true, feedback: toFeedback(row) }
+	} catch {
+		return { ok: false, error: "Failed to save feedback" }
+	}
 }

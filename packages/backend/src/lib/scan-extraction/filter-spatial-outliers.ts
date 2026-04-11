@@ -7,9 +7,10 @@
  * 1. Sort bboxes by yMin (top of each token).
  * 2. Walk the sorted list and find "gaps" — vertical distances between
  *    consecutive tokens that are significantly larger than the typical
- *    inter-token spacing. The threshold is 3× the median gap.
+ *    inter-token spacing. The threshold is 3× the median gap (min 30px).
  * 3. Split into clusters at each large gap.
- * 4. Keep only the largest cluster (by token count).
+ * 4. Keep all clusters that are "substantial" (≥ 10% of total tokens or
+ *    ≥ 5 tokens). Only discard truly tiny clusters (stray tokens).
  *
  * Bbox format: [yMin, xMin, yMax, xMax]
  */
@@ -30,7 +31,7 @@ function medianOfSorted(sorted: number[]): number {
 
 /**
  * Given an array of bounding boxes, removes spatial outliers by keeping
- * only the largest vertically contiguous cluster.
+ * only substantial clusters and discarding stray tokens.
  *
  * Returns the filtered array. If there are fewer than 3 bboxes, returns
  * the input unchanged (can't meaningfully detect outliers).
@@ -72,14 +73,32 @@ export function filterSpatialOutliers(bboxes: Bbox[]): Bbox[] {
 		clusters[clusters.length - 1].push(sorted[i + 1])
 	}
 
-	// Keep only the largest cluster. If there are ties, keep the first
-	// (topmost) — but ties are rare in practice.
-	let largest = clusters[0]
-	for (const cluster of clusters) {
-		if (cluster.length > largest.length) {
-			largest = cluster
+	// If only one cluster, no outliers to remove.
+	if (clusters.length === 1) return clusters[0]
+
+	// Keep all "substantial" clusters — those with enough tokens to be
+	// a real paragraph rather than a stray misattribution.
+	// A cluster is substantial if it has ≥ 10% of total tokens OR ≥ 5 tokens.
+	const MIN_CLUSTER_FRACTION = 0.1
+	const MIN_CLUSTER_SIZE = 5
+	const minTokens = Math.max(
+		MIN_CLUSTER_SIZE,
+		Math.ceil(bboxes.length * MIN_CLUSTER_FRACTION),
+	)
+
+	const kept = clusters.filter((c) => c.length >= minTokens)
+
+	// If filtering removed everything (shouldn't happen, but safety),
+	// fall back to keeping the largest cluster.
+	if (kept.length === 0) {
+		let largest = clusters[0]
+		for (const cluster of clusters) {
+			if (cluster.length > largest.length) {
+				largest = cluster
+			}
 		}
+		return largest
 	}
 
-	return largest
+	return kept.flat()
 }

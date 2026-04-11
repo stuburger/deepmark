@@ -57,6 +57,40 @@ export const MODEL_PRICING: Record<
 }
 
 /**
+ * Recommended default temperature for each model.
+ * Used when the user selects a new model in the admin UI — pre-fills
+ * the temperature to a sensible starting point for structured output tasks.
+ *
+ * Sources:
+ * - Google: docs recommend 0 for structured output; gemini-3-flash: keep at 1.0 (reasoning model)
+ * - OpenAI: o-series rejects temperature entirely; GPT models default to 1.0
+ * - Anthropic: docs recommend closer to 0 for analytical tasks; max is 1.0
+ */
+export const MODEL_DEFAULT_TEMPERATURE: Record<string, number | null> = {
+	// Google — low for structured, 1.0 for reasoning models
+	"gemini-2.5-flash": 0.2,
+	"gemini-2.5-flash-lite": 0.2,
+	"gemini-2.5-pro": 0.2,
+	"gemini-3-flash-preview": 1.0,
+	"gemini-3.1-pro-preview": 1.0,
+	// OpenAI — GPT models low for structured; o-series: null = omit temperature
+	"gpt-4o": 0.2,
+	"gpt-4o-mini": 0.2,
+	"gpt-4.1": 0.2,
+	"gpt-4.1-mini": 0.2,
+	"gpt-4.1-nano": 0.2,
+	"gpt-5.4": 0.2,
+	"gpt-5.4-mini": 0.2,
+	"gpt-5.4-nano": 0.2,
+	o3: null,
+	"o4-mini": null,
+	// Anthropic — low for analytical; max temp is 1.0
+	"claude-opus-4-6": 0.2,
+	"claude-sonnet-4-6": 0.2,
+	"claude-haiku-4-5": 0.2,
+}
+
+/**
  * Pipeline phases — used for grouping and ordering call sites in the UI.
  * Listed in the temporal order they execute during the marking pipeline.
  */

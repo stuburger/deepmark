@@ -13,6 +13,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { NativeSelect } from "@/components/ui/native-select"
 import {
+	MODEL_DEFAULT_TEMPERATURE,
 	PROVIDER_MODELS,
 	type LlmCallSiteRow,
 	type LlmModelEntry,
@@ -111,7 +112,13 @@ export function EditModelsDialog({
 			(m) => `${m.provider}/${m.model}` === value,
 		)
 		if (!entry) return
-		updateModel(index, { provider: entry.provider, model: entry.model })
+		const defaultTemp = MODEL_DEFAULT_TEMPERATURE[entry.model]
+		updateModel(index, {
+			provider: entry.provider,
+			model: entry.model,
+			// Auto-set temperature to the model's recommended default
+			...(defaultTemp !== undefined ? { temperature: defaultTemp ?? 0 } : {}),
+		})
 	}
 
 	function stripKeys(entries: ModelEntryWithKey[]): LlmModelEntry[] {
@@ -168,23 +175,29 @@ export function EditModelsDialog({
 								>
 									Temp
 								</label>
-								<Input
-									id={`temp-${index}`}
-									type="number"
-									min={0}
-									max={2}
-									step={0.1}
-									value={model.temperature}
-									onChange={(e) =>
-										updateModel(index, {
-											temperature: Math.min(
-												2,
-												Math.max(0, Number(e.target.value)),
-											),
-										})
-									}
-									className="h-7 w-16 text-xs"
-								/>
+								{MODEL_DEFAULT_TEMPERATURE[model.model] === null ? (
+									<span className="text-[10px] text-muted-foreground/60 w-16 text-center">
+										n/a
+									</span>
+								) : (
+									<Input
+										id={`temp-${index}`}
+										type="number"
+										min={0}
+										max={model.provider === "anthropic" ? 1 : 2}
+										step={0.1}
+										value={model.temperature}
+										onChange={(e) =>
+											updateModel(index, {
+												temperature: Math.min(
+													model.provider === "anthropic" ? 1 : 2,
+													Math.max(0, Number(e.target.value)),
+												),
+											})
+										}
+										className="h-7 w-16 text-xs"
+									/>
+								)}
 							</div>
 
 							<div className="flex items-center gap-0.5 shrink-0">

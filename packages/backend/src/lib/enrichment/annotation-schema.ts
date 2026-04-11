@@ -11,13 +11,11 @@ export const AnnotationPlanItemSchema = z.object({
 	anchor_start: z
 		.number()
 		.int()
-		.min(0)
-		.describe("Start token index (inclusive) from the OCR token array"),
+		.describe("Start token index (0-based, inclusive) from the OCR token array"),
 	anchor_end: z
 		.number()
 		.int()
-		.min(0)
-		.describe("End token index (inclusive) from the OCR token array"),
+		.describe("End token index (0-based, inclusive) from the OCR token array"),
 	sentiment: z
 		.enum(["positive", "negative", "neutral"])
 		.describe("Sentiment for color coding"),
@@ -29,12 +27,10 @@ export const AnnotationPlanItemSchema = z.object({
 		.describe("Required for overlay_type=mark. The physical signal type."),
 	label: z
 		.string()
-		.max(20)
 		.optional()
 		.describe("Optional short label for marks, e.g. 'AO1', 'vague'"),
 	reason: z
 		.string()
-		.max(80)
 		.optional()
 		.describe(
 			"Required for overlay_type=mark and overlay_type=tag. Short examiner-style note (max ~10 words) explaining what this mark refers to. For marks: which mark point or skill. For tags: what skill was demonstrated.",

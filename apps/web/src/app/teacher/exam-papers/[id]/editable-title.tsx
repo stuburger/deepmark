@@ -61,12 +61,13 @@ export function EditableTitle({
 	}
 
 	return (
-		<h1
-			className="text-2xl font-semibold cursor-pointer hover:text-foreground/70 transition-colors truncate min-w-0"
+		<button
+			type="button"
+			className="text-2xl font-semibold cursor-pointer hover:text-foreground/70 transition-colors truncate min-w-0 bg-transparent border-none p-0 text-left"
 			onClick={startEditing}
 			title={initialTitle}
 		>
 			{initialTitle}
-		</h1>
+		</button>
 	)
 }

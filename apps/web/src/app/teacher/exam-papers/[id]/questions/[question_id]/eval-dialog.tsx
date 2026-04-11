@@ -150,6 +150,7 @@ export function EvalDialog({
 									<div className="space-y-2">
 										{result.awarded_points.map((mp, i) => (
 											<div
+												// biome-ignore lint/suspicious/noArrayIndexKey: static mark point list
 												key={i}
 												className={`flex items-start gap-3 rounded-lg border p-3 text-sm ${
 													mp.awarded

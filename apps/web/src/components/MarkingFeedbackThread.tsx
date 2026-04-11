@@ -53,6 +53,7 @@ function ScoreDots({
 		<span className="flex items-center gap-0.5">
 			{Array.from({ length: max }).map((_, i) => (
 				<span
+					// biome-ignore lint/suspicious/noArrayIndexKey: static dot indicators
 					key={i}
 					className={cn(
 						"inline-block size-2 rounded-full",
@@ -228,6 +229,7 @@ export function MarkingFeedbackThread({
 									Mark points
 								</p>
 								{markPointResults.map((mp, i) => (
+									// biome-ignore lint/suspicious/noArrayIndexKey: static mark point list
 									<div key={i} className="flex items-start gap-2">
 										<span
 											className={cn(

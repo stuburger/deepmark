@@ -114,34 +114,34 @@ export async function reconcilePageTokens({
 				const tokenList = pageTokens.map((t) => `"${t.text_raw}"`).join(", ")
 
 				const { output } = await callLlmWithFallback(
-					"vision-token-reconciliation",
-					async (model, entry, report) => {
-						const result = await generateText({
-							model,
-							temperature: entry.temperature,
-							messages: [
-								{
-									role: "user",
-									content: [
-										{
-											type: "image",
-											image: imageBase64,
-											mediaType: page.mime_type,
-										},
-										{
-											type: "text",
-											text: buildReconciliationPrompt(tokenList),
-										},
-									],
-								},
-							],
-							output: Output.object({ schema: ReconcileSchema }),
-						})
-						report.usage = result.usage
-						return result
-					},
-					llm,
-				)
+						"vision-token-reconciliation",
+						async (model, entry, report) => {
+							const result = await generateText({
+								model,
+								temperature: entry.temperature,
+								messages: [
+									{
+										role: "user",
+										content: [
+											{
+												type: "image",
+												image: imageBase64,
+												mediaType: page.mime_type,
+											},
+											{
+												type: "text",
+												text: buildReconciliationPrompt(tokenList),
+											},
+										],
+									},
+								],
+								output: Output.object({ schema: ReconcileSchema }),
+							})
+							report.usage = result.usage
+							return result
+						},
+						llm,
+					)
 				const corrections = output.corrections
 
 				// Build a queue of tokens grouped by raw text for order-of-appearance matching.

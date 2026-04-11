@@ -61,6 +61,7 @@ function BreadcrumbLink({
 
 function BreadcrumbPage({ className, ...props }: React.ComponentProps<"span">) {
 	return (
+		// biome-ignore lint/a11y/useFocusableInteractive: shadcn breadcrumb component — current page is non-focusable by design
 		<span
 			data-slot="breadcrumb-page"
 			role="link"

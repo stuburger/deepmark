@@ -343,6 +343,7 @@ export function AnnotationHitTarget({
 
 	return (
 		<>
+			{/* biome-ignore lint/a11y/useKeyWithClickEvents: overlay hit target on scan image — not keyboard-navigable */}
 			<div
 				role="button"
 				tabIndex={0}

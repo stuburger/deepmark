@@ -133,6 +133,7 @@ export function GradedScanViewer({
 						<>
 							{/* SVG highlight layer — mix-blend-multiply for highlighter effect */}
 							<svg
+								aria-hidden="true"
 								viewBox={viewBox}
 								preserveAspectRatio="none"
 								className="absolute inset-0 h-full w-full"

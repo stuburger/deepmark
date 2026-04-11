@@ -13,3 +13,4 @@ dist
 
 packages/db/src/generated/
 .open-next
+biome-audit.txt

@@ -30,17 +30,10 @@ export function ScriptCard({
 	const isInProgress = !TERMINAL_STATUSES.has(sub.status)
 
 	return (
-		<div
-			role="button"
-			tabIndex={0}
+		<button
+			type="button"
 			onClick={onView}
-			onKeyDown={(e) => {
-				if (e.key === "Enter" || e.key === " ") {
-					e.preventDefault()
-					onView()
-				}
-			}}
-			className="text-left w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-xl cursor-pointer"
+			className="text-left w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-xl cursor-pointer appearance-none bg-transparent border-none p-0"
 		>
 			<Card className="group/script gap-0 py-0 hover:ring-foreground/20 transition-shadow cursor-pointer bg-amber-50/40 dark:bg-amber-950/10 h-full">
 				<CardHeader className="pt-4 pb-0 px-4">
@@ -111,6 +104,6 @@ export function ScriptCard({
 					</span>
 				</CardFooter>
 			</Card>
-		</div>
+		</button>
 	)
 }

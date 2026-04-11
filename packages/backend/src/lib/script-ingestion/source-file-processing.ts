@@ -25,7 +25,7 @@ export async function listSourceFiles(batchJobId: string): Promise<string[]> {
 		}),
 	)
 	return (result.Contents ?? [])
-		.map((obj) => obj.Key!)
+		.map((obj) => obj.Key as string)
 		.filter(Boolean)
 		.sort()
 }
@@ -112,7 +112,7 @@ function buildScripts(
 			const contentPages = g.pages.filter((p) => p.jpegKey !== null)
 			return {
 				page_keys: contentPages.map((p, i) => ({
-					s3_key: p.jpegKey!,
+					s3_key: p.jpegKey as string,
 					order: i + 1,
 					mime_type: "image/jpeg",
 					source_file: sourceKey,
@@ -178,7 +178,7 @@ export async function processSourceFilePerFile(
 
 	const script: StagedScriptData = {
 		page_keys: contentPages.map((p, i) => ({
-			s3_key: p.jpegKey!,
+			s3_key: p.jpegKey as string,
 			order: i + 1,
 			mime_type: "image/jpeg",
 			source_file: sourceKey,

@@ -34,6 +34,7 @@ export function IdleDropZone({ onFileSelected, onManual }: IdleDropZoneProps) {
 	return (
 		<Card>
 			<CardContent className="pt-6 pb-6">
+				{/* biome-ignore lint/a11y/useKeyWithClickEvents: drop zone — keyboard users use the hidden file input */}
 				<div
 					onDragOver={handleDragOver}
 					onDragEnter={handleDragOver}

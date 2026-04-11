@@ -141,6 +141,7 @@ export function PageCarousel({
 					<div className="flex items-center gap-1.5">
 						{pages.map((_, i) => (
 							<button
+								// biome-ignore lint/suspicious/noArrayIndexKey: static page dot indicators
 								key={i}
 								type="button"
 								onClick={() => onNavigate(i)}

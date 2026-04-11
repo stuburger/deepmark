@@ -6,7 +6,7 @@
 		"dev": "next dev",
 		"build": "next build",
 		"start": "next start",
-		"lint": "eslint"
+		"lint": "bunx biome check src/"
 	},
 	"dependencies": {
 		"@ai-sdk/anthropic": "^3.0.68",
@@ -60,8 +60,6 @@
 		"@types/node": "^20",
 		"@types/react": "^19",
 		"@types/react-dom": "^19",
-		"eslint": "^9",
-		"eslint-config-next": "16.1.6",
 		"tailwindcss": "^4",
 		"typescript": "^5"
 	},

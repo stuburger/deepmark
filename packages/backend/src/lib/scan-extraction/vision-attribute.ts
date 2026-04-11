@@ -282,6 +282,7 @@ export async function visionAttributeRegions({
 				if (filteredBboxes.length === 0) return []
 
 				const hull = computeBboxHull(filteredBboxes)
+				// biome-ignore lint/style/noNonNullAssertion: question_id guaranteed in map from earlier query
 				const question_number = questionNumberById.get(assignment.question_id)!
 
 				return [
@@ -449,6 +450,7 @@ async function runMcqFallback({
 					data: found.map((r) => ({
 						submission_id: jobId,
 						question_id: r.question_id,
+						// biome-ignore lint/style/noNonNullAssertion: question_id guaranteed in map from earlier query
 						question_number: questionNumberById.get(r.question_id)!,
 						page_order: page.order,
 						box: r.box,

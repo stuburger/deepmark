@@ -108,7 +108,7 @@ export function ExamPaperStatsShell({
 			const pct = s.total_max > 0 ? (s.total_awarded / s.total_max) * 100 : 0
 			return pct >= band.min && pct < band.max
 		}).length,
-		color: BAND_COLORS[i]!,
+		color: BAND_COLORS[i] ?? "#888",
 	}))
 
 	return (

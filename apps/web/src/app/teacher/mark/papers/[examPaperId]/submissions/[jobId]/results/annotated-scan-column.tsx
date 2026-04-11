@@ -185,6 +185,7 @@ export function AnnotatedScanColumn({
 								/>
 								{showRegions &&
 									gradingAnns.map((ann, idx) => (
+										// biome-ignore lint/suspicious/noArrayIndexKey: static annotation list
 										<div key={idx}>
 											<SimpleRegionButton
 												annotation={ann}

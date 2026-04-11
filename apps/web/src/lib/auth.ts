@@ -14,7 +14,7 @@ export function getClient() {
 	if (!_client) {
 		_client = createClient({
 			clientID: "nextjs",
-			issuer: process.env.OPENAUTH_ISSUER!,
+			issuer: process.env.OPENAUTH_ISSUER ?? "",
 		})
 	}
 	return _client

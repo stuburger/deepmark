@@ -230,14 +230,9 @@ Ensure the generated cases complement the provided examples and create a compreh
 			const result = await generateText({
 				model,
 				temperature: entry.temperature,
-				messages: [
-					{
-						role: "system",
-						content:
-							"You are an expert in creating GCSE assessment test datasets. Generate clear, diverse test cases with realistic student answers and grading criteria.",
-					},
-					{ role: "user", content: prompt },
-				],
+				system:
+					"You are an expert in creating GCSE assessment test datasets. Generate clear, diverse test cases with realistic student answers and grading criteria.",
+				messages: [{ role: "user", content: prompt }],
 				output: Output.object({
 					schema: additionalTestCasesSchema,
 				}),

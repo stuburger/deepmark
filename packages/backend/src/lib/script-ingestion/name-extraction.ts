@@ -18,6 +18,7 @@ export async function extractNames(groups: PageGroup[]): Promise<void> {
 	)
 
 	for (let i = 0; i < groups.length; i++) {
-		groups[i]!.proposedName = results[i]?.name ?? null
+		const group = groups[i]
+		if (group) group.proposedName = results[i]?.name ?? null
 	}
 }

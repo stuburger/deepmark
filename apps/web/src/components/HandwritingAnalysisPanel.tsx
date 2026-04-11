@@ -63,6 +63,7 @@ export function HandwritingAnalysisPanel({ analysis }: Props) {
 					{observations.length > 0 ? (
 						<ul className="list-inside list-disc space-y-1 text-sm leading-relaxed text-foreground">
 							{observations.map((o, i) => (
+								// biome-ignore lint/suspicious/noArrayIndexKey: static observation list
 								<li key={i}>{o}</li>
 							))}
 						</ul>

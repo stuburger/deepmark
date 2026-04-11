@@ -3,6 +3,7 @@
 	"extends": "../../tsconfig.json",
 	"compilerOptions": {
 		"strict": true,
+		"skipLibCheck": true,
 		"isolatedModules": false,
 		"module": "esnext",
 		"target": "es2022",

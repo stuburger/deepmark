@@ -208,6 +208,7 @@ async function updateExistingQuestion(
 	r: ResolvedMarkScheme,
 	ctx: ProcessQuestionContext,
 ): Promise<void> {
+	// biome-ignore lint/style/noNonNullAssertion: existingId guaranteed present for update path
 	const questionId = r.match.existingId!
 
 	await db.question.update({

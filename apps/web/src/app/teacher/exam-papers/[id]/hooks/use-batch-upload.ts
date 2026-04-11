@@ -74,6 +74,7 @@ export function useBatchUpload({
 		}
 	}
 
+	// biome-ignore lint/correctness/useExhaustiveDependencies: cleanup-only effect — stopPolling is stable via ref
 	useEffect(() => {
 		return () => stopPolling()
 	}, [])

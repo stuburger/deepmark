@@ -70,6 +70,7 @@ export async function classifyBoundariesScriptPageMode(
 			return {
 				absoluteIndex: idx,
 				prevPage,
+				// biome-ignore lint/style/noNonNullAssertion: idx is derived from pages array
 				currentPage: pages[idx]!,
 			}
 		})

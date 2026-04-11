@@ -41,6 +41,7 @@ export async function extractPdfPages(
 		Array.from({ length: pageCount }, async (_, i) => {
 			const singlePage = await PDFDocument.create()
 			const [copiedPage] = await singlePage.copyPages(pdfDoc, [i])
+			// biome-ignore lint/style/noNonNullAssertion: copyPages always returns one page for single-index array
 			singlePage.addPage(copiedPage!)
 			const singlePageBytes = await singlePage.save()
 

@@ -40,8 +40,8 @@ function ExamPaperGridSkeleton() {
 	return (
 		<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
 			{Array.from({ length: 8 }).map((_, i) => (
-				// biome-ignore lint/suspicious/noArrayIndexKey: static skeleton
 				<div
+					// biome-ignore lint/suspicious/noArrayIndexKey: static skeleton
 					key={i}
 					className="flex flex-col rounded-xl ring-1 ring-foreground/10 overflow-hidden"
 				>

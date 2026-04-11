@@ -144,6 +144,7 @@ export function EventLog({
 						</p>
 					) : (
 						[...list].reverse().map((event, i) => (
+							// biome-ignore lint/suspicious/noArrayIndexKey: static reversed event list
 							<div key={i} className="flex items-start gap-2">
 								<span className="mt-0.5 shrink-0">{eventIcon(event.type)}</span>
 								<div className="flex-1 min-w-0">

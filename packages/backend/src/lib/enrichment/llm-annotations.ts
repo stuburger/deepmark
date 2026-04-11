@@ -76,14 +76,9 @@ export async function annotateOneQuestion(
 			const result = await generateText({
 				model,
 				temperature: entry.temperature,
-				messages: [
-					{
-						role: "system",
-						content:
-							"You are an expert GCSE examiner producing structured annotations for a student's exam script. Output valid JSON matching the schema. Be precise and concise.",
-					},
-					{ role: "user", content: prompt },
-				],
+				system:
+					"You are an expert GCSE examiner producing structured annotations for a student's exam script. Output valid JSON matching the schema. Be precise and concise.",
+				messages: [{ role: "user", content: prompt }],
 				output: Output.object({
 					schema: AnnotationPlanSchema,
 				}),

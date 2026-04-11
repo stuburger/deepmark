@@ -115,6 +115,7 @@ async function gradeJob({
 	})
 
 	const answerMap = new Map(
+		// biome-ignore lint/style/noNonNullAssertion: latestOcr verified non-null above
 		extractRawAnswers(latestOcr!).map((a) => [a.question_id, a.answer_text]),
 	)
 
@@ -134,6 +135,7 @@ async function gradeJob({
 		return
 	}
 
+	// biome-ignore lint/style/noNonNullAssertion: latestOcr verified non-null above
 	await completeGradingJob({ sub, ocrRun: latestOcr!, gradingResults, jobId })
 
 	// Write LLM snapshot — informational, not critical

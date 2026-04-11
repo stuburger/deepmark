@@ -104,6 +104,7 @@ export function ObservationsSheet({
 						{(page.analysis?.observations ?? []).length > 0 ? (
 							<ul className="list-disc list-inside space-y-1 text-sm leading-relaxed text-foreground rounded-md bg-muted/50 px-3 py-2.5">
 								{(page.analysis?.observations ?? []).map((obs, i) => (
+									// biome-ignore lint/suspicious/noArrayIndexKey: static observation list
 									<li key={i}>{obs}</li>
 								))}
 							</ul>

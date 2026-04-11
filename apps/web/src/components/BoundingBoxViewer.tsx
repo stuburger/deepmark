@@ -182,6 +182,7 @@ export function BoundingBoxViewer({
 										{/* Grading annotation bands */}
 										{hasAnnotations && (
 											<svg
+												aria-hidden="true"
 												viewBox={viewBox}
 												preserveAspectRatio="none"
 												className="absolute inset-0 h-full w-full"
@@ -195,6 +196,7 @@ export function BoundingBoxViewer({
 														ann.maxScore,
 													)
 													return (
+														// biome-ignore lint/suspicious/noArrayIndexKey: static annotation overlay
 														<g key={i}>
 															<rect
 																x={xMin * scaleX}
@@ -238,6 +240,7 @@ export function BoundingBoxViewer({
 										{/* Chain indicator highlight layer (background) */}
 										{showChains && annotations.length > 0 && (
 											<svg
+												aria-hidden="true"
 												viewBox={viewBox}
 												preserveAspectRatio="none"
 												className="absolute inset-0 h-full w-full"
@@ -263,6 +266,7 @@ export function BoundingBoxViewer({
 										{/* Mark + tag visual layer (no pointer events) */}
 										{showMarks && annotations.length > 0 && (
 											<svg
+												aria-hidden="true"
 												viewBox={viewBox}
 												preserveAspectRatio="none"
 												className="absolute inset-0 h-full w-full"
@@ -362,6 +366,7 @@ export function BoundingBoxViewer({
 										{/* Word-level highlight layer */}
 										{showHighlights && tokens.length > 0 && (
 											<svg
+												aria-hidden="true"
 												viewBox={viewBox}
 												preserveAspectRatio="none"
 												className="absolute inset-0 h-full w-full"
@@ -374,6 +379,7 @@ export function BoundingBoxViewer({
 													const [yMin, xMin, yMax, xMax] = t.bbox
 													return (
 														<rect
+															// biome-ignore lint/suspicious/noArrayIndexKey: static token overlay
 															key={i}
 															x={xMin * scaleX}
 															y={yMin * scaleY}
@@ -392,6 +398,7 @@ export function BoundingBoxViewer({
 										{hasAnnotations &&
 											gradingAnnotations.map((ann, i) => (
 												<GradingAnnotationOverlay
+													// biome-ignore lint/suspicious/noArrayIndexKey: static annotation list
 													key={i}
 													annotation={ann}
 													onAnnotationClick={onAnnotationClick}

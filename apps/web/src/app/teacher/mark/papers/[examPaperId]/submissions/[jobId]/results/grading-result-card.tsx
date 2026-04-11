@@ -148,6 +148,7 @@ export function GradingResultCard({
 							<ul className="space-y-0.5">
 								{www.map((item, i) => (
 									<li
+										// biome-ignore lint/suspicious/noArrayIndexKey: static feedback list
 										key={i}
 										className="text-muted-foreground flex items-start gap-1"
 									>
@@ -166,6 +167,7 @@ export function GradingResultCard({
 							<ul className="space-y-0.5">
 								{ebi.map((item, i) => (
 									<li
+										// biome-ignore lint/suspicious/noArrayIndexKey: static feedback list
 										key={i}
 										className="text-muted-foreground flex items-start gap-1"
 									>

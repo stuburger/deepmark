@@ -8,9 +8,7 @@ import type { LlmCallSiteRow, LlmModelEntry } from "./llm-types"
 const db = createPrismaClient(Resource.NeonPostgres.databaseUrl)
 
 /** Canonical sort order: matches the phase + temporal order in LLM_CALL_SITE_DEFAULTS. */
-const KEY_ORDER = new Map(
-	LLM_CALL_SITE_DEFAULTS.map((d, i) => [d.key, i]),
-)
+const KEY_ORDER = new Map(LLM_CALL_SITE_DEFAULTS.map((d, i) => [d.key, i]))
 
 export type ListLlmCallSitesResult =
 	| { ok: true; callSites: LlmCallSiteRow[] }
@@ -32,8 +30,7 @@ export async function listLlmCallSites(): Promise<ListLlmCallSitesResult> {
 				updated_at: r.updated_at,
 			}))
 			.sort(
-				(a, b) =>
-					(KEY_ORDER.get(a.key) ?? 999) - (KEY_ORDER.get(b.key) ?? 999),
+				(a, b) => (KEY_ORDER.get(a.key) ?? 999) - (KEY_ORDER.get(b.key) ?? 999),
 			)
 		return { ok: true, callSites }
 	} catch {

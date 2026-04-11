@@ -81,7 +81,7 @@ function MarkPopoverContent({
 	const signalSymbol = SIGNAL_SYMBOLS[payload.signal] ?? ""
 	const title = payload.reason
 		? `${signalSymbol} ${payload.reason}`.trim()
-		: payload.label ?? signalSymbol
+		: (payload.label ?? signalSymbol)
 
 	return (
 		<>
@@ -91,7 +91,9 @@ function MarkPopoverContent({
 					<div className="space-y-1">
 						{payload.markPoints.map((mp) => (
 							<div key={mp.point} className="flex items-start gap-1.5 text-xs">
-								<span className={`shrink-0 font-semibold ${mp.awarded ? "text-green-600" : "text-red-500"}`}>
+								<span
+									className={`shrink-0 font-semibold ${mp.awarded ? "text-green-600" : "text-red-500"}`}
+								>
 									{mp.awarded ? "✓" : "✗"}
 								</span>
 								<span className="text-muted-foreground leading-snug">
@@ -122,12 +124,13 @@ function TagPopoverContent({
 	parentAnnotation: StudentPaperAnnotation | undefined
 }) {
 	const payload = annotation.payload as TagPayload
-	const parentPayload = parentAnnotation?.overlay_type === "mark"
-		? (parentAnnotation.payload as MarkPayload)
-		: null
+	const parentPayload =
+		parentAnnotation?.overlay_type === "mark"
+			? (parentAnnotation.payload as MarkPayload)
+			: null
 
 	const parentSymbol = parentPayload
-		? SIGNAL_SYMBOLS[parentPayload.signal] ?? ""
+		? (SIGNAL_SYMBOLS[parentPayload.signal] ?? "")
 		: ""
 	const parentReason = parentPayload?.reason
 		? `${parentSymbol} ${parentPayload.reason}`.trim()
@@ -136,11 +139,16 @@ function TagPopoverContent({
 	return (
 		<>
 			{parentReason && (
-				<PopoverHeader sentiment={parentAnnotation?.sentiment ?? null} title={parentReason} />
+				<PopoverHeader
+					sentiment={parentAnnotation?.sentiment ?? null}
+					title={parentReason}
+				/>
 			)}
 			<div className="space-y-2">
 				<div className="flex items-start gap-1.5">
-					<span className={`inline-flex items-center shrink-0 rounded border px-1.5 py-0.5 text-[11px] font-semibold ${tagColorClass(payload)}`}>
+					<span
+						className={`inline-flex items-center shrink-0 rounded border px-1.5 py-0.5 text-[11px] font-semibold ${tagColorClass(payload)}`}
+					>
 						{payload.display}
 					</span>
 					{payload.reason && (
@@ -203,7 +211,9 @@ function TagList({ tags }: { tags: StudentPaperAnnotation[] }) {
 				const tp = t.payload as TagPayload
 				return (
 					<div key={t.id} className="flex items-start gap-1.5">
-						<span className={`inline-flex items-center shrink-0 rounded border px-1.5 py-0.5 text-[11px] font-semibold ${tagColorClass(tp)}`}>
+						<span
+							className={`inline-flex items-center shrink-0 rounded border px-1.5 py-0.5 text-[11px] font-semibold ${tagColorClass(tp)}`}
+						>
 							{tp.display}
 						</span>
 						{tp.reason && (
@@ -320,14 +330,16 @@ export function AnnotationHitTarget({
 	const panelY = Math.min(clickPos.y - 8, window.innerHeight - 200)
 
 	// Resolve linked annotations for marks
-	const linked = annotation.overlay_type === "mark"
-		? allAnnotations.filter((c) => c.parent_annotation_id === annotation.id)
-		: []
+	const linked =
+		annotation.overlay_type === "mark"
+			? allAnnotations.filter((c) => c.parent_annotation_id === annotation.id)
+			: []
 
 	// Resolve parent for tags
-	const parentAnnotation = isTag && annotation.parent_annotation_id
-		? allAnnotations.find((a) => a.id === annotation.parent_annotation_id)
-		: undefined
+	const parentAnnotation =
+		isTag && annotation.parent_annotation_id
+			? allAnnotations.find((a) => a.id === annotation.parent_annotation_id)
+			: undefined
 
 	return (
 		<>

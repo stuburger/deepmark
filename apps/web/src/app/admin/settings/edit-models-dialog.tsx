@@ -13,11 +13,11 @@ import {
 import { Input } from "@/components/ui/input"
 import { NativeSelect } from "@/components/ui/native-select"
 import {
-	MODEL_DEFAULT_TEMPERATURE,
-	PROVIDER_MODELS,
 	type LlmCallSiteRow,
 	type LlmModelEntry,
 	type LlmProvider,
+	MODEL_DEFAULT_TEMPERATURE,
+	PROVIDER_MODELS,
 } from "@/lib/admin/llm-types"
 import {
 	ArrowDown,
@@ -30,15 +30,18 @@ import {
 import { useEffect, useRef, useState } from "react"
 
 /** Flat list of all available models, grouped by provider for the dropdown. */
-const ALL_MODELS: Array<{ provider: LlmProvider; model: string; label: string }> =
-	(Object.entries(PROVIDER_MODELS) as [LlmProvider, string[]][]).flatMap(
-		([provider, models]) =>
-			models.map((model) => ({
-				provider,
-				model,
-				label: `${model}  (${provider})`,
-			})),
-	)
+const ALL_MODELS: Array<{
+	provider: LlmProvider
+	model: string
+	label: string
+}> = (Object.entries(PROVIDER_MODELS) as [LlmProvider, string[]][]).flatMap(
+	([provider, models]) =>
+		models.map((model) => ({
+			provider,
+			model,
+			label: `${model}  (${provider})`,
+		})),
+)
 
 type ModelEntryWithKey = LlmModelEntry & { _key: number }
 
@@ -108,16 +111,12 @@ export function EditModelsDialog({
 	}
 
 	function selectModel(index: number, value: string) {
-		const entry = ALL_MODELS.find(
-			(m) => `${m.provider}/${m.model}` === value,
-		)
+		const entry = ALL_MODELS.find((m) => `${m.provider}/${m.model}` === value)
 		if (!entry) return
-		const defaultTemp = MODEL_DEFAULT_TEMPERATURE[entry.model]
 		updateModel(index, {
 			provider: entry.provider,
 			model: entry.model,
-			// Auto-set temperature to the model's recommended default
-			...(defaultTemp !== undefined ? { temperature: defaultTemp ?? 0 } : {}),
+			temperature: MODEL_DEFAULT_TEMPERATURE[entry.model] ?? 0.2,
 		})
 	}
 

@@ -21,7 +21,7 @@ export function naturalCompare(a: string | null, b: string | null): number {
 		const pb = partsB[i] ?? ""
 		const na = Number(pa)
 		const nb = Number(pb)
-		if (!isNaN(na) && !isNaN(nb)) {
+		if (!Number.isNaN(na) && !Number.isNaN(nb)) {
 			if (na !== nb) return na - nb
 		} else {
 			if (pa < pb) return -1

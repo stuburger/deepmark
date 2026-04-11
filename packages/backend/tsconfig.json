@@ -1,18 +1,18 @@
 {
-  "$schema": "https://json.schemastore.org/tsconfig",
-  "extends": "../../tsconfig.json",
-  "compilerOptions": {
-    "strict": true,
-    "isolatedModules": false,
-    "module": "esnext",
-    "target": "es2022",
-    "moduleResolution": "bundler",
-    "baseUrl": ".",
-    "paths": {
-      "@/*": ["./src/*"],
-      "@/generated/*": ["./generated/*"]
-    }
-  },
-  "include": ["src/**/*.ts", "lib/**/*.ts", "sst-env.d.ts"],
-  "exclude": ["node_modules"]
+	"$schema": "https://json.schemastore.org/tsconfig",
+	"extends": "../../tsconfig.json",
+	"compilerOptions": {
+		"strict": true,
+		"isolatedModules": false,
+		"module": "esnext",
+		"target": "es2022",
+		"moduleResolution": "bundler",
+		"baseUrl": ".",
+		"paths": {
+			"@/*": ["./src/*"],
+			"@/generated/*": ["./generated/*"]
+		}
+	},
+	"include": ["src/**/*.ts", "lib/**/*.ts", "sst-env.d.ts"],
+	"exclude": ["node_modules"]
 }

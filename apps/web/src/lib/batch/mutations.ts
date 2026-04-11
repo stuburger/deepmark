@@ -191,7 +191,7 @@ export async function updateStagedScript(
 
 	const script = await db.stagedScript.findFirst({
 		where: { id: scriptId },
-		})
+	})
 	if (!script) {
 		return { ok: false, error: "Staged script not found" }
 	}
@@ -340,7 +340,7 @@ export async function updateStagedScriptPageKeys(
 
 	const script = await db.stagedScript.findFirst({
 		where: { id: scriptId },
-		})
+	})
 	if (!script) {
 		return { ok: false, error: "Staged script not found" }
 	}
@@ -367,7 +367,7 @@ export async function deleteStagedScript(
 
 	const script = await db.stagedScript.findFirst({
 		where: { id: scriptId },
-		})
+	})
 	if (!script) {
 		return { ok: false, error: "Staged script not found" }
 	}
@@ -392,7 +392,7 @@ export async function splitStagedScript(
 
 	const script = await db.stagedScript.findFirst({
 		where: { id: scriptId },
-		})
+	})
 	if (!script) {
 		return { ok: false, error: "Staged script not found" }
 	}

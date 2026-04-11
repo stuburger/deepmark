@@ -1,5 +1,11 @@
 import { auth, authUrl } from "./auth"
-import { anthropicApiKey, domain, geminiApiKey, openAiApiKey, webUrl } from "./config"
+import {
+	domain,
+	anthropicApiKey,
+	geminiApiKey,
+	openAiApiKey,
+	webUrl,
+} from "./config"
 import { neonPostgres } from "./database"
 import {
 	batchClassifyQueue,

@@ -111,7 +111,6 @@ export function ExamPaperStatsShell({
 		color: BAND_COLORS[i]!,
 	}))
 
-
 	return (
 		<div className="space-y-6">
 			{/* Header */}

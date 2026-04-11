@@ -102,9 +102,7 @@ export function ScriptCard({
 						</span>
 					) : (
 						<span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground capitalize">
-							{isInProgress && (
-								<Loader2 className="h-3 w-3 animate-spin" />
-							)}
+							{isInProgress && <Loader2 className="h-3 w-3 animate-spin" />}
 							{statusLabel(sub.status)}
 						</span>
 					)}

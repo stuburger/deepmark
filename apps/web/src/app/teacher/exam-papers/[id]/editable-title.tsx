@@ -56,7 +56,6 @@ export function EditableTitle({
 				onKeyDown={handleKeyDown}
 				disabled={pending}
 				className="text-2xl font-semibold bg-transparent border-b border-foreground/30 focus:border-foreground outline-none w-full"
-				autoFocus
 			/>
 		)
 	}

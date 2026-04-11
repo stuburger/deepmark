@@ -150,9 +150,7 @@ export function ExamPaperPaperView({
 			)
 			if (!section) return
 
-			const isOverInSameSection = section.questions.some(
-				(q) => q.id === overId,
-			)
+			const isOverInSameSection = section.questions.some((q) => q.id === overId)
 			if (!isOverInSameSection) return
 
 			const oldIndex = section.questions.findIndex((q) => q.id === activeId)

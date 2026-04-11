@@ -33,10 +33,7 @@ export function UnlinkedSchemesPanel({
 									Extracted as Q{item.ghostQuestionNumber}
 								</p>
 							)}
-							<p
-								className="text-sm truncate"
-								title={item.ghostQuestionText}
-							>
+							<p className="text-sm truncate" title={item.ghostQuestionText}>
 								{item.ghostQuestionText}
 							</p>
 							{item.markSchemeDescription && (

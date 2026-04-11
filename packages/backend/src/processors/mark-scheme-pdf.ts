@@ -129,51 +129,57 @@ export async function handler(
 			]
 
 			const [markSchemeResult, metadataResult] = await Promise.all([
-				callLlmWithFallback("mark-scheme-extraction", async (model, entry, report) => {
-					const result = await generateText({
-						model,
-						temperature: entry.temperature,
-						messages: [
-							{
-								role: "user",
-								content: [
-									...pdfContent,
-									{
-										type: "text",
-										text: buildExtractionPrompt(existingQuestionsBlock),
-									},
-								],
-							},
-						],
-						output: Output.object({ schema: MarkSchemeSchema }),
-					})
-					report.usage = result.usage
-					return result
-				}),
-				job.auto_create_exam_paper
-					? callLlmWithFallback("mark-scheme-metadata", async (model, entry, report) => {
-							const result = await generateText({
-								model,
-								temperature: entry.temperature,
-								messages: [
-									{
-										role: "user",
-										content: [
-											...pdfContent,
-											{
-												type: "text",
-												text: "From the document header or cover, extract: title (exam paper title), subject, exam_board, total_marks, duration_minutes, and year if visible. Return only these fields.",
-											},
-										],
-									},
-								],
-								output: Output.object({
-									schema: ExamPaperMetadataSchema,
-								}),
-							})
-							report.usage = result.usage
-							return result
+				callLlmWithFallback(
+					"mark-scheme-extraction",
+					async (model, entry, report) => {
+						const result = await generateText({
+							model,
+							temperature: entry.temperature,
+							messages: [
+								{
+									role: "user",
+									content: [
+										...pdfContent,
+										{
+											type: "text",
+											text: buildExtractionPrompt(existingQuestionsBlock),
+										},
+									],
+								},
+							],
+							output: Output.object({ schema: MarkSchemeSchema }),
 						})
+						report.usage = result.usage
+						return result
+					},
+				),
+				job.auto_create_exam_paper
+					? callLlmWithFallback(
+							"mark-scheme-metadata",
+							async (model, entry, report) => {
+								const result = await generateText({
+									model,
+									temperature: entry.temperature,
+									messages: [
+										{
+											role: "user",
+											content: [
+												...pdfContent,
+												{
+													type: "text",
+													text: "From the document header or cover, extract: title (exam paper title), subject, exam_board, total_marks, duration_minutes, and year if visible. Return only these fields.",
+												},
+											],
+										},
+									],
+									output: Output.object({
+										schema: ExamPaperMetadataSchema,
+									}),
+								})
+								report.usage = result.usage
+								return result
+							},
+						)
 					: Promise.resolve(null),
 			])
 

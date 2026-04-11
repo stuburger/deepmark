@@ -47,8 +47,12 @@ type SubRow = {
 }
 
 function mapSubmission(s: SubRow): BatchIngestJobData["student_jobs"][number] {
-	const ocrStatus = (s.ocr_runs[0]?.status ?? null) as Parameters<typeof deriveScanStatus>[0]
-	const gradingStatus = (s.grading_runs[0]?.status ?? null) as Parameters<typeof deriveScanStatus>[1]
+	const ocrStatus = (s.ocr_runs[0]?.status ?? null) as Parameters<
+		typeof deriveScanStatus
+	>[0]
+	const gradingStatus = (s.grading_runs[0]?.status ?? null) as Parameters<
+		typeof deriveScanStatus
+	>[1]
 	return {
 		id: s.id,
 		status: deriveScanStatus(ocrStatus, gradingStatus),

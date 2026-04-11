@@ -49,10 +49,7 @@ export function useStagedScriptsState(
 		}
 	}, [scripts])
 
-	function openCarousel(
-		script: StagedScript,
-		startIndex: number,
-	) {
+	function openCarousel(script: StagedScript, startIndex: number) {
 		const pageKeys = script.page_keys.slice().sort((a, b) => a.order - b.order)
 		const pages: PageItem[] = pageKeys.map((pk) => ({
 			key: pk.s3_key,
@@ -65,9 +62,7 @@ export function useStagedScriptsState(
 		setCarousel({ pages, index: startIndex, scriptName: name })
 	}
 
-	async function persistPageKeys(
-		script: StagedScript,
-	) {
+	async function persistPageKeys(script: StagedScript) {
 		const r = await updateStagedScriptPageKeys(script.id, script.page_keys)
 		if (!r.ok) toast.error(r.error)
 	}

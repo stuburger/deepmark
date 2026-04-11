@@ -9,9 +9,9 @@ type Props = {
 }
 
 const CHAIN_COLORS: Record<string, string> = {
-	reasoning: "#93c5fd",   // blue-300
-	evaluation: "#fcd34d",  // amber-300
-	judgement: "#c4b5fd",   // violet-300
+	reasoning: "#93c5fd", // blue-300
+	evaluation: "#fcd34d", // amber-300
+	judgement: "#c4b5fd", // violet-300
 }
 
 /**

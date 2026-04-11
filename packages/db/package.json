@@ -1,39 +1,39 @@
 {
-  "name": "@mcp-gcse/db",
-  "version": "1.0.0",
-  "private": true,
-  "type": "module",
-  "main": "dist/index.js",
-  "types": "src/index.ts",
-  "exports": {
-    ".": {
-      "types": "./src/index.ts",
-      "import": "./dist/index.js"
-    }
-  },
-  "scripts": {
-    "build": "bun build ./src/index.ts --outdir ./dist --target node --format esm --external @prisma/client --external @prisma/adapter-neon --external @neondatabase/serverless --external ws",
-    "typecheck": "tsc --noEmit",
-    "clean": "rm -rf dist .turbo",
-    "extract-env": "bun run scripts/extract-env.ts",
-    "db:generate": "prisma generate",
-    "db:migrate": "prisma migrate dev",
-    "db:deploy": "prisma migrate deploy",
-    "db:studio": "prisma studio",
-    "db:setup-extensions": "prisma db execute --file ./prisma/00-create-vector-extension.sql",
-    "db:push": "prisma db execute --file ./prisma/00-create-vector-extension.sql && prisma db push && prisma db execute --file ./prisma/setup-vectors.sql",
-    "db:push:reset": "prisma db execute --file ./prisma/00-create-vector-extension.sql && prisma db push --force-reset && prisma db execute --file ./prisma/setup-vectors.sql"
-  },
-  "dependencies": {
-    "@neondatabase/serverless": "^1.0.2",
-    "@prisma/adapter-neon": "^7.5.0",
-    "@prisma/client": "^7.5.0",
-    "ws": "^8.18.3"
-  },
-  "devDependencies": {
-    "@types/ws": "^8.18.1",
-    "dotenv": "^17.2.3",
-    "prisma": "^7.5.0",
-    "vitest": "^4.1.2"
-  }
+	"name": "@mcp-gcse/db",
+	"version": "1.0.0",
+	"private": true,
+	"type": "module",
+	"main": "dist/index.js",
+	"types": "src/index.ts",
+	"exports": {
+		".": {
+			"types": "./src/index.ts",
+			"import": "./dist/index.js"
+		}
+	},
+	"scripts": {
+		"build": "bun build ./src/index.ts --outdir ./dist --target node --format esm --external @prisma/client --external @prisma/adapter-neon --external @neondatabase/serverless --external ws",
+		"typecheck": "tsc --noEmit",
+		"clean": "rm -rf dist .turbo",
+		"extract-env": "bun run scripts/extract-env.ts",
+		"db:generate": "prisma generate",
+		"db:migrate": "prisma migrate dev",
+		"db:deploy": "prisma migrate deploy",
+		"db:studio": "prisma studio",
+		"db:setup-extensions": "prisma db execute --file ./prisma/00-create-vector-extension.sql",
+		"db:push": "prisma db execute --file ./prisma/00-create-vector-extension.sql && prisma db push && prisma db execute --file ./prisma/setup-vectors.sql",
+		"db:push:reset": "prisma db execute --file ./prisma/00-create-vector-extension.sql && prisma db push --force-reset && prisma db execute --file ./prisma/setup-vectors.sql"
+	},
+	"dependencies": {
+		"@neondatabase/serverless": "^1.0.2",
+		"@prisma/adapter-neon": "^7.5.0",
+		"@prisma/client": "^7.5.0",
+		"ws": "^8.18.3"
+	},
+	"devDependencies": {
+		"@types/ws": "^8.18.1",
+		"dotenv": "^17.2.3",
+		"prisma": "^7.5.0",
+		"vitest": "^4.1.2"
+	}
 }

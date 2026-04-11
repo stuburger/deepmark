@@ -116,44 +116,50 @@ export async function handler(
 			]
 
 			const [questionsResult, metadataResult] = await Promise.all([
-				callLlmWithFallback("question-paper-extraction", async (model, entry, report) => {
-					const result = await generateText({
-						model,
-						temperature: entry.temperature,
-						messages: [
-							{
-								role: "user",
-								content: [
-									...pdfContent,
-									{ type: "text", text: EXTRACT_QUESTIONS_PROMPT },
-								],
-							},
-						],
-						output: Output.object({ schema: QuestionPaperSchema }),
-					})
-					report.usage = result.usage
-					return result
-				}),
-				callLlmWithFallback("question-paper-metadata", async (model, entry, report) => {
-					const result = await generateText({
-						model,
-						temperature: entry.temperature,
-						messages: [
-							{
-								role: "user",
-								content: [
-									...pdfContent,
-									{ type: "text", text: EXTRACT_METADATA_PROMPT },
-								],
-							},
-						],
-						output: Output.object({
-							schema: QuestionPaperMetadataSchema,
-						}),
-					})
-					report.usage = result.usage
-					return result
-				}),
+				callLlmWithFallback(
+					"question-paper-extraction",
+					async (model, entry, report) => {
+						const result = await generateText({
+							model,
+							temperature: entry.temperature,
+							messages: [
+								{
+									role: "user",
+									content: [
+										...pdfContent,
+										{ type: "text", text: EXTRACT_QUESTIONS_PROMPT },
+									],
+								},
+							],
+							output: Output.object({ schema: QuestionPaperSchema }),
+						})
+						report.usage = result.usage
+						return result
+					},
+				),
+				callLlmWithFallback(
+					"question-paper-metadata",
+					async (model, entry, report) => {
+						const result = await generateText({
+							model,
+							temperature: entry.temperature,
+							messages: [
+								{
+									role: "user",
+									content: [
+										...pdfContent,
+										{ type: "text", text: EXTRACT_METADATA_PROMPT },
+									],
+								},
+							],
+							output: Output.object({
+								schema: QuestionPaperMetadataSchema,
+							}),
+						})
+						report.usage = result.usage
+						return result
+					},
+				),
 			])
 
 			logger.info(TAG, "LLM extraction complete", { jobId })

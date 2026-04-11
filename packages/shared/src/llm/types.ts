@@ -21,7 +21,11 @@ export type LlmCallSiteRow = {
 export type LlmInputType = "text" | "vision" | "pdf"
 
 /** What drives the call count for a call site. */
-export type CallMultiplier = "once" | "per-page" | "per-question" | "per-lor-question"
+export type CallMultiplier =
+	| "once"
+	| "per-page"
+	| "per-question"
+	| "per-lor-question"
 
 export const CALL_MULTIPLIER_LABELS: Record<CallMultiplier, string> = {
 	once: "once",
@@ -34,27 +38,25 @@ export const CALL_MULTIPLIER_LABELS: Record<CallMultiplier, string> = {
  * Model pricing per million tokens (USD).
  * Used for cost estimation in the UI — not billing.
  */
-export const MODEL_PRICING: Record<
-	string,
-	{ input: number; output: number }
-> = {
-	// Google
-	"gemini-2.5-flash": { input: 0.15, output: 0.60 },
-	"gemini-2.5-flash-lite": { input: 0.075, output: 0.30 },
-	"gemini-2.5-pro": { input: 1.25, output: 10.0 },
-	"gemini-3-flash-preview": { input: 0.15, output: 0.60 },
-	"gemini-3.1-pro-preview": { input: 1.25, output: 10.0 },
-	// OpenAI
-	"gpt-4o": { input: 2.5, output: 10.0 },
-	"gpt-4o-mini": { input: 0.15, output: 0.60 },
-	"gpt-4.1": { input: 2.0, output: 8.0 },
-	"gpt-4.1-mini": { input: 0.40, output: 1.60 },
-	"gpt-4.1-nano": { input: 0.10, output: 0.40 },
-	// Anthropic
-	"claude-opus-4-6": { input: 15.0, output: 75.0 },
-	"claude-sonnet-4-6": { input: 3.0, output: 15.0 },
-	"claude-haiku-4-5": { input: 0.80, output: 4.0 },
-}
+export const MODEL_PRICING: Record<string, { input: number; output: number }> =
+	{
+		// Google
+		"gemini-2.5-flash": { input: 0.15, output: 0.6 },
+		"gemini-2.5-flash-lite": { input: 0.075, output: 0.3 },
+		"gemini-2.5-pro": { input: 1.25, output: 10.0 },
+		"gemini-3-flash-preview": { input: 0.15, output: 0.6 },
+		"gemini-3.1-pro-preview": { input: 1.25, output: 10.0 },
+		// OpenAI
+		"gpt-4o": { input: 2.5, output: 10.0 },
+		"gpt-4o-mini": { input: 0.15, output: 0.6 },
+		"gpt-4.1": { input: 2.0, output: 8.0 },
+		"gpt-4.1-mini": { input: 0.4, output: 1.6 },
+		"gpt-4.1-nano": { input: 0.1, output: 0.4 },
+		// Anthropic
+		"claude-opus-4-6": { input: 15.0, output: 75.0 },
+		"claude-sonnet-4-6": { input: 3.0, output: 15.0 },
+		"claude-haiku-4-5": { input: 0.8, output: 4.0 },
+	}
 
 /**
  * Recommended default temperature for each model.
@@ -184,7 +186,8 @@ export const LLM_CALL_SITE_DEFAULTS: Array<{
 			"Detects document type, subject, and metadata when uploading PDFs from the web UI.",
 		input_type: "pdf",
 		phase: "setup",
-		step: 1, multiplier: "once",
+		step: 1,
+		multiplier: "once",
 		models: [
 			{ provider: "google", model: "gemini-2.5-flash", temperature: 0.1 },
 		],
@@ -195,7 +198,8 @@ export const LLM_CALL_SITE_DEFAULTS: Array<{
 		description: "Detects exam paper metadata from question paper cover page.",
 		input_type: "pdf",
 		phase: "setup",
-		step: 2, multiplier: "once",
+		step: 2,
+		multiplier: "once",
 		models: [
 			{ provider: "google", model: "gemini-2.5-flash", temperature: 0.1 },
 		],
@@ -207,7 +211,8 @@ export const LLM_CALL_SITE_DEFAULTS: Array<{
 			"Extracts questions, types, and marks from uploaded question paper PDFs.",
 		input_type: "pdf",
 		phase: "setup",
-		step: 2, multiplier: "once",
+		step: 2,
+		multiplier: "once",
 		models: [
 			{ provider: "google", model: "gemini-2.5-flash", temperature: 0.2 },
 		],
@@ -219,7 +224,8 @@ export const LLM_CALL_SITE_DEFAULTS: Array<{
 			"Detects exam paper title, subject, board, and year from mark scheme cover page.",
 		input_type: "pdf",
 		phase: "setup",
-		step: 3, multiplier: "once",
+		step: 3,
+		multiplier: "once",
 		models: [
 			{ provider: "google", model: "gemini-2.5-flash", temperature: 0.1 },
 		],
@@ -231,7 +237,8 @@ export const LLM_CALL_SITE_DEFAULTS: Array<{
 			"Extracts questions, mark points, and level descriptors from uploaded mark scheme PDFs.",
 		input_type: "pdf",
 		phase: "setup",
-		step: 3, multiplier: "once",
+		step: 3,
+		multiplier: "once",
 		models: [
 			{ provider: "google", model: "gemini-2.5-flash", temperature: 0.2 },
 		],
@@ -242,7 +249,8 @@ export const LLM_CALL_SITE_DEFAULTS: Array<{
 		description: "Extracts exemplar answers from uploaded exemplar PDFs.",
 		input_type: "pdf",
 		phase: "setup",
-		step: 4, multiplier: "once",
+		step: 4,
+		multiplier: "once",
 		models: [
 			{ provider: "google", model: "gemini-2.5-flash", temperature: 0.2 },
 		],
@@ -254,7 +262,8 @@ export const LLM_CALL_SITE_DEFAULTS: Array<{
 			"Auto-generates mark scheme suggestions from question text in the editor.",
 		input_type: "text",
 		phase: "setup",
-		step: 5, multiplier: "once",
+		step: 5,
+		multiplier: "once",
 		models: [
 			{ provider: "google", model: "gemini-2.5-flash", temperature: 0.2 },
 		],
@@ -269,7 +278,8 @@ export const LLM_CALL_SITE_DEFAULTS: Array<{
 			"Classifies whether a page starts a new student script during batch segmentation.",
 		input_type: "vision",
 		phase: "segmentation",
-		step: 1, multiplier: "per-page",
+		step: 1,
+		multiplier: "per-page",
 		models: [
 			{ provider: "google", model: "gemini-2.5-flash", temperature: 0.2 },
 		],
@@ -281,7 +291,8 @@ export const LLM_CALL_SITE_DEFAULTS: Array<{
 			"Classifies blank pages as separators, script pages, or artifacts.",
 		input_type: "vision",
 		phase: "segmentation",
-		step: 1, multiplier: "per-page",
+		step: 1,
+		multiplier: "per-page",
 		models: [
 			{ provider: "google", model: "gemini-2.5-flash", temperature: 0.2 },
 		],
@@ -293,7 +304,8 @@ export const LLM_CALL_SITE_DEFAULTS: Array<{
 			"Extracts student name from the first page of a script during batch classification.",
 		input_type: "vision",
 		phase: "segmentation",
-		step: 2, multiplier: "once",
+		step: 2,
+		multiplier: "once",
 		models: [
 			{ provider: "google", model: "gemini-2.5-flash", temperature: 0.2 },
 		],
@@ -308,7 +320,8 @@ export const LLM_CALL_SITE_DEFAULTS: Array<{
 			"Extracts student name, subject, and per-question answers from scanned exam pages.",
 		input_type: "vision",
 		phase: "answer-detection",
-		step: 1, multiplier: "once",
+		step: 1,
+		multiplier: "once",
 		models: [
 			{ provider: "google", model: "gemini-2.5-flash", temperature: 0.1 },
 		],
@@ -320,7 +333,8 @@ export const LLM_CALL_SITE_DEFAULTS: Array<{
 			"Transcribes handwritten text and provides handwriting analysis from page images.",
 		input_type: "vision",
 		phase: "answer-detection",
-		step: 1, multiplier: "per-page",
+		step: 1,
+		multiplier: "per-page",
 		models: [
 			{ provider: "google", model: "gemini-2.5-flash", temperature: 0.2 },
 		],
@@ -332,10 +346,9 @@ export const LLM_CALL_SITE_DEFAULTS: Array<{
 			"Corrects Cloud Vision OCR tokens against original page images for accuracy.",
 		input_type: "vision",
 		phase: "answer-detection",
-		step: 2, multiplier: "per-page",
-		models: [
-			{ provider: "google", model: "gemini-2.5-pro", temperature: 0.1 },
-		],
+		step: 2,
+		multiplier: "per-page",
+		models: [{ provider: "google", model: "gemini-2.5-pro", temperature: 0.1 }],
 	},
 	{
 		key: "vision-attribution",
@@ -344,10 +357,9 @@ export const LLM_CALL_SITE_DEFAULTS: Array<{
 			"Assigns OCR tokens to questions and derives answer region bounding boxes.",
 		input_type: "vision",
 		phase: "answer-detection",
-		step: 3, multiplier: "per-page",
-		models: [
-			{ provider: "google", model: "gemini-2.5-pro", temperature: 0.1 },
-		],
+		step: 3,
+		multiplier: "per-page",
+		models: [{ provider: "google", model: "gemini-2.5-pro", temperature: 0.1 }],
 	},
 	{
 		key: "vision-attribution-mcq-fallback",
@@ -356,7 +368,8 @@ export const LLM_CALL_SITE_DEFAULTS: Array<{
 			"Fallback for locating MCQ answers when primary attribution misses them.",
 		input_type: "vision",
 		phase: "answer-detection",
-		step: 4, multiplier: "per-page",
+		step: 4,
+		multiplier: "per-page",
 		models: [
 			{ provider: "google", model: "gemini-2.5-flash", temperature: 0.1 },
 		],
@@ -368,7 +381,8 @@ export const LLM_CALL_SITE_DEFAULTS: Array<{
 			"LLM fallback to align OCR-extracted answers to exam questions when string matching fails.",
 		input_type: "text",
 		phase: "answer-detection",
-		step: 5, multiplier: "once",
+		step: 5,
+		multiplier: "once",
 		models: [
 			{ provider: "google", model: "gemini-2.5-flash", temperature: 0.3 },
 		],
@@ -383,7 +397,8 @@ export const LLM_CALL_SITE_DEFAULTS: Array<{
 			"Grades student answers via the MarkerOrchestrator (point-based and level-of-response).",
 		input_type: "text",
 		phase: "grading",
-		step: 1, multiplier: "per-question",
+		step: 1,
+		multiplier: "per-question",
 		models: [
 			{ provider: "google", model: "gemini-2.5-flash", temperature: 0.3 },
 		],
@@ -398,7 +413,8 @@ export const LLM_CALL_SITE_DEFAULTS: Array<{
 			"Generates inline annotations on student scripts after grading (enrichment phase).",
 		input_type: "text",
 		phase: "annotations",
-		step: 1, multiplier: "per-lor-question",
+		step: 1,
+		multiplier: "per-lor-question",
 		models: [
 			{ provider: "google", model: "gemini-2.5-flash", temperature: 0.7 },
 		],
@@ -413,7 +429,8 @@ export const LLM_CALL_SITE_DEFAULTS: Array<{
 			"Generates diverse test cases for mark scheme validation via MCP tools.",
 		input_type: "text",
 		phase: "tools",
-		step: 1, multiplier: "once",
+		step: 1,
+		multiplier: "once",
 		models: [
 			{ provider: "google", model: "gemini-2.5-flash", temperature: 0.8 },
 		],

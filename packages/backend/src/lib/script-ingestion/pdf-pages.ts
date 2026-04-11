@@ -1,4 +1,4 @@
-import { inflateSync } from "zlib"
+import { inflateSync } from "node:zlib"
 import { s3 } from "@/lib/infra/s3"
 import { computeInkDensity } from "@/lib/scan-extraction/blank-detection"
 import { GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3"

@@ -70,7 +70,7 @@ export function QuestionEditForm({
 		const parsedPoints = points !== "" ? Number.parseInt(points, 10) : null
 		if (
 			points !== "" &&
-			(isNaN(parsedPoints as number) || (parsedPoints as number) < 0)
+			(Number.isNaN(parsedPoints as number) || (parsedPoints as number) < 0)
 		) {
 			setError("Marks must be a positive number")
 			return
@@ -114,9 +114,7 @@ export function QuestionEditForm({
 						disabled={isPending}
 						className="resize-y font-mono text-sm"
 					/>
-					<FieldError>
-						{error && error.includes("text") ? error : null}
-					</FieldError>
+					<FieldError>{error?.includes("text") ? error : null}</FieldError>
 				</Field>
 
 				<div className="grid grid-cols-2 gap-4">
@@ -148,9 +146,7 @@ export function QuestionEditForm({
 							placeholder="e.g. 6"
 							className="max-w-32"
 						/>
-						<FieldError>
-							{error && error.includes("arks") ? error : null}
-						</FieldError>
+						<FieldError>{error?.includes("arks") ? error : null}</FieldError>
 					</Field>
 				</div>
 			</FieldGroup>

@@ -102,10 +102,5 @@ export function useAnswerRegionLayout({
 			questionId: item.questionId,
 			top: tops[i] ?? item.idealTop,
 		}))
-	}, [
-		answers,
-		imageRenderedHeight,
-		activeQuestionId,
-		cardEstimatedHeight,
-	])
+	}, [answers, imageRenderedHeight, activeQuestionId, cardEstimatedHeight])
 }

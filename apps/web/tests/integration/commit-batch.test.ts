@@ -72,8 +72,8 @@ describe("commitBatch", () => {
 			where: { batch_job_id: batchId },
 		})
 		expect(subs).toHaveLength(1)
-		expect(subs[0]!.student_name).toBe("Sofia")
-		expect(subs[0]!.batch_job_id).toBe(batchId)
+		expect(subs[0]?.student_name).toBe("Sofia")
+		expect(subs[0]?.batch_job_id).toBe(batchId)
 	})
 
 	it("creates 2 StudentSubmissions from 2 confirmed StagedScripts", async () => {
@@ -234,7 +234,7 @@ describe("commitBatch", () => {
 			where: { batch_job_id: batchId },
 		})
 		expect(subs).toHaveLength(1)
-		expect(subs[0]!.pages).toEqual([
+		expect(subs[0]?.pages).toEqual([
 			{ key, order: 1, mime_type: "application/pdf" },
 		])
 	})
@@ -301,6 +301,6 @@ describe("commitBatch", () => {
 			where: { batch_job_id: batchId },
 		})
 		expect(subs).toHaveLength(1)
-		expect(subs[0]!.student_name).toBe("Sofia")
+		expect(subs[0]?.student_name).toBe("Sofia")
 	})
 })

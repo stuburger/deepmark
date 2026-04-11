@@ -164,4 +164,3 @@
 .dark [data-slot="sidebar-inset"] > header {
 	background-color: oklch(0.145 0 0 / 0.85);
 }
-

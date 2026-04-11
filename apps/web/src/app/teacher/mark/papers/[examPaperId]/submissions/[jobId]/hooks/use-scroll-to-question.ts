@@ -7,7 +7,7 @@ import { useCallback } from "react"
  * setter) and smoothly scrolls the visible results panel to that question card.
  */
 export function useScrollToQuestion(
-	setActiveQuestionNumber: (value: string) => void | Promise<unknown>,
+	setActiveQuestionNumber: (value: string) => undefined | Promise<unknown>,
 ) {
 	return useCallback(
 		(questionNumber: string) => {

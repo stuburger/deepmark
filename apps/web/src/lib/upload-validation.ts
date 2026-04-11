@@ -13,9 +13,7 @@ const IMAGE_MIME_TYPES = new Set([
 	"image/tiff",
 ])
 
-type ValidateResult =
-	| { ok: true }
-	| { ok: false; error: string }
+type ValidateResult = { ok: true } | { ok: false; error: string }
 
 function formatSize(bytes: number): string {
 	if (bytes < 1024) return `${bytes} B`
@@ -28,8 +26,14 @@ function formatSize(bytes: number): string {
  * Only PDFs accepted.
  */
 export function validatePdfFile(file: File): ValidateResult {
-	if (!PDF_MIME_TYPES.has(file.type) && !file.name.toLowerCase().endsWith(".pdf")) {
-		return { ok: false, error: `"${file.name}" is not a PDF. Please upload a .pdf file.` }
+	if (
+		!PDF_MIME_TYPES.has(file.type) &&
+		!file.name.toLowerCase().endsWith(".pdf")
+	) {
+		return {
+			ok: false,
+			error: `"${file.name}" is not a PDF. Please upload a .pdf file.`,
+		}
 	}
 
 	if (file.size > MAX_PDF_SIZE_BYTES) {
@@ -40,7 +44,10 @@ export function validatePdfFile(file: File): ValidateResult {
 	}
 
 	if (file.size === 0) {
-		return { ok: false, error: `"${file.name}" is empty. Please select a valid file.` }
+		return {
+			ok: false,
+			error: `"${file.name}" is empty. Please select a valid file.`,
+		}
 	}
 
 	return { ok: true }
@@ -51,7 +58,8 @@ export function validatePdfFile(file: File): ValidateResult {
  * Accepts PDFs and common image formats.
  */
 export function validateScriptFile(file: File): ValidateResult {
-	const isPdf = PDF_MIME_TYPES.has(file.type) || file.name.toLowerCase().endsWith(".pdf")
+	const isPdf =
+		PDF_MIME_TYPES.has(file.type) || file.name.toLowerCase().endsWith(".pdf")
 	const isImage = IMAGE_MIME_TYPES.has(file.type)
 
 	if (!isPdf && !isImage) {
@@ -72,7 +80,10 @@ export function validateScriptFile(file: File): ValidateResult {
 	}
 
 	if (file.size === 0) {
-		return { ok: false, error: `"${file.name}" is empty. Please select a valid file.` }
+		return {
+			ok: false,
+			error: `"${file.name}" is empty. Please select a valid file.`,
+		}
 	}
 
 	return { ok: true }

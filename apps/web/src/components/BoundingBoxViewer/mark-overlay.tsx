@@ -2,6 +2,7 @@
 
 import type { MarkPayload, StudentPaperAnnotation } from "@/lib/marking/types"
 import {
+	CIRCLE_PAD_X,
 	DOUBLE_UNDERLINE_GAP,
 	DOUBLE_UNDERLINE_STROKE,
 	LABEL_SIZE,
@@ -9,7 +10,6 @@ import {
 	OFFSET_H,
 	SHAPE_PAD,
 	SHAPE_STROKE,
-	CIRCLE_PAD_X,
 	SYMBOL_BASELINE,
 	SYMBOL_OFFSET_LEFT,
 	UNDERLINE_STROKE,
@@ -65,7 +65,13 @@ export function MarkOverlay({ annotation, scaleX, scaleY }: Props) {
 						✓
 					</text>
 					{payload.label && (
-						<text x={x + w + sz * OFFSET_H} y={y + labelSize} fill={color} fontSize={labelSize} fontWeight="600">
+						<text
+							x={x + w + sz * OFFSET_H}
+							y={y + labelSize}
+							fill={color}
+							fontSize={labelSize}
+							fontWeight="600"
+						>
 							{payload.label}
 						</text>
 					)}
@@ -85,7 +91,13 @@ export function MarkOverlay({ annotation, scaleX, scaleY }: Props) {
 						✗
 					</text>
 					{payload.label && (
-						<text x={x + w + sz * OFFSET_H} y={y + labelSize} fill={color} fontSize={labelSize} fontWeight="600">
+						<text
+							x={x + w + sz * OFFSET_H}
+							y={y + labelSize}
+							fill={color}
+							fontSize={labelSize}
+							fontWeight="600"
+						>
 							{payload.label}
 						</text>
 					)}
@@ -106,7 +118,13 @@ export function MarkOverlay({ annotation, scaleX, scaleY }: Props) {
 						strokeLinecap="round"
 					/>
 					{payload.label && (
-						<text x={x + w + sz * OFFSET_H} y={y + h} fill={color} fontSize={labelSize} fontWeight="600">
+						<text
+							x={x + w + sz * OFFSET_H}
+							y={y + h}
+							fill={color}
+							fontSize={labelSize}
+							fontWeight="600"
+						>
 							{payload.label}
 						</text>
 					)}
@@ -139,7 +157,13 @@ export function MarkOverlay({ annotation, scaleX, scaleY }: Props) {
 						strokeLinecap="round"
 					/>
 					{payload.label && (
-						<text x={x + w + sz * OFFSET_H} y={y + h} fill={color} fontSize={labelSize} fontWeight="600">
+						<text
+							x={x + w + sz * OFFSET_H}
+							y={y + h}
+							fill={color}
+							fontSize={labelSize}
+							fontWeight="600"
+						>
 							{payload.label}
 						</text>
 					)}
@@ -164,7 +188,13 @@ export function MarkOverlay({ annotation, scaleX, scaleY }: Props) {
 						rx={pad}
 					/>
 					{payload.label && (
-						<text x={x + w + pad * 2 + sz * OFFSET_H} y={y + labelSize} fill={color} fontSize={labelSize} fontWeight="600">
+						<text
+							x={x + w + pad * 2 + sz * OFFSET_H}
+							y={y + labelSize}
+							fill={color}
+							fontSize={labelSize}
+							fontWeight="600"
+						>
 							{payload.label}
 						</text>
 					)}
@@ -189,7 +219,13 @@ export function MarkOverlay({ annotation, scaleX, scaleY }: Props) {
 						strokeOpacity={0.8}
 					/>
 					{payload.label && (
-						<text x={x + w + padX + sz * OFFSET_H} y={y + labelSize} fill={color} fontSize={labelSize} fontWeight="600">
+						<text
+							x={x + w + padX + sz * OFFSET_H}
+							y={y + labelSize}
+							fill={color}
+							fontSize={labelSize}
+							fontWeight="600"
+						>
 							{payload.label}
 						</text>
 					)}

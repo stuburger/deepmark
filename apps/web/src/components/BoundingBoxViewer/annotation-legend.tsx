@@ -7,7 +7,11 @@ import {
 	SheetTitle,
 	SheetTrigger,
 } from "@/components/ui/sheet"
-import type { GradingResult, StudentPaperAnnotation, TagPayload } from "@/lib/marking/types"
+import type {
+	GradingResult,
+	StudentPaperAnnotation,
+	TagPayload,
+} from "@/lib/marking/types"
 import type { ReactElement } from "react"
 
 type Props = {
@@ -19,23 +23,65 @@ type Props = {
 
 const SIGNAL_KEY = [
 	{ signal: "✓ Tick", meaning: "Creditworthy point", color: "text-green-600" },
-	{ signal: "✗ Cross", meaning: "Incorrect or irrelevant", color: "text-red-500" },
-	{ signal: "Underline", meaning: "Applied or contextualised knowledge", color: "text-blue-500" },
-	{ signal: "Double underline", meaning: "Developed reasoning or analysis chain", color: "text-green-600" },
+	{
+		signal: "✗ Cross",
+		meaning: "Incorrect or irrelevant",
+		color: "text-red-500",
+	},
+	{
+		signal: "Underline",
+		meaning: "Applied or contextualised knowledge",
+		color: "text-blue-500",
+	},
+	{
+		signal: "Double underline",
+		meaning: "Developed reasoning or analysis chain",
+		color: "text-green-600",
+	},
 	{ signal: "Box", meaning: "Key term or concept", color: "text-purple-500" },
-	{ signal: "Circle", meaning: "Vague or unclear expression", color: "text-amber-500" },
+	{
+		signal: "Circle",
+		meaning: "Vague or unclear expression",
+		color: "text-amber-500",
+	},
 ] as const
 
 const QUALITY_KEY = [
-	{ label: "Strong (+)", meaning: "Clear, developed demonstration", color: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" },
-	{ label: "Partial (?)", meaning: "Attempted but underdeveloped", color: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" },
-	{ label: "Incorrect (✗)", meaning: "Flawed reasoning", color: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" },
+	{
+		label: "Strong (+)",
+		meaning: "Clear, developed demonstration",
+		color:
+			"bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
+	},
+	{
+		label: "Partial (?)",
+		meaning: "Attempted but underdeveloped",
+		color:
+			"bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
+	},
+	{
+		label: "Incorrect (✗)",
+		meaning: "Flawed reasoning",
+		color: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
+	},
 ] as const
 
 const CHAIN_KEY = [
-	{ color: "bg-blue-300", label: "Blue highlight", meaning: "Reasoning connective" },
-	{ color: "bg-amber-300", label: "Amber highlight", meaning: "Evaluation connective" },
-	{ color: "bg-violet-300", label: "Purple highlight", meaning: "Judgement indicator" },
+	{
+		color: "bg-blue-300",
+		label: "Blue highlight",
+		meaning: "Reasoning connective",
+	},
+	{
+		color: "bg-amber-300",
+		label: "Amber highlight",
+		meaning: "Evaluation connective",
+	},
+	{
+		color: "bg-violet-300",
+		label: "Purple highlight",
+		meaning: "Judgement indicator",
+	},
 ] as const
 
 const AO_LEGEND_STYLES: Record<string, string> = {
@@ -48,13 +94,18 @@ const AO_LEGEND_STYLES: Record<string, string> = {
  * Sheet panel showing an annotation key/legend.
  * Static signal descriptions + dynamic AO labels from grading results.
  */
-export function AnnotationLegend({ gradingResults, annotations = [], levelDescriptors, trigger }: Props) {
+export function AnnotationLegend({
+	gradingResults,
+	annotations = [],
+	levelDescriptors,
+	trigger,
+}: Props) {
 	// Extract unique AO labels from tag annotations
 	const aoLabels = [
 		...new Set(
 			annotations
 				.filter((a) => a.overlay_type === "tag")
-				.map((a) => (a.payload as TagPayload).category)
+				.map((a) => (a.payload as TagPayload).category),
 		),
 	].sort()
 
@@ -91,10 +142,14 @@ export function AnnotationLegend({ gradingResults, annotations = [], levelDescri
 						<div className="flex flex-wrap gap-1.5">
 							{QUALITY_KEY.map((q) => (
 								<div key={q.label} className="flex items-center gap-1.5">
-									<span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${q.color}`}>
+									<span
+										className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${q.color}`}
+									>
 										{q.label}
 									</span>
-									<span className="text-xs text-muted-foreground">{q.meaning}</span>
+									<span className="text-xs text-muted-foreground">
+										{q.meaning}
+									</span>
 								</div>
 							))}
 						</div>
@@ -108,7 +163,9 @@ export function AnnotationLegend({ gradingResults, annotations = [], levelDescri
 						<div className="space-y-1.5">
 							{CHAIN_KEY.map((c) => (
 								<div key={c.label} className="flex items-center gap-2 text-xs">
-									<span className={`inline-block w-4 h-3 rounded-sm ${c.color} opacity-50`} />
+									<span
+										className={`inline-block w-4 h-3 rounded-sm ${c.color} opacity-50`}
+									/>
 									<span className="text-muted-foreground">{c.meaning}</span>
 								</div>
 							))}
@@ -132,7 +189,8 @@ export function AnnotationLegend({ gradingResults, annotations = [], levelDescri
 								))}
 							</div>
 							<p className="text-[10px] text-muted-foreground mt-1.5">
-								AO definitions are subject-specific. See the level descriptors below for what each AO means for this paper.
+								AO definitions are subject-specific. See the level descriptors
+								below for what each AO means for this paper.
 							</p>
 						</section>
 					)}

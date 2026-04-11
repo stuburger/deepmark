@@ -21,6 +21,9 @@ import type {
 	TagPayload,
 } from "@/lib/marking/types"
 import { cn } from "@/lib/utils"
+import { Minus, Plus, RotateCcw } from "lucide-react"
+import { useCallback, useState } from "react"
+import { TransformComponent, TransformWrapper } from "react-zoom-pan-pinch"
 import {
 	HOVER_HIGHLIGHT_DASH,
 	HOVER_HIGHLIGHT_GAP,
@@ -28,9 +31,6 @@ import {
 	HOVER_HIGHLIGHT_STROKE,
 	overlayUnit,
 } from "./BoundingBoxViewer/overlay-sizing"
-import { Minus, Plus, RotateCcw } from "lucide-react"
-import { useCallback, useState } from "react"
-import { TransformComponent, TransformWrapper } from "react-zoom-pan-pinch"
 
 export type { GradingAnnotation }
 
@@ -248,7 +248,11 @@ export function BoundingBoxViewer({
 													.map((a) => (
 														<ChainOverlay
 															key={a.id}
-															annotation={a as StudentPaperAnnotation & { payload: ChainPayload }}
+															annotation={
+																a as StudentPaperAnnotation & {
+																	payload: ChainPayload
+																}
+															}
 															scaleX={scaleX}
 															scaleY={scaleY}
 														/>
@@ -269,7 +273,11 @@ export function BoundingBoxViewer({
 													.map((a) => (
 														<MarkOverlay
 															key={a.id}
-															annotation={a as StudentPaperAnnotation & { payload: MarkPayload }}
+															annotation={
+																a as StudentPaperAnnotation & {
+																	payload: MarkPayload
+																}
+															}
 															scaleX={scaleX}
 															scaleY={scaleY}
 														/>
@@ -278,12 +286,18 @@ export function BoundingBoxViewer({
 													.filter((a) => a.overlay_type === "tag")
 													.map((a) => {
 														const parent = a.parent_annotation_id
-															? annotations.find((p) => p.id === a.parent_annotation_id)
+															? annotations.find(
+																	(p) => p.id === a.parent_annotation_id,
+																)
 															: undefined
 														return (
 															<TagOverlay
 																key={a.id}
-																annotation={a as StudentPaperAnnotation & { payload: TagPayload }}
+																annotation={
+																	a as StudentPaperAnnotation & {
+																		payload: TagPayload
+																	}
+																}
 																parentBbox={parent?.bbox}
 																scaleX={scaleX}
 																scaleY={scaleY}
@@ -294,13 +308,16 @@ export function BoundingBoxViewer({
 												{/* Highlight parent mark's text region on tag hover */}
 												{hoveredParentId != null &&
 													(() => {
-														const parent = annotations.find((a) => a.id === hoveredParentId)
+														const parent = annotations.find(
+															(a) => a.id === hoveredParentId,
+														)
 														if (!parent) return null
 														const [pyMin, pxMin, pyMax, pxMax] = parent.bbox
 														const sz = overlayUnit(scaleY)
-														const color = (parent.payload as MarkPayload).signal === "cross"
-															? "#ef4444"
-															: "#3b82f6"
+														const color =
+															(parent.payload as MarkPayload).signal === "cross"
+																? "#ef4444"
+																: "#3b82f6"
 														return (
 															<rect
 																x={pxMin * scaleX}

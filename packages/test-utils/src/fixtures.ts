@@ -18,7 +18,9 @@ export async function cleanupBatch(batchId: string) {
 	})
 	const subIds = submissions.map((s) => s.id)
 	if (subIds.length > 0) {
-		await db.enrichmentRun.deleteMany({ where: { grading_run_id: { in: subIds } } })
+		await db.enrichmentRun.deleteMany({
+			where: { grading_run_id: { in: subIds } },
+		})
 		await db.gradingRun.deleteMany({ where: { submission_id: { in: subIds } } })
 		await db.ocrRun.deleteMany({ where: { submission_id: { in: subIds } } })
 	}

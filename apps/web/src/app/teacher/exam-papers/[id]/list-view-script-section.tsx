@@ -14,10 +14,7 @@ type ListViewScriptSectionProps = {
 	localName: string
 	urls: Record<string, string>
 	onToggleInclude: () => void
-	onOpenCarousel: (
-		script: StagedScript,
-		index: number,
-	) => void
+	onOpenCarousel: (script: StagedScript, index: number) => void
 	onUpdateLocalName: (value: string) => void
 	onUpdateName: (name: string) => void
 	onDelete: () => void

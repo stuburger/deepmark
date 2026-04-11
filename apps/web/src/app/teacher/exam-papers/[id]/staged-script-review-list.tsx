@@ -51,9 +51,7 @@ export function StagedScriptReviewList({
 		Set<string>
 	>(new Set())
 
-	const dragSnapshotRef = useRef<StagedScript[] | null>(
-		null,
-	)
+	const dragSnapshotRef = useRef<StagedScript[] | null>(null)
 
 	function handleDeletePage(pageKey: string) {
 		const sourceScript = localScripts.find((s) =>

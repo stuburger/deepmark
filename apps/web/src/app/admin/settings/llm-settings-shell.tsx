@@ -215,9 +215,7 @@ export function LlmSettingsShell({
 			) : (
 				<div className="space-y-2">
 					{LLM_PHASE_ORDER.flatMap((phase, phaseIdx) => {
-						const phaseCallSites = callSites.filter(
-							(cs) => cs.phase === phase,
-						)
+						const phaseCallSites = callSites.filter((cs) => cs.phase === phase)
 						if (phaseCallSites.length === 0) return []
 
 						// Group call sites by step number. Same step = parallel.
@@ -239,8 +237,6 @@ export function LlmSettingsShell({
 						}
 
 						const elements: React.ReactNode[] = []
-
-						{/* Arrow between phase groups */}
 						if (phaseIdx > 0) {
 							elements.push(
 								<div
@@ -275,15 +271,13 @@ export function LlmSettingsShell({
 										</TableHeader>
 										<TableBody>
 											{stepGroups.flatMap((group, groupIdx) => {
-												const isLastGroup =
-													groupIdx === stepGroups.length - 1
+												const isLastGroup = groupIdx === stepGroups.length - 1
 												const isParallel = group.sites.length > 1
 												return group.sites.map((cs, i) => {
 													const inputConfig = INPUT_TYPE_CONFIG[cs.input_type]
 													const InputIcon = inputConfig?.icon ?? Eye
 													const isFirstInGroup = i === 0
-													const isLastInGroup =
-														i === group.sites.length - 1
+													const isLastInGroup = i === group.sites.length - 1
 													return (
 														<TableRow key={cs.id}>
 															<TableCell className="text-center pr-0 align-middle">
@@ -324,9 +318,7 @@ export function LlmSettingsShell({
 															</TableCell>
 															<TableCell>
 																<Badge
-																	variant={
-																		inputConfig?.variant ?? "secondary"
-																	}
+																	variant={inputConfig?.variant ?? "secondary"}
 																	className="gap-1"
 																>
 																	<InputIcon className="h-3 w-3" />

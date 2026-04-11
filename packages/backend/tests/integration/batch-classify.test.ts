@@ -59,7 +59,7 @@ describe("batch-classify Lambda", () => {
 
 		expect(result.status).not.toBe("failed")
 		expect(result.staged_scripts).toHaveLength(1)
-		expect(result.staged_scripts[0]!.status).toBe("excluded")
+		expect(result.staged_scripts[0]?.status).toBe("excluded")
 	})
 
 	it("classifies sofia-1.pdf (3-page single-student PDF) as at least 1 proposed StagedScript", async () => {

@@ -45,10 +45,9 @@ const capSchema = z
 	.refine((cap) => cap.maxLevel.trim() !== "" || cap.maxMark.trim() !== "", {
 		message: "Each cap needs a max level or max mark",
 	})
-	.refine(
-		(cap) => !(cap.maxLevel.trim() !== "" && cap.maxMark.trim() !== ""),
-		{ message: "Use either max level or max mark, not both" },
-	)
+	.refine((cap) => !(cap.maxLevel.trim() !== "" && cap.maxMark.trim() !== ""), {
+		message: "Use either max level or max mark, not both",
+	})
 
 const formSchema = z
 	.object({
@@ -59,11 +58,10 @@ const formSchema = z
 		levels: z.array(levelSchema).min(1, "At least one level is required"),
 		caps: z.array(capSchema),
 	})
-	.refine(
-		(data) =>
-			data.levels.every((l) => l.minMark <= l.maxMark),
-		{ message: "Min mark must not exceed max mark", path: ["levels"] },
-	)
+	.refine((data) => data.levels.every((l) => l.minMark <= l.maxMark), {
+		message: "Min mark must not exceed max mark",
+		path: ["levels"],
+	})
 
 type FormValues = z.infer<typeof formSchema>
 
@@ -171,7 +169,9 @@ export function LorMarkSchemeEditForm({
 				level: row.level,
 				mark_range: [row.minMark, row.maxMark] as [number, number],
 				descriptor: row.descriptor.trim(),
-				...(aoRequirements.length > 0 ? { ao_requirements: aoRequirements } : {}),
+				...(aoRequirements.length > 0
+					? { ao_requirements: aoRequirements }
+					: {}),
 			}
 		})
 
@@ -181,9 +181,7 @@ export function LorMarkSchemeEditForm({
 					? undefined
 					: Number.parseInt(cap.maxLevel, 10)
 			const maxMark =
-				cap.maxMark.trim() === ""
-					? undefined
-					: Number.parseInt(cap.maxMark, 10)
+				cap.maxMark.trim() === "" ? undefined : Number.parseInt(cap.maxMark, 10)
 			return {
 				condition: cap.condition.trim(),
 				reason: cap.reason.trim(),
@@ -253,9 +251,7 @@ export function LorMarkSchemeEditForm({
 							setSaved(false)
 						}}
 					/>
-					<FieldError>
-						{form.formState.errors.description?.message}
-					</FieldError>
+					<FieldError>{form.formState.errors.description?.message}</FieldError>
 				</Field>
 
 				<div className="grid grid-cols-2 gap-4">
@@ -311,13 +307,22 @@ export function LorMarkSchemeEditForm({
 								onChange={(key, value) => {
 									switch (key) {
 										case "level":
-											form.setValue(`levels.${i}.level`, Number.parseInt(value, 10) || 0)
+											form.setValue(
+												`levels.${i}.level`,
+												Number.parseInt(value, 10) || 0,
+											)
 											break
 										case "minMark":
-											form.setValue(`levels.${i}.minMark`, Number.parseInt(value, 10) || 0)
+											form.setValue(
+												`levels.${i}.minMark`,
+												Number.parseInt(value, 10) || 0,
+											)
 											break
 										case "maxMark":
-											form.setValue(`levels.${i}.maxMark`, Number.parseInt(value, 10) || 0)
+											form.setValue(
+												`levels.${i}.maxMark`,
+												Number.parseInt(value, 10) || 0,
+											)
 											break
 										case "descriptor":
 											form.setValue(`levels.${i}.descriptor`, value)
@@ -355,9 +360,7 @@ export function LorMarkSchemeEditForm({
 						<Plus className="h-3.5 w-3.5 mr-1.5" />
 						Add level
 					</Button>
-					<FieldError>
-						{form.formState.errors.levels?.message}
-					</FieldError>
+					<FieldError>{form.formState.errors.levels?.message}</FieldError>
 				</Field>
 
 				<Field>

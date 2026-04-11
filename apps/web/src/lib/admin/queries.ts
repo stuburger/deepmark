@@ -69,7 +69,9 @@ export async function getDashboardData(): Promise<DashboardData> {
 		db.studentSubmission.count({
 			where: {
 				superseded_at: null,
-				grading_runs: { none: { status: { in: ["complete", "failed", "cancelled"] } } },
+				grading_runs: {
+					none: { status: { in: ["complete", "failed", "cancelled"] } },
+				},
 			},
 		}),
 		db.markScheme.count({

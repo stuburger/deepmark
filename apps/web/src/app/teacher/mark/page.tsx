@@ -84,7 +84,11 @@ function SubmissionRow({ sub }: { sub: SubmissionHistoryItem }) {
 						)}
 					</Link>
 				) : (
-					<span className={sub.student_name ? "font-medium" : "text-muted-foreground italic"}>
+					<span
+						className={
+							sub.student_name ? "font-medium" : "text-muted-foreground italic"
+						}
+					>
 						{sub.student_name || "Unknown student"}
 					</span>
 				)}
@@ -206,7 +210,7 @@ export default async function MarkPage() {
 									<TableHead>Exam paper</TableHead>
 									<TableHead>Score</TableHead>
 									<TableHead>Submitted</TableHead>
-									<TableHead></TableHead>
+									<TableHead />
 								</TableRow>
 							</TableHeader>
 							<TableBody>

@@ -195,17 +195,17 @@ export default function NewExamPaperPage() {
 			return
 		}
 		const parsedYear = Number.parseInt(year, 10)
-		if (!year || isNaN(parsedYear)) {
+		if (!year || Number.isNaN(parsedYear)) {
 			setSubmitError("Valid year is required")
 			return
 		}
 		const parsedMarks = Number.parseInt(totalMarks, 10)
-		if (!totalMarks || isNaN(parsedMarks)) {
+		if (!totalMarks || Number.isNaN(parsedMarks)) {
 			setSubmitError("Total marks is required")
 			return
 		}
 		const parsedDuration = Number.parseInt(durationMinutes, 10)
-		if (!durationMinutes || isNaN(parsedDuration)) {
+		if (!durationMinutes || Number.isNaN(parsedDuration)) {
 			setSubmitError("Duration is required")
 			return
 		}

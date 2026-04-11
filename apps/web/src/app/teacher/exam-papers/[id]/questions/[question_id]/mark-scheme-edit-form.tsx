@@ -169,7 +169,10 @@ function useMarkSchemeSubmit({
 						? await updateMarkScheme(markSchemeId, input)
 						: questionId
 							? await createMarkScheme(questionId, input)
-							: { ok: false as const, error: "Missing question or mark scheme ID" }
+							: {
+									ok: false as const,
+									error: "Missing question or mark scheme ID",
+								}
 				if (!result.ok) {
 					setSubmitError(result.error)
 					return
@@ -245,9 +248,7 @@ function McqForm(props: Props) {
 						placeholder="e.g. The correct answer is B."
 						className="resize-y text-sm"
 					/>
-					<FieldError>
-						{form.formState.errors.description?.message}
-					</FieldError>
+					<FieldError>{form.formState.errors.description?.message}</FieldError>
 				</Field>
 
 				<Field>
@@ -308,7 +309,8 @@ function WrittenForm(props: Props) {
 		useMarkSchemeSubmit(props)
 
 	const showMarkPoints =
-		!isEdit || ("markingMethod" in props && props.markingMethod === "point_based")
+		!isEdit ||
+		("markingMethod" in props && props.markingMethod === "point_based")
 
 	const form = useForm<WrittenFormValues>({
 		resolver: zodResolver(writtenFormSchema),
@@ -362,9 +364,7 @@ function WrittenForm(props: Props) {
 						placeholder="Describe what a correct answer should include…"
 						className="resize-y text-sm"
 					/>
-					<FieldError>
-						{form.formState.errors.description?.message}
-					</FieldError>
+					<FieldError>{form.formState.errors.description?.message}</FieldError>
 				</Field>
 
 				{showMarkPoints && (
@@ -416,9 +416,7 @@ function WrittenForm(props: Props) {
 							<Plus className="h-3.5 w-3.5 mr-1.5" />
 							Add mark point
 						</Button>
-						<FieldError>
-							{form.formState.errors.markPoints?.message}
-						</FieldError>
+						<FieldError>{form.formState.errors.markPoints?.message}</FieldError>
 					</Field>
 				)}
 
@@ -432,11 +430,7 @@ function WrittenForm(props: Props) {
 			{submitError && (
 				<p className="mt-3 text-sm text-destructive">{submitError}</p>
 			)}
-			<SaveButton
-				pending={effectivelyPending}
-				saved={saved}
-				isEdit={isEdit}
-			/>
+			<SaveButton pending={effectivelyPending} saved={saved} isEdit={isEdit} />
 		</form>
 	)
 }

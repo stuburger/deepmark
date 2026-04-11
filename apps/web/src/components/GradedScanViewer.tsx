@@ -144,9 +144,7 @@ export function GradedScanViewer({
 										answer={answer}
 										scaleX={scaleX}
 										scaleY={scaleY}
-										isActive={
-											answer.questionId === activeQuestionId
-										}
+										isActive={answer.questionId === activeQuestionId}
 									/>
 								))}
 							</svg>

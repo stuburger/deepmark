@@ -46,7 +46,10 @@ export function McqOptions({
 						<span
 							className={cn(
 								"flex-1",
-								isGradingView && !isChosen && !isCorrect && "text-muted-foreground",
+								isGradingView &&
+									!isChosen &&
+									!isCorrect &&
+									"text-muted-foreground",
 							)}
 						>
 							{opt.option_text}

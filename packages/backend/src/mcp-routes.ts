@@ -23,12 +23,12 @@ export const mcpRoutes = new Hono<HonoEnv>()
 		// The MCP SDK requires both content types in the Accept header for POST requests.
 		// Some MCP clients (e.g. Claude Desktop) omit text/event-stream on notifications,
 		// which causes the transport to return 406. Normalise here before delegating.
-		const accept = req.headers["accept"] as string | undefined
+		const accept = req.headers.accept as string | undefined
 		if (
 			!accept?.includes("application/json") ||
 			!accept?.includes("text/event-stream")
 		) {
-			req.headers["accept"] = "application/json, text/event-stream"
+			req.headers.accept = "application/json, text/event-stream"
 		}
 
 		const auth = c.get("auth")

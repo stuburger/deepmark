@@ -49,9 +49,7 @@ type PhaseSnapshot = {
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
-const DEFAULTS_BY_KEY = new Map(
-	LLM_CALL_SITE_DEFAULTS.map((d) => [d.key, d]),
-)
+const DEFAULTS_BY_KEY = new Map(LLM_CALL_SITE_DEFAULTS.map((d) => [d.key, d]))
 
 function displayName(key: string): string {
 	return DEFAULTS_BY_KEY.get(key)?.display_name ?? key
@@ -83,7 +81,7 @@ function estimateCost(
 }
 
 function formatCost(cost: number): string {
-	if (cost < 0.01) return `<$0.01`
+	if (cost < 0.01) return "<$0.01"
 	return `$${cost.toFixed(2)}`
 }
 
@@ -130,15 +128,11 @@ function SnapshotTable({ snapshot }: { snapshot: LlmRunSnapshot }) {
 				<TableCell className="text-xs font-medium">
 					{displayName(key)}
 				</TableCell>
-				<TableCell className="text-xs font-mono">
-					{primary.model}
-				</TableCell>
+				<TableCell className="text-xs font-mono">{primary.model}</TableCell>
 				<TableCell className="text-right text-xs tabular-nums">
 					{effective?.total_calls ?? "-"}
 					{mult && (
-						<span className="text-muted-foreground/60 ml-1">
-							({mult})
-						</span>
+						<span className="text-muted-foreground/60 ml-1">({mult})</span>
 					)}
 				</TableCell>
 				<TableCell className="text-right text-xs tabular-nums">

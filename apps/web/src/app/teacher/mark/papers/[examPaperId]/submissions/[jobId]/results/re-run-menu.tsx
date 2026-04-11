@@ -1,12 +1,12 @@
 "use client"
 
+import { buttonVariants } from "@/components/ui/button-variants"
 import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { buttonVariants } from "@/components/ui/button-variants"
 import { retriggerGrading, retriggerOcr } from "@/lib/marking/mutations"
 import { cn } from "@/lib/utils"
 import { useMutation } from "@tanstack/react-query"
@@ -72,16 +72,25 @@ export function ReRunMenu({
 				<ChevronDown className="h-3 w-3 ml-1 opacity-50" />
 			</DropdownMenuTrigger>
 			<DropdownMenuContent align="end" className="w-auto min-w-0">
-				<DropdownMenuItem className="whitespace-nowrap" onClick={() => ocrMutation.mutate()}>
+				<DropdownMenuItem
+					className="whitespace-nowrap"
+					onClick={() => ocrMutation.mutate()}
+				>
 					<ScanText className="h-3.5 w-3.5 mr-2 shrink-0" />
 					Re-scan
 				</DropdownMenuItem>
-				<DropdownMenuItem className="whitespace-nowrap" onClick={() => gradingMutation.mutate()}>
+				<DropdownMenuItem
+					className="whitespace-nowrap"
+					onClick={() => gradingMutation.mutate()}
+				>
 					<RefreshCw className="h-3.5 w-3.5 mr-2 shrink-0" />
 					Re-grade
 				</DropdownMenuItem>
 				{onReAnnotate && (
-					<DropdownMenuItem className="whitespace-nowrap" onClick={onReAnnotate}>
+					<DropdownMenuItem
+						className="whitespace-nowrap"
+						onClick={onReAnnotate}
+					>
 						<Sparkles className="h-3.5 w-3.5 mr-2 shrink-0" />
 						Re-annotate
 					</DropdownMenuItem>

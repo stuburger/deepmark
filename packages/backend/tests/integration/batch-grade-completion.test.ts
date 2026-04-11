@@ -16,12 +16,7 @@ beforeAll(async () => {
 async function createSubmissionWithGrading(
 	batchId: string,
 	index: number,
-	gradingStatus:
-		| "complete"
-		| "failed"
-		| "cancelled"
-		| "processing"
-		| "pending",
+	gradingStatus: "complete" | "failed" | "cancelled" | "processing" | "pending",
 ) {
 	const sub = await db.studentSubmission.create({
 		data: {
@@ -126,5 +121,4 @@ describe("batch grade completion", () => {
 		expect(updated.status).toBe("marking")
 		expect(updated.notification_sent_at).toBeNull()
 	})
-
 })

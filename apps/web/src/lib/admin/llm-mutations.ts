@@ -86,6 +86,48 @@ export async function updateLlmCallSiteModels(
 	}
 }
 
+// ─── Bulk update all call sites ──────────────────────────────────────────────
+
+export type BulkUpdateResult =
+	| { ok: true; updated: number; skipped: number }
+	| { ok: false; error: string }
+
+export async function bulkUpdateLlmCallSiteModels(
+	models: LlmModelEntry[],
+): Promise<BulkUpdateResult> {
+	try {
+		const session = await auth()
+		if (!session) return { ok: false, error: "Not authenticated" }
+
+		if (models.length === 0) {
+			return { ok: false, error: "At least one model is required" }
+		}
+
+		const allCallSites = await db.llmCallSite.findMany({
+			select: { id: true, input_type: true },
+		})
+
+		const hasOpenAi = models.some((m) => m.provider === "openai")
+		const toUpdate = allCallSites.filter(
+			(cs) => !(cs.input_type === "pdf" && hasOpenAi),
+		)
+		const skipped = allCallSites.length - toUpdate.length
+
+		const modelsJson = models as unknown as Parameters<
+			typeof db.llmCallSite.create
+		>[0]["data"]["models"]
+
+		await db.llmCallSite.updateMany({
+			where: { id: { in: toUpdate.map((cs) => cs.id) } },
+			data: { models: modelsJson, updated_by: session.userId },
+		})
+
+		return { ok: true, updated: toUpdate.length, skipped }
+	} catch {
+		return { ok: false, error: "Failed to bulk update model configurations" }
+	}
+}
+
 // ─── Seed / sync defaults ────────────────────────────────────────────────────
 
 export type SeedLlmCallSitesResult =

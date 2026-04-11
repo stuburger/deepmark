@@ -17,6 +17,7 @@ import {
 	TooltipTrigger,
 } from "@/components/ui/tooltip"
 import {
+	bulkUpdateLlmCallSiteModels,
 	resetLlmCallSiteToDefault,
 	seedLlmCallSites,
 	updateLlmCallSiteModels,
@@ -42,9 +43,11 @@ import {
 	RefreshCw,
 	RotateCcw,
 	Type,
+	Zap,
 } from "lucide-react"
 import { useState } from "react"
 import { toast } from "sonner"
+import { BulkUpdateModelsDialog } from "./bulk-update-models-dialog"
 import { EditModelsDialog } from "./edit-models-dialog"
 
 const INPUT_TYPE_CONFIG: Record<
@@ -104,6 +107,7 @@ export function LlmSettingsShell({
 	const [editingCallSite, setEditingCallSite] = useState<LlmCallSiteRow | null>(
 		null,
 	)
+	const [bulkUpdateOpen, setBulkUpdateOpen] = useState(false)
 
 	const { data: callSites = initialCallSites } = useQuery({
 		queryKey: queryKeys.llmCallSites(),
@@ -178,23 +182,51 @@ export function LlmSettingsShell({
 		onError: () => toast.error("Failed to reset"),
 	})
 
+	const bulkMutation = useMutation({
+		mutationFn: bulkUpdateLlmCallSiteModels,
+		onSuccess: (result) => {
+			if (!result.ok) {
+				toast.error(result.error)
+				return
+			}
+			const msg =
+				result.skipped > 0
+					? `Updated ${result.updated} call sites (${result.skipped} skipped — PDF sites incompatible with OpenAI)`
+					: `Updated ${result.updated} call sites`
+			toast.success(msg)
+			setBulkUpdateOpen(false)
+			queryClient.invalidateQueries({ queryKey: queryKeys.llmCallSites() })
+		},
+		onError: () => toast.error("Failed to bulk update"),
+	})
+
 	return (
 		<div className="space-y-4">
 			<div className="flex items-center justify-between">
 				<h2 className="text-lg font-semibold">LLM Call Sites</h2>
-				<Button
-					variant="outline"
-					size="sm"
-					onClick={() => seedMutation.mutate()}
-					disabled={seedMutation.isPending}
-				>
-					{seedMutation.isPending ? (
-						<Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-					) : (
-						<RefreshCw className="h-3.5 w-3.5 mr-1.5" />
-					)}
-					Sync defaults
-				</Button>
+				<div className="flex items-center gap-2">
+					<Button
+						variant="outline"
+						size="sm"
+						onClick={() => setBulkUpdateOpen(true)}
+					>
+						<Zap className="h-3.5 w-3.5 mr-1.5" />
+						Bulk update
+					</Button>
+					<Button
+						variant="outline"
+						size="sm"
+						onClick={() => seedMutation.mutate()}
+						disabled={seedMutation.isPending}
+					>
+						{seedMutation.isPending ? (
+							<Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+						) : (
+							<RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+						)}
+						Sync defaults
+					</Button>
+				</div>
 			</div>
 
 			{callSites.length === 0 ? (
@@ -368,6 +400,13 @@ export function LlmSettingsShell({
 					isResetting={resetMutation.isPending}
 				/>
 			)}
+
+			<BulkUpdateModelsDialog
+				open={bulkUpdateOpen}
+				onOpenChange={setBulkUpdateOpen}
+				onSave={(models) => bulkMutation.mutate(models)}
+				isSaving={bulkMutation.isPending}
+			/>
 		</div>
 	)
 }

@@ -1,20 +1,19 @@
 import { OpenAPIHono } from "@hono/zod-openapi"
+import type { Context } from "hono"
 import { compress } from "hono/compress"
-import { type Context } from "hono"
 import { HTTPException } from "hono/http-exception"
 import { logger } from "hono/logger"
 
 import { ErrorCodes, VisibleError } from "./error"
 
-import { mcpRoutes } from "./mcp-routes"
-import { Resource } from "sst"
 import { cors } from "hono/cors"
+import { Resource } from "sst"
+import { mcpRoutes } from "./mcp-routes"
 import type { HonoEnv } from "./types"
 
-import { authMiddleware } from "./auth/auth-middleware"
 import { swaggerUI } from "@hono/swagger-ui"
 import { apiRoutes } from "./api-routes"
-
+import { authMiddleware } from "./auth/auth-middleware"
 
 export const v1Routes = new OpenAPIHono<HonoEnv>()
 	.route("/v1", apiRoutes)
@@ -68,11 +67,17 @@ export const routes = new OpenAPIHono<HonoEnv>()
 	// - /.well-known/oauth-protected-resource/mcp    (MCP clients append the resource path)
 	.get("/.well-known/oauth-protected-resource", (c: Context) => {
 		const origin = new URL(c.req.url).origin
-		return c.json({ resource: `${origin}/mcp`, authorization_servers: [Resource.AuthUrl.url] })
+		return c.json({
+			resource: `${origin}/mcp`,
+			authorization_servers: [Resource.AuthUrl.url],
+		})
 	})
 	.get("/.well-known/oauth-protected-resource/mcp", (c: Context) => {
 		const origin = new URL(c.req.url).origin
-		return c.json({ resource: `${origin}/mcp`, authorization_servers: [Resource.AuthUrl.url] })
+		return c.json({
+			resource: `${origin}/mcp`,
+			authorization_servers: [Resource.AuthUrl.url],
+		})
 	})
 	.get("/.well-known/oauth-authorization-server", (c) => {
 		return c.json({
@@ -115,7 +120,9 @@ export const routes = new OpenAPIHono<HonoEnv>()
 			{
 				client_id: clientId,
 				client_id_issued_at: Math.floor(Date.now() / 1000),
-				redirect_uris: Array.isArray(body.redirect_uris) ? body.redirect_uris : [],
+				redirect_uris: Array.isArray(body.redirect_uris)
+					? body.redirect_uris
+					: [],
 				grant_types: ["authorization_code"],
 				response_types: ["code"],
 				token_endpoint_auth_method: "none",

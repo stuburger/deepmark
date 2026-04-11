@@ -1,6 +1,6 @@
-import { GetExamPaperByIdSchema } from "./schema"
-import { tool } from "@/tools/shared/tool-utils"
 import { db } from "@/db"
+import { tool } from "@/tools/shared/tool-utils"
+import { GetExamPaperByIdSchema } from "./schema"
 
 export const handler = tool(GetExamPaperByIdSchema, async (args, extra) => {
 	const { userId } = extra.authInfo.extra

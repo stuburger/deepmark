@@ -24,14 +24,7 @@ export const AnnotationPlanItemSchema = z.object({
 
 	// Mark fields
 	signal: z
-		.enum([
-			"tick",
-			"cross",
-			"underline",
-			"double_underline",
-			"box",
-			"circle",
-		])
+		.enum(["tick", "cross", "underline", "double_underline", "box", "circle"])
 		.optional()
 		.describe("Required for overlay_type=mark. The physical signal type."),
 	label: z
@@ -51,15 +44,21 @@ export const AnnotationPlanItemSchema = z.object({
 	category: z
 		.string()
 		.optional()
-		.describe("Required for overlay_type=tag. Skill category e.g. 'AO1', 'AO2', 'AO3'"),
+		.describe(
+			"Required for overlay_type=tag. Skill category e.g. 'AO1', 'AO2', 'AO3'",
+		),
 	awarded: z
 		.boolean()
 		.optional()
-		.describe("Required for overlay_type=tag. Whether the skill was demonstrated."),
+		.describe(
+			"Required for overlay_type=tag. Whether the skill was demonstrated.",
+		),
 	quality: z
 		.enum(["strong", "partial", "incorrect", "valid"])
 		.optional()
-		.describe("Required for overlay_type=tag. Quality of the skill demonstration."),
+		.describe(
+			"Required for overlay_type=tag. Quality of the skill demonstration.",
+		),
 
 	// Comment fields
 	comment_text: z
@@ -77,7 +76,9 @@ export const AnnotationPlanItemSchema = z.object({
 	trigger_phrase: z
 		.string()
 		.optional()
-		.describe("Required for overlay_type=chain. The connective phrase matched."),
+		.describe(
+			"Required for overlay_type=chain. The connective phrase matched.",
+		),
 
 	// Parent linking
 	parent_index: z

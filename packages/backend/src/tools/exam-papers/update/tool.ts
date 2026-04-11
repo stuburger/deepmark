@@ -1,8 +1,8 @@
 import { UpdateExamPaperSchema } from "./schema"
 
-import { tool } from "@/tools/shared/tool-utils"
 import { db } from "@/db"
 import type { ExamPaper } from "@/generated/prisma"
+import { tool } from "@/tools/shared/tool-utils"
 
 export const handler = tool(UpdateExamPaperSchema, async (args, extra) => {
 	const {

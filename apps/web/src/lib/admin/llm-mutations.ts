@@ -144,8 +144,9 @@ export async function seedLlmCallSites(): Promise<SeedLlmCallSitesResult> {
 		}
 
 		return { ok: true, created, updated }
-	} catch {
-		return { ok: false, error: "Failed to seed call sites" }
+	} catch (err) {
+		const msg = err instanceof Error ? err.message : String(err)
+		return { ok: false, error: `Failed to seed call sites: ${msg}` }
 	}
 }
 

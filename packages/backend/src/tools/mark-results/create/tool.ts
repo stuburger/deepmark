@@ -1,7 +1,7 @@
-import { MarkAnswerSchema } from "./schema"
-import { tool } from "@/tools/shared/tool-utils"
 import { db } from "@/db"
 import { markAnswerById } from "@/services/mark-answer"
+import { tool } from "@/tools/shared/tool-utils"
+import { MarkAnswerSchema } from "./schema"
 
 export const handler = tool(MarkAnswerSchema, async (args) => {
 	const { answer_id, include_mark_result } = args

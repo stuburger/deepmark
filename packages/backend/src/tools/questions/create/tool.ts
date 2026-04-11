@@ -1,6 +1,6 @@
 import { db } from "@/db"
-import { CreateQuestionSchema } from "./schema"
 import { tool } from "@/tools/shared/tool-utils"
+import { CreateQuestionSchema } from "./schema"
 import { service } from "./service"
 
 export const handler = tool(CreateQuestionSchema, async (args, extra) => {

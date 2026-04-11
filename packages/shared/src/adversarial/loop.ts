@@ -1,4 +1,4 @@
-import { generateText, type LanguageModel } from "ai"
+import { type LanguageModel, generateText } from "ai"
 import type { Grader } from "../grading/grader"
 import type { QuestionGrade, QuestionWithMarkScheme } from "../grading/types"
 import type { AdversarialLoopOptions, TestRunResult } from "./types"

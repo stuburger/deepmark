@@ -48,7 +48,7 @@ export async function persistAnswerRows(
 						level_awarded: r.level_awarded ?? null,
 						why_not_next_level: r.why_not_next_level ?? null,
 						cap_applied: r.cap_applied ?? null,
-						},
+					},
 				})
 			}
 		}

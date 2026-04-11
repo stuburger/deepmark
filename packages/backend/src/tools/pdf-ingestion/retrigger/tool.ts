@@ -1,7 +1,7 @@
-import { SendMessageCommand, SQSClient } from "@aws-sdk/client-sqs"
-import { Resource } from "sst"
-import { tool } from "@/tools/shared/tool-utils"
 import { db } from "@/db"
+import { tool } from "@/tools/shared/tool-utils"
+import { SQSClient, SendMessageCommand } from "@aws-sdk/client-sqs"
+import { Resource } from "sst"
 import { RetriggerPdfIngestionJobSchema } from "./schema"
 
 const sqs = new SQSClient({})
@@ -13,7 +13,9 @@ export const handler = tool(RetriggerPdfIngestionJobSchema, async (args) => {
 	})
 	const terminal = ["failed", "ocr_complete"]
 	if (!terminal.includes(job.status)) {
-		throw new Error(`Job can only be retriggered when status is failed or ocr_complete (current: ${job.status})`)
+		throw new Error(
+			`Job can only be retriggered when status is failed or ocr_complete (current: ${job.status})`,
+		)
 	}
 	await db.pdfIngestionJob.update({
 		where: { id: job_id },

@@ -6,6 +6,10 @@
 
 declare module "sst" {
   export interface Resource {
+    "AnthropicApiKey": {
+      "type": "sst.sst.Secret"
+      "value": string
+    }
     "ApiGateway": {
       "type": "sst.aws.ApiGatewayV2"
       "url": string
@@ -66,10 +70,6 @@ declare module "sst" {
     "NeonPostgres": {
       "databaseUrl": string
       "type": "sst.sst.Linkable"
-    }
-    "AnthropicApiKey": {
-      "type": "sst.sst.Secret"
-      "value": string
     }
     "OpenAiApiKey": {
       "type": "sst.sst.Secret"

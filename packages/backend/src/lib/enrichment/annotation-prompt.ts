@@ -1,4 +1,7 @@
-import type { GradingResult, MarkPointResultEntry } from "@/lib/grading/grade-questions"
+import type {
+	GradingResult,
+	MarkPointResultEntry,
+} from "@/lib/grading/grade-questions"
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -133,10 +136,7 @@ NOTE: Assessment Objective (AO) definitions are SUBJECT-SPECIFIC. Different subj
 
 // ─── Score guidance (dynamic — varies by score band) ─────────────────────────
 
-function scoreGuidance(
-	awarded: number,
-	maxScore: number,
-): string {
+function scoreGuidance(awarded: number, maxScore: number): string {
 	const percent = maxScore > 0 ? Math.round((awarded / maxScore) * 100) : 0
 	if (awarded === maxScore) {
 		return `SCORE CONTEXT: The student scored FULL MARKS (${awarded}/${maxScore}).

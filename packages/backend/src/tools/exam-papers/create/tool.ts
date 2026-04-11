@@ -1,7 +1,7 @@
-import { CreateExamPaperSchema } from "./schema"
-import { ObjectId } from "mongodb"
-import { tool } from "@/tools/shared/tool-utils"
 import { db } from "@/db"
+import { tool } from "@/tools/shared/tool-utils"
+import { ObjectId } from "mongodb"
+import { CreateExamPaperSchema } from "./schema"
 
 export const handler = tool(CreateExamPaperSchema, async (args, extra) => {
 	const { userId } = extra.authInfo.extra

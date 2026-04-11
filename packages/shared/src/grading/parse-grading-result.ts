@@ -22,13 +22,15 @@ export const GradingResultDbSchema = z.object({
 	cap_applied: z.string().optional(),
 	what_went_well: z.array(z.string()).optional(),
 	even_better_if: z.array(z.string()).optional(),
-	mark_points_results: z.array(z.object({
-		pointNumber: z.number(),
-		awarded: z.boolean(),
-		reasoning: z.string(),
-		expectedCriteria: z.string().optional(),
-		studentCovered: z.string().optional(),
-	})),
+	mark_points_results: z.array(
+		z.object({
+			pointNumber: z.number(),
+			awarded: z.boolean(),
+			reasoning: z.string(),
+			expectedCriteria: z.string().optional(),
+			studentCovered: z.string().optional(),
+		}),
+	),
 	mark_scheme_id: z.string().nullable(),
 })
 

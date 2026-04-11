@@ -1,7 +1,7 @@
 import { LLM_CALL_SITE_DEFAULTS } from "./types"
 import type { LlmModelEntry } from "./types"
 
-const CACHE_TTL_MS = 5 * 60 * 1000
+const CACHE_TTL_MS = 0 // 5 * 60 * 1000
 
 type CacheEntry = {
 	models: LlmModelEntry[]

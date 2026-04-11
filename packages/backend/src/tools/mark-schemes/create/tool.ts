@@ -1,7 +1,7 @@
 import { CreateMarkSchemeSchema } from "./schema"
 
-import { tool } from "@/tools/shared/tool-utils"
 import { db } from "@/db"
+import { tool } from "@/tools/shared/tool-utils"
 
 export const handler = tool(CreateMarkSchemeSchema, async (args, extra) => {
 	const {

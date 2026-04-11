@@ -1,7 +1,7 @@
 import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js"
 import { Resource } from "sst"
-import { AuthError } from "../error"
 import z from "zod"
+import { AuthError } from "../error"
 
 export const AuthInfoSchema = z.object({
 	token: z.string(),

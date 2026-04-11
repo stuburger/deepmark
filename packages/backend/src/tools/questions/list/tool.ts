@@ -1,8 +1,8 @@
-import { ListQuestionsSchema } from "./schema"
-import { questions } from "../../db/collections/questions"
-import { tool } from "@/tools/shared/tool-utils"
-import type { Prisma } from "@/generated/prisma"
 import { db } from "@/db"
+import type { Prisma } from "@/generated/prisma"
+import { tool } from "@/tools/shared/tool-utils"
+import { questions } from "../../db/collections/questions"
+import { ListQuestionsSchema } from "./schema"
 
 export const handler = tool(ListQuestionsSchema, async (args) => {
 	const { subject } = args

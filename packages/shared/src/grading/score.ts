@@ -29,9 +29,7 @@ export function computeGradeMetrics(
 	const maxPossibleScore = question.totalPoints
 	const totalScore = Math.min(rawScore, maxPossibleScore)
 	const scorePercentage =
-		maxPossibleScore > 0
-			? Math.round((totalScore / maxPossibleScore) * 100)
-			: 0
+		maxPossibleScore > 0 ? Math.round((totalScore / maxPossibleScore) * 100) : 0
 
 	const requiredMarkPoints = question.markPoints.filter((mp) => mp.isRequired)
 	const passed =

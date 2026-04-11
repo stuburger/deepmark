@@ -1,5 +1,5 @@
-import type { LambdaEvent, LambdaContext } from "hono/aws-lambda"
 import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js"
+import type { LambdaContext, LambdaEvent } from "hono/aws-lambda"
 
 // export interface AuthInfo {
 // 	token: string

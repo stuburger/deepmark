@@ -1,6 +1,6 @@
-import { GetQuestionByIdSchema } from "./schema"
 import { db } from "@/db"
 import { tool } from "@/tools/shared/tool-utils"
+import { GetQuestionByIdSchema } from "./schema"
 
 export const handler = tool(GetQuestionByIdSchema, async (args) => {
 	const { id } = args

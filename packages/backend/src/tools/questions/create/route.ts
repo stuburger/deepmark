@@ -1,7 +1,7 @@
-import { service } from "./service"
-import { type RouteHandler, createRoute, z } from "@hono/zod-openapi"
-import { CreateQuestionSchema, CreateQuestionResponseSchema } from "./schema"
 import type { HonoEnv } from "@/types"
+import { type RouteHandler, createRoute, z } from "@hono/zod-openapi"
+import { CreateQuestionResponseSchema, CreateQuestionSchema } from "./schema"
+import { service } from "./service"
 
 export const route = createRoute({
 	method: "post",

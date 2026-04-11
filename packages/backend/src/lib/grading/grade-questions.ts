@@ -1,11 +1,11 @@
 import { db } from "@/db"
-import type { CancellationToken } from "@/lib/infra/cancellation"
-import { logger } from "@/lib/infra/logger"
 import type {
 	ExamPaperWithSections,
 	MarkScheme,
 	QuestionListItem,
 } from "@/lib/grading/question-list"
+import type { CancellationToken } from "@/lib/infra/cancellation"
+import { logger } from "@/lib/infra/logger"
 import { logGradingRunEvent } from "@mcp-gcse/db"
 import {
 	type MarkerContext,
@@ -203,6 +203,8 @@ async function gradeOneQuestion({
 			max: grade.maxPossibleScore,
 		})
 
+		const isLoR = grade.markingMethod === "level_of_response"
+
 		return {
 			_v: 1 as const,
 			question_id: qItem.question_id,
@@ -214,11 +216,11 @@ async function gradeOneQuestion({
 			llm_reasoning: grade.llmReasoning,
 			feedback_summary: grade.feedbackSummary,
 			marking_method: ms.marking_method as GradingResult["marking_method"],
-			level_awarded: grade.levelAwarded ?? undefined,
-			why_not_next_level: grade.whyNotNextLevel ?? undefined,
-			cap_applied: grade.capApplied ?? undefined,
-			what_went_well: grade.whatWentWell ?? undefined,
-			even_better_if: grade.whatDidntGoWell ?? undefined,
+			level_awarded: isLoR ? grade.levelAwarded : undefined,
+			why_not_next_level: isLoR ? grade.whyNotNextLevel : undefined,
+			cap_applied: isLoR ? grade.capApplied : undefined,
+			what_went_well: isLoR ? grade.whatWentWell : undefined,
+			even_better_if: isLoR ? grade.whatDidntGoWell : undefined,
 			mark_points_results: grade.markPointsResults as MarkPointResultEntry[],
 			mark_scheme_id: ms.id,
 		}
@@ -230,7 +232,7 @@ async function gradeOneQuestion({
 			error: String(err),
 		})
 		const gradingFailedNote = studentAnswer.trim()
-			? "This answer could not be automatically graded. Please review it manually against the mark scheme."
+			? "You should not be seeing this message. An error has occurred and this answer could not be automatically graded."
 			: "No answer was detected for this question. If you did write an answer, try re-scanning or edit the extracted answer and re-mark."
 		return {
 			_v: 1 as const,

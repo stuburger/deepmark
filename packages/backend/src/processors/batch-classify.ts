@@ -1,5 +1,6 @@
 import { db } from "@/db"
 import { logger } from "@/lib/infra/logger"
+import type { SqsEvent, SqsRecord } from "@/lib/infra/sqs-job-runner"
 import { autoCommitBatch } from "@/lib/script-ingestion/auto-commit"
 import {
 	listSourceFiles,
@@ -8,7 +9,6 @@ import {
 } from "@/lib/script-ingestion/source-file-processing"
 import type { StagedScriptData } from "@/lib/script-ingestion/types"
 import { scriptCountIsPlausible } from "@/lib/script-ingestion/utils"
-import type { SqsEvent, SqsRecord } from "@/lib/infra/sqs-job-runner"
 import type {
 	BatchStatus,
 	ClassificationMode,

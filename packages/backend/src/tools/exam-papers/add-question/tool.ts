@@ -1,6 +1,6 @@
-import { AddQuestionToExamPaperSchema } from "./schema"
 import { db } from "@/db/client"
 import { tool } from "@/tools/shared/tool-utils"
+import { AddQuestionToExamPaperSchema } from "./schema"
 
 export const handler = tool(
 	AddQuestionToExamPaperSchema,

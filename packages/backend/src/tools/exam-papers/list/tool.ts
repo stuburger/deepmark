@@ -1,6 +1,6 @@
-import { ListExamPapersSchema } from "./schema"
-import { tool } from "@/tools/shared/tool-utils"
 import { db } from "@/db"
+import { tool } from "@/tools/shared/tool-utils"
+import { ListExamPapersSchema } from "./schema"
 
 export const handler = tool(ListExamPapersSchema, async (args, extra) => {
 	const { userId } = extra.authInfo.extra

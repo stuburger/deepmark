@@ -28,7 +28,8 @@ export function pointBasedAnnotations(
 	const markPoints = gradingResult.mark_points_results.map((mp) => ({
 		point: mp.pointNumber,
 		awarded: mp.awarded,
-		criteria: mp.expectedCriteria ?? mp.studentCovered ?? `Point ${mp.pointNumber}`,
+		criteria:
+			mp.expectedCriteria ?? mp.studentCovered ?? `Point ${mp.pointNumber}`,
 	}))
 
 	return [

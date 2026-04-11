@@ -1,8 +1,5 @@
 import type { Grader } from "../grading/grader"
-import type {
-	LoRQuestionGrade,
-	QuestionWithMarkScheme,
-} from "../grading/types"
+import type { LoRQuestionGrade, QuestionWithMarkScheme } from "../grading/types"
 import type { Marker, MarkerContext } from "./marker"
 
 /**

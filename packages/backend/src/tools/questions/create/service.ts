@@ -1,9 +1,9 @@
 import { db } from "@/db"
-import type {
-	CreateQuestionSchema,
-	CreateQuestionResponseSchema,
-} from "./schema"
 import type { z } from "zod"
+import type {
+	CreateQuestionResponseSchema,
+	CreateQuestionSchema,
+} from "./schema"
 
 export async function service(
 	args: z.infer<z.ZodObject<typeof CreateQuestionSchema>>,

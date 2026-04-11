@@ -1,9 +1,9 @@
 import { toFetchResponse, toReqRes } from "fetch-to-node"
 import { type Context, Hono } from "hono"
+import { authMiddleware } from "./auth/auth-middleware"
 import { server } from "./mcp-server"
 import { getStatelessTransport } from "./transport"
 import type { HonoEnv } from "./types"
-import { authMiddleware } from "./auth/auth-middleware"
 
 // authMiddleware MUST be registered first so it runs before route handlers.
 // In Hono, handlers execute in registration order — middleware added after
@@ -24,7 +24,10 @@ export const mcpRoutes = new Hono<HonoEnv>()
 		// Some MCP clients (e.g. Claude Desktop) omit text/event-stream on notifications,
 		// which causes the transport to return 406. Normalise here before delegating.
 		const accept = req.headers["accept"] as string | undefined
-		if (!accept?.includes("application/json") || !accept?.includes("text/event-stream")) {
+		if (
+			!accept?.includes("application/json") ||
+			!accept?.includes("text/event-stream")
+		) {
 			req.headers["accept"] = "application/json, text/event-stream"
 		}
 

@@ -1,7 +1,9 @@
 import { z } from "zod"
 
 export const TestAndRefineMarkSchemeSchema = {
-	mark_scheme_id: z.string().describe("ID of the mark scheme to test and refine"),
+	mark_scheme_id: z
+		.string()
+		.describe("ID of the mark scheme to test and refine"),
 	target_scores: z
 		.array(z.number().int().min(0))
 		.optional()

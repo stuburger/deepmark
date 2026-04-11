@@ -1,6 +1,6 @@
-import { GetMarkResultByAnswerIdSchema } from "./schema"
-import { tool } from "@/tools/shared/tool-utils"
 import { db } from "@/db"
+import { tool } from "@/tools/shared/tool-utils"
+import { GetMarkResultByAnswerIdSchema } from "./schema"
 
 export const handler = tool(
 	GetMarkResultByAnswerIdSchema,

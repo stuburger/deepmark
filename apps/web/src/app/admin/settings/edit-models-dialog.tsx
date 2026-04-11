@@ -12,12 +12,12 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { NativeSelect } from "@/components/ui/native-select"
-import type {
-	LlmCallSiteRow,
-	LlmModelEntry,
-	LlmProvider,
+import {
+	PROVIDER_MODELS,
+	type LlmCallSiteRow,
+	type LlmModelEntry,
+	type LlmProvider,
 } from "@/lib/admin/llm-types"
-import { PROVIDER_MODELS } from "@/lib/admin/llm-types"
 import {
 	ArrowDown,
 	ArrowUp,
@@ -28,7 +28,16 @@ import {
 } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 
-const PROVIDERS: LlmProvider[] = ["google", "openai", "anthropic"]
+/** Flat list of all available models, grouped by provider for the dropdown. */
+const ALL_MODELS: Array<{ provider: LlmProvider; model: string; label: string }> =
+	(Object.entries(PROVIDER_MODELS) as [LlmProvider, string[]][]).flatMap(
+		([provider, models]) =>
+			models.map((model) => ({
+				provider,
+				model,
+				label: `${model}  (${provider})`,
+			})),
+	)
 
 type ModelEntryWithKey = LlmModelEntry & { _key: number }
 
@@ -93,17 +102,16 @@ export function EditModelsDialog({
 
 	function updateModel(index: number, patch: Partial<LlmModelEntry>) {
 		setModels((prev) =>
-			prev.map((m, i) => {
-				if (i !== index) return m
-				const updated = { ...m, ...patch }
-				// When provider changes, reset to first available model for that provider
-				if (patch.provider && patch.provider !== m.provider) {
-					const availableModels = PROVIDER_MODELS[patch.provider]
-					updated.model = availableModels?.[0] ?? ""
-				}
-				return updated
-			}),
+			prev.map((m, i) => (i !== index ? m : { ...m, ...patch })),
 		)
+	}
+
+	function selectModel(index: number, value: string) {
+		const entry = ALL_MODELS.find(
+			(m) => `${m.provider}/${m.model}` === value,
+		)
+		if (!entry) return
+		updateModel(index, { provider: entry.provider, model: entry.model })
 	}
 
 	function stripKeys(entries: ModelEntryWithKey[]): LlmModelEntry[] {
@@ -115,7 +123,7 @@ export function EditModelsDialog({
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent className="max-w-xl">
+			<DialogContent className="sm:max-w-3xl">
 				<DialogHeader>
 					<DialogTitle>{callSite.display_name}</DialogTitle>
 					<DialogDescription>
@@ -139,29 +147,16 @@ export function EditModelsDialog({
 
 							<NativeSelect
 								size="sm"
-								value={model.provider}
-								onChange={(e) =>
-									updateModel(index, {
-										provider: e.target.value as LlmProvider,
-									})
-								}
-							>
-								{PROVIDERS.map((p) => (
-									<option key={p} value={p}>
-										{p}
-									</option>
-								))}
-							</NativeSelect>
-
-							<NativeSelect
-								size="sm"
-								value={model.model}
-								onChange={(e) => updateModel(index, { model: e.target.value })}
+								value={`${model.provider}/${model.model}`}
+								onChange={(e) => selectModel(index, e.target.value)}
 								className="flex-1"
 							>
-								{(PROVIDER_MODELS[model.provider] ?? []).map((m) => (
-									<option key={m} value={m}>
-										{m}
+								{ALL_MODELS.map((m) => (
+									<option
+										key={`${m.provider}/${m.model}`}
+										value={`${m.provider}/${m.model}`}
+									>
+										{m.label}
 									</option>
 								))}
 							</NativeSelect>

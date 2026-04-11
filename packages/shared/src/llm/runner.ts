@@ -12,6 +12,8 @@ import type { LlmModelEntry, LlmProvider } from "./types"
 export type EffectiveSummary = {
 	total_calls: number
 	fallback_calls: number
+	prompt_tokens: number
+	completion_tokens: number
 }
 
 export type LlmRunSnapshot = {
@@ -19,6 +21,20 @@ export type LlmRunSnapshot = {
 	selected: Record<string, LlmModelEntry[]>
 	/** Per-call-site summary of what actually executed. */
 	effective: Record<string, EffectiveSummary>
+}
+
+/**
+ * Mutable bag passed into the `call()` callback so call sites can
+ * report token usage from the `generateText` result.
+ *
+ * Usage: `report.usage = result.usage` after the `generateText` call.
+ * Field names match the Vercel AI SDK's `LanguageModelUsage` type.
+ */
+export type LlmCallReport = {
+	usage?: {
+		inputTokens: number | undefined
+		outputTokens: number | undefined
+	}
 }
 
 // ── Zod schemas ─────────────────────────────────────────────────────────────
@@ -32,6 +48,8 @@ export const LlmModelEntrySchema = z.object({
 const EffectiveSummarySchema = z.object({
 	total_calls: z.number().int().nonnegative(),
 	fallback_calls: z.number().int().nonnegative(),
+	prompt_tokens: z.number().int().nonnegative(),
+	completion_tokens: z.number().int().nonnegative(),
 })
 
 export const LlmRunSnapshotSchema = z.object({
@@ -52,7 +70,7 @@ export type LlmRunnerDeps = {
 /**
  * Per-run LLM service that executes calls with fallback and accumulates
  * a snapshot of which models were configured (selected) and which actually
- * ran (effective).
+ * ran (effective), including token usage.
  *
  * Lives in `packages/shared` — pure, no SST deps. Callers inject
  * config loading and model resolution via `LlmRunnerDeps`.
@@ -71,20 +89,37 @@ export class LlmRunner {
 		this.overrides = overrides ?? {}
 	}
 
-	/** Execute an LLM call with fallback, recording to the snapshot. */
+	/**
+	 * Execute an LLM call with fallback, recording to the snapshot.
+	 *
+	 * The callback receives a `report` bag — set `report.usage = result.usage`
+	 * after your `generateText` call to capture token counts in the snapshot.
+	 */
 	async call<T>(
 		callSiteKey: string,
-		fn: (model: LanguageModel, entry: LlmModelEntry) => Promise<T>,
+		fn: (
+			model: LanguageModel,
+			entry: LlmModelEntry,
+			report: LlmCallReport,
+		) => Promise<T>,
 	): Promise<T> {
 		const models = await this.resolveConfig(callSiteKey)
+		const report: LlmCallReport = {}
 
-		return callWithFallback(models, this.deps.resolveModel, fn, {
-			callSiteKey,
-			logger: this.deps.logger,
-			onEffective: (_entry, attemptIndex) => {
-				this.recordEffective(callSiteKey, attemptIndex)
+		const result = await callWithFallback(
+			models,
+			this.deps.resolveModel,
+			(model, entry) => fn(model, entry, report),
+			{
+				callSiteKey,
+				logger: this.deps.logger,
+				onEffective: (_entry, attemptIndex) => {
+					this.recordEffective(callSiteKey, attemptIndex, report)
+				},
 			},
-		})
+		)
+
+		return result
 	}
 
 	/** Returns a Zod-validated deep clone of the accumulated snapshot. */
@@ -104,12 +139,25 @@ export class LlmRunner {
 		return models
 	}
 
-	private recordEffective(callSiteKey: string, attemptIndex: number): void {
+	private recordEffective(
+		callSiteKey: string,
+		attemptIndex: number,
+		report: LlmCallReport,
+	): void {
 		if (!this.effective[callSiteKey]) {
-			this.effective[callSiteKey] = { total_calls: 0, fallback_calls: 0 }
+			this.effective[callSiteKey] = {
+				total_calls: 0,
+				fallback_calls: 0,
+				prompt_tokens: 0,
+				completion_tokens: 0,
+			}
 		}
 		const summary = this.effective[callSiteKey]
 		summary.total_calls++
 		if (attemptIndex > 0) summary.fallback_calls++
+		if (report.usage) {
+			summary.prompt_tokens += report.usage.inputTokens ?? 0
+			summary.completion_tokens += report.usage.outputTokens ?? 0
+		}
 	}
 }

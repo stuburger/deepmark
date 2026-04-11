@@ -106,8 +106,8 @@ export async function extractStudentPaper(
 	const [extractionResult, ...ocrResults] = await Promise.all([
 		callLlmWithFallback(
 			"student-paper-extraction",
-			async (model, entry) =>
-				generateText({
+			async (model, entry, report) => {
+				const result = await generateText({
 					model,
 					temperature: entry.temperature,
 					messages: [
@@ -123,7 +123,10 @@ export async function extractStudentPaper(
 						},
 					],
 					output: Output.object({ schema: StudentPaperSchema }),
-				}),
+				})
+				report.usage = result.usage
+				return result
+			},
 			llm,
 		),
 		...pageData.map((p) => runOcr(p.data, p.mimeType, {}, llm)),

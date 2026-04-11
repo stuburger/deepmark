@@ -116,8 +116,8 @@ export async function handler(
 			]
 
 			const [questionsResult, metadataResult] = await Promise.all([
-				callLlmWithFallback("question-paper-extraction", async (model, entry) =>
-					generateText({
+				callLlmWithFallback("question-paper-extraction", async (model, entry, report) => {
+					const result = await generateText({
 						model,
 						temperature: entry.temperature,
 						messages: [
@@ -130,10 +130,12 @@ export async function handler(
 							},
 						],
 						output: Output.object({ schema: QuestionPaperSchema }),
-					}),
-				),
-				callLlmWithFallback("question-paper-metadata", async (model, entry) =>
-					generateText({
+					})
+					report.usage = result.usage
+					return result
+				}),
+				callLlmWithFallback("question-paper-metadata", async (model, entry, report) => {
+					const result = await generateText({
 						model,
 						temperature: entry.temperature,
 						messages: [
@@ -148,8 +150,10 @@ export async function handler(
 						output: Output.object({
 							schema: QuestionPaperMetadataSchema,
 						}),
-					}),
-				),
+					})
+					report.usage = result.usage
+					return result
+				}),
 			])
 
 			logger.info(TAG, "LLM extraction complete", { jobId })

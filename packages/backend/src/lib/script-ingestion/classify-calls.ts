@@ -56,13 +56,16 @@ export async function callClassifyPageBoundary(
 	try {
 		const { output } = await callLlmWithFallback(
 			"script-boundary-classification",
-			async (model, entry) =>
-				generateText({
+			async (model, entry, report) => {
+				const result = await generateText({
 					model,
 					temperature: entry.temperature,
 					messages: [{ role: "user", content }],
 					output: Output.object({ schema: PageBoundarySchema }),
-				}),
+				})
+				report.usage = result.usage
+				return result
+			},
 		)
 
 		return {
@@ -119,13 +122,16 @@ export async function callClassifyBlankPage(
 	try {
 		const { output } = await callLlmWithFallback(
 			"blank-page-classification",
-			async (model, entry) =>
-				generateText({
+			async (model, entry, report) => {
+				const result = await generateText({
 					model,
 					temperature: entry.temperature,
 					messages: [{ role: "user", content }],
 					output: Output.object({ schema: BlankClassificationSchema }),
-				}),
+				})
+				report.usage = result.usage
+				return result
+			},
 		)
 
 		return output.classification
@@ -140,8 +146,8 @@ export async function callExtractNameFromPage(
 	try {
 		const { output } = await callLlmWithFallback(
 			"student-name-extraction",
-			async (model, entry) =>
-				generateText({
+			async (model, entry, report) => {
+				const result = await generateText({
 					model,
 					temperature: entry.temperature,
 					messages: [
@@ -158,7 +164,10 @@ export async function callExtractNameFromPage(
 						},
 					],
 					output: Output.object({ schema: NameExtractionSchema }),
-				}),
+				})
+				report.usage = result.usage
+				return result
+			},
 		)
 
 		return {

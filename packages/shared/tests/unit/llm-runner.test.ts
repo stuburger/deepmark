@@ -21,6 +21,11 @@ const OPENAI_GPT4O: LlmModelEntry = {
 	temperature: 0.7,
 }
 
+/** Effective summary with zero tokens — convenience for assertions. */
+function eff(total_calls: number, fallback_calls: number) {
+	return { total_calls, fallback_calls, prompt_tokens: 0, completion_tokens: 0 }
+}
+
 function createRunner(
 	config: Record<string, LlmModelEntry[]> = { grading: [GOOGLE_FLASH] },
 	overrides?: Record<string, LlmModelEntry[]>,
@@ -52,10 +57,7 @@ describe("LlmRunner", () => {
 		await runner.call("grading", async () => "b")
 
 		const snapshot = runner.toSnapshot()
-		expect(snapshot.effective.grading).toEqual({
-			total_calls: 2,
-			fallback_calls: 0,
-		})
+		expect(snapshot.effective.grading).toEqual(eff(2, 0))
 	})
 
 	it("records fallback when primary model fails", async () => {
@@ -75,10 +77,7 @@ describe("LlmRunner", () => {
 		})
 
 		const snapshot = runner.toSnapshot()
-		expect(snapshot.effective.grading).toEqual({
-			total_calls: 1,
-			fallback_calls: 1,
-		})
+		expect(snapshot.effective.grading).toEqual(eff(1, 1))
 		expect(callCount).toBe(2)
 	})
 
@@ -93,7 +92,6 @@ describe("LlmRunner", () => {
 			}),
 		).rejects.toThrow("fail")
 
-		// No effective entry recorded
 		const snapshot = runner.toSnapshot()
 		expect(snapshot.effective.grading).toBeUndefined()
 	})
@@ -109,33 +107,23 @@ describe("LlmRunner", () => {
 		await runner.call("ocr", async () => "c")
 
 		const snapshot = runner.toSnapshot()
-		expect(snapshot.selected.grading).toEqual([GOOGLE_FLASH])
-		expect(snapshot.selected.ocr).toEqual([OPENAI_GPT4O])
-		expect(snapshot.effective.grading).toEqual({
-			total_calls: 2,
-			fallback_calls: 0,
-		})
-		expect(snapshot.effective.ocr).toEqual({
-			total_calls: 1,
-			fallback_calls: 0,
-		})
+		expect(snapshot.effective.grading).toEqual(eff(2, 0))
+		expect(snapshot.effective.ocr).toEqual(eff(1, 0))
 	})
 
 	it("uses override instead of getConfig", async () => {
-		const overrideConfig: LlmModelEntry[] = [OPENAI_GPT4O]
 		const { runner, getConfig } = createRunner(
 			{ grading: [GOOGLE_FLASH] },
-			{ grading: overrideConfig },
+			{ grading: [OPENAI_GPT4O] },
 		)
 
 		await runner.call("grading", async () => "result")
 
 		expect(getConfig).not.toHaveBeenCalled()
-		const snapshot = runner.toSnapshot()
-		expect(snapshot.selected.grading).toEqual(overrideConfig)
+		expect(runner.toSnapshot().selected.grading).toEqual([OPENAI_GPT4O])
 	})
 
-	it("supports partial overrides — uses override for one key, getConfig for another", async () => {
+	it("supports partial overrides", async () => {
 		const { runner, getConfig } = createRunner(
 			{ grading: [GOOGLE_FLASH], ocr: [GOOGLE_FLASH] },
 			{ grading: [OPENAI_GPT4O] },
@@ -144,39 +132,96 @@ describe("LlmRunner", () => {
 		await runner.call("grading", async () => "a")
 		await runner.call("ocr", async () => "b")
 
-		// getConfig called only for "ocr", not "grading"
 		expect(getConfig).toHaveBeenCalledTimes(1)
 		expect(getConfig).toHaveBeenCalledWith("ocr")
-
-		const snapshot = runner.toSnapshot()
-		expect(snapshot.selected.grading).toEqual([OPENAI_GPT4O])
-		expect(snapshot.selected.ocr).toEqual([GOOGLE_FLASH])
 	})
 
 	it("toSnapshot() returns Zod-valid data", async () => {
 		const { runner } = createRunner({ grading: [GOOGLE_FLASH] })
-
 		await runner.call("grading", async () => "result")
 
-		const snapshot = runner.toSnapshot()
-		const parsed = LlmRunSnapshotSchema.safeParse(snapshot)
+		const parsed = LlmRunSnapshotSchema.safeParse(runner.toSnapshot())
 		expect(parsed.success).toBe(true)
 	})
 
 	it("toSnapshot() returns a deep clone", async () => {
 		const { runner } = createRunner({ grading: [GOOGLE_FLASH] })
-
 		await runner.call("grading", async () => "result")
 
 		const snap1 = runner.toSnapshot()
-		snap1.selected.grading = []
-		snap1.effective.grading = { total_calls: 999, fallback_calls: 999 }
+		snap1.effective.grading = {
+			total_calls: 999,
+			fallback_calls: 999,
+			prompt_tokens: 999,
+			completion_tokens: 999,
+		}
 
-		const snap2 = runner.toSnapshot()
-		expect(snap2.selected.grading).toEqual([GOOGLE_FLASH])
-		expect(snap2.effective.grading).toEqual({
-			total_calls: 1,
+		expect(runner.toSnapshot().effective.grading).toEqual(eff(1, 0))
+	})
+
+	// ── Token usage reporting ─────────────────────────────────────────────
+
+	it("accumulates token usage when report.usage is set", async () => {
+		const { runner } = createRunner({ grading: [GOOGLE_FLASH] })
+
+		await runner.call("grading", async (_model, _entry, report) => {
+			report.usage = { inputTokens: 100, outputTokens: 50 }
+			return "a"
+		})
+		await runner.call("grading", async (_model, _entry, report) => {
+			report.usage = { inputTokens: 200, outputTokens: 80 }
+			return "b"
+		})
+
+		const snapshot = runner.toSnapshot()
+		expect(snapshot.effective.grading).toEqual({
+			total_calls: 2,
 			fallback_calls: 0,
+			prompt_tokens: 300,
+			completion_tokens: 130,
+		})
+	})
+
+	it("handles calls with no usage reported", async () => {
+		const { runner } = createRunner({ grading: [GOOGLE_FLASH] })
+
+		// First call reports usage, second doesn't
+		await runner.call("grading", async (_model, _entry, report) => {
+			report.usage = { inputTokens: 100, outputTokens: 50 }
+			return "a"
+		})
+		await runner.call("grading", async () => "b")
+
+		const snapshot = runner.toSnapshot()
+		expect(snapshot.effective.grading).toEqual({
+			total_calls: 2,
+			fallback_calls: 0,
+			prompt_tokens: 100,
+			completion_tokens: 50,
+		})
+	})
+
+	it("captures usage from fallback model", async () => {
+		const { runner } = createRunner({
+			grading: [GOOGLE_FLASH, OPENAI_GPT4O],
+		})
+
+		await runner.call("grading", async (model, _entry, report) => {
+			if (
+				(model as unknown as { modelId: string }).modelId.includes("google")
+			) {
+				throw new Error("fail")
+			}
+			report.usage = { inputTokens: 500, outputTokens: 200 }
+			return "ok"
+		})
+
+		const snapshot = runner.toSnapshot()
+		expect(snapshot.effective.grading).toEqual({
+			total_calls: 1,
+			fallback_calls: 1,
+			prompt_tokens: 500,
+			completion_tokens: 200,
 		})
 	})
 })

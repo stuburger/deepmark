@@ -129,8 +129,8 @@ export async function handler(
 			]
 
 			const [markSchemeResult, metadataResult] = await Promise.all([
-				callLlmWithFallback("mark-scheme-extraction", async (model, entry) =>
-					generateText({
+				callLlmWithFallback("mark-scheme-extraction", async (model, entry, report) => {
+					const result = await generateText({
 						model,
 						temperature: entry.temperature,
 						messages: [
@@ -146,11 +146,13 @@ export async function handler(
 							},
 						],
 						output: Output.object({ schema: MarkSchemeSchema }),
-					}),
-				),
+					})
+					report.usage = result.usage
+					return result
+				}),
 				job.auto_create_exam_paper
-					? callLlmWithFallback("mark-scheme-metadata", async (model, entry) =>
-							generateText({
+					? callLlmWithFallback("mark-scheme-metadata", async (model, entry, report) => {
+							const result = await generateText({
 								model,
 								temperature: entry.temperature,
 								messages: [
@@ -168,8 +170,10 @@ export async function handler(
 								output: Output.object({
 									schema: ExamPaperMetadataSchema,
 								}),
-							}),
-						)
+							})
+							report.usage = result.usage
+							return result
+						})
 					: Promise.resolve(null),
 			])
 

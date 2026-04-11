@@ -115,8 +115,8 @@ export async function reconcilePageTokens({
 
 				const { output } = await callLlmWithFallback(
 					"vision-token-reconciliation",
-					async (model, entry) =>
-						generateText({
+					async (model, entry, report) => {
+						const result = await generateText({
 							model,
 							temperature: entry.temperature,
 							messages: [
@@ -136,7 +136,10 @@ export async function reconcilePageTokens({
 								},
 							],
 							output: Output.object({ schema: ReconcileSchema }),
-						}),
+						})
+						report.usage = result.usage
+						return result
+					},
 					llm,
 				)
 				const corrections = output.corrections

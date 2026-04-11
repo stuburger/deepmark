@@ -63,13 +63,16 @@ export async function alignAnswersWithLlm(
 	try {
 		const { output } = await callLlmWithFallback(
 			"answer-alignment",
-			async (model, entry) =>
-				generateText({
+			async (model, entry, report) => {
+				const result = await generateText({
 					model,
 					temperature: entry.temperature,
 					messages: [{ role: "user", content: prompt }],
 					output: Output.object({ schema: AlignmentSchema }),
-				}),
+				})
+				report.usage = result.usage
+				return result
+			},
 		)
 
 		for (const alignment of output.alignments) {

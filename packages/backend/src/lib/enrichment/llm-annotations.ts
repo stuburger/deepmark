@@ -70,8 +70,8 @@ export async function annotateOneQuestion(
 		levelDescriptors,
 	})
 
-	const plan = await llm.call("llm-annotations", async (model, entry) => {
-		const { output } = await generateText({
+	const plan = await llm.call("llm-annotations", async (model, entry, report) => {
+		const result = await generateText({
 			model,
 			temperature: entry.temperature,
 			messages: [
@@ -86,7 +86,8 @@ export async function annotateOneQuestion(
 				schema: AnnotationPlanSchema,
 			}),
 		})
-		return output
+		report.usage = result.usage
+		return result.output
 	})
 
 	// Resolve token indices to spans and build pending records

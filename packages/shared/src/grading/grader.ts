@@ -51,7 +51,7 @@ export class Grader {
 
 		const output = await this.runner.call(
 			this.callSiteKey,
-			async (model, entry) => {
+			async (model, entry, report) => {
 				const result = await generateText({
 					model,
 					temperature: entry.temperature,
@@ -61,6 +61,7 @@ export class Grader {
 					],
 					output: Output.object({ schema: BatchGradeSchema }),
 				})
+				report.usage = result.usage
 				return result.output
 			},
 		)
@@ -112,7 +113,7 @@ export class Grader {
 
 		const output = await this.runner.call(
 			this.callSiteKey,
-			async (model, entry) => {
+			async (model, entry, report) => {
 				const result = await generateText({
 					model,
 					temperature: entry.temperature,
@@ -122,6 +123,7 @@ export class Grader {
 					],
 					output: Output.object({ schema: QuestionGradeSchema }),
 				})
+				report.usage = result.usage
 				return result.output
 			},
 		)
@@ -158,7 +160,7 @@ export class Grader {
 
 		const output = await this.runner.call(
 			this.callSiteKey,
-			async (model, entry) => {
+			async (model, entry, report) => {
 				const result = await generateText({
 					model,
 					temperature: entry.temperature,
@@ -168,6 +170,7 @@ export class Grader {
 					],
 					output: Output.object({ schema: LoRQuestionGradeSchema }),
 				})
+				report.usage = result.usage
 				return result.output
 			},
 		)

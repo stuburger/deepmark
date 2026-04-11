@@ -40,8 +40,8 @@ export async function runOcr(
 
 	const { output } = await callLlmWithFallback(
 		"handwriting-ocr",
-		async (model, entry) =>
-			generateText({
+		async (model, entry, report) => {
+			const result = await generateText({
 				model,
 				temperature: entry.temperature,
 				system:
@@ -63,7 +63,10 @@ export async function runOcr(
 					},
 				],
 				output: Output.object({ schema: TranscriptSchema }),
-			}),
+			})
+			report.usage = result.usage
+			return result
+		},
 		llm,
 	)
 

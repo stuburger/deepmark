@@ -3,6 +3,7 @@ import { createGoogleGenerativeAI } from "@ai-sdk/google"
 import { createOpenAI } from "@ai-sdk/openai"
 import { createPrismaClient } from "@mcp-gcse/db"
 import {
+	type LlmCallReport,
 	type LlmModelEntry,
 	type LlmProvider,
 	LlmRunner,
@@ -72,7 +73,11 @@ export function getDefaultRunner(): LlmRunner {
  */
 export async function callLlmWithFallback<T>(
 	callSiteKey: string,
-	fn: (model: LanguageModel, entry: LlmModelEntry) => Promise<T>,
+	fn: (
+		model: LanguageModel,
+		entry: LlmModelEntry,
+		report: LlmCallReport,
+	) => Promise<T>,
 	llm?: LlmRunner,
 ): Promise<T> {
 	return (llm ?? getDefaultRunner()).call(callSiteKey, fn)

@@ -97,8 +97,8 @@ export async function handler(
 			logger.info(TAG, "Calling LLM to extract exemplar answers", { jobId })
 			const { output } = await callLlmWithFallback(
 				"exemplar-extraction",
-				async (model, entry) =>
-					generateText({
+				async (model, entry, report) => {
+					const result = await generateText({
 						model,
 						temperature: entry.temperature,
 						messages: [
@@ -115,7 +115,10 @@ export async function handler(
 							},
 						],
 						output: Output.object({ schema: ExemplarSchema }),
-					}),
+					})
+					report.usage = result.usage
+					return result
+				},
 			)
 
 			logger.info(TAG, "LLM extraction complete", { jobId })

@@ -114,13 +114,16 @@ Only return the letter for both fields (e.g. "A", "B", "C", or "D").`
 
 			const { output } = await callLlmWithFallback(
 				"mark-scheme-autofill",
-				async (model, entry) =>
-					generateText({
+				async (model, entry, report) => {
+					const result = await generateText({
 						model,
 						temperature: entry.temperature,
 						messages: [{ role: "user", content: prompt }],
 						output: Output.object({ schema: McqSchema }),
-					}),
+					})
+					report.usage = result.usage
+					return result
+				},
 			)
 
 			const label = output.correct_option_label.trim().toUpperCase()
@@ -174,13 +177,16 @@ Return JSON with:
 
 		const { output } = await callLlmWithFallback(
 			"mark-scheme-autofill",
-			async (model, entry) =>
-				generateText({
+			async (model, entry, report) => {
+				const result = await generateText({
 					model,
 					temperature: entry.temperature,
 					messages: [{ role: "user", content: prompt }],
 					output: Output.object({ schema: WrittenSchema }),
-				}),
+				})
+				report.usage = result.usage
+				return result
+			},
 		)
 
 		if (!output.mark_points || output.mark_points.length === 0) {

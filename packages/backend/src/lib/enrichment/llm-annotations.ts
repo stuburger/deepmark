@@ -1,6 +1,7 @@
 import { logger } from "@/lib/infra/logger"
 import { parseMarkPointsFromPrisma } from "@mcp-gcse/shared"
-import { Output, generateText } from "ai"
+import { generateText } from "ai"
+import { outputSchema } from "@/lib/infra/output-schema"
 import { buildAnnotationPrompt } from "./annotation-prompt"
 import { AnnotationPlanSchema } from "./annotation-schema"
 import { buildPayload } from "./payload-builder"
@@ -79,9 +80,7 @@ export async function annotateOneQuestion(
 				system:
 					"You are an expert GCSE examiner producing structured annotations for a student's exam script. Output valid JSON matching the schema. Be precise and concise.",
 				messages: [{ role: "user", content: prompt }],
-				output: Output.object({
-					schema: AnnotationPlanSchema,
-				}),
+				output: outputSchema(AnnotationPlanSchema),
 			})
 			report.usage = result.usage
 			return result.output

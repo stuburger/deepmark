@@ -157,12 +157,12 @@ export function resolveMarkSchemeFields(
 
 	const markingRules: MarkingRulesValue =
 		markingMethod === "level_of_response" && q.levels && q.levels.length > 0
-			? {
-					command_word: q.command_word,
-					items_required: q.items_required,
+			? ({
+					command_word: q.command_word ?? undefined,
+					items_required: q.items_required ?? undefined,
 					levels: q.levels,
 					caps: q.caps?.length ? q.caps : undefined,
-				}
+				} as MarkingRulesValue)
 			: undefined
 
 	const markPoints = (q.mark_points ?? []).map((mp, idx) => ({
@@ -186,7 +186,7 @@ export function resolveMarkSchemeFields(
 		correctOptionLabels,
 		markingMethod,
 		markingRules,
-		aoDescription: formatAoAllocations(q.ao_allocations) ?? "",
+		aoDescription: formatAoAllocations(q.ao_allocations ?? undefined) ?? "",
 	}
 }
 

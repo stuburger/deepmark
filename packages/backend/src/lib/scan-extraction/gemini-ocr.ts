@@ -1,7 +1,8 @@
 import { callLlmWithFallback } from "@/lib/infra/llm-runtime"
 import type { LlmRunner } from "@mcp-gcse/shared"
-import { Output, generateText } from "ai"
-import { z } from "zod"
+import { generateText } from "ai"
+import { outputSchema } from "@/lib/infra/output-schema"
+import { z } from "zod/v4"
 
 export type HandwritingAnalysis = {
 	transcript: string
@@ -62,7 +63,7 @@ export async function runOcr(
 						],
 					},
 				],
-				output: Output.object({ schema: TranscriptSchema }),
+				output: outputSchema(TranscriptSchema),
 			})
 			report.usage = result.usage
 			return result

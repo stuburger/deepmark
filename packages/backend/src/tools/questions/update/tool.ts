@@ -1,5 +1,4 @@
 import { db } from "@/db"
-import type { Question } from "@/generated/prisma"
 import { tool } from "@/tools/shared/tool-utils"
 import { UpdateQuestionByIdSchema } from "./schema"
 
@@ -17,7 +16,7 @@ export const handler = tool(UpdateQuestionByIdSchema, async (args, extra) => {
 	}
 
 	// Prepare update data
-	const updateData: Partial<Question> = {}
+	const updateData: Record<string, unknown> = {}
 
 	if (topic !== undefined) updateData.topic = topic
 	if (question_text !== undefined) updateData.text = question_text
@@ -28,7 +27,7 @@ export const handler = tool(UpdateQuestionByIdSchema, async (args, extra) => {
 
 	const updatedQuestion = await db.question.update({
 		where: { id },
-		data: updateData,
+		data: updateData as any,
 	})
 
 	const updatedFields = Object.keys(updateData).filter(

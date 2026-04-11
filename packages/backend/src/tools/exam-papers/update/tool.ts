@@ -1,7 +1,6 @@
 import { UpdateExamPaperSchema } from "./schema"
 
 import { db } from "@/db"
-import type { ExamPaper } from "@/generated/prisma"
 import { tool } from "@/tools/shared/tool-utils"
 
 export const handler = tool(UpdateExamPaperSchema, async (args, extra) => {
@@ -28,7 +27,7 @@ export const handler = tool(UpdateExamPaperSchema, async (args, extra) => {
 	})
 
 	// Prepare update object
-	const update: Partial<ExamPaper> = {}
+	const update: Record<string, unknown> = {}
 
 	if (title !== undefined) update.title = title
 	if (subject !== undefined) update.subject = subject
@@ -36,11 +35,11 @@ export const handler = tool(UpdateExamPaperSchema, async (args, extra) => {
 	if (paper_number !== undefined) update.paper_number = paper_number
 	if (duration_minutes !== undefined) update.duration_minutes = duration_minutes
 	if (is_active !== undefined) update.is_active = is_active
-	if (total_marks !== undefined) update.is_active = is_active
+	if (total_marks !== undefined) update.total_marks = total_marks
 
 	console.log("[update-exam-paper] Updating exam paper", { update })
 
-	await db.examPaper.update({ where: { id: exam_paper_id }, data: update })
+	await db.examPaper.update({ where: { id: exam_paper_id }, data: update as any })
 
 	console.log("[update-exam-paper] Exam paper updated successfully", {
 		examPaperId: exam_paper_id,

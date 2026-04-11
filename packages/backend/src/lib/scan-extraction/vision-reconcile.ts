@@ -4,7 +4,8 @@ import { logger } from "@/lib/infra/logger"
 import { getFileBase64 } from "@/lib/infra/s3"
 import { logOcrRunEvent } from "@mcp-gcse/db"
 import type { LlmRunner } from "@mcp-gcse/shared"
-import { Output, generateText } from "ai"
+import { generateText } from "ai"
+import { outputSchema } from "@/lib/infra/output-schema"
 import { Resource } from "sst"
 import {
 	ReconcileSchema,
@@ -135,7 +136,7 @@ export async function reconcilePageTokens({
 										],
 									},
 								],
-								output: Output.object({ schema: ReconcileSchema }),
+								output: outputSchema(ReconcileSchema),
 							})
 							report.usage = result.usage
 							return result

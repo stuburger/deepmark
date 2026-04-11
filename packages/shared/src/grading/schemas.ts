@@ -1,4 +1,4 @@
-import { z } from "zod"
+import { z } from "zod/v4"
 import { MarkPointResultSchema } from "./types"
 
 // ============================================
@@ -51,8 +51,7 @@ export const LoRQuestionGradeSchema = z.object({
 		),
 	levelAwarded: z
 		.number()
-		.int()
-		.describe("The level (0 if no level reached, otherwise 1-based) awarded for this response"),
+		.describe("The level as an integer (0 if no level reached, otherwise 1-based) awarded for this response"),
 	whyNotNextLevel: z
 		.string()
 		.describe(

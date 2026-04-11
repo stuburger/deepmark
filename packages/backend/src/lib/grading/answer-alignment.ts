@@ -1,7 +1,8 @@
 import type { QuestionListItem } from "@/lib/grading/question-list"
 import { callLlmWithFallback } from "@/lib/infra/llm-runtime"
 import { logger } from "@/lib/infra/logger"
-import { Output, generateText } from "ai"
+import { generateText } from "ai"
+import { outputSchema } from "@/lib/infra/output-schema"
 import {
 	AlignmentSchema,
 	buildAlignmentPrompt,
@@ -68,7 +69,7 @@ export async function alignAnswersWithLlm(
 					model,
 					temperature: entry.temperature,
 					messages: [{ role: "user", content: prompt }],
-					output: Output.object({ schema: AlignmentSchema }),
+					output: outputSchema(AlignmentSchema),
 				})
 				report.usage = result.usage
 				return result

@@ -7,7 +7,7 @@ import { DynamoStorage } from "@openauthjs/openauth/storage/dynamo"
 import { Hono } from "hono"
 import { handle } from "hono/aws-lambda"
 import { Resource } from "sst"
-import { z } from "zod"
+import { z } from "zod/v4"
 import { subjects } from "./subjects"
 
 const db = createPrismaClient(Resource.NeonPostgres.databaseUrl)

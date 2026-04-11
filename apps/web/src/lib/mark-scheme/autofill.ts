@@ -44,7 +44,7 @@ const WrittenSchema = z.object({
 	mark_points: z.array(
 		z.object({
 			description: z.string(),
-			points: z.number().int(),
+			points: z.number().describe("Points as an integer"),
 		}),
 	),
 })

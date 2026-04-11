@@ -1,4 +1,4 @@
-import { z } from "zod"
+import { z } from "zod/v4"
 
 export const AttributionSchema = z.object({
 	assignments: z
@@ -12,12 +12,10 @@ export const AttributionSchema = z.object({
 						z.object({
 							start: z
 								.number()
-								.int()
-								.describe("First token index (0-based, inclusive)"),
+								.describe("First token index as an integer (0-based, inclusive)"),
 							end: z
 								.number()
-								.int()
-								.describe("Last token index (0-based, inclusive)"),
+								.describe("Last token index as an integer (0-based, inclusive)"),
 						}),
 					)
 					.describe(
@@ -35,7 +33,7 @@ export const McqFallbackSchema = z.object({
 		z.object({
 			question_id: z.string(),
 			box: z
-				.array(z.number().int())
+				.array(z.number())
 				.describe(
 					"[yMin, xMin, yMax, xMax] normalised 0–1000 around the selected option",
 				),

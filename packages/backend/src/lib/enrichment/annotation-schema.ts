@@ -1,4 +1,4 @@
-import { z } from "zod"
+import { z } from "zod/v4"
 
 /**
  * Zod schema for the Gemini structured output when generating annotations
@@ -10,12 +10,10 @@ export const AnnotationPlanItemSchema = z.object({
 		.describe("The annotation overlay type"),
 	anchor_start: z
 		.number()
-		.int()
-		.describe("Start token index (0-based, inclusive) from the OCR token array"),
+		.describe("Start token index as an integer (0-based, inclusive) from the OCR token array"),
 	anchor_end: z
 		.number()
-		.int()
-		.describe("End token index (0-based, inclusive) from the OCR token array"),
+		.describe("End token index as an integer (0-based, inclusive) from the OCR token array"),
 	sentiment: z
 		.enum(["positive", "negative", "neutral"])
 		.describe("Sentiment for color coding"),
@@ -79,7 +77,6 @@ export const AnnotationPlanItemSchema = z.object({
 	// Parent linking
 	parent_index: z
 		.number()
-		.int()
 		.optional()
 		.describe(
 			"For tag/comment: index of the parent mark annotation in this array",

@@ -1,4 +1,4 @@
-import { z } from "zod"
+import { z } from "zod/v4"
 
 export const AnalyzeHandwritingSchema = {
 	image_base64: z

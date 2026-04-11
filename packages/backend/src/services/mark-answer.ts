@@ -103,9 +103,9 @@ export async function markAnswerById(answer_id: string): Promise<{
 			marked_at: new Date(),
 			llm_reasoning: grade.llmReasoning,
 			feedback_summary: grade.feedbackSummary,
-			level_awarded: grade.levelAwarded ?? null,
-			why_not_next_level: grade.whyNotNextLevel ?? null,
-			cap_applied: grade.capApplied ?? null,
+			level_awarded: "levelAwarded" in grade ? grade.levelAwarded : null,
+			why_not_next_level: "whyNotNextLevel" in grade ? grade.whyNotNextLevel : null,
+			cap_applied: "capApplied" in grade ? (grade.capApplied ?? null) : null,
 		},
 	})
 

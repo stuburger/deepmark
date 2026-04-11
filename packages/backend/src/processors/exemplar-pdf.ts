@@ -15,7 +15,8 @@ import {
 } from "@/lib/infra/sqs-job-runner"
 import { validateWithExemplars } from "@/services/validate-with-exemplars"
 import type { ScanStatus } from "@mcp-gcse/db"
-import { Output, generateText } from "ai"
+import { generateText } from "ai"
+import { outputSchema } from "@/lib/infra/output-schema"
 import { EXTRACT_EXEMPLARS_PROMPT } from "./exemplar-pdf/prompts"
 import { ExemplarSchema } from "./exemplar-pdf/schema"
 
@@ -114,7 +115,7 @@ export async function handler(
 								],
 							},
 						],
-						output: Output.object({ schema: ExemplarSchema }),
+						output: outputSchema(ExemplarSchema),
 					})
 					report.usage = result.usage
 					return result

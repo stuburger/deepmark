@@ -1,14 +1,13 @@
 import { db } from "@/db"
-import type { Prisma } from "@/generated/prisma"
 import { tool } from "@/tools/shared/tool-utils"
-import { questions } from "../../db/collections/questions"
 import { ListQuestionsSchema } from "./schema"
 
 export const handler = tool(ListQuestionsSchema, async (args) => {
 	const { subject } = args
 
 	// Build the where clause conditionally
-	const whereClause: Prisma.QuestionWhereInput = subject ? { subject } : {}
+	// biome-ignore lint/suspicious/noExplicitAny: subject enum mismatch between schema and Prisma type
+	const whereClause: any = subject ? { subject } : {}
 
 	const questions = await db.question.findMany({
 		where: whereClause,

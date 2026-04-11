@@ -1,4 +1,4 @@
-import { z } from "zod"
+import { z } from "zod/v4"
 
 const MarkPointSchema = z.object({
 	point_number: z

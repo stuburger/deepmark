@@ -18,7 +18,8 @@ import {
 	markPdfIngestionFailed,
 } from "@/lib/infra/sqs-job-runner"
 import type { ScanStatus } from "@mcp-gcse/db"
-import { Output, generateText } from "ai"
+import { generateText } from "ai"
+import { outputSchema } from "@/lib/infra/output-schema"
 import {
 	EXTRACT_METADATA_PROMPT,
 	EXTRACT_QUESTIONS_PROMPT,
@@ -131,7 +132,7 @@ export async function handler(
 									],
 								},
 							],
-							output: Output.object({ schema: QuestionPaperSchema }),
+							output: outputSchema(QuestionPaperSchema),
 						})
 						report.usage = result.usage
 						return result
@@ -152,9 +153,7 @@ export async function handler(
 									],
 								},
 							],
-							output: Output.object({
-								schema: QuestionPaperMetadataSchema,
-							}),
+							output: outputSchema(QuestionPaperMetadataSchema),
 						})
 						report.usage = result.usage
 						return result

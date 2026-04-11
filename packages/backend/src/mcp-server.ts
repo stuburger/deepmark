@@ -62,11 +62,6 @@ import { CREATE_MARK_SCHEME_DESCRIPTION } from "./tools/mark-schemes/create-mark
 export const server = new McpServer({
 	name: "mcp-gcse",
 	version: "1.0.0",
-
-	capabilities: {
-		resources: {},
-		tools: {},
-	},
 })
 
 server.registerTool(

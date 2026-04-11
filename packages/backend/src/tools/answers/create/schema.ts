@@ -1,4 +1,4 @@
-import { z } from "zod"
+import { z } from "zod/v4"
 
 export const AnswerQuestionSchema = {
 	question_id: z.string().min(1).describe("The ID of the question to answer"),

@@ -1,8 +1,9 @@
 import { db } from "@/db"
 import { callLlmWithFallback } from "@/lib/infra/llm-runtime"
 import { tool } from "@/tools/shared/tool-utils"
-import { Output, generateText } from "ai"
-import z from "zod"
+import { generateText } from "ai"
+import { outputSchema } from "@/lib/infra/output-schema"
+import z from "zod/v4"
 import { CreateTestDatasetSchema } from "./schema"
 
 interface TestCase {
@@ -98,7 +99,7 @@ export const handler = tool(CreateTestDatasetSchema, async (args, extra) => {
 
 		const additionalCases = await generateAdditionalTestCases(
 			question,
-			markScheme,
+			markScheme as any,
 			answer_examples,
 			additional_count,
 		)
@@ -113,7 +114,7 @@ export const handler = tool(CreateTestDatasetSchema, async (args, extra) => {
 	// Create the final report
 	const report = generateDatasetReport(
 		question,
-		markScheme,
+		markScheme as any,
 		dataset_name,
 		allTestCases,
 		datasetAnalysis,
@@ -233,9 +234,7 @@ Ensure the generated cases complement the provided examples and create a compreh
 				system:
 					"You are an expert in creating GCSE assessment test datasets. Generate clear, diverse test cases with realistic student answers and grading criteria.",
 				messages: [{ role: "user", content: prompt }],
-				output: Output.object({
-					schema: additionalTestCasesSchema,
-				}),
+				output: outputSchema(additionalTestCasesSchema),
 			})
 			report.usage = result.usage
 			return result

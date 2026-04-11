@@ -1,4 +1,4 @@
-import { z } from "zod"
+import { z } from "zod/v4"
 
 export const AddQuestionToExamPaperSchema = {
 	exam_paper_id: z

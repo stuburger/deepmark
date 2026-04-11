@@ -29,7 +29,14 @@ export const handler = tool(
 		)
 
 		// Format the marking result details
-		const markPointsDetails = most_recent_mark.mark_points_results
+		const markPointsResults = (most_recent_mark.mark_points_results ?? []) as Array<{
+			point_number: number
+			awarded: boolean
+			expected_criteria: string
+			student_covered: string
+			reasoning: string
+		}>
+		const markPointsDetails = markPointsResults
 			.map((mp) => {
 				const status = mp.awarded ? "✓ AWARDED" : "✗ NOT AWARDED"
 				return `Point ${mp.point_number}: ${status}

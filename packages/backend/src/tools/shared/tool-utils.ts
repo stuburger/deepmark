@@ -5,7 +5,7 @@ import type {
 	ServerNotification,
 	ServerRequest,
 } from "@modelcontextprotocol/sdk/types.js"
-import type { z } from "zod"
+import type { z } from "zod/v4"
 
 export const text = <T extends Record<string, unknown>>(
 	text: string,

@@ -15,7 +15,8 @@ import {
 } from "@/lib/infra/sqs-job-runner"
 import type { ScanStatus } from "@mcp-gcse/db"
 import { Grader } from "@mcp-gcse/shared"
-import { Output, generateText } from "ai"
+import { generateText } from "ai"
+import { outputSchema } from "@/lib/infra/output-schema"
 import { linkJobQuestionsToExamPaper } from "./mark-scheme-pdf/linking"
 import { processExtractedQuestion } from "./mark-scheme-pdf/process-question"
 import {
@@ -147,7 +148,7 @@ export async function handler(
 									],
 								},
 							],
-							output: Output.object({ schema: MarkSchemeSchema }),
+							output: outputSchema(MarkSchemeSchema),
 						})
 						report.usage = result.usage
 						return result
@@ -172,9 +173,7 @@ export async function handler(
 											],
 										},
 									],
-									output: Output.object({
-										schema: ExamPaperMetadataSchema,
-									}),
+									output: outputSchema(ExamPaperMetadataSchema),
 								})
 								report.usage = result.usage
 								return result

@@ -119,9 +119,9 @@ export const handler = tool(EvaluateAnswerSchema, async (args, extra) => {
 		total_score: grade.totalScore,
 		llm_reasoning: grade.llmReasoning,
 		feedback_summary: grade.feedbackSummary,
-		level_awarded: grade.levelAwarded,
-		why_not_next_level: grade.whyNotNextLevel,
-		cap_applied: grade.capApplied,
+		level_awarded: "levelAwarded" in grade ? grade.levelAwarded : undefined,
+		why_not_next_level: "whyNotNextLevel" in grade ? grade.whyNotNextLevel : undefined,
+		cap_applied: "capApplied" in grade ? grade.capApplied : undefined,
 	}
 
 	console.log("[evaluate-answer] Marking completed", {

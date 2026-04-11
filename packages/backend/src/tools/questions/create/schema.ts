@@ -1,5 +1,5 @@
 import { SUBJECT_VALUES } from "@mcp-gcse/db"
-import { z } from "zod"
+import { z } from "zod/v4"
 
 export const MultipleChoiceOptionSchema = z.object({
 	option_label: z

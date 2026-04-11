@@ -62,14 +62,15 @@ export const handler = tool(ListExamPapersSchema, async (args, extra) => {
 		markdown += `- **Sections**: ${paper.sections.length}\n`
 
 		if (paper.metadata) {
-			if (paper.metadata.difficulty_level) {
-				markdown += `- **Difficulty**: ${paper.metadata.difficulty_level}\n`
+			const meta = paper.metadata as Record<string, unknown>
+			if (meta.difficulty_level) {
+				markdown += `- **Difficulty**: ${meta.difficulty_level}\n`
 			}
-			if (paper.metadata.tier) {
-				markdown += `- **Tier**: ${paper.metadata.tier}\n`
+			if (meta.tier) {
+				markdown += `- **Tier**: ${meta.tier}\n`
 			}
-			if (paper.metadata.season) {
-				markdown += `- **Season**: ${paper.metadata.season}\n`
+			if (meta.season) {
+				markdown += `- **Season**: ${meta.season}\n`
 			}
 		}
 

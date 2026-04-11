@@ -1,6 +1,7 @@
 import { callLlmWithFallback } from "@/lib/infra/llm-runtime"
-import { Output, generateText } from "ai"
-import { z } from "zod"
+import { generateText } from "ai"
+import { outputSchema } from "@/lib/infra/output-schema"
+import { z } from "zod/v4"
 import {
 	buildBlankClassificationPrompt,
 	buildNameExtractionPrompt,
@@ -61,7 +62,7 @@ export async function callClassifyPageBoundary(
 					model,
 					temperature: entry.temperature,
 					messages: [{ role: "user", content }],
-					output: Output.object({ schema: PageBoundarySchema }),
+					output: outputSchema(PageBoundarySchema),
 				})
 				report.usage = result.usage
 				return result
@@ -127,7 +128,7 @@ export async function callClassifyBlankPage(
 					model,
 					temperature: entry.temperature,
 					messages: [{ role: "user", content }],
-					output: Output.object({ schema: BlankClassificationSchema }),
+					output: outputSchema(BlankClassificationSchema),
 				})
 				report.usage = result.usage
 				return result
@@ -163,7 +164,7 @@ export async function callExtractNameFromPage(
 							],
 						},
 					],
-					output: Output.object({ schema: NameExtractionSchema }),
+					output: outputSchema(NameExtractionSchema),
 				})
 				report.usage = result.usage
 				return result

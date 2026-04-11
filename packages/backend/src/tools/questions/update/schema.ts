@@ -1,5 +1,5 @@
 import { SUBJECT_VALUES } from "@mcp-gcse/db"
-import { z } from "zod"
+import { z } from "zod/v4"
 
 export const UpdateQuestionByIdSchema = {
 	id: z.string().describe("The unique identifier for the question to update"),

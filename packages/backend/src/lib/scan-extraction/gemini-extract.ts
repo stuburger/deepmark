@@ -5,8 +5,9 @@ import {
 	runOcr,
 } from "@/lib/scan-extraction/gemini-ocr"
 import type { LlmRunner } from "@mcp-gcse/shared"
-import { Output, generateText } from "ai"
-import { z } from "zod"
+import { generateText } from "ai"
+import { outputSchema } from "@/lib/infra/output-schema"
+import { z } from "zod/v4"
 
 const TAG = "gemini-extract"
 
@@ -122,7 +123,7 @@ export async function extractStudentPaper(
 							],
 						},
 					],
-					output: Output.object({ schema: StudentPaperSchema }),
+					output: outputSchema(StudentPaperSchema),
 				})
 				report.usage = result.usage
 				return result

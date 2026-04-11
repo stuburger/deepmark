@@ -9,11 +9,6 @@ export const handler = tool(AnalyzeHandwritingSchema, async (args) => {
 		analysisFocus: analysis_focus,
 	})
 
-	const featureLines = analysis.features.map((f) => {
-		const [yMin, xMin, yMax, xMax] = f.box_2d
-		return `  [${f.feature_type}] "${f.label}" — bbox(y: ${yMin}–${yMax}, x: ${xMin}–${xMax})`
-	})
-
 	const observationLines = analysis.observations.map((o) => `  • ${o}`)
 
 	const separator = "─".repeat(48)
@@ -23,16 +18,8 @@ export const handler = tool(AnalyzeHandwritingSchema, async (args) => {
 		separator,
 		analysis.transcript,
 		"",
-		`DETECTED FEATURES (${analysis.features.length})`,
-		separator,
-		...featureLines,
-		"",
 		"HANDWRITING OBSERVATIONS",
 		separator,
 		...observationLines,
-		"",
-		"RAW ANALYSIS (JSON)",
-		separator,
-		JSON.stringify(analysis, null, 2),
 	].join("\n")
 })

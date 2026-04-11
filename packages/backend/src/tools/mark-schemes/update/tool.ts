@@ -1,6 +1,5 @@
 import { db } from "@/db"
 import { tool } from "@/tools/shared/tool-utils"
-import type { MarkScheme } from "@mcp-gcse/db"
 import { UpdateMarkSchemeSchema } from "./schema"
 
 export const handler = tool(UpdateMarkSchemeSchema, async (args) => {
@@ -22,7 +21,7 @@ export const handler = tool(UpdateMarkSchemeSchema, async (args) => {
 		throw new Error("Cannot update a mark scheme that has already been used")
 	}
 	// Prepare update data
-	const updateData: Partial<MarkScheme> = {}
+	const updateData: Record<string, unknown> = {}
 
 	// Add optional fields if provided
 	if (points_total !== undefined) {
@@ -45,7 +44,7 @@ export const handler = tool(UpdateMarkSchemeSchema, async (args) => {
 		marking_method ?? mark_scheme.marking_method ?? "point_based"
 	const effectivePointsTotal = points_total ?? mark_scheme.points_total
 	const effectiveMarkPoints =
-		mark_points ?? (mark_scheme.mark_points as typeof mark_points)
+		mark_points ?? (mark_scheme.mark_points as any)
 
 	console.log("[update-mark-scheme] Validating update data", {
 		id,
@@ -101,7 +100,7 @@ export const handler = tool(UpdateMarkSchemeSchema, async (args) => {
 	// Update the mark scheme in the database
 	const updatedMarkScheme = await db.markScheme.update({
 		where: { id },
-		data: updateData,
+		data: updateData as any,
 	})
 
 	console.log("[update-mark-scheme] Mark scheme updated successfully", {

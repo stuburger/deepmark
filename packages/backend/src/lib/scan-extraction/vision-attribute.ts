@@ -6,7 +6,8 @@ import { filterSpatialOutliers } from "@/lib/scan-extraction/filter-spatial-outl
 import type { CorrectedPageToken } from "@/lib/scan-extraction/vision-reconcile"
 import { logOcrRunEvent } from "@mcp-gcse/db"
 import { type LlmRunner, computeBboxHull } from "@mcp-gcse/shared"
-import { Output, generateText } from "ai"
+import { generateText } from "ai"
+import { outputSchema } from "@/lib/infra/output-schema"
 import {
 	AttributionSchema,
 	McqFallbackSchema,
@@ -192,7 +193,7 @@ export async function visionAttributeRegions({
 									],
 								},
 							],
-							output: Output.object({ schema: AttributionSchema }),
+							output: outputSchema(AttributionSchema),
 						})
 						report.usage = result.usage
 						return result
@@ -429,7 +430,7 @@ async function runMcqFallback({
 									],
 								},
 							],
-							output: Output.object({ schema: McqFallbackSchema }),
+							output: outputSchema(McqFallbackSchema),
 						})
 						report.usage = result.usage
 						return result

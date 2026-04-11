@@ -42,18 +42,16 @@ const MetadataSchema = z.object({
 		.describe("Exam board name, e.g. AQA, OCR, Edexcel, WJEC, Cambridge"),
 	year: z
 		.number()
-		.int()
 		.nullable()
 		.optional()
-		.describe("Year the exam was sat, e.g. 2023. Null if not found."),
+		.describe("Year the exam was sat as an integer, e.g. 2023. Null if not found."),
 	paper_number: z
 		.number()
-		.int()
 		.nullable()
 		.optional()
-		.describe("Paper number (1, 2, 3…). Null if not found or not applicable."),
-	total_marks: z.number().int().describe("Total marks available for the paper"),
-	duration_minutes: z.number().int().describe("Allowed time in minutes"),
+		.describe("Paper number as an integer (1, 2, 3…). Null if not found or not applicable."),
+	total_marks: z.number().describe("Total marks available for the paper (integer)"),
+	duration_minutes: z.number().describe("Allowed time in minutes (integer)"),
 	document_type: z
 		.string()
 		.describe(

@@ -5,10 +5,14 @@
 		"weather": "./build/index.js"
 	},
 	"dependencies": {
+		"@ai-sdk/google": "^3.0.61",
+		"@ai-sdk/openai": "^3.0.52",
+		"@ai-sdk/provider-utils": "^4.0.23",
 		"@aws-sdk/client-sqs": "^3.862.0",
 		"@hono/swagger-ui": "^0.5.2",
 		"@modelcontextprotocol/sdk": "^1.17.1",
 		"@openauthjs/openauth": "0.4.3",
+		"ai": "^6.0.158",
 		"mongodb": "7.1.0",
 		"sst": "^4.6.11",
 		"ts-node": "^10.9.2",
@@ -24,7 +28,7 @@
 		"@types/sharp": "^0.32.0",
 		"sharp": "^0.34.5",
 		"turbo": "^2.3.3",
-		"typescript": "^5.8.3",
+		"typescript": "~5.8.3",
 		"vite-tsconfig-paths": "^6.1.1"
 	},
 	"workspaces": ["packages/*", "apps/*"],

@@ -1,4 +1,4 @@
-import { z } from "zod"
+import { z } from "zod/v4"
 
 /**
  * Zod schema for the serialised GradingResult shape stored in

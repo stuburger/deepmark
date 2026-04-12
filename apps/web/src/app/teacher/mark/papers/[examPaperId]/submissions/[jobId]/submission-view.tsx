@@ -250,6 +250,8 @@ export function SubmissionView({
 				onVersionChange={onVersionChange}
 				isEditing={isEditing}
 				onToggleEditing={() => setIsEditing((v) => !v)}
+				annotations={annotations}
+				pageTokens={pageTokens}
 			/>
 
 			{/* Mobile: scan/results tabs */}

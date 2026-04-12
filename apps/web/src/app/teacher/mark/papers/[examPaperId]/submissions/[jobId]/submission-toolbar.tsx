@@ -9,7 +9,12 @@ import {
 	TooltipProvider,
 	TooltipTrigger,
 } from "@/components/ui/tooltip"
-import type { ScanPageUrl, StudentPaperJobPayload } from "@/lib/marking/types"
+import type {
+	PageToken,
+	ScanPageUrl,
+	StudentPaperAnnotation,
+	StudentPaperJobPayload,
+} from "@/lib/marking/types"
 import { cn } from "@/lib/utils"
 import {
 	BookOpen,
@@ -56,6 +61,8 @@ export function SubmissionToolbar({
 	onVersionChange,
 	isEditing = false,
 	onToggleEditing,
+	annotations,
+	pageTokens,
 }: {
 	examPaperId: string
 	jobId: string
@@ -76,6 +83,8 @@ export function SubmissionToolbar({
 	onVersionChange?: (newJobId: string) => void
 	isEditing?: boolean
 	onToggleEditing?: () => void
+	annotations?: StudentPaperAnnotation[]
+	pageTokens?: PageToken[]
 }) {
 	const hasOcr = scanPages.some((p) => p.analysis != null)
 	const hasRegions = data.grading_results.some(
@@ -312,7 +321,11 @@ export function SubmissionToolbar({
 								{isEditing ? "Done editing" : "Edit marking"}
 							</Button>
 						)}
-						<DownloadPdfButton data={data} />
+						<DownloadPdfButton
+							data={data}
+							annotations={annotations}
+							pageTokens={pageTokens}
+						/>
 						<ReRunMenu
 							jobId={jobId}
 							onNavigateToJob={onNavigateToJob ?? (() => {})}

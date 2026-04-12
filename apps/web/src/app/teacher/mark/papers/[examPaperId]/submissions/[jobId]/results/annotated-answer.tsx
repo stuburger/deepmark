@@ -129,7 +129,7 @@ export function AnnotatedAnswer({
 	)
 
 	return (
-		<div className="text-base whitespace-pre-wrap">
+		<div className="text-base whitespace-pre-wrap font-handwriting">
 			{segments.map((seg, i) => (
 				// biome-ignore lint/suspicious/noArrayIndexKey: segments are stable derived data
 				<AnnotatedSpan key={i} segment={seg} />

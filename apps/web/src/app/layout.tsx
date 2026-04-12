@@ -1,5 +1,5 @@
 import type { Metadata } from "next"
-import { Plus_Jakarta_Sans } from "next/font/google"
+import { Indie_Flower, Plus_Jakarta_Sans } from "next/font/google"
 import localFont from "next/font/local"
 
 import { Providers } from "@/components/providers"
@@ -10,6 +10,13 @@ const plusJakartaSans = Plus_Jakarta_Sans({
 	variable: "--font-plus-jakarta-sans",
 	subsets: ["latin"],
 	weight: ["300", "400", "500", "600", "700", "800"],
+})
+
+const indieFlower = Indie_Flower({
+	variable: "--font-indie-flower",
+	subsets: ["latin"],
+	weight: "400",
+	display: "swap",
 })
 
 const haveIdea = localFont({
@@ -49,7 +56,7 @@ export default function RootLayout({
 	return (
 		<html
 			lang="en"
-			className={`${plusJakartaSans.variable} ${haveIdea.variable}`}
+			className={`${plusJakartaSans.variable} ${indieFlower.variable} ${haveIdea.variable}`}
 			suppressHydrationWarning
 		>
 			<body className="antialiased">

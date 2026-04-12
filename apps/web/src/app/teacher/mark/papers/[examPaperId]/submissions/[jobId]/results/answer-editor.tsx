@@ -49,7 +49,7 @@ export function AnswerEditor({
 			<div className="group relative">
 				<div className="rounded-md bg-muted px-3 py-2 pr-8">
 					{readOnlyContent ?? (
-						<div className="text-base whitespace-pre-wrap">
+						<div className="text-base whitespace-pre-wrap font-handwriting">
 							{text || (
 								<span className="italic text-muted-foreground">
 									No answer written

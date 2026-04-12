@@ -36,7 +36,7 @@ export function QuestionAnswerView({
 			)}
 
 			{/* Editable answer content — marks render here */}
-			<NodeViewContent className="text-sm leading-relaxed whitespace-pre-wrap" />
+			<NodeViewContent className="text-sm leading-relaxed whitespace-pre-wrap font-handwriting text-base" />
 		</NodeViewWrapper>
 	)
 }

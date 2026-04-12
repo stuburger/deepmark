@@ -80,7 +80,9 @@ export const MarkPointResultSchema = z.object({
 	awarded: z.boolean(),
 	reasoning: z
 		.string()
-		.describe("Detailed reasoning for why this mark was or was not awarded"),
+		.describe(
+			"One sentence, max 15 words: why awarded or not. Quote key student phrase or state what was missing.",
+		),
 	expectedCriteria: z
 		.string()
 		.describe("What the mark scheme expected for this point"),
@@ -107,6 +109,8 @@ export type QuestionGradeBase = {
 	feedbackSummary: string
 	correctAnswer: string
 	relevantLearningSnippet: string
+	whatWentWell: string[]
+	whatDidntGoWell: string[]
 }
 
 /** MCQ grading result — deterministic, no LLM fields beyond base. */
@@ -125,8 +129,6 @@ export type LoRQuestionGrade = QuestionGradeBase & {
 	levelAwarded: number
 	whyNotNextLevel: string
 	capApplied: string
-	whatWentWell: string[]
-	whatDidntGoWell: string[]
 }
 
 /**

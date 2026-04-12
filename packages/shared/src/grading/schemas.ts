@@ -12,19 +12,25 @@ export const QuestionGradeSchema = z.object({
 	totalScore: z.number(),
 	llmReasoning: z
 		.string()
-		.describe("Chain-of-thought reasoning for the overall marking process"),
+		.describe(
+			"Internal chain-of-thought for audit. Be thorough but teachers will not see this.",
+		),
 	feedbackSummary: z
 		.string()
-		.describe("Overall feedback summary for the student"),
-	correctAnswer: z
-		.string()
 		.describe(
-			"The correct/model answer for this question - what the student should have answered",
+			"One sentence, max 20 words: state the mark awarded and the single most important reason.",
 		),
-	relevantLearningSnippet: z
-		.string()
+	correctAnswer: z.string().describe("Leave as empty string."),
+	relevantLearningSnippet: z.string().describe("Leave as empty string."),
+	whatWentWell: z
+		.array(z.string())
 		.describe(
-			"A relevant snippet from the learning material that explains or supports the correct answer. Empty if not applicable.",
+			"1-3 short bullets on what the student did well. Max 3 items, max 6 words each.",
+		),
+	whatDidntGoWell: z
+		.array(z.string())
+		.describe(
+			"1-3 short bullets on what was missing or weak. Actionable, student-facing. Max 3 items, max 6 words each.",
 		),
 })
 
@@ -35,20 +41,16 @@ export const LoRQuestionGradeSchema = z.object({
 	totalScore: z.number(),
 	llmReasoning: z
 		.string()
-		.describe("Chain-of-thought reasoning for the overall marking process"),
+		.describe(
+			"Internal chain-of-thought for audit. Be thorough but teachers will not see this.",
+		),
 	feedbackSummary: z
 		.string()
-		.describe("Overall feedback summary for the student"),
-	correctAnswer: z
-		.string()
 		.describe(
-			"The correct/model answer for this question - what the student should have answered",
+			"One sentence, max 20 words: state the mark awarded and the single most important reason.",
 		),
-	relevantLearningSnippet: z
-		.string()
-		.describe(
-			"A relevant snippet from the learning material that explains or supports the correct answer. Empty if not applicable.",
-		),
+	correctAnswer: z.string().describe("Leave as empty string."),
+	relevantLearningSnippet: z.string().describe("Leave as empty string."),
 	levelAwarded: z
 		.number()
 		.describe(
@@ -65,7 +67,7 @@ export const LoRQuestionGradeSchema = z.object({
 	whatWentWell: z
 		.array(z.string())
 		.describe(
-			"1-3 short bullets on what the student did well. Only credit what is actually present. Max 3 items, max 6 words each.",
+			"1-3 short bullets on what the student did well. Max 3 items, max 6 words each.",
 		),
 	whatDidntGoWell: z
 		.array(z.string())

@@ -107,6 +107,8 @@ export class DeterministicMarker implements Marker {
 			feedbackSummary,
 			correctAnswer: correct.join(", "),
 			relevantLearningSnippet: "",
+			whatWentWell: isCorrect ? ["Correct option selected"] : [],
+			whatDidntGoWell: isCorrect ? [] : ["Wrong option selected"],
 		}
 	}
 }

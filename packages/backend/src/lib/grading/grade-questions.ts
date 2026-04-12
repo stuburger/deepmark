@@ -219,8 +219,8 @@ async function gradeOneQuestion({
 			level_awarded: isLoR ? grade.levelAwarded : undefined,
 			why_not_next_level: isLoR ? grade.whyNotNextLevel : undefined,
 			cap_applied: isLoR ? grade.capApplied : undefined,
-			what_went_well: isLoR ? grade.whatWentWell : undefined,
-			even_better_if: isLoR ? grade.whatDidntGoWell : undefined,
+			what_went_well: grade.whatWentWell,
+			even_better_if: grade.whatDidntGoWell,
 			mark_points_results: grade.markPointsResults as MarkPointResultEntry[],
 			mark_scheme_id: ms.id,
 		}

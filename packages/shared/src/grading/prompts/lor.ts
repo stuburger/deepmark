@@ -77,6 +77,10 @@ ${levelSections}
 </MarkingRules>
 
 <Instructions>
-Output valid JSON matching the schema. Include questionId, markPointsResults, totalScore, llmReasoning, feedbackSummary, correctAnswer, relevantLearningSnippet, levelAwarded, whyNotNextLevel, capApplied, whatWentWell (1-3 short bullets, max 6 words each), and whatDidntGoWell (1-3 short bullets, max 6 words each, actionable).
+Set correctAnswer and relevantLearningSnippet to empty string.
+feedbackSummary: 1 sentence, max 20 words — level, mark, and key reason.
+whatWentWell and whatDidntGoWell: 1-3 bullets each, max 6 words each.
+markPointsResults reasoning: max 15 words per point.
+Output valid JSON matching the schema.
 </Instructions>`
 }

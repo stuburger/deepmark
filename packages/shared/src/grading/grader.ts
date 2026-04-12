@@ -190,11 +190,6 @@ export class Grader {
 			scorePercentage,
 			passed: totalScore > 0,
 			markingMethod: "level_of_response" as const,
-			levelAwarded: output.levelAwarded,
-			whyNotNextLevel: output.whyNotNextLevel,
-			capApplied: output.capApplied,
-			whatWentWell: output.whatWentWell,
-			whatDidntGoWell: output.whatDidntGoWell,
 		}
 	}
 }

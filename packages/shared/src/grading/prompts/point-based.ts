@@ -45,6 +45,10 @@ ${learningSection}<Topic>\n${question.topic}\n</Topic>
 </MarkingRules>
 
 <Instructions>
-Analyze the answer systematically. For each mark point provide reasoning, expectedCriteria, studentCovered, and awarded. Also provide correctAnswer and relevantLearningSnippet (or empty string). Output valid JSON matching the schema.
+For each mark point provide pointNumber, awarded, reasoning (max 15 words), expectedCriteria, studentCovered.
+Set correctAnswer and relevantLearningSnippet to empty string.
+feedbackSummary: 1 sentence, max 20 words — mark and key reason.
+whatWentWell: 1-3 bullets, max 6 words each. whatDidntGoWell: 1-3 bullets, max 6 words each, actionable.
+Output valid JSON matching the schema.
 </Instructions>`
 }

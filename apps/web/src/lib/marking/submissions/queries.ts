@@ -111,6 +111,7 @@ const submissionDetailInclude = {
 			status: true,
 			error: true,
 			grading_results: true,
+			examiner_summary: true,
 			job_events: true,
 			llm_snapshot: true,
 			enrichment_runs: {
@@ -170,6 +171,7 @@ function toJobPayload(sub: {
 		status: GradingStatus
 		error: string | null
 		grading_results: unknown
+		examiner_summary: string | null
 		job_events: unknown
 		llm_snapshot: unknown
 		enrichment_runs: Array<{
@@ -249,6 +251,7 @@ function toJobPayload(sub: {
 		created_at: sub.created_at,
 		extracted_answers: extractedAnswers,
 		job_events: allEvents.length > 0 ? allEvents : null,
+		examiner_summary: latestGrading?.examiner_summary ?? null,
 		enrichment_status: latestEnrichment?.status ?? null,
 		level_descriptors: sub.exam_paper?.level_descriptors ?? null,
 		submission_id: sub.id,

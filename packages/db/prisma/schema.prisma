@@ -580,6 +580,8 @@ model GradingRun {
   grading_results Json?
   // Ordered append-only event log
   job_events    Json?
+  // 3-line LLM-generated student summary (strength / weakness / improvement)
+  examiner_summary String?
   // LlmRunSnapshot — which models were configured and which executed
   llm_snapshot  Json?
   started_at    DateTime?

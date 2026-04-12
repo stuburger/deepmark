@@ -176,6 +176,8 @@ export type StudentPaperJobPayload = {
 	ocr_run_id?: string
 	grading_run_id?: string
 	enrichment_run_id?: string
+	/** 3-line LLM-generated student summary (strength / weakness / improvement). */
+	examiner_summary?: string | null
 	/** LLM run snapshots — which models were configured and which executed. */
 	ocr_llm_snapshot?: unknown
 	grading_llm_snapshot?: unknown

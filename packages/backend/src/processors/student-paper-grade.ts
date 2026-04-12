@@ -1,4 +1,5 @@
 import { db } from "@/db"
+import { generateExaminerSummary } from "@/lib/grading/examiner-summary"
 import { loadExamPaperForGrading } from "@/lib/grading/grade-queries"
 import {
 	type GradingResult,
@@ -135,8 +136,21 @@ async function gradeJob({
 		return
 	}
 
-	// biome-ignore lint/style/noNonNullAssertion: latestOcr verified non-null above
-	await completeGradingJob({ sub, ocrRun: latestOcr!, gradingResults, jobId })
+	const examinerSummary = await generateExaminerSummary({
+		gradingResults,
+		examPaperTitle: examPaper.title,
+		subject: examPaper.subject,
+		runner: llm,
+	})
+
+	await completeGradingJob({
+		sub,
+		// biome-ignore lint/style/noNonNullAssertion: latestOcr verified non-null above
+		ocrRun: latestOcr!,
+		gradingResults,
+		jobId,
+		examinerSummary,
+	})
 
 	// Write LLM snapshot — informational, not critical
 	await db.gradingRun
@@ -209,11 +223,13 @@ async function completeGradingJob({
 	ocrRun,
 	gradingResults,
 	jobId,
+	examinerSummary,
 }: {
 	sub: SubmissionWithOcr
 	ocrRun: { extracted_answers_raw: unknown }
 	gradingResults: GradingResult[]
 	jobId: string
+	examinerSummary: string | null
 }): Promise<void> {
 	const totalAwarded = gradingResults.reduce((s, r) => s + r.awarded_score, 0)
 	const totalMax = gradingResults.reduce((s, r) => s + r.max_score, 0)
@@ -242,6 +258,7 @@ async function completeGradingJob({
 		data: {
 			status: "complete" satisfies GradingStatus,
 			grading_results: gradingResults,
+			examiner_summary: examinerSummary,
 			completed_at: new Date(),
 			error: null,
 		},

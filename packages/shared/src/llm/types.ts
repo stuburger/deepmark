@@ -404,6 +404,20 @@ export const LLM_CALL_SITE_DEFAULTS: Array<{
 		],
 	},
 
+	{
+		key: "examiner-summary",
+		display_name: "Examiner Summary",
+		description:
+			"Generates a 3-line student summary after all questions are graded.",
+		input_type: "text",
+		phase: "grading",
+		step: 2,
+		multiplier: "once",
+		models: [
+			{ provider: "google", model: "gemini-2.5-flash", temperature: 0.3 },
+		],
+	},
+
 	// ── Enrichment & Annotations ─────────────────────────────────────────
 	// Phase 3: generate inline annotations on the scanned script.
 	{

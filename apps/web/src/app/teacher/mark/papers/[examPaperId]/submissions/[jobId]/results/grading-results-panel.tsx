@@ -113,6 +113,20 @@ export function GradingResultsPanel({
 				</CardContent>
 			</Card>
 
+			{/* Examiner summary */}
+			{data.examiner_summary && (
+				<Card>
+					<CardHeader className="pb-2">
+						<CardTitle className="text-sm">Examiner Summary</CardTitle>
+					</CardHeader>
+					<CardContent>
+						<p className="text-sm text-muted-foreground whitespace-pre-line leading-relaxed">
+							{data.examiner_summary}
+						</p>
+					</CardContent>
+				</Card>
+			)}
+
 			{/* Question breakdown */}
 			<div>
 				<div className="flex items-center justify-between mb-3">

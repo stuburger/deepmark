@@ -4,6 +4,7 @@ import type {
 	ChainPayload as SharedChainPayload,
 	CommentPayload as SharedCommentPayload,
 	MarkPayload as SharedMarkPayload,
+	MarkSignal as SharedMarkSignal,
 	OverlayType as SharedOverlayType,
 	TagPayload as SharedTagPayload,
 } from "@mcp-gcse/shared"
@@ -76,6 +77,7 @@ export type AnswerRegion = {
 // ─── Annotation types (re-exported from @mcp-gcse/shared) ───────────────────
 
 export type OverlayType = SharedOverlayType
+export type MarkSignal = SharedMarkSignal
 export type MarkPayload = SharedMarkPayload
 export type TagPayload = SharedTagPayload
 export type CommentPayload = SharedCommentPayload

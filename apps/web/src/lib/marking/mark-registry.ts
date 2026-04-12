@@ -5,17 +5,19 @@
  * lookup tables, tiptap extension names, and UI metadata from this registry.
  * Adding a new mark type means adding one entry here — not five separate files.
  */
+import type { AnnotationSignal } from "@/lib/marking/token-alignment"
 import type {
 	AnnotationPayload,
 	MarkPayload,
 	OverlayType,
 } from "@/lib/marking/types"
+import { MARK_SIGNAL_NAMES } from "@mcp-gcse/shared"
 
 // ─── Registry entry ────────────────────────────────────────────────────────
 
 export type MarkRegistryEntry = {
 	/** Domain-level signal name (e.g. "tick", "underline", "ao_tag", "chain") */
-	signal: string
+	signal: AnnotationSignal
 	/** Tiptap mark extension name (e.g. "annotationUnderline", "aoTag") */
 	tiptapName: string
 	/** Which overlay category this mark belongs to */
@@ -112,18 +114,20 @@ export const TIPTAP_TO_ENTRY: ReadonlyMap<string, MarkRegistryEntry> = new Map(
 )
 
 /** Domain signal → tiptap mark name (used when building PM doc from TextMarks) */
-export const SIGNAL_TO_TIPTAP: Readonly<Record<string, string>> =
-	Object.fromEntries(MARK_REGISTRY.map((e) => [e.signal, e.tiptapName]))
+export const SIGNAL_TO_TIPTAP: Readonly<Record<AnnotationSignal, string>> =
+	Object.fromEntries(
+		MARK_REGISTRY.map((e) => [e.signal, e.tiptapName]),
+	) as Record<AnnotationSignal, string>
 
 /** Overlay type → domain signal (used when resolving annotation → TextMark type) */
 export function resolveSignal(
 	overlayType: OverlayType,
 	payload: Record<string, unknown>,
-): string | null {
+): AnnotationSignal | null {
 	switch (overlayType) {
 		case "mark": {
 			const signal = payload.signal as string | undefined
-			if (signal && MARK_SIGNALS.has(signal)) return signal
+			if (signal && MARK_SIGNALS.has(signal)) return signal as AnnotationSignal
 			return "underline" // fallback for unknown signals
 		}
 		case "tag":
@@ -138,6 +142,4 @@ export function resolveSignal(
 }
 
 /** The set of valid mark signal names (the 6 physical mark signals) */
-export const MARK_SIGNALS: ReadonlySet<string> = new Set(
-	MARK_REGISTRY.filter((e) => e.overlayType === "mark").map((e) => e.signal),
-)
+export const MARK_SIGNALS: ReadonlySet<string> = new Set(MARK_SIGNAL_NAMES)

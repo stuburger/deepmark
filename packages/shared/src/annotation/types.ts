@@ -8,6 +8,27 @@ import { z } from "zod/v4"
 export type OverlayType = "mark" | "tag" | "comment" | "chain"
 
 // ============================================
+// MARK SIGNAL VOCABULARY
+// ============================================
+
+/**
+ * The 6 physical mark signals that can appear on a scanned page.
+ * Single source of truth — Zod schemas, TypeScript unions, and the
+ * web mark registry all derive from this array.
+ */
+export const MARK_SIGNAL_NAMES = [
+	"tick",
+	"cross",
+	"underline",
+	"double_underline",
+	"box",
+	"circle",
+] as const
+
+/** Union type for the 6 physical mark signals. */
+export type MarkSignal = (typeof MARK_SIGNAL_NAMES)[number]
+
+// ============================================
 // PAYLOAD SCHEMAS (versioned, per overlay type)
 // ============================================
 
@@ -21,14 +42,7 @@ export const MarkPointEntrySchema = z.object({
 /** Mark: a physical signal placed ON the scanned page (tick, cross, underline, etc.) */
 export const MarkPayloadSchema = z.object({
 	_v: z.literal(1),
-	signal: z.enum([
-		"tick",
-		"cross",
-		"underline",
-		"double_underline",
-		"box",
-		"circle",
-	]),
+	signal: z.enum(MARK_SIGNAL_NAMES),
 	label: z.string().max(20).optional(),
 	/** Short examiner-style note explaining what this mark refers to. */
 	reason: z.string().max(80).optional(),

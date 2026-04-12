@@ -1,3 +1,4 @@
+import { MARK_SIGNAL_NAMES } from "@mcp-gcse/shared"
 import { z } from "zod/v4"
 
 /**
@@ -24,7 +25,7 @@ export const AnnotationPlanItemSchema = z.object({
 
 	// Mark fields
 	signal: z
-		.enum(["tick", "cross", "underline", "double_underline", "box", "circle"])
+		.enum(MARK_SIGNAL_NAMES)
 		.optional()
 		.describe("Required for overlay_type=mark. The physical signal type."),
 	label: z

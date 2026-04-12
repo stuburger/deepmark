@@ -1,5 +1,5 @@
 import { resolveSignal } from "./mark-registry"
-import type { PageToken, StudentPaperAnnotation } from "./types"
+import type { MarkSignal, PageToken, StudentPaperAnnotation } from "./types"
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -9,19 +9,14 @@ export type TokenAlignment = {
 	confidence: number
 }
 
+/** All annotation signal names — the 6 physical mark signals plus ao_tag and chain. */
+export type AnnotationSignal = MarkSignal | "ao_tag" | "chain"
+
 /** PM-style mark: typed decoration over a character range */
 export type TextMark = {
 	from: number
 	to: number
-	type:
-		| "tick"
-		| "cross"
-		| "underline"
-		| "double_underline"
-		| "box"
-		| "circle"
-		| "ao_tag"
-		| "chain"
+	type: AnnotationSignal
 	sentiment: "positive" | "negative" | "neutral"
 	attrs: Record<string, unknown>
 	annotationId: string
@@ -142,12 +137,11 @@ export function alignTokensToAnswer(
 
 function resolveMarkType(
 	annotation: StudentPaperAnnotation,
-): TextMark["type"] | null {
-	const signal = resolveSignal(
+): AnnotationSignal | null {
+	return resolveSignal(
 		annotation.overlay_type,
 		annotation.payload as Record<string, unknown>,
 	)
-	return signal as TextMark["type"] | null
 }
 
 /**

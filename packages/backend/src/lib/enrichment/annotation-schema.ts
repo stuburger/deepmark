@@ -10,10 +10,14 @@ export const AnnotationPlanItemSchema = z.object({
 		.describe("The annotation overlay type"),
 	anchor_start: z
 		.number()
-		.describe("Start token index as an integer (0-based, inclusive) from the OCR token array"),
+		.describe(
+			"Start token index as an integer (0-based, inclusive) from the OCR token array",
+		),
 	anchor_end: z
 		.number()
-		.describe("End token index as an integer (0-based, inclusive) from the OCR token array"),
+		.describe(
+			"End token index as an integer (0-based, inclusive) from the OCR token array",
+		),
 	sentiment: z
 		.enum(["positive", "negative", "neutral"])
 		.describe("Sentiment for color coding"),

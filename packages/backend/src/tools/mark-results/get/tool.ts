@@ -29,7 +29,8 @@ export const handler = tool(
 		)
 
 		// Format the marking result details
-		const markPointsResults = (most_recent_mark.mark_points_results ?? []) as Array<{
+		const markPointsResults = (most_recent_mark.mark_points_results ??
+			[]) as Array<{
 			point_number: number
 			awarded: boolean
 			expected_criteria: string

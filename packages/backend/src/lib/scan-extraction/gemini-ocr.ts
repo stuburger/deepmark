@@ -1,7 +1,7 @@
 import { callLlmWithFallback } from "@/lib/infra/llm-runtime"
+import { outputSchema } from "@/lib/infra/output-schema"
 import type { LlmRunner } from "@mcp-gcse/shared"
 import { generateText } from "ai"
-import { outputSchema } from "@/lib/infra/output-schema"
 import { z } from "zod/v4"
 
 export type HandwritingAnalysis = {

@@ -1,6 +1,6 @@
 import { callLlmWithFallback } from "@/lib/infra/llm-runtime"
-import { generateText } from "ai"
 import { outputSchema } from "@/lib/infra/output-schema"
+import { generateText } from "ai"
 import { z } from "zod/v4"
 import {
 	buildBlankClassificationPrompt,

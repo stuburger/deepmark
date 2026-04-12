@@ -1,8 +1,8 @@
 import type { QuestionListItem } from "@/lib/grading/question-list"
 import { callLlmWithFallback } from "@/lib/infra/llm-runtime"
 import { logger } from "@/lib/infra/logger"
-import { generateText } from "ai"
 import { outputSchema } from "@/lib/infra/output-schema"
+import { generateText } from "ai"
 import {
 	AlignmentSchema,
 	buildAlignmentPrompt,

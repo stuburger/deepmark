@@ -120,7 +120,8 @@ export const handler = tool(EvaluateAnswerSchema, async (args, extra) => {
 		llm_reasoning: grade.llmReasoning,
 		feedback_summary: grade.feedbackSummary,
 		level_awarded: "levelAwarded" in grade ? grade.levelAwarded : undefined,
-		why_not_next_level: "whyNotNextLevel" in grade ? grade.whyNotNextLevel : undefined,
+		why_not_next_level:
+			"whyNotNextLevel" in grade ? grade.whyNotNextLevel : undefined,
 		cap_applied: "capApplied" in grade ? grade.capApplied : undefined,
 	}
 

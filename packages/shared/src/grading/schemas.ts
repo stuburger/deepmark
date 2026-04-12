@@ -51,7 +51,9 @@ export const LoRQuestionGradeSchema = z.object({
 		),
 	levelAwarded: z
 		.number()
-		.describe("The level as an integer (0 if no level reached, otherwise 1-based) awarded for this response"),
+		.describe(
+			"The level as an integer (0 if no level reached, otherwise 1-based) awarded for this response",
+		),
 	whyNotNextLevel: z
 		.string()
 		.describe(

@@ -1,13 +1,14 @@
 "use client"
 
 import type {
+	PageToken,
 	StudentPaperAnnotation,
 	StudentPaperJobPayload,
 	TeacherOverride,
 	UpsertTeacherOverrideInput,
 } from "@/lib/marking/types"
 import { useState } from "react"
-import { GradingResultsPanel } from "./grading-results-panel"
+import { GradingResultsPanel, type ResultsView } from "./grading-results-panel"
 
 /**
  * Digital tab content for the completed phase.
@@ -19,18 +20,26 @@ export function MarkingResults({
 	data,
 	activeQuestionNumber,
 	annotations = [],
+	pageTokens,
 	overridesByQuestionId,
 	onOverrideChange,
+	view,
+	onViewChange,
+	onDerivedAnnotations,
 }: {
 	jobId: string
 	data: StudentPaperJobPayload
 	activeQuestionNumber?: string | null
 	annotations?: StudentPaperAnnotation[]
+	pageTokens?: PageToken[]
 	overridesByQuestionId?: Map<string, TeacherOverride>
 	onOverrideChange?: (
 		questionId: string,
 		input: UpsertTeacherOverrideInput | null,
 	) => void
+	view?: ResultsView
+	onViewChange?: (view: ResultsView) => void
+	onDerivedAnnotations?: (annotations: StudentPaperAnnotation[]) => void
 }) {
 	const [answers, setAnswers] = useState<Record<string, string>>(
 		Object.fromEntries(
@@ -48,8 +57,12 @@ export function MarkingResults({
 				setAnswers((prev) => ({ ...prev, [id]: text }))
 			}
 			annotations={annotations}
+			pageTokens={pageTokens}
 			overridesByQuestionId={overridesByQuestionId}
 			onOverrideChange={onOverrideChange}
+			view={view}
+			onViewChange={onViewChange}
+			onDerivedAnnotations={onDerivedAnnotations}
 		/>
 	)
 }

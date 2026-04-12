@@ -3,6 +3,7 @@
 import { LiveMarkingExamPaperPanel } from "@/components/ExamPaperPanel"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import type {
+	PageToken,
 	StudentPaperAnnotation,
 	StudentPaperJobPayload,
 	TeacherOverride,
@@ -12,6 +13,7 @@ import { Loader2 } from "lucide-react"
 import { CancelledPanel } from "./cancelled"
 import { FailedPanel } from "./failed"
 import type { MarkingPhase } from "./phase"
+import type { ResultsView } from "./results/grading-results-panel"
 import { MarkingResults } from "./results/index"
 import { LlmSnapshotPanel } from "./results/llm-snapshot-panel"
 
@@ -44,19 +46,27 @@ function DigitalPanelContent({
 	phase,
 	activeQuestionNumber,
 	annotations = [],
+	pageTokens,
 	overridesByQuestionId,
 	onOverrideChange,
+	view,
+	onViewChange,
+	onDerivedAnnotations,
 }: {
 	jobId: string
 	data: StudentPaperJobPayload
 	phase: MarkingPhase
 	activeQuestionNumber: string | null
 	annotations?: StudentPaperAnnotation[]
+	pageTokens?: PageToken[]
 	overridesByQuestionId?: Map<string, TeacherOverride>
 	onOverrideChange?: (
 		questionId: string,
 		input: UpsertTeacherOverrideInput | null,
 	) => void
+	view?: ResultsView
+	onViewChange?: (view: ResultsView) => void
+	onDerivedAnnotations?: (annotations: StudentPaperAnnotation[]) => void
 }) {
 	switch (phase) {
 		case "scan_processing":
@@ -78,8 +88,12 @@ function DigitalPanelContent({
 					data={data}
 					activeQuestionNumber={activeQuestionNumber}
 					annotations={annotations}
+					pageTokens={pageTokens}
 					overridesByQuestionId={overridesByQuestionId}
 					onOverrideChange={onOverrideChange}
+					view={view}
+					onViewChange={onViewChange}
+					onDerivedAnnotations={onDerivedAnnotations}
 				/>
 			)
 
@@ -97,19 +111,27 @@ export function ResultsPanel({
 	phase,
 	activeQuestionNumber,
 	annotations = [],
+	pageTokens,
 	overridesByQuestionId,
 	onOverrideChange,
+	view,
+	onViewChange,
+	onDerivedAnnotations,
 }: {
 	jobId: string
 	data: StudentPaperJobPayload
 	phase: MarkingPhase
 	activeQuestionNumber: string | null
 	annotations?: StudentPaperAnnotation[]
+	pageTokens?: PageToken[]
 	overridesByQuestionId?: Map<string, TeacherOverride>
 	onOverrideChange?: (
 		questionId: string,
 		input: UpsertTeacherOverrideInput | null,
 	) => void
+	view?: ResultsView
+	onViewChange?: (view: ResultsView) => void
+	onDerivedAnnotations?: (annotations: StudentPaperAnnotation[]) => void
 }) {
 	return (
 		<ScrollArea data-results-panel className="h-full w-full">
@@ -120,8 +142,12 @@ export function ResultsPanel({
 					phase={phase}
 					activeQuestionNumber={activeQuestionNumber}
 					annotations={annotations}
+					pageTokens={pageTokens}
 					overridesByQuestionId={overridesByQuestionId}
 					onOverrideChange={onOverrideChange}
+					view={view}
+					onViewChange={onViewChange}
+					onDerivedAnnotations={onDerivedAnnotations}
 				/>
 				<LlmSnapshotPanel
 					ocrSnapshot={data.ocr_llm_snapshot}

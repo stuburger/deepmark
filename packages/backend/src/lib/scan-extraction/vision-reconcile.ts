@@ -1,11 +1,11 @@
 import { db } from "@/db"
 import { callLlmWithFallback } from "@/lib/infra/llm-runtime"
 import { logger } from "@/lib/infra/logger"
+import { outputSchema } from "@/lib/infra/output-schema"
 import { getFileBase64 } from "@/lib/infra/s3"
 import { logOcrRunEvent } from "@mcp-gcse/db"
 import type { LlmRunner } from "@mcp-gcse/shared"
 import { generateText } from "ai"
-import { outputSchema } from "@/lib/infra/output-schema"
 import { Resource } from "sst"
 import {
 	ReconcileSchema,
@@ -115,34 +115,34 @@ export async function reconcilePageTokens({
 				const tokenList = pageTokens.map((t) => `"${t.text_raw}"`).join(", ")
 
 				const { output } = await callLlmWithFallback(
-						"vision-token-reconciliation",
-						async (model, entry, report) => {
-							const result = await generateText({
-								model,
-								temperature: entry.temperature,
-								messages: [
-									{
-										role: "user",
-										content: [
-											{
-												type: "image",
-												image: imageBase64,
-												mediaType: page.mime_type,
-											},
-											{
-												type: "text",
-												text: buildReconciliationPrompt(tokenList),
-											},
-										],
-									},
-								],
-								output: outputSchema(ReconcileSchema),
-							})
-							report.usage = result.usage
-							return result
-						},
-						llm,
-					)
+					"vision-token-reconciliation",
+					async (model, entry, report) => {
+						const result = await generateText({
+							model,
+							temperature: entry.temperature,
+							messages: [
+								{
+									role: "user",
+									content: [
+										{
+											type: "image",
+											image: imageBase64,
+											mediaType: page.mime_type,
+										},
+										{
+											type: "text",
+											text: buildReconciliationPrompt(tokenList),
+										},
+									],
+								},
+							],
+							output: outputSchema(ReconcileSchema),
+						})
+						report.usage = result.usage
+						return result
+					},
+					llm,
+				)
 				const corrections = output.corrections
 
 				// Build a queue of tokens grouped by raw text for order-of-appearance matching.

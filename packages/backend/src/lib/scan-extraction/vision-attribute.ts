@@ -1,13 +1,13 @@
 import { db } from "@/db"
 import { callLlmWithFallback } from "@/lib/infra/llm-runtime"
 import { logger } from "@/lib/infra/logger"
+import { outputSchema } from "@/lib/infra/output-schema"
 import { getFileBase64 } from "@/lib/infra/s3"
 import { filterSpatialOutliers } from "@/lib/scan-extraction/filter-spatial-outliers"
 import type { CorrectedPageToken } from "@/lib/scan-extraction/vision-reconcile"
 import { logOcrRunEvent } from "@mcp-gcse/db"
 import { type LlmRunner, computeBboxHull } from "@mcp-gcse/shared"
 import { generateText } from "ai"
-import { outputSchema } from "@/lib/infra/output-schema"
 import {
 	AttributionSchema,
 	McqFallbackSchema,

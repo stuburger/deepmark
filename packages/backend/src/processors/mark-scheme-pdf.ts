@@ -5,6 +5,7 @@ import {
 } from "@/lib/infra/cancellation"
 import { callLlmWithFallback, createLlmRunner } from "@/lib/infra/llm-runtime"
 import { logger } from "@/lib/infra/logger"
+import { outputSchema } from "@/lib/infra/output-schema"
 import {
 	getPdfBase64,
 	parsePdfIngestionTrigger,
@@ -16,7 +17,6 @@ import {
 import type { ScanStatus } from "@mcp-gcse/db"
 import { Grader } from "@mcp-gcse/shared"
 import { generateText } from "ai"
-import { outputSchema } from "@/lib/infra/output-schema"
 import { linkJobQuestionsToExamPaper } from "./mark-scheme-pdf/linking"
 import { processExtractedQuestion } from "./mark-scheme-pdf/process-question"
 import {

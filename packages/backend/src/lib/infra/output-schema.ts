@@ -10,7 +10,9 @@ import type { z } from "zod/v4"
  * Remove once `@ai-sdk/provider-utils` ships a stable fix.
  */
 // biome-ignore lint/suspicious/noExplicitAny: upstream type mismatch requires cast
-export function outputSchema<T>(schema: z.ZodType<T>): ReturnType<typeof Output.object<T>> {
+export function outputSchema<T>(
+	schema: z.ZodType<T>,
+): ReturnType<typeof Output.object<T>> {
 	// @ts-expect-error TODO fix this when it's fixed upstream
-	return Output.object({ schema: schema  })
+	return Output.object({ schema: schema })
 }

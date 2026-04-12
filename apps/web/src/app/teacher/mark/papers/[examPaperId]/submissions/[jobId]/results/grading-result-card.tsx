@@ -5,12 +5,14 @@ import { Progress } from "@/components/ui/progress"
 import type {
 	CommentPayload,
 	GradingResult,
+	PageToken,
 	StudentPaperAnnotation,
 	TeacherOverride,
 	UpsertTeacherOverrideInput,
 } from "@/lib/marking/types"
 import { cn } from "@/lib/utils"
 import { ChevronDown } from "lucide-react"
+import { AnnotatedAnswer } from "./annotated-answer"
 import { AnswerEditor } from "./answer-editor"
 import { FeedbackOverrideEditor } from "./feedback-override-editor"
 import { ScoreOverrideEditor } from "./score-override-editor"
@@ -22,6 +24,7 @@ export function GradingResultCard({
 	isActive = false,
 	onAnswerSaved,
 	annotations = [],
+	questionTokens = [],
 	override,
 	onOverrideChange,
 }: {
@@ -31,6 +34,7 @@ export function GradingResultCard({
 	isActive?: boolean
 	onAnswerSaved: (questionId: string, text: string) => void
 	annotations?: StudentPaperAnnotation[]
+	questionTokens?: PageToken[]
 	override?: TeacherOverride
 	onOverrideChange?: (input: UpsertTeacherOverrideInput | null) => void
 }) {
@@ -105,6 +109,15 @@ export function GradingResultCard({
 						questionNumber={r.question_number}
 						initialText={currentAnswer}
 						onSaved={(newText) => onAnswerSaved(r.question_id, newText)}
+						readOnlyContent={
+							questionTokens.length > 0 && annotations.length > 0 ? (
+								<AnnotatedAnswer
+									answer={currentAnswer}
+									tokens={questionTokens}
+									annotations={annotations}
+								/>
+							) : undefined
+						}
 					/>
 				</div>
 			)}

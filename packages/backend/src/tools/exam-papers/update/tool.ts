@@ -39,7 +39,10 @@ export const handler = tool(UpdateExamPaperSchema, async (args, extra) => {
 
 	console.log("[update-exam-paper] Updating exam paper", { update })
 
-	await db.examPaper.update({ where: { id: exam_paper_id }, data: update as any })
+	await db.examPaper.update({
+		where: { id: exam_paper_id },
+		data: update as any,
+	})
 
 	console.log("[update-exam-paper] Exam paper updated successfully", {
 		examPaperId: exam_paper_id,

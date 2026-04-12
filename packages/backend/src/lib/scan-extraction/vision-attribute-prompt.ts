@@ -12,10 +12,14 @@ export const AttributionSchema = z.object({
 						z.object({
 							start: z
 								.number()
-								.describe("First token index as an integer (0-based, inclusive)"),
+								.describe(
+									"First token index as an integer (0-based, inclusive)",
+								),
 							end: z
 								.number()
-								.describe("Last token index as an integer (0-based, inclusive)"),
+								.describe(
+									"Last token index as an integer (0-based, inclusive)",
+								),
 						}),
 					)
 					.describe(

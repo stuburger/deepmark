@@ -127,6 +127,7 @@ export async function getJobPageTokens(
 			text_corrected: true,
 			bbox: true,
 			confidence: true,
+			question_id: true,
 		},
 	})
 
@@ -140,6 +141,7 @@ export async function getJobPageTokens(
 		text_corrected: row.text_corrected,
 		bbox: row.bbox as [number, number, number, number],
 		confidence: row.confidence,
+		question_id: row.question_id,
 	}))
 
 	return { ok: true, tokens }
@@ -195,6 +197,8 @@ export async function getJobAnnotations(
 			payload,
 			bbox: row.bbox as [number, number, number, number],
 			parent_annotation_id: row.parent_annotation_id,
+			anchor_token_start_id: row.anchor_token_start_id,
+			anchor_token_end_id: row.anchor_token_end_id,
 		}
 	})
 

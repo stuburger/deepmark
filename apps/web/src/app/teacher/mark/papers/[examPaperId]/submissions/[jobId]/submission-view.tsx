@@ -35,6 +35,7 @@ import type { MarkingPhase } from "./phase"
 import { derivePhase } from "./phase"
 import { ResultsPanel } from "./results-panel"
 import { AnnotatedScanColumn } from "./results/annotated-scan-column"
+import type { ResultsView } from "./results/grading-results-panel"
 import { ScanPanel } from "./scan-panel"
 import { SubmissionToolbar } from "./submission-toolbar"
 
@@ -67,6 +68,10 @@ export function SubmissionView({
 	const [showMarks, setShowMarks] = useState(false)
 	const [showChains, setShowChains] = useState(false)
 	const [isEditing, setIsEditing] = useState(false)
+	const [resultsView, setResultsView] = useState<ResultsView>("cards")
+	const [sheetAnnotations, setSheetAnnotations] = useState<
+		StudentPaperAnnotation[]
+	>([])
 	const [activeQuestionNumber, setActiveQuestionNumber] = useQueryState(
 		"question",
 		parseAsString,
@@ -163,6 +168,13 @@ export function SubmissionView({
 		}
 	}, [annotations])
 
+	// When sheet view is active, PM doc is the state — scan derives from it.
+	// When card view is active, DB annotations are the state (no PM editor running).
+	const effectiveAnnotations =
+		resultsView === "sheet" && sheetAnnotations.length > 0
+			? sheetAnnotations
+			: annotations
+
 	// Trigger enrichment mutation
 	const enrichMutation = useMutation({
 		mutationFn: () => triggerEnrichment(jobId),
@@ -226,7 +238,7 @@ export function SubmissionView({
 				onToggleMarks={() => setShowMarks((v) => !v)}
 				onToggleChains={() => setShowChains((v) => !v)}
 				onGenerateAnnotations={() => enrichMutation.mutate()}
-				annotationCount={annotations.length}
+				annotationCount={effectiveAnnotations.length}
 				onNavigateToJob={onNavigateToJob}
 				onVersionChange={onVersionChange}
 				isEditing={isEditing}
@@ -261,7 +273,7 @@ export function SubmissionView({
 								gradingResults={data.grading_results}
 								onAnnotationClick={handleAnnotationClick}
 								debugMode={debugMode}
-								annotations={annotations}
+								annotations={effectiveAnnotations}
 								showMarks={showMarks}
 								showChains={showChains}
 							/>
@@ -278,8 +290,12 @@ export function SubmissionView({
 							phase={phase}
 							activeQuestionNumber={activeQuestionNumber}
 							annotations={annotations}
+							pageTokens={pageTokens}
 							overridesByQuestionId={overridesByQuestionId}
 							onOverrideChange={isEditing ? handleOverrideChange : undefined}
+							view={resultsView}
+							onViewChange={setResultsView}
+							onDerivedAnnotations={setSheetAnnotations}
 						/>
 					</TabsContent>
 				</Tabs>
@@ -299,7 +315,7 @@ export function SubmissionView({
 						showRegions={showRegions}
 						onAnnotationClick={handleAnnotationClick}
 						debugMode={debugMode}
-						annotations={annotations}
+						annotations={effectiveAnnotations}
 						showMarks={showMarks}
 						showChains={showChains}
 					/>
@@ -313,8 +329,13 @@ export function SubmissionView({
 						data={data}
 						phase={phase}
 						activeQuestionNumber={activeQuestionNumber}
+						annotations={annotations}
+						pageTokens={pageTokens}
 						overridesByQuestionId={overridesByQuestionId}
 						onOverrideChange={isEditing ? handleOverrideChange : undefined}
+						view={resultsView}
+						onViewChange={setResultsView}
+						onDerivedAnnotations={setSheetAnnotations}
 					/>
 				</ResizablePanel>
 			</ResizablePanelGroup>

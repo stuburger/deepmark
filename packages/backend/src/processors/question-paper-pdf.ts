@@ -8,6 +8,7 @@ import {
 import { embedQuestionText } from "@/lib/infra/google-generative-ai"
 import { callLlmWithFallback } from "@/lib/infra/llm-runtime"
 import { logger } from "@/lib/infra/logger"
+import { outputSchema } from "@/lib/infra/output-schema"
 import {
 	embeddingToVectorStr,
 	getPdfBase64,
@@ -19,7 +20,6 @@ import {
 } from "@/lib/infra/sqs-job-runner"
 import type { ScanStatus } from "@mcp-gcse/db"
 import { generateText } from "ai"
-import { outputSchema } from "@/lib/infra/output-schema"
 import {
 	EXTRACT_METADATA_PROMPT,
 	EXTRACT_QUESTIONS_PROMPT,

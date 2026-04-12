@@ -1,0 +1,26 @@
+/* Tick/cross leading symbols via ::before pseudo-elements */
+span[data-mark-type="tick"]::before {
+	content: "✓";
+	color: #22c55e;
+	font-weight: 700;
+	font-size: 0.75em;
+	margin-right: 2px;
+}
+
+span[data-mark-type="cross"]::before {
+	content: "✗";
+	color: #ef4444;
+	font-weight: 700;
+	font-size: 0.75em;
+	margin-right: 2px;
+}
+
+/* AO tag trailing badge via ::after pseudo-element */
+span[data-mark-type="ao_tag"]::after {
+	content: " [" attr(data-tag-display) "]";
+	font-size: 0.65em;
+	font-weight: 600;
+	vertical-align: super;
+	color: #3b82f6;
+	margin-left: 1px;
+}

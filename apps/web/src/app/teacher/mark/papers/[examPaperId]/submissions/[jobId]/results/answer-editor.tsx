@@ -11,11 +11,14 @@ export function AnswerEditor({
 	questionNumber,
 	initialText,
 	onSaved,
+	readOnlyContent,
 }: {
 	jobId: string
 	questionNumber: string
 	initialText: string
 	onSaved: (newText: string) => void
+	/** When provided, renders this instead of plain text in read-only mode. */
+	readOnlyContent?: React.ReactNode
 }) {
 	const [editing, setEditing] = useState(false)
 	const [text, setText] = useState(initialText)
@@ -44,11 +47,15 @@ export function AnswerEditor({
 	if (!editing) {
 		return (
 			<div className="group relative">
-				<div className="text-base whitespace-pre-wrap rounded-md bg-muted px-3 py-2 pr-8">
-					{text || (
-						<span className="italic text-muted-foreground">
-							No answer written
-						</span>
+				<div className="rounded-md bg-muted px-3 py-2 pr-8">
+					{readOnlyContent ?? (
+						<div className="text-base whitespace-pre-wrap">
+							{text || (
+								<span className="italic text-muted-foreground">
+									No answer written
+								</span>
+							)}
+						</div>
 					)}
 				</div>
 				<Button

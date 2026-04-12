@@ -1,7 +1,7 @@
 import { logger } from "@/lib/infra/logger"
+import { outputSchema } from "@/lib/infra/output-schema"
 import { parseMarkPointsFromPrisma } from "@mcp-gcse/shared"
 import { generateText } from "ai"
-import { outputSchema } from "@/lib/infra/output-schema"
 import { buildAnnotationPrompt } from "./annotation-prompt"
 import { AnnotationPlanSchema } from "./annotation-schema"
 import { buildPayload } from "./payload-builder"

@@ -18,14 +18,7 @@ import {
 	MODEL_DEFAULT_TEMPERATURE,
 	PROVIDER_MODELS,
 } from "@/lib/admin/llm-types"
-import {
-	ArrowDown,
-	ArrowUp,
-	Loader2,
-	Plus,
-	Trash2,
-	Zap,
-} from "lucide-react"
+import { ArrowDown, ArrowUp, Loader2, Plus, Trash2, Zap } from "lucide-react"
 import { useRef, useState } from "react"
 
 const ALL_MODELS: Array<{

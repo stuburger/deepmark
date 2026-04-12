@@ -1,12 +1,12 @@
 import { callLlmWithFallback } from "@/lib/infra/llm-runtime"
 import { logger } from "@/lib/infra/logger"
+import { outputSchema } from "@/lib/infra/output-schema"
 import {
 	type HandwritingAnalysis,
 	runOcr,
 } from "@/lib/scan-extraction/gemini-ocr"
 import type { LlmRunner } from "@mcp-gcse/shared"
 import { generateText } from "ai"
-import { outputSchema } from "@/lib/infra/output-schema"
 import { z } from "zod/v4"
 
 const TAG = "gemini-extract"

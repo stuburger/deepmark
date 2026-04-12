@@ -3,9 +3,15 @@ import tsconfigPaths from "vite-tsconfig-paths"
 import { defineConfig } from "vitest/config"
 
 const backendRoot = path.resolve(__dirname, "packages/backend")
+const webRoot = path.resolve(__dirname, "apps/web")
 
 const backendTsconfigPaths = tsconfigPaths({
 	root: backendRoot,
+	projects: ["tsconfig.json"],
+})
+
+const webTsconfigPaths = tsconfigPaths({
+	root: webRoot,
 	projects: ["tsconfig.json"],
 })
 
@@ -40,6 +46,16 @@ export default defineConfig({
 					testTimeout: 180_000,
 					hookTimeout: 30_000,
 					pool: "forks",
+				},
+			},
+			{
+				plugins: [webTsconfigPaths],
+				test: {
+					name: "web:unit",
+					root: webRoot,
+					include: ["src/**/__tests__/**/*.test.ts"],
+					testTimeout: 10_000,
+					hookTimeout: 5_000,
 				},
 			},
 			{

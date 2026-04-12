@@ -5,6 +5,7 @@ import {
 } from "@/lib/infra/cancellation"
 import { callLlmWithFallback } from "@/lib/infra/llm-runtime"
 import { logger } from "@/lib/infra/logger"
+import { outputSchema } from "@/lib/infra/output-schema"
 import {
 	getPdfBase64,
 	parsePdfIngestionTrigger,
@@ -16,7 +17,6 @@ import {
 import { validateWithExemplars } from "@/services/validate-with-exemplars"
 import type { ScanStatus } from "@mcp-gcse/db"
 import { generateText } from "ai"
-import { outputSchema } from "@/lib/infra/output-schema"
 import { EXTRACT_EXEMPLARS_PROMPT } from "./exemplar-pdf/prompts"
 import { ExemplarSchema } from "./exemplar-pdf/schema"
 

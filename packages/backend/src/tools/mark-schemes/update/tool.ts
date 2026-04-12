@@ -43,8 +43,7 @@ export const handler = tool(UpdateMarkSchemeSchema, async (args) => {
 	const effectiveMethod =
 		marking_method ?? mark_scheme.marking_method ?? "point_based"
 	const effectivePointsTotal = points_total ?? mark_scheme.points_total
-	const effectiveMarkPoints =
-		mark_points ?? (mark_scheme.mark_points as any)
+	const effectiveMarkPoints = mark_points ?? (mark_scheme.mark_points as any)
 
 	console.log("[update-mark-scheme] Validating update data", {
 		id,

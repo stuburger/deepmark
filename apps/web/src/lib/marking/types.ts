@@ -29,6 +29,8 @@ export type PageToken = {
 	/** [yMin, xMin, yMax, xMax] normalised 0–1000 */
 	bbox: [number, number, number, number]
 	confidence: number | null
+	/** Which question this token was attributed to (null for unattributed tokens). */
+	question_id: string | null
 }
 
 export type MarkPointResult = {
@@ -90,6 +92,10 @@ export type StudentPaperAnnotation = {
 	payload: AnnotationPayload
 	bbox: [number, number, number, number]
 	parent_annotation_id: string | null
+	/** FK to the first token in this annotation's span (null for older enrichment runs). */
+	anchor_token_start_id: string | null
+	/** FK to the last token in this annotation's span (null for older enrichment runs). */
+	anchor_token_end_id: string | null
 }
 
 export type GetJobAnnotationsResult =

@@ -1,6 +1,6 @@
 "use client"
 
-import type { StudentPaperAnnotation, TagPayload } from "@/lib/marking/types"
+import type { StudentPaperAnnotation } from "@/lib/marking/types"
 import {
 	OFFSET_H,
 	TAG_BORDER,
@@ -13,7 +13,7 @@ import {
 } from "./overlay-sizing"
 
 type Props = {
-	annotation: StudentPaperAnnotation & { payload: TagPayload }
+	annotation: Extract<StudentPaperAnnotation, { overlay_type: "tag" }>
 	/** Parent mark's bbox for positioning — tag renders offset from parent */
 	parentBbox?: [number, number, number, number]
 	scaleX: number

@@ -7,11 +7,7 @@ import {
 	SheetTitle,
 	SheetTrigger,
 } from "@/components/ui/sheet"
-import type {
-	GradingResult,
-	StudentPaperAnnotation,
-	TagPayload,
-} from "@/lib/marking/types"
+import type { GradingResult, StudentPaperAnnotation } from "@/lib/marking/types"
 import type { ReactElement } from "react"
 
 type Props = {
@@ -104,8 +100,11 @@ export function AnnotationLegend({
 	const aoLabels = [
 		...new Set(
 			annotations
-				.filter((a) => a.overlay_type === "tag")
-				.map((a) => (a.payload as TagPayload).category),
+				.filter(
+					(a): a is Extract<StudentPaperAnnotation, { overlay_type: "tag" }> =>
+						a.overlay_type === "tag",
+				)
+				.map((a) => a.payload.category),
 		),
 	].sort()
 

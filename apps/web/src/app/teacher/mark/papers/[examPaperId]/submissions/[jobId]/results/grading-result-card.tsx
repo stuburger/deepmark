@@ -3,7 +3,6 @@
 import { McqOptions } from "@/components/mcq-options"
 import { Progress } from "@/components/ui/progress"
 import type {
-	CommentPayload,
 	GradingResult,
 	PageToken,
 	StudentPaperAnnotation,
@@ -126,9 +125,16 @@ export function GradingResultCard({
 			{annotations.length > 0 && (
 				<div className="flex flex-wrap gap-1.5">
 					{annotations
-						.filter((a) => a.overlay_type === "comment")
+						.filter(
+							(
+								a,
+							): a is Extract<
+								StudentPaperAnnotation,
+								{ overlay_type: "comment" }
+							> => a.overlay_type === "comment",
+						)
 						.map((a) => {
-							const text = (a.payload as CommentPayload).text
+							const text = a.payload.text
 							const borderColor =
 								a.sentiment === "positive"
 									? "border-green-400 text-green-700 dark:text-green-400"
@@ -194,41 +200,40 @@ export function GradingResultCard({
 				</div>
 			)}
 
-			{/* Feedback + examiner reasoning */}
-			{r.marking_method !== "deterministic" &&
-				(r.feedback_summary || r.llm_reasoning) && (
-					<details className="text-xs" open={isEditing}>
-						<summary className="cursor-pointer text-muted-foreground hover:text-foreground list-none flex items-center gap-1 w-fit">
-							Feedback <ChevronDown className="h-3 w-3" />
-						</summary>
-						<div className="mt-2 space-y-3">
-							<FeedbackOverrideEditor
-								aiFeedback={r.feedback_summary}
-								overrideFeedback={override?.feedback_override ?? null}
-								isEditing={isEditing}
-								onSave={(text) =>
-									onOverrideChange?.({
-										score_override: override?.score_override ?? r.awarded_score,
-										reason: override?.reason,
-										feedback_override: text,
-									})
-								}
-								onReset={() =>
-									onOverrideChange?.({
-										score_override: override?.score_override ?? r.awarded_score,
-										reason: override?.reason,
-										feedback_override: undefined,
-									})
-								}
-							/>
-							{r.llm_reasoning && r.llm_reasoning !== r.feedback_summary && (
-								<p className="text-muted-foreground whitespace-pre-wrap leading-relaxed pl-2 border-l">
-									{r.llm_reasoning}
-								</p>
-							)}
-						</div>
-					</details>
-				)}
+			{/* Feedback summary (inline) + override editor (collapsible when editing) */}
+			{r.marking_method !== "deterministic" && r.feedback_summary && (
+				<p className="text-xs text-muted-foreground leading-relaxed">
+					{override?.feedback_override ?? r.feedback_summary}
+				</p>
+			)}
+			{isEditing && r.marking_method !== "deterministic" && (
+				<details className="text-xs">
+					<summary className="cursor-pointer text-muted-foreground hover:text-foreground list-none flex items-center gap-1 w-fit">
+						Edit feedback <ChevronDown className="h-3 w-3" />
+					</summary>
+					<div className="mt-2">
+						<FeedbackOverrideEditor
+							aiFeedback={r.feedback_summary}
+							overrideFeedback={override?.feedback_override ?? null}
+							isEditing={isEditing}
+							onSave={(text) =>
+								onOverrideChange?.({
+									score_override: override?.score_override ?? r.awarded_score,
+									reason: override?.reason,
+									feedback_override: text,
+								})
+							}
+							onReset={() =>
+								onOverrideChange?.({
+									score_override: override?.score_override ?? r.awarded_score,
+									reason: override?.reason,
+									feedback_override: undefined,
+								})
+							}
+						/>
+					</div>
+				</details>
+			)}
 
 			{/* Score progress + extras */}
 			<div className="space-y-1.5">

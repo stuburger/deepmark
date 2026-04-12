@@ -1,9 +1,9 @@
 "use client"
 
-import type { ChainPayload, StudentPaperAnnotation } from "@/lib/marking/types"
+import type { StudentPaperAnnotation } from "@/lib/marking/types"
 
 type Props = {
-	annotation: StudentPaperAnnotation & { payload: ChainPayload }
+	annotation: Extract<StudentPaperAnnotation, { overlay_type: "chain" }>
 	scaleX: number
 	scaleY: number
 }

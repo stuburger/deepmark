@@ -1,19 +1,7 @@
+import { SIGNAL_TO_TIPTAP } from "@/lib/marking/mark-registry"
 import type { TextMark } from "@/lib/marking/token-alignment"
 import type { GradingResult } from "@/lib/marking/types"
 import type { JSONContent } from "@tiptap/core"
-
-// ─── Mark type → tiptap mark name mapping ───────────────────────────────────
-
-const MARK_TYPE_TO_TIPTAP: Record<TextMark["type"], string> = {
-	tick: "tick",
-	cross: "cross",
-	underline: "annotationUnderline",
-	double_underline: "doubleUnderline",
-	box: "box",
-	circle: "circle",
-	ao_tag: "aoTag",
-	chain: "chain",
-}
 
 // ─── Build text runs with marks from a flat string + TextMark[] ─────────────
 
@@ -45,7 +33,7 @@ function buildTextContent(text: string, marks: TextMark[]): JSONContent[] {
 
 		if (covering.length > 0) {
 			node.marks = covering.map((m) => ({
-				type: MARK_TYPE_TO_TIPTAP[m.type],
+				type: SIGNAL_TO_TIPTAP[m.type],
 				attrs: {
 					sentiment: m.sentiment,
 					reason: (m.attrs.reason as string) ?? null,

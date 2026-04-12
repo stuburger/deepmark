@@ -1,3 +1,4 @@
+import { resolveSignal } from "./mark-registry"
 import type { PageToken, StudentPaperAnnotation } from "./types"
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -139,46 +140,14 @@ export function alignTokensToAnswer(
 
 // ─── Mark derivation ────────────────────────────────────────────────────────
 
-type MarkSignal =
-	| "tick"
-	| "cross"
-	| "underline"
-	| "double_underline"
-	| "box"
-	| "circle"
-
 function resolveMarkType(
 	annotation: StudentPaperAnnotation,
 ): TextMark["type"] | null {
-	switch (annotation.overlay_type) {
-		case "mark": {
-			const signal = (annotation.payload as { signal?: string }).signal as
-				| MarkSignal
-				| undefined
-			if (
-				signal &&
-				[
-					"tick",
-					"cross",
-					"underline",
-					"double_underline",
-					"box",
-					"circle",
-				].includes(signal)
-			) {
-				return signal as TextMark["type"]
-			}
-			return "underline"
-		}
-		case "tag":
-			return "ao_tag"
-		case "chain":
-			return "chain"
-		case "comment":
-			return null // comments are rendered separately as badges
-		default:
-			return null
-	}
+	const signal = resolveSignal(
+		annotation.overlay_type,
+		annotation.payload as Record<string, unknown>,
+	)
+	return signal as TextMark["type"] | null
 }
 
 /**

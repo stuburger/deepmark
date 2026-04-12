@@ -45,14 +45,14 @@ function makeAnnotation(
 		enrichment_run_id: "run1",
 		question_id: "q1",
 		page_order: 1,
-		overlay_type: overlayType as StudentPaperAnnotation["overlay_type"],
+		overlay_type: overlayType,
 		sentiment: "positive",
-		payload: { _v: 1, ...payload } as StudentPaperAnnotation["payload"],
+		payload: { _v: 1, ...payload },
 		bbox: [0, 0, 100, 100],
 		parent_annotation_id: null,
 		anchor_token_start_id: startTokenId,
 		anchor_token_end_id: endTokenId,
-	}
+	} as StudentPaperAnnotation
 }
 
 // ─── splitWithOffsets ───────────────────────────────────────────────────────

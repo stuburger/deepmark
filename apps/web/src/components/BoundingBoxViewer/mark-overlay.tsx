@@ -1,6 +1,6 @@
 "use client"
 
-import type { MarkPayload, StudentPaperAnnotation } from "@/lib/marking/types"
+import type { StudentPaperAnnotation } from "@/lib/marking/types"
 import {
 	CIRCLE_PAD_X,
 	DOUBLE_UNDERLINE_GAP,
@@ -17,7 +17,7 @@ import {
 } from "./overlay-sizing"
 
 type Props = {
-	annotation: StudentPaperAnnotation & { payload: MarkPayload }
+	annotation: Extract<StudentPaperAnnotation, { overlay_type: "mark" }>
 	scaleX: number
 	scaleY: number
 }

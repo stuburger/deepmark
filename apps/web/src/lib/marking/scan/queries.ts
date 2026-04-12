@@ -175,7 +175,9 @@ export async function getJobAnnotations(
 		orderBy: [{ page_order: "asc" }, { sort_order: "asc" }],
 	})
 
-	const annotations: StudentPaperAnnotation[] = rows.map((row) => {
+	// parseAnnotationPayload validates the overlay_type/payload pairing via Zod,
+	// so the cast to StudentPaperAnnotation (discriminated union) is safe here.
+	const annotations = rows.map((row) => {
 		let payload: AnnotationPayload
 		try {
 			payload = parseAnnotationPayload(
@@ -199,7 +201,7 @@ export async function getJobAnnotations(
 			parent_annotation_id: row.parent_annotation_id,
 			anchor_token_start_id: row.anchor_token_start_id,
 			anchor_token_end_id: row.anchor_token_end_id,
-		}
+		} as StudentPaperAnnotation
 	})
 
 	return { ok: true, annotations }

@@ -82,14 +82,13 @@ export type CommentPayload = SharedCommentPayload
 export type ChainPayload = SharedChainPayload
 export type AnnotationPayload = SharedAnnotationPayload
 
-export type StudentPaperAnnotation = {
+/** Shared fields present on every annotation variant. */
+type AnnotationBase = {
 	id: string
 	enrichment_run_id: string
 	question_id: string
 	page_order: number
-	overlay_type: OverlayType
 	sentiment: string | null
-	payload: AnnotationPayload
 	bbox: [number, number, number, number]
 	parent_annotation_id: string | null
 	/** FK to the first token in this annotation's span (null for older enrichment runs). */
@@ -97,6 +96,16 @@ export type StudentPaperAnnotation = {
 	/** FK to the last token in this annotation's span (null for older enrichment runs). */
 	anchor_token_end_id: string | null
 }
+
+/**
+ * Discriminated union on `overlay_type`.
+ * Checking `a.overlay_type === "mark"` narrows `a.payload` to `MarkPayload`.
+ */
+export type StudentPaperAnnotation =
+	| (AnnotationBase & { overlay_type: "mark"; payload: MarkPayload })
+	| (AnnotationBase & { overlay_type: "tag"; payload: TagPayload })
+	| (AnnotationBase & { overlay_type: "comment"; payload: CommentPayload })
+	| (AnnotationBase & { overlay_type: "chain"; payload: ChainPayload })
 
 export type GetJobAnnotationsResult =
 	| { ok: true; annotations: StudentPaperAnnotation[] }

@@ -1,7 +1,9 @@
 import type { TokenAlignment } from "@/lib/marking/token-alignment"
+import type { GradingResult } from "@/lib/marking/types"
 import type { PageToken } from "@/lib/marking/types"
 import type { Node as PmNode } from "@tiptap/pm/model"
 import { describe, expect, it } from "vitest"
+import { buildAnnotatedDoc } from "../build-doc"
 import { deriveAnnotationsFromDoc } from "../use-derived-annotations"
 
 // ─── Helpers to build mock PM nodes ────────────────────────────────────────
@@ -441,5 +443,140 @@ describe("deriveAnnotationsFromDoc", () => {
 
 		const result = deriveAnnotationsFromDoc(doc, alignments, tokensMap)
 		expect(result).toHaveLength(0)
+	})
+})
+
+// ─── Integration test: real tiptap schema ──────────────────────────────────
+// Validates that PM's node.forEach childOffset semantics match our
+// char-offset assumption — the mock tests can't catch this.
+
+describe("deriveAnnotationsFromDoc (real PM schema)", () => {
+	it("round-trips: buildAnnotatedDoc → PM parse → derive matches original annotation", async () => {
+		// Dynamically import tiptap to build a real schema + doc
+		const { getSchema } = await import("@tiptap/core")
+		const Document = (await import("@tiptap/extension-document")).default
+		const Text = (await import("@tiptap/extension-text")).default
+		const HardBreak = (await import("@tiptap/extension-hard-break")).default
+		const { QuestionAnswerNode } = await import("../question-answer-node")
+		const { annotationMarks } = await import("../annotation-marks")
+
+		const schema = getSchema([
+			Document.extend({ content: "questionAnswer+" }),
+			Text,
+			HardBreak,
+			QuestionAnswerNode,
+			...annotationMarks,
+		])
+
+		// Build a JSON doc with one question that has a tick mark on "answer"
+		const gradingResults: GradingResult[] = [
+			{
+				question_id: "q1",
+				question_number: "1",
+				question_text: "What is the answer?",
+				student_answer: "The answer is correct",
+				marking_method: "point_based",
+				awarded_score: 1,
+				max_score: 1,
+				llm_reasoning: "",
+				feedback_summary: "",
+			},
+		]
+
+		const marks = new Map([
+			[
+				"q1",
+				[
+					{
+						from: 4,
+						to: 10,
+						type: "tick" as const,
+						sentiment: "positive" as const,
+						attrs: { reason: "correct key term" },
+						annotationId: "ann-1",
+					},
+				],
+			],
+		])
+
+		const jsonDoc = buildAnnotatedDoc(gradingResults, marks)
+		const pmDoc = schema.nodeFromJSON(jsonDoc)
+
+		// The answer "The answer is correct" has these tokens:
+		// "The" → 0-3, "answer" → 4-10, "is" → 11-13, "correct" → 14-21
+		const alignment: TokenAlignment = {
+			tokenMap: {
+				t1: { start: 0, end: 3 },
+				t2: { start: 4, end: 10 },
+				t3: { start: 11, end: 13 },
+				t4: { start: 14, end: 21 },
+			},
+			confidence: 1.0,
+		}
+
+		const tokens: PageToken[] = [
+			{
+				id: "t1",
+				text_raw: "The",
+				text_corrected: "The",
+				bbox: [10, 10, 20, 40],
+				page_order: 1,
+				para_index: 0,
+				line_index: 0,
+				word_index: 0,
+				confidence: 0.99,
+				question_id: "q1",
+			},
+			{
+				id: "t2",
+				text_raw: "answer",
+				text_corrected: "answer",
+				bbox: [10, 50, 20, 100],
+				page_order: 1,
+				para_index: 0,
+				line_index: 0,
+				word_index: 1,
+				confidence: 0.99,
+				question_id: "q1",
+			},
+			{
+				id: "t3",
+				text_raw: "is",
+				text_corrected: "is",
+				bbox: [10, 110, 20, 130],
+				page_order: 1,
+				para_index: 0,
+				line_index: 0,
+				word_index: 2,
+				confidence: 0.99,
+				question_id: "q1",
+			},
+			{
+				id: "t4",
+				text_raw: "correct",
+				text_corrected: "correct",
+				bbox: [10, 140, 20, 200],
+				page_order: 1,
+				para_index: 0,
+				line_index: 0,
+				word_index: 3,
+				confidence: 0.99,
+				question_id: "q1",
+			},
+		]
+
+		const alignments = new Map([["q1", alignment]])
+		const tokensMap = new Map([["q1", tokens]])
+
+		const result = deriveAnnotationsFromDoc(pmDoc, alignments, tokensMap)
+
+		// Should produce exactly one annotation for the tick on "answer"
+		expect(result).toHaveLength(1)
+		expect(result[0].id).toBe("ann-1")
+		expect(result[0].overlay_type).toBe("mark")
+		expect(result[0].anchor_token_start_id).toBe("t2")
+		expect(result[0].anchor_token_end_id).toBe("t2")
+		expect(result[0].bbox).toEqual([10, 50, 20, 100])
+		expect((result[0].payload as { signal: string }).signal).toBe("tick")
 	})
 })

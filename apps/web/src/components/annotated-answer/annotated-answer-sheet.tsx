@@ -27,7 +27,7 @@ import {
 	Underline,
 	X,
 } from "lucide-react"
-import { useEffect, useMemo } from "react"
+import { useCallback, useMemo } from "react"
 import "./annotation-marks.css"
 import { annotationMarks } from "./annotation-marks"
 import { buildAnnotatedDoc } from "./build-doc"
@@ -170,17 +170,21 @@ export function AnnotatedAnswerSheet({
 		[doc],
 	)
 
-	// Derive annotations from PM state for the scan overlay
-	const derivedAnnotations = useDerivedAnnotations(
+	// Stable callback ref — avoids re-subscribing the transaction listener
+	// every time the parent re-renders with a new callback identity.
+	const stableOnDerived = useCallback(
+		(anns: StudentPaperAnnotation[]) => onDerivedAnnotations?.(anns),
+		[onDerivedAnnotations],
+	)
+
+	// Derive annotations from PM state for the scan overlay.
+	// Calls stableOnDerived synchronously inside the transaction handler.
+	useDerivedAnnotations(
 		editor,
 		alignmentByQuestion,
 		tokensByQuestion,
+		stableOnDerived,
 	)
-
-	// Notify parent when derived annotations change
-	useEffect(() => {
-		onDerivedAnnotations?.(derivedAnnotations)
-	}, [derivedAnnotations, onDerivedAnnotations])
 
 	if (!editor) return null
 

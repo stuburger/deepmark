@@ -13,12 +13,9 @@ import {
 	annotationColor,
 } from "@/lib/marking/bounding-box"
 import type {
-	ChainPayload,
 	HandwritingAnalysis,
-	MarkPayload,
 	PageToken,
 	StudentPaperAnnotation,
-	TagPayload,
 } from "@/lib/marking/types"
 import { cn } from "@/lib/utils"
 import { Minus, Plus, RotateCcw } from "lucide-react"
@@ -247,15 +244,18 @@ export function BoundingBoxViewer({
 												style={{ pointerEvents: "none" }}
 											>
 												{annotations
-													.filter((a) => a.overlay_type === "chain")
+													.filter(
+														(
+															a,
+														): a is Extract<
+															StudentPaperAnnotation,
+															{ overlay_type: "chain" }
+														> => a.overlay_type === "chain",
+													)
 													.map((a) => (
 														<ChainOverlay
 															key={a.id}
-															annotation={
-																a as StudentPaperAnnotation & {
-																	payload: ChainPayload
-																}
-															}
+															annotation={a}
 															scaleX={scaleX}
 															scaleY={scaleY}
 														/>
@@ -273,21 +273,31 @@ export function BoundingBoxViewer({
 												style={{ pointerEvents: "none" }}
 											>
 												{annotations
-													.filter((a) => a.overlay_type === "mark")
+													.filter(
+														(
+															a,
+														): a is Extract<
+															StudentPaperAnnotation,
+															{ overlay_type: "mark" }
+														> => a.overlay_type === "mark",
+													)
 													.map((a) => (
 														<MarkOverlay
 															key={a.id}
-															annotation={
-																a as StudentPaperAnnotation & {
-																	payload: MarkPayload
-																}
-															}
+															annotation={a}
 															scaleX={scaleX}
 															scaleY={scaleY}
 														/>
 													))}
 												{annotations
-													.filter((a) => a.overlay_type === "tag")
+													.filter(
+														(
+															a,
+														): a is Extract<
+															StudentPaperAnnotation,
+															{ overlay_type: "tag" }
+														> => a.overlay_type === "tag",
+													)
 													.map((a) => {
 														const parent = a.parent_annotation_id
 															? annotations.find(
@@ -297,11 +307,7 @@ export function BoundingBoxViewer({
 														return (
 															<TagOverlay
 																key={a.id}
-																annotation={
-																	a as StudentPaperAnnotation & {
-																		payload: TagPayload
-																	}
-																}
+																annotation={a}
 																parentBbox={parent?.bbox}
 																scaleX={scaleX}
 																scaleY={scaleY}
@@ -315,11 +321,12 @@ export function BoundingBoxViewer({
 														const parent = annotations.find(
 															(a) => a.id === hoveredParentId,
 														)
-														if (!parent) return null
+														if (!parent || parent.overlay_type !== "mark")
+															return null
 														const [pyMin, pxMin, pyMax, pxMax] = parent.bbox
 														const sz = overlayUnit(scaleY)
 														const color =
-															(parent.payload as MarkPayload).signal === "cross"
+															parent.payload.signal === "cross"
 																? "#ef4444"
 																: "#3b82f6"
 														return (

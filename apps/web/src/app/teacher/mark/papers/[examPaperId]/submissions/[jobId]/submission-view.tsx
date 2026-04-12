@@ -72,6 +72,13 @@ export function SubmissionView({
 	const [sheetAnnotations, setSheetAnnotations] = useState<
 		StudentPaperAnnotation[]
 	>([])
+
+	// Clear stale derived annotations when leaving sheet view so the scan
+	// doesn't flash old data when switching back later.
+	const handleViewChange = useCallback((view: ResultsView) => {
+		if (view !== "sheet") setSheetAnnotations([])
+		setResultsView(view)
+	}, [])
 	const [activeQuestionNumber, setActiveQuestionNumber] = useQueryState(
 		"question",
 		parseAsString,
@@ -294,7 +301,7 @@ export function SubmissionView({
 							overridesByQuestionId={overridesByQuestionId}
 							onOverrideChange={isEditing ? handleOverrideChange : undefined}
 							view={resultsView}
-							onViewChange={setResultsView}
+							onViewChange={handleViewChange}
 							onDerivedAnnotations={setSheetAnnotations}
 						/>
 					</TabsContent>
@@ -334,7 +341,7 @@ export function SubmissionView({
 						overridesByQuestionId={overridesByQuestionId}
 						onOverrideChange={isEditing ? handleOverrideChange : undefined}
 						view={resultsView}
-						onViewChange={setResultsView}
+						onViewChange={handleViewChange}
 						onDerivedAnnotations={setSheetAnnotations}
 					/>
 				</ResizablePanel>

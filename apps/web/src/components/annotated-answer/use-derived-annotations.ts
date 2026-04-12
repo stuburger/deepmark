@@ -1,88 +1,14 @@
 "use client"
 
+import { TIPTAP_TO_ENTRY } from "@/lib/marking/mark-registry"
 import {
 	type TokenAlignment,
 	charRangeToTokens,
 } from "@/lib/marking/token-alignment"
-import type {
-	AnnotationPayload,
-	MarkPayload,
-	OverlayType,
-	PageToken,
-	StudentPaperAnnotation,
-} from "@/lib/marking/types"
+import type { PageToken, StudentPaperAnnotation } from "@/lib/marking/types"
 import type { Editor } from "@tiptap/core"
 import type { Node as PmNode } from "@tiptap/pm/model"
-import { useEffect, useState } from "react"
-
-// ─── Tiptap mark name → annotation fields ──────────────────────────────────
-
-type MarkMapping = {
-	overlayType: OverlayType
-	buildPayload: (attrs: Record<string, unknown>) => AnnotationPayload
-}
-
-export const TIPTAP_MARK_TO_ANNOTATION: Record<string, MarkMapping> = {
-	tick: {
-		overlayType: "mark",
-		buildPayload: (a) =>
-			({ _v: 1, signal: "tick", reason: a.reason ?? "" }) as MarkPayload,
-	},
-	cross: {
-		overlayType: "mark",
-		buildPayload: (a) =>
-			({ _v: 1, signal: "cross", reason: a.reason ?? "" }) as MarkPayload,
-	},
-	annotationUnderline: {
-		overlayType: "mark",
-		buildPayload: (a) =>
-			({
-				_v: 1,
-				signal: "underline",
-				reason: a.reason ?? "",
-			}) as MarkPayload,
-	},
-	doubleUnderline: {
-		overlayType: "mark",
-		buildPayload: (a) =>
-			({
-				_v: 1,
-				signal: "double_underline",
-				reason: a.reason ?? "",
-			}) as MarkPayload,
-	},
-	box: {
-		overlayType: "mark",
-		buildPayload: (a) =>
-			({ _v: 1, signal: "box", reason: a.reason ?? "" }) as MarkPayload,
-	},
-	circle: {
-		overlayType: "mark",
-		buildPayload: (a) =>
-			({ _v: 1, signal: "circle", reason: a.reason ?? "" }) as MarkPayload,
-	},
-	aoTag: {
-		overlayType: "tag",
-		buildPayload: (a) =>
-			({
-				_v: 1,
-				category: a.category ?? "AO1",
-				display: a.display ?? "AO1",
-				awarded: a.awarded ?? true,
-				quality: a.quality ?? "valid",
-				reason: a.reason ?? "",
-			}) as AnnotationPayload,
-	},
-	chain: {
-		overlayType: "chain",
-		buildPayload: (a) =>
-			({
-				_v: 1,
-				chainType: a.chainType ?? "reasoning",
-				phrase: a.phrase ?? "",
-			}) as AnnotationPayload,
-	},
-}
+import { useEffect, useRef } from "react"
 
 // ─── Pure derivation function (testable without React/tiptap) ──────────────
 
@@ -100,7 +26,7 @@ export function deriveAnnotationsFromDoc(
 	tokensByQuestion: Map<string, PageToken[]>,
 ): StudentPaperAnnotation[] {
 	const annotations: StudentPaperAnnotation[] = []
-	let idCounter = 0
+	const seenKeys = new Set<string>()
 
 	doc.descendants((node, pos) => {
 		if (node.type.name !== "questionAnswer") return
@@ -117,8 +43,8 @@ export function deriveAnnotationsFromDoc(
 			if (!child.isText || !child.marks.length) return
 
 			for (const mark of child.marks) {
-				const mapping = TIPTAP_MARK_TO_ANNOTATION[mark.type.name]
-				if (!mapping) continue
+				const entry = TIPTAP_TO_ENTRY.get(mark.type.name)
+				if (!entry) continue
 
 				const attrs = mark.attrs as Record<string, unknown>
 				const charFrom = childOffset
@@ -127,33 +53,29 @@ export function deriveAnnotationsFromDoc(
 				const span = charRangeToTokens(charFrom, charTo, alignment, tokens)
 				if (!span) continue
 
-				// Use annotationId from AI marks, or generate a deterministic ID
 				const existingId = attrs.annotationId as string | null
-				const id =
-					existingId ??
-					`derived-${questionId}-${mark.type.name}-${charFrom}-${charTo}`
-
-				// Deduplicate: same key shouldn't appear twice
 				const key = `${questionId}-${mark.type.name}-${charFrom}-${charTo}`
-				if (annotations.some((a) => a.id === key || a.id === existingId)) {
-					continue
-				}
 
-				idCounter++
+				// Deduplicate — O(1) lookup via Set
+				const dedupeKey = existingId ?? key
+				if (seenKeys.has(dedupeKey)) continue
+				seenKeys.add(dedupeKey)
 
+				// Registry guarantees overlayType and buildPayload are paired correctly,
+				// so the cast to the discriminated union is safe at this construction site.
 				annotations.push({
-					id: existingId ?? key,
+					id: dedupeKey,
 					enrichment_run_id: existingId ? "ai" : "teacher",
 					question_id: questionId,
 					page_order: span.pageOrder,
-					overlay_type: mapping.overlayType,
+					overlay_type: entry.overlayType,
 					sentiment: (attrs.sentiment as string) ?? "neutral",
-					payload: mapping.buildPayload(attrs),
+					payload: entry.buildPayload(attrs),
 					bbox: span.bbox,
 					parent_annotation_id: null,
 					anchor_token_start_id: span.startTokenId,
 					anchor_token_end_id: span.endTokenId,
-				})
+				} as StudentPaperAnnotation)
 			}
 		})
 	})
@@ -163,19 +85,27 @@ export function deriveAnnotationsFromDoc(
 
 // ─── React hook ────────────────────────────────────────────────────────────
 
+/** Compact fingerprint that captures identity + payload-relevant attrs. */
+function annotationFingerprint(a: StudentPaperAnnotation): string {
+	return `${a.id}|${a.overlay_type}|${a.sentiment}|${JSON.stringify(a.payload)}`
+}
+
 /**
- * Derives StudentPaperAnnotation[] from the current PM editor state.
- * Recomputes on every transaction (mark add/remove, undo/redo, etc).
+ * Derives StudentPaperAnnotation[] from the current PM editor state and
+ * calls `onChange` synchronously whenever the derived set changes.
  *
- * Returns a stable array reference when marks haven't changed (compared
- * by a deterministic key string to avoid unnecessary re-renders).
+ * Uses a ref-based fingerprint to avoid unnecessary callbacks. The callback
+ * fires inside the transaction handler — no render-behind delay.
  */
 export function useDerivedAnnotations(
 	editor: Editor | null,
 	alignmentByQuestion: Map<string, TokenAlignment>,
 	tokensByQuestion: Map<string, PageToken[]>,
-): StudentPaperAnnotation[] {
-	const [annotations, setAnnotations] = useState<StudentPaperAnnotation[]>([])
+	onChange: (annotations: StudentPaperAnnotation[]) => void,
+): void {
+	const prevFingerprintRef = useRef("")
+	const onChangeRef = useRef(onChange)
+	onChangeRef.current = onChange
 
 	useEffect(() => {
 		if (!editor) return
@@ -187,19 +117,11 @@ export function useDerivedAnnotations(
 				tokensByQuestion,
 			)
 
-			// Only update state if the set of annotations actually changed
-			setAnnotations((prev) => {
-				const prevKey = prev
-					.map((a) => a.id)
-					.sort()
-					.join(",")
-				const newKey = derived
-					.map((a) => a.id)
-					.sort()
-					.join(",")
-				if (prevKey === newKey) return prev
-				return derived
-			})
+			const fp = derived.map(annotationFingerprint).sort().join("\n")
+			if (fp === prevFingerprintRef.current) return
+
+			prevFingerprintRef.current = fp
+			onChangeRef.current(derived)
 		}
 
 		// Derive once on mount (for initial AI marks)
@@ -210,6 +132,4 @@ export function useDerivedAnnotations(
 			editor.off("transaction", handleTransaction)
 		}
 	}, [editor, alignmentByQuestion, tokensByQuestion])
-
-	return annotations
 }

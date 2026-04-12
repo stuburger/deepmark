@@ -1,13 +1,7 @@
 "use client"
 
 import { bboxToPercentStyle } from "@/lib/marking/bounding-box"
-import type {
-	ChainPayload,
-	CommentPayload,
-	MarkPayload,
-	StudentPaperAnnotation,
-	TagPayload,
-} from "@/lib/marking/types"
+import type { StudentPaperAnnotation } from "@/lib/marking/types"
 import { cn } from "@/lib/utils"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { createPortal } from "react-dom"
@@ -67,14 +61,25 @@ function expandedBbox(
 
 // ─── Popover content by type ─────────────────────────────────────────────────
 
+type MarkAnnotation = Extract<StudentPaperAnnotation, { overlay_type: "mark" }>
+type TagAnnotation = Extract<StudentPaperAnnotation, { overlay_type: "tag" }>
+type ChainAnnotation = Extract<
+	StudentPaperAnnotation,
+	{ overlay_type: "chain" }
+>
+type CommentAnnotation = Extract<
+	StudentPaperAnnotation,
+	{ overlay_type: "comment" }
+>
+
 function MarkPopoverContent({
 	annotation,
 	linked,
 }: {
-	annotation: StudentPaperAnnotation
+	annotation: MarkAnnotation
 	linked: StudentPaperAnnotation[]
 }) {
-	const payload = annotation.payload as MarkPayload
+	const payload = annotation.payload
 	const tags = linked.filter((a) => a.overlay_type === "tag")
 	const comments = linked.filter((a) => a.overlay_type === "comment")
 
@@ -120,14 +125,12 @@ function TagPopoverContent({
 	annotation,
 	parentAnnotation,
 }: {
-	annotation: StudentPaperAnnotation
+	annotation: TagAnnotation
 	parentAnnotation: StudentPaperAnnotation | undefined
 }) {
-	const payload = annotation.payload as TagPayload
+	const payload = annotation.payload
 	const parentPayload =
-		parentAnnotation?.overlay_type === "mark"
-			? (parentAnnotation.payload as MarkPayload)
-			: null
+		parentAnnotation?.overlay_type === "mark" ? parentAnnotation.payload : null
 
 	const parentSymbol = parentPayload
 		? (SIGNAL_SYMBOLS[parentPayload.signal] ?? "")
@@ -165,9 +168,9 @@ function TagPopoverContent({
 function ChainPopoverContent({
 	annotation,
 }: {
-	annotation: StudentPaperAnnotation
+	annotation: ChainAnnotation
 }) {
-	const payload = annotation.payload as ChainPayload
+	const payload = annotation.payload
 	const title = CHAIN_LABELS[payload.chainType] ?? "Chain"
 
 	return (
@@ -203,12 +206,12 @@ function PopoverHeader({
 	)
 }
 
-function TagList({ tags }: { tags: StudentPaperAnnotation[] }) {
+function TagList({ tags }: { tags: TagAnnotation[] }) {
 	if (tags.length === 0) return null
 	return (
 		<div className="space-y-1">
 			{tags.map((t) => {
-				const tp = t.payload as TagPayload
+				const tp = t.payload
 				return (
 					<div key={t.id} className="flex items-start gap-1.5">
 						<span
@@ -228,7 +231,7 @@ function TagList({ tags }: { tags: StudentPaperAnnotation[] }) {
 	)
 }
 
-function CommentList({ comments }: { comments: StudentPaperAnnotation[] }) {
+function CommentList({ comments }: { comments: CommentAnnotation[] }) {
 	if (comments.length === 0) return null
 	return (
 		<>
@@ -237,14 +240,14 @@ function CommentList({ comments }: { comments: StudentPaperAnnotation[] }) {
 					key={c.id}
 					className="text-xs leading-snug text-muted-foreground border-l-2 border-zinc-300 dark:border-zinc-600 pl-2"
 				>
-					{(c.payload as CommentPayload).text}
+					{c.payload.text}
 				</p>
 			))}
 		</>
 	)
 }
 
-function tagColorClass(tp: TagPayload): string {
+function tagColorClass(tp: TagAnnotation["payload"]): string {
 	if (tp.quality === "strong" || tp.quality === "valid")
 		return "text-green-700 bg-green-50 border-green-200 dark:text-green-400 dark:bg-green-950 dark:border-green-800"
 	if (tp.quality === "partial")

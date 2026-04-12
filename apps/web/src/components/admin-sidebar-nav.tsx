@@ -9,6 +9,7 @@ import {
 	SidebarMenuItem,
 } from "@/components/ui/sidebar"
 import {
+	BarChart3,
 	BookOpen,
 	GraduationCap,
 	LayoutDashboard,
@@ -21,6 +22,7 @@ const navItems = [
 	{ href: "/admin/overview", label: "Overview", icon: LayoutDashboard },
 	{ href: "/admin/questions", label: "Questions", icon: BookOpen },
 	{ href: "/admin/exemplars", label: "Exemplar Answers", icon: GraduationCap },
+	{ href: "/admin/usage", label: "Usage", icon: BarChart3 },
 	{ href: "/admin/settings", label: "Settings", icon: Settings },
 ]
 

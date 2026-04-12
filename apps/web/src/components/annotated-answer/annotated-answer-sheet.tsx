@@ -1,11 +1,6 @@
 "use client"
 
-import {
-	type TextMark,
-	type TokenAlignment,
-	alignTokensToAnswer,
-	deriveTextMarks,
-} from "@/lib/marking/token-alignment"
+import type { TextMark, TokenAlignment } from "@/lib/marking/token-alignment"
 import type {
 	GradingResult,
 	PageToken,
@@ -92,55 +87,17 @@ const MARK_ACTIONS: MarkAction[] = [
 
 export function AnnotatedAnswerSheet({
 	gradingResults,
-	annotations,
-	pageTokens,
+	marksByQuestion,
+	alignmentByQuestion,
+	tokensByQuestion,
 	onDerivedAnnotations,
 }: {
 	gradingResults: GradingResult[]
-	annotations: StudentPaperAnnotation[]
-	pageTokens: PageToken[]
+	marksByQuestion: Map<string, TextMark[]>
+	alignmentByQuestion: Map<string, TokenAlignment>
+	tokensByQuestion: Map<string, PageToken[]>
 	onDerivedAnnotations?: (annotations: StudentPaperAnnotation[]) => void
 }) {
-	// Compute marks + alignment maps per question
-	const { marksByQuestion, alignmentByQuestion, tokensByQuestion } =
-		useMemo(() => {
-			const marks = new Map<string, TextMark[]>()
-			const alignments = new Map<string, TokenAlignment>()
-			const tokensMap = new Map<string, PageToken[]>()
-
-			for (const r of gradingResults) {
-				if (r.marking_method === "deterministic") continue
-
-				const qTokens = pageTokens.filter(
-					(t) => t.question_id === r.question_id,
-				)
-				if (qTokens.length === 0) continue
-
-				tokensMap.set(r.question_id, qTokens)
-
-				const qAnnotations = annotations.filter(
-					(a) => a.question_id === r.question_id,
-				)
-
-				const alignment = alignTokensToAnswer(r.student_answer, qTokens)
-				if (Object.keys(alignment.tokenMap).length === 0) continue
-
-				alignments.set(r.question_id, alignment)
-
-				if (qAnnotations.length === 0) continue
-				const derived = deriveTextMarks(qAnnotations, alignment)
-				if (derived.length > 0) {
-					marks.set(r.question_id, derived)
-				}
-			}
-
-			return {
-				marksByQuestion: marks,
-				alignmentByQuestion: alignments,
-				tokensByQuestion: tokensMap,
-			}
-		}, [gradingResults, annotations, pageTokens])
-
 	// Build PM document
 	const doc = useMemo(
 		() => buildAnnotatedDoc(gradingResults, marksByQuestion),

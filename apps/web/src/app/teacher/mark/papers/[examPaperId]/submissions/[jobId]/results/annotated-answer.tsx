@@ -3,12 +3,8 @@
 import {
 	type TextMark,
 	type TextSegment,
-	alignTokensToAnswer,
-	deriveTextMarks,
 	splitIntoSegments,
 } from "@/lib/marking/token-alignment"
-import type { ChainPayload, MarkPayload, TagPayload } from "@/lib/marking/types"
-import type { PageToken, StudentPaperAnnotation } from "@/lib/marking/types"
 import { cn } from "@/lib/utils"
 import { useMemo } from "react"
 
@@ -121,26 +117,16 @@ function AnnotatedSpan({ segment }: { segment: TextSegment }) {
 
 export function AnnotatedAnswer({
 	answer,
-	tokens,
-	annotations,
+	marks,
 }: {
 	answer: string
-	tokens: PageToken[]
-	annotations: StudentPaperAnnotation[]
+	/** Pre-computed text marks from the shared alignment hook */
+	marks: TextMark[]
 }) {
-	const segments = useMemo(() => {
-		if (tokens.length === 0 || annotations.length === 0) return null
-
-		const alignment = alignTokensToAnswer(answer, tokens)
-		if (Object.keys(alignment.tokenMap).length === 0) return null
-
-		const marks = deriveTextMarks(annotations, alignment)
-		if (marks.length === 0) return null
-
-		return splitIntoSegments(answer, marks)
-	}, [answer, tokens, annotations])
-
-	if (!segments) return null
+	const segments = useMemo(
+		() => splitIntoSegments(answer, marks),
+		[answer, marks],
+	)
 
 	return (
 		<div className="text-base whitespace-pre-wrap">

@@ -2,9 +2,9 @@
 
 import { McqOptions } from "@/components/mcq-options"
 import { Progress } from "@/components/ui/progress"
+import type { TextMark } from "@/lib/marking/token-alignment"
 import type {
 	GradingResult,
-	PageToken,
 	StudentPaperAnnotation,
 	TeacherOverride,
 	UpsertTeacherOverrideInput,
@@ -22,8 +22,8 @@ export function GradingResultCard({
 	currentAnswer,
 	isActive = false,
 	onAnswerSaved,
+	questionMarks,
 	annotations = [],
-	questionTokens = [],
 	override,
 	onOverrideChange,
 }: {
@@ -32,8 +32,9 @@ export function GradingResultCard({
 	currentAnswer: string
 	isActive?: boolean
 	onAnswerSaved: (questionId: string, text: string) => void
+	/** Pre-computed text marks from alignment (avoids recomputing per card) */
+	questionMarks?: TextMark[]
 	annotations?: StudentPaperAnnotation[]
-	questionTokens?: PageToken[]
 	override?: TeacherOverride
 	onOverrideChange?: (input: UpsertTeacherOverrideInput | null) => void
 }) {
@@ -109,12 +110,8 @@ export function GradingResultCard({
 						initialText={currentAnswer}
 						onSaved={(newText) => onAnswerSaved(r.question_id, newText)}
 						readOnlyContent={
-							questionTokens.length > 0 && annotations.length > 0 ? (
-								<AnnotatedAnswer
-									answer={currentAnswer}
-									tokens={questionTokens}
-									annotations={annotations}
-								/>
+							questionMarks && questionMarks.length > 0 ? (
+								<AnnotatedAnswer answer={currentAnswer} marks={questionMarks} />
 							) : undefined
 						}
 					/>

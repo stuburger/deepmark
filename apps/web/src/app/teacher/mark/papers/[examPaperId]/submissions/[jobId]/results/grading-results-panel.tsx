@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
+import { useQuestionAlignments } from "@/lib/marking/token-alignment"
 import type {
 	GradingResult,
 	PageToken,
@@ -71,6 +72,10 @@ export function GradingResultsPanel({
 		data.total_max > 0
 			? Math.round((effectiveTotalAwarded / data.total_max) * 100)
 			: 0
+
+	// Compute alignment data once — shared by both card and sheet views
+	const { marksByQuestion, alignmentByQuestion, tokensByQuestion } =
+		useQuestionAlignments(data.grading_results, annotations, pageTokens)
 
 	// Only show the sheet toggle when we have annotations with token anchors
 	const hasAnnotationsWithAnchors = annotations.some(
@@ -144,8 +149,9 @@ export function GradingResultsPanel({
 				) : view === "sheet" && hasAnnotationsWithAnchors ? (
 					<AnnotatedAnswerSheet
 						gradingResults={data.grading_results}
-						annotations={annotations}
-						pageTokens={pageTokens}
+						marksByQuestion={marksByQuestion}
+						alignmentByQuestion={alignmentByQuestion}
+						tokensByQuestion={tokensByQuestion}
 						onDerivedAnnotations={onDerivedAnnotations}
 					/>
 				) : (
@@ -164,11 +170,9 @@ export function GradingResultsPanel({
 									currentAnswer={answers[r.question_id] ?? ""}
 									isActive={activeQuestionNumber === r.question_number}
 									onAnswerSaved={onAnswerSaved}
+									questionMarks={marksByQuestion.get(r.question_id)}
 									annotations={annotations.filter(
 										(a) => a.question_id === r.question_id,
-									)}
-									questionTokens={pageTokens.filter(
-										(t) => t.question_id === r.question_id,
 									)}
 									override={overridesByQuestionId?.get(r.question_id)}
 									onOverrideChange={

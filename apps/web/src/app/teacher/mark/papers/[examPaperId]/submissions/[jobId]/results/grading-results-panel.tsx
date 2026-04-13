@@ -7,7 +7,6 @@ import {
 	GradingDataProvider,
 } from "@/components/annotated-answer/grading-data-context"
 import { Badge } from "@/components/ui/badge"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { useQuestionAlignments } from "@/lib/marking/token-alignment"
 import type {
@@ -42,7 +41,6 @@ export function GradingResultsPanel({
 	overridesByQuestionId,
 	onOverrideChange,
 	onDerivedAnnotations,
-	hoveredTokenId,
 	onTokenHighlight,
 }: {
 	jobId: string
@@ -58,7 +56,6 @@ export function GradingResultsPanel({
 		input: UpsertTeacherOverrideInput | null,
 	) => void
 	onDerivedAnnotations?: (annotations: StudentPaperAnnotation[]) => void
-	hoveredTokenId?: string | null
 	onTokenHighlight?: (tokenIds: string[] | null) => void
 }) {
 	// Compute effective totals using overrides where present
@@ -117,72 +114,47 @@ export function GradingResultsPanel({
 	)
 
 	return (
-		<div className="space-y-5">
-			{/* Score summary */}
-			<Card>
-				<CardHeader className="pb-3">
-					<CardTitle className="flex items-center justify-between text-base">
-						<span>Total score</span>
-						<Badge
-							variant={scoreBadgeVariant(effectiveTotalAwarded, data.total_max)}
-							className="text-sm px-2.5 py-0.5"
-						>
-							{effectiveTotalAwarded} / {data.total_max}
-						</Badge>
-					</CardTitle>
-				</CardHeader>
-				<CardContent>
-					<Progress value={scorePercent} className="h-2.5" />
-					<div className="mt-1.5 flex items-center justify-between">
-						{hasOverrides && (
-							<p className="text-[10px] text-blue-500">
-								Includes teacher adjustments (AI: {data.total_awarded}/
-								{data.total_max})
-							</p>
-						)}
-						<p className="text-xs text-muted-foreground text-right ml-auto">
-							{scorePercent}%
-						</p>
-					</div>
-				</CardContent>
-			</Card>
-
-			{/* Examiner summary */}
-			{data.examiner_summary && (
-				<Card>
-					<CardHeader className="pb-2">
-						<CardTitle className="text-sm">Examiner Summary</CardTitle>
-					</CardHeader>
-					<CardContent>
-						<p className="text-sm text-muted-foreground whitespace-pre-line leading-relaxed">
-							{data.examiner_summary}
-						</p>
-					</CardContent>
-				</Card>
-			)}
-
-			{/* Question breakdown — always the answer sheet */}
-			<div>
-				<h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-3">
-					Question breakdown
-				</h2>
-				{data.grading_results.length === 0 ? (
-					<p className="text-sm text-muted-foreground">
-						No questions were graded.
-					</p>
-				) : (
-					<GradingDataProvider value={ctxValue}>
-						<AnnotatedAnswerSheet
-							doc={doc}
-							alignmentByQuestion={alignmentByQuestion}
-							tokensByQuestion={tokensByQuestion}
-							onDerivedAnnotations={onDerivedAnnotations}
-							hoveredTokenId={hoveredTokenId}
-							onTokenHighlight={onTokenHighlight}
-						/>
-					</GradingDataProvider>
+		<div className="space-y-4">
+			{/* Compact score bar */}
+			<div className="flex items-center gap-3 px-1">
+				<Badge
+					variant={scoreBadgeVariant(effectiveTotalAwarded, data.total_max)}
+					className="text-xs px-2 py-0.5 shrink-0"
+				>
+					{effectiveTotalAwarded} / {data.total_max}
+				</Badge>
+				<Progress value={scorePercent} className="h-1.5 flex-1" />
+				<span className="text-xs text-muted-foreground tabular-nums shrink-0">
+					{scorePercent}%
+				</span>
+				{hasOverrides && (
+					<span className="text-[10px] text-blue-500 shrink-0">Adjusted</span>
 				)}
 			</div>
+
+			{/* Examiner summary — compact */}
+			{data.examiner_summary && (
+				<p className="text-xs text-muted-foreground leading-relaxed px-1">
+					{data.examiner_summary}
+				</p>
+			)}
+
+			{/* Answer sheet — the document */}
+			{data.grading_results.length === 0 ? (
+				<p className="text-sm text-muted-foreground px-1">
+					No questions were graded.
+				</p>
+			) : (
+				<GradingDataProvider value={ctxValue}>
+					<AnnotatedAnswerSheet
+						doc={doc}
+						alignmentByQuestion={alignmentByQuestion}
+						tokensByQuestion={tokensByQuestion}
+						onDerivedAnnotations={onDerivedAnnotations}
+						onTokenHighlight={onTokenHighlight}
+					/>
+				</GradingDataProvider>
+			)}
 		</div>
 	)
 }

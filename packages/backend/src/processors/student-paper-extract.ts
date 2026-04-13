@@ -13,6 +13,7 @@ import {
 	markJobFailed,
 	parseSqsJobId,
 } from "@/lib/infra/sqs-job-runner"
+import { alignAndPersistTokenOffsets } from "@/lib/scan-extraction/align-tokens-to-answer"
 import { runVisionOcr } from "@/lib/scan-extraction/cloud-vision-ocr"
 import {
 	type PageMimeType,
@@ -250,6 +251,16 @@ export async function handler(
 				pages: sortedPages,
 				s3Bucket: bucket,
 				tokens: correctedTokens,
+				jobId,
+				llm,
+			})
+
+			// Phase 2c — LLM-powered token-to-answer mapping.
+			// Sends each question's tokens + student answer + page image to the LLM
+			// to map every OCR token to its corresponding answer word.
+			await alignAndPersistTokenOffsets({
+				extractedAnswers: extraction.answers,
+				pages: sortedPages,
 				jobId,
 				llm,
 			})

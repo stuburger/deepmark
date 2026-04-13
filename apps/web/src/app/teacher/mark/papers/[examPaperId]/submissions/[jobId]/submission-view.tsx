@@ -73,7 +73,6 @@ export function SubmissionView({
 	>([])
 
 	// Hover word linking — bidirectional between scan and PM editor
-	const [hoveredTokenId, setHoveredTokenId] = useState<string | null>(null)
 	const [highlightedTokenIds, setHighlightedTokenIds] =
 		useState<Set<string> | null>(null)
 	const handleTokenHighlight = useCallback((tokenIds: string[] | null) => {
@@ -307,7 +306,6 @@ export function SubmissionView({
 							overridesByQuestionId={overridesByQuestionId}
 							onOverrideChange={isEditing ? handleOverrideChange : undefined}
 							onDerivedAnnotations={setSheetAnnotations}
-							hoveredTokenId={hoveredTokenId}
 							onTokenHighlight={handleTokenHighlight}
 						/>
 					</TabsContent>
@@ -319,7 +317,7 @@ export function SubmissionView({
 				orientation="horizontal"
 				className="flex-1 min-h-0 hidden md:flex"
 			>
-				<ResizablePanel defaultSize={55} minSize={35}>
+				<ResizablePanel defaultSize={30} minSize={20}>
 					<ScanPanel
 						scanPages={scanPages}
 						pageTokens={pageTokens}
@@ -332,13 +330,12 @@ export function SubmissionView({
 						showMarks={showMarks}
 						showChains={showChains}
 						highlightedTokenIds={highlightedTokenIds}
-						onTokenHover={setHoveredTokenId}
 					/>
 				</ResizablePanel>
 
 				<ResizableHandle withHandle />
 
-				<ResizablePanel defaultSize={45} minSize={30}>
+				<ResizablePanel defaultSize={70} minSize={40}>
 					<ResultsPanel
 						jobId={jobId}
 						data={data}
@@ -349,7 +346,6 @@ export function SubmissionView({
 						overridesByQuestionId={overridesByQuestionId}
 						onOverrideChange={isEditing ? handleOverrideChange : undefined}
 						onDerivedAnnotations={setSheetAnnotations}
-						hoveredTokenId={hoveredTokenId}
 						onTokenHighlight={handleTokenHighlight}
 					/>
 				</ResizablePanel>

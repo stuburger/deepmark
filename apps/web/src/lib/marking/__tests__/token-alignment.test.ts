@@ -30,6 +30,8 @@ function makeToken(
 		bbox: [0, 0, 100, 100],
 		confidence: 0.9,
 		question_id: opts?.questionId ?? "q1",
+		answer_char_start: null,
+		answer_char_end: null,
 	}
 }
 
@@ -200,7 +202,7 @@ describe("alignTokensToAnswer", () => {
 		expect(result.tokenMap).toEqual({})
 	})
 
-	it("skips unmatched tokens but aligns the rest", () => {
+	it("fuzzy matches good tokens and positionally assigns junk", () => {
 		const tokens = [
 			makeToken("t1", "The"),
 			makeToken("t2", "GARBAGE"),
@@ -208,11 +210,12 @@ describe("alignTokensToAnswer", () => {
 		]
 		const result = alignTokensToAnswer("The cell membrane", tokens)
 
-		// 2/3 = 0.67 > 0.5 threshold
+		// 2/3 fuzzy matched
 		expect(result.confidence).toBeCloseTo(2 / 3, 2)
 		expect(result.tokenMap.t1).toEqual({ start: 0, end: 3 })
 		expect(result.tokenMap.t3).toEqual({ start: 9, end: 17 })
-		expect(result.tokenMap.t2).toBeUndefined()
+		// t2 positionally assigned to the remaining word "cell"
+		expect(result.tokenMap.t2).toEqual({ start: 4, end: 8 })
 	})
 
 	it("handles extra answer word (Gemini added content)", () => {
@@ -254,8 +257,8 @@ describe("alignTokensToAnswer", () => {
 		expect(result.confidence).toBe(0)
 	})
 
-	it("returns empty tokenMap when confidence < 50%", () => {
-		// 3 tokens, only 1 matches → 33% < 50%
+	it("maps all tokens — fuzzy match + positional fill for junk", () => {
+		// 3 tokens: t2 fuzzy-matches "cell", t1 + t3 get positionally assigned
 		const tokens = [
 			makeToken("t1", "zzz"),
 			makeToken("t2", "cell"),
@@ -263,8 +266,13 @@ describe("alignTokensToAnswer", () => {
 		]
 		const result = alignTokensToAnswer("The cell membrane", tokens)
 
+		// Only t2 matched via fuzzy → confidence = 1/3
 		expect(result.confidence).toBeCloseTo(1 / 3, 2)
-		expect(result.tokenMap).toEqual({})
+		// t2 fuzzy matched to "cell"
+		expect(result.tokenMap.t2).toEqual({ start: 4, end: 8 })
+		// t1 and t3 positionally assigned to remaining words "The" and "membrane"
+		expect(result.tokenMap.t1).toEqual({ start: 0, end: 3 })
+		expect(result.tokenMap.t3).toEqual({ start: 9, end: 17 })
 	})
 
 	it("prefers text_corrected over text_raw", () => {

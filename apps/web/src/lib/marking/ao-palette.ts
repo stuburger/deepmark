@@ -46,8 +46,7 @@ const FALLBACK: AoPaletteEntry = {
 	rgb: [107, 114, 128],
 	pillClass:
 		"border-zinc-300 text-zinc-600 bg-zinc-50 dark:border-zinc-500 dark:text-zinc-400 dark:bg-zinc-800/40",
-	legendClass:
-		"bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",
+	legendClass: "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",
 }
 
 /** Get the full palette entry for an AO category label. */
@@ -80,11 +79,7 @@ export function aoLegendClass(category: string): string {
  * Prefers ao_display, falls back to ao_category, then "?".
  */
 export function aoLabel(attrs: Record<string, unknown>): string {
-	return (
-		(attrs.ao_display as string) ??
-		(attrs.ao_category as string) ??
-		"?"
-	)
+	return (attrs.ao_display as string) ?? (attrs.ao_category as string) ?? "?"
 }
 
 /**

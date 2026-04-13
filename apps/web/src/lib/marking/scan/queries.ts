@@ -128,6 +128,8 @@ export async function getJobPageTokens(
 			bbox: true,
 			confidence: true,
 			question_id: true,
+			answer_char_start: true,
+			answer_char_end: true,
 		},
 	})
 
@@ -142,6 +144,8 @@ export async function getJobPageTokens(
 		bbox: row.bbox as [number, number, number, number],
 		confidence: row.confidence,
 		question_id: row.question_id,
+		answer_char_start: row.answer_char_start,
+		answer_char_end: row.answer_char_end,
 	}))
 
 	return { ok: true, tokens }

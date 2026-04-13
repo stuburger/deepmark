@@ -57,10 +57,18 @@ function expandedBbox(
 
 // ─── Popover content ────────────────────────────────────────────────────────
 
-type SignalAnnotation = Extract<StudentPaperAnnotation, { overlay_type: "annotation" }>
-type ChainAnnotation = Extract<StudentPaperAnnotation, { overlay_type: "chain" }>
+type SignalAnnotation = Extract<
+	StudentPaperAnnotation,
+	{ overlay_type: "annotation" }
+>
+type ChainAnnotation = Extract<
+	StudentPaperAnnotation,
+	{ overlay_type: "chain" }
+>
 
-function AnnotationPopoverContent({ annotation }: { annotation: SignalAnnotation }) {
+function AnnotationPopoverContent({
+	annotation,
+}: { annotation: SignalAnnotation }) {
 	const payload = annotation.payload
 	const signalSymbol = SIGNAL_SYMBOLS[payload.signal] ?? ""
 	const title = payload.reason

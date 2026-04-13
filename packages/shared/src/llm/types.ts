@@ -379,6 +379,19 @@ export const LLM_CALL_SITE_DEFAULTS: Array<{
 		],
 	},
 	{
+		key: "token-answer-mapping",
+		display_name: "Token-to-Answer Mapping",
+		description:
+			"Maps OCR tokens to student answer words using the page image, producing character offsets for scan highlighting.",
+		input_type: "vision",
+		phase: "answer-detection",
+		step: 4,
+		multiplier: "per-question",
+		models: [
+			{ provider: "anthropic", model: "claude-sonnet-4-6", temperature: 0.2 },
+		],
+	},
+	{
 		key: "answer-alignment",
 		display_name: "Answer Alignment",
 		description:

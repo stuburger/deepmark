@@ -466,6 +466,10 @@ model StudentPaperPageToken {
   bbox           Json
   confidence     Float?
   question_id    String?
+  /// Character offset (start) in student_answer where this token aligns. Null if unaligned.
+  answer_char_start Int?
+  /// Character offset (end, exclusive) in student_answer where this token aligns.
+  answer_char_end   Int?
   created_at     DateTime @default(now())
 
   submission StudentSubmission @relation("SubmissionWordTokens", fields: [submission_id], references: [id])

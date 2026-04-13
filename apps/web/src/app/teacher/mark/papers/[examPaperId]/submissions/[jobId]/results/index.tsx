@@ -24,7 +24,6 @@ export function MarkingResults({
 	overridesByQuestionId,
 	onOverrideChange,
 	onDerivedAnnotations,
-	hoveredTokenId,
 	onTokenHighlight,
 }: {
 	jobId: string
@@ -38,7 +37,6 @@ export function MarkingResults({
 		input: UpsertTeacherOverrideInput | null,
 	) => void
 	onDerivedAnnotations?: (annotations: StudentPaperAnnotation[]) => void
-	hoveredTokenId?: string | null
 	onTokenHighlight?: (tokenIds: string[] | null) => void
 }) {
 	const [answers, setAnswers] = useState<Record<string, string>>(
@@ -61,7 +59,6 @@ export function MarkingResults({
 			overridesByQuestionId={overridesByQuestionId}
 			onOverrideChange={onOverrideChange}
 			onDerivedAnnotations={onDerivedAnnotations}
-			hoveredTokenId={hoveredTokenId}
 			onTokenHighlight={onTokenHighlight}
 		/>
 	)

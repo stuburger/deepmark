@@ -2,11 +2,11 @@
 
 import { FeedbackOverrideEditor } from "@/components/feedback-override-editor"
 import { ScoreOverrideEditor } from "@/components/score-override-editor"
-import { Progress } from "@/components/ui/progress"
 import { cn } from "@/lib/utils"
 import type { Node as PmNode } from "@tiptap/pm/model"
 import { NodeViewContent, NodeViewWrapper } from "@tiptap/react"
-import { ChevronDown } from "lucide-react"
+import { MessageSquareText } from "lucide-react"
+import { useState } from "react"
 import { useGradingData } from "./grading-data-context"
 
 export function QuestionAnswerView({
@@ -21,7 +21,6 @@ export function QuestionAnswerView({
 
 	const {
 		gradingResults,
-		answers,
 		overridesByQuestionId,
 		activeQuestionNumber,
 		isEditing,
@@ -30,20 +29,19 @@ export function QuestionAnswerView({
 
 	const result = qId ? gradingResults.get(qId) : undefined
 	const override = qId ? overridesByQuestionId.get(qId) : undefined
-	const originalText = qId ? (answers[qId] ?? "") : ""
-	const textModified = node.textContent !== originalText
-
 	const aiScore = result?.awarded_score ?? 0
-	const effectiveScore = override?.score_override ?? aiScore
 	const max = maxScore ?? result?.max_score ?? 0
-	const pct = max > 0 ? Math.round((effectiveScore / max) * 100) : 0
 
 	const www = result?.what_went_well ?? []
 	const ebi = result?.even_better_if ?? []
 	const feedback = override?.feedback_override ?? result?.feedback_summary
-	const levelAwarded = result?.level_awarded
-	const isLoR = result?.marking_method === "level_of_response"
+	const hasFeedback = !!feedback || isEditing
 
+	const [showWww, setShowWww] = useState(false)
+	const [showEbi, setShowEbi] = useState(false)
+	const [showFeedback, setShowFeedback] = useState(false)
+
+	const hasBadges = www.length > 0 || ebi.length > 0 || hasFeedback
 	const isActive = activeQuestionNumber === qNum
 
 	return (
@@ -98,123 +96,126 @@ export function QuestionAnswerView({
 			{/* Editable answer content -- marks render here */}
 			<NodeViewContent className="text-sm leading-relaxed whitespace-pre-wrap font-handwriting text-base" />
 
-			{/* Re-mark hint when answer text has been modified */}
-			{textModified && (
-				<p
-					contentEditable={false}
-					className="select-none text-[10px] text-amber-600 dark:text-amber-400 mt-1 italic"
-				>
-					Answer modified — re-mark to update score
-				</p>
-			)}
-
-			{/* Non-editable grading details below the answer */}
-			<div contentEditable={false} className="select-none space-y-2 mt-3">
-				{/* WWW / EBI */}
-				{(www.length > 0 || ebi.length > 0) && (
-					<div className="space-y-2 text-xs">
+			{/* Feedback badges + expandable panels */}
+			{hasBadges && (
+				<div contentEditable={false} className="select-none mt-2 space-y-2">
+					{/* Badge row */}
+					<div className="flex items-center gap-1.5">
 						{www.length > 0 && (
-							<div>
-								<p className="text-[10px] font-semibold uppercase tracking-wide text-green-600 dark:text-green-400 mb-0.5">
-									What went well
-								</p>
-								<ul className="space-y-0.5">
-									{www.map((item, i) => (
-										<li
-											// biome-ignore lint/suspicious/noArrayIndexKey: static feedback list
-											key={i}
-											className="text-muted-foreground flex items-start gap-1"
-										>
-											<span className="text-green-500 shrink-0">
-												{"\u2713"}
-											</span>
-											{item}
-										</li>
-									))}
-								</ul>
-							</div>
+							<button
+								type="button"
+								onClick={() => setShowWww((v) => !v)}
+								title="What went well"
+								className={cn(
+									"inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide transition-colors",
+									showWww
+										? "bg-green-500 text-white"
+										: "bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-900/40 dark:text-green-400 dark:hover:bg-green-900/60",
+								)}
+							>
+								WWW
+							</button>
 						)}
 						{ebi.length > 0 && (
-							<div>
-								<p className="text-[10px] font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400 mb-0.5">
-									Even better if
-								</p>
-								<ul className="space-y-0.5">
-									{ebi.map((item, i) => (
-										<li
-											// biome-ignore lint/suspicious/noArrayIndexKey: static feedback list
-											key={i}
-											className="text-muted-foreground flex items-start gap-1"
-										>
-											<span className="text-amber-500 shrink-0">
-												{"\u2192"}
-											</span>
-											{item}
-										</li>
-									))}
-								</ul>
-							</div>
+							<button
+								type="button"
+								onClick={() => setShowEbi((v) => !v)}
+								title="Even better if"
+								className={cn(
+									"inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide transition-colors",
+									showEbi
+										? "bg-amber-500 text-white"
+										: "bg-amber-100 text-amber-700 hover:bg-amber-200 dark:bg-amber-900/40 dark:text-amber-400 dark:hover:bg-amber-900/60",
+								)}
+							>
+								EBI
+							</button>
+						)}
+						{hasFeedback && (
+							<button
+								type="button"
+								onClick={() => setShowFeedback((v) => !v)}
+								title={isEditing ? "Edit feedback" : "Feedback"}
+								className={cn(
+									"inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium transition-colors",
+									showFeedback
+										? "bg-zinc-500 text-white"
+										: "bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700",
+								)}
+							>
+								<MessageSquareText className="h-2.5 w-2.5" />
+								{isEditing ? "Edit" : "FB"}
+							</button>
 						)}
 					</div>
-				)}
 
-				{/* Feedback summary + override editor */}
-				{feedback && !isEditing && (
-					<details className="text-xs">
-						<summary className="cursor-pointer text-muted-foreground hover:text-foreground list-none flex items-center gap-1 w-fit">
-							Feedback <ChevronDown className="h-3 w-3" />
-						</summary>
-						<p className="mt-1 text-muted-foreground leading-relaxed">
-							{feedback}
-						</p>
-					</details>
-				)}
-				{isEditing && (
-					<details className="text-xs">
-						<summary className="cursor-pointer text-muted-foreground hover:text-foreground list-none flex items-center gap-1 w-fit">
-							Edit feedback <ChevronDown className="h-3 w-3" />
-						</summary>
-						<div className="mt-2">
-							<FeedbackOverrideEditor
-								aiFeedback={result?.feedback_summary ?? null}
-								overrideFeedback={override?.feedback_override ?? null}
-								isEditing={isEditing}
-								onSave={(text) =>
-									qId &&
-									onOverrideChange(qId, {
-										score_override: override?.score_override ?? aiScore,
-										reason: override?.reason,
-										feedback_override: text,
-									})
-								}
-								onReset={() =>
-									qId &&
-									onOverrideChange(qId, {
-										score_override: override?.score_override ?? aiScore,
-										reason: override?.reason,
-										feedback_override: undefined,
-									})
-								}
-							/>
+					{/* WWW panel */}
+					{showWww && www.length > 0 && (
+						<ul className="text-xs space-y-0.5">
+							{www.map((item, i) => (
+								<li
+									// biome-ignore lint/suspicious/noArrayIndexKey: static feedback list
+									key={i}
+									className="text-muted-foreground flex items-start gap-1"
+								>
+									<span className="text-green-500 shrink-0">{"\u2713"}</span>
+									{item}
+								</li>
+							))}
+						</ul>
+					)}
+
+					{/* EBI panel */}
+					{showEbi && ebi.length > 0 && (
+						<ul className="text-xs space-y-0.5">
+							{ebi.map((item, i) => (
+								<li
+									// biome-ignore lint/suspicious/noArrayIndexKey: static feedback list
+									key={i}
+									className="text-muted-foreground flex items-start gap-1"
+								>
+									<span className="text-amber-500 shrink-0">{"\u2192"}</span>
+									{item}
+								</li>
+							))}
+						</ul>
+					)}
+
+					{/* Feedback panel */}
+					{showFeedback && (
+						<div className="text-xs space-y-2">
+							{feedback && !isEditing && (
+								<p className="text-muted-foreground leading-relaxed">
+									{feedback}
+								</p>
+							)}
+							{isEditing && (
+								<FeedbackOverrideEditor
+									aiFeedback={result?.feedback_summary ?? null}
+									overrideFeedback={override?.feedback_override ?? null}
+									isEditing={isEditing}
+									onSave={(text) =>
+										qId &&
+										onOverrideChange(qId, {
+											score_override: override?.score_override ?? aiScore,
+											reason: override?.reason,
+											feedback_override: text,
+										})
+									}
+									onReset={() =>
+										qId &&
+										onOverrideChange(qId, {
+											score_override: override?.score_override ?? aiScore,
+											reason: override?.reason,
+											feedback_override: undefined,
+										})
+									}
+								/>
+							)}
 						</div>
-					</details>
-				)}
-
-				{/* Level awarded (LoR only) */}
-				{isLoR && levelAwarded !== undefined && (
-					<p className="text-xs text-muted-foreground">
-						Level awarded: <span className="font-medium">{levelAwarded}</span>
-					</p>
-				)}
-
-				{/* Score progress bar */}
-				<div className="flex items-center gap-2">
-					<Progress value={pct} className="h-1.5 flex-1" />
-					<span className="text-xs text-muted-foreground tabular-nums w-8 text-right">
-						{pct}%
-					</span>
+					)}
 				</div>
-			</div>
+			)}
 		</NodeViewWrapper>
 	)
 }

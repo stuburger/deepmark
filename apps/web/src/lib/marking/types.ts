@@ -1,7 +1,7 @@
 import type { EnrichmentStatus, JobEvent } from "@mcp-gcse/db"
 import type {
-	AnyAnnotationPayload as SharedAnyAnnotationPayload,
 	AnnotationPayload as SharedAnnotationPayload,
+	AnyAnnotationPayload as SharedAnyAnnotationPayload,
 	ChainPayload as SharedChainPayload,
 	MarkSignal as SharedMarkSignal,
 	OverlayType as SharedOverlayType,
@@ -30,6 +30,10 @@ export type PageToken = {
 	confidence: number | null
 	/** Which question this token was attributed to (null for unattributed tokens). */
 	question_id: string | null
+	/** Character offset (start) in student_answer where this token aligns. Null if unaligned. */
+	answer_char_start: number | null
+	/** Character offset (end, exclusive) in student_answer where this token aligns. */
+	answer_char_end: number | null
 }
 
 export type MarkPointResult = {
@@ -99,7 +103,10 @@ type AnnotationBase = {
  * Checking `a.overlay_type === "annotation"` narrows `a.payload` to `AnnotationPayload`.
  */
 export type StudentPaperAnnotation =
-	| (AnnotationBase & { overlay_type: "annotation"; payload: AnnotationPayload })
+	| (AnnotationBase & {
+			overlay_type: "annotation"
+			payload: AnnotationPayload
+	  })
 	| (AnnotationBase & { overlay_type: "chain"; payload: ChainPayload })
 
 export type GetJobAnnotationsResult =

@@ -16,11 +16,30 @@ export type QuestionAlignments = {
 }
 
 /**
+ * Builds a TokenAlignment from pre-computed char offsets on tokens.
+ * Used when the backend has already run alignment and stored the result.
+ */
+function alignmentFromPrecomputed(tokens: PageToken[]): TokenAlignment | null {
+	const tokenMap: Record<string, { start: number; end: number }> = {}
+	let aligned = 0
+
+	for (const t of tokens) {
+		if (t.answer_char_start != null && t.answer_char_end != null) {
+			tokenMap[t.id] = { start: t.answer_char_start, end: t.answer_char_end }
+			aligned++
+		}
+	}
+
+	if (aligned === 0) return null
+	return { tokenMap, confidence: aligned / tokens.length }
+}
+
+/**
  * Computes token alignment, text marks, and per-question token maps
  * from grading results, annotations, and page tokens.
  *
- * Shared between the card view (AnnotatedAnswer) and sheet view
- * (AnnotatedAnswerSheet) to avoid duplicating alignment computation.
+ * Uses pre-computed char offsets from the backend when available,
+ * falling back to frontend Levenshtein alignment for older submissions.
  */
 export function useQuestionAlignments(
 	gradingResults: GradingResult[],
@@ -40,7 +59,12 @@ export function useQuestionAlignments(
 
 			tokensMap.set(r.question_id, qTokens)
 
-			const alignment = alignTokensToAnswer(r.student_answer, qTokens)
+			// Prefer pre-computed offsets from the backend pipeline.
+			// Fall back to frontend Levenshtein for older submissions without them.
+			const precomputed = alignmentFromPrecomputed(qTokens)
+			const alignment =
+				precomputed ?? alignTokensToAnswer(r.student_answer, qTokens)
+
 			if (Object.keys(alignment.tokenMap).length === 0) continue
 
 			alignments.set(r.question_id, alignment)

@@ -70,4 +70,3 @@ export const TAG_BORDER = 0.015
 
 /** Tag pill corner radius. */
 export const TAG_RADIUS = 0.06
-

@@ -20,6 +20,7 @@ const CALL_SITE_LABELS: Record<string, string> = {
 	"handwriting-ocr": "Handwriting OCR",
 	"vision-token-reconciliation": "Token Reconciliation",
 	"vision-attribution": "Vision Attribution",
+	"token-answer-mapping": "Token Mapping",
 	grading: "Grading",
 	"llm-annotations": "Annotations",
 }

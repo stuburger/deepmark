@@ -473,7 +473,9 @@ export async function upsertTeacherOverride(
 		reason?: string | null
 		feedback_override?: string | null
 	},
-): Promise<{ ok: true; override: TeacherOverride } | { ok: false; error: string }> {
+): Promise<
+	{ ok: true; override: TeacherOverride } | { ok: false; error: string }
+> {
 	const session = await auth()
 	if (!session) return { ok: false, error: "Not authenticated" }
 

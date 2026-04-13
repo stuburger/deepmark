@@ -1,7 +1,7 @@
 "use client"
 
-import type { StudentPaperAnnotation } from "@/lib/marking/types"
 import { aoHex } from "@/lib/marking/ao-palette"
+import type { StudentPaperAnnotation } from "@/lib/marking/types"
 import {
 	CIRCLE_PAD_X,
 	DOUBLE_UNDERLINE_GAP,
@@ -38,7 +38,6 @@ const SIGNAL_COLORS = {
 	circle: "#f59e0b",
 } as const
 
-
 /**
  * Renders a mark signal (tick/cross/underline/box/circle) on the scanned page,
  * with an optional AO badge pill when ao_category is present.
@@ -69,11 +68,21 @@ export function MarkOverlay({ annotation, scaleX, scaleY }: Props) {
 		}
 	})()
 
-	const labelY = payload.signal === "underline" || payload.signal === "double_underline"
-		? y + h
-		: y + labelSize
+	const labelY =
+		payload.signal === "underline" || payload.signal === "double_underline"
+			? y + h
+			: y + labelSize
 
-	const signalElement = renderSignal(payload.signal, { x, y, w, h, color, sz, strokeW, thinStrokeW })
+	const signalElement = renderSignal(payload.signal, {
+		x,
+		y,
+		w,
+		h,
+		color,
+		sz,
+		strokeW,
+		thinStrokeW,
+	})
 
 	// Label text (if present)
 	const labelElement = payload.label ? (
@@ -92,7 +101,12 @@ export function MarkOverlay({ annotation, scaleX, scaleY }: Props) {
 	const aoElement = payload.ao_category ? (
 		<AoBadge
 			category={payload.ao_display ?? payload.ao_category}
-			x={labelX + (payload.label ? payload.label.length * labelSize * 0.6 + sz * OFFSET_H : 0)}
+			x={
+				labelX +
+				(payload.label
+					? payload.label.length * labelSize * 0.6 + sz * OFFSET_H
+					: 0)
+			}
 			y={yMin * scaleY + ((yMax - yMin) * scaleY - sz * TAG_FONT_SIZE) / 2}
 			sz={sz}
 		/>
@@ -230,7 +244,12 @@ function renderSignal(
 	}
 }
 
-function AoBadge({ category, x, y, sz }: { category: string; x: number; y: number; sz: number }) {
+function AoBadge({
+	category,
+	x,
+	y,
+	sz,
+}: { category: string; x: number; y: number; sz: number }) {
 	const fontSize = sz * TAG_FONT_SIZE
 	const paddingV = fontSize * TAG_PADDING_V
 	const paddingH = fontSize * TAG_PADDING_H

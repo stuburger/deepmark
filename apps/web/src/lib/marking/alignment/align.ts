@@ -3,12 +3,17 @@ import { normalizedDistance, splitWithOffsets } from "./string-utils"
 import type { TokenAlignment } from "./types"
 
 const MAX_DISTANCE = 0.4
-const LOOK_AHEAD = 3
-const MIN_CONFIDENCE = 0.5
+const LOOK_AHEAD = 8
 
 /**
- * Aligns OCR tokens to character positions in the student_answer string
- * using fuzzy word-level matching with advancing cursors.
+ * Two-pass alignment of OCR tokens to character positions in student_answer.
+ *
+ * Pass 1 (fuzzy): walks tokens and answer words with advancing cursors,
+ * matching via Levenshtein distance. Unmatched tokens are skipped.
+ *
+ * Pass 2 (positional fill): unmatched tokens are assigned to the nearest
+ * unassigned answer word by position, so every token gets a mapping when
+ * possible — even garbled OCR.
  */
 export function alignTokensToAnswer(
 	answer: string,
@@ -20,17 +25,20 @@ export function alignTokensToAnswer(
 
 	const answerWords = splitWithOffsets(answer)
 	const tokenMap: Record<string, { start: number; end: number }> = {}
-	let alignedCount = 0
+	const assignedWordIndices = new Set<number>()
 	let wordCursor = 0
+	let fuzzyCount = 0
 
+	// ── Pass 1: fuzzy match ─────────────────────────────────────────────
 	for (const token of tokens) {
+		if (wordCursor >= answerWords.length) break
+
 		const tokenText = (token.text_corrected ?? token.text_raw).toLowerCase()
 		if (tokenText.length === 0) continue
 
 		let bestIdx = -1
 		let bestDist = Number.POSITIVE_INFINITY
 
-		// Search within a look-ahead window from the current cursor
 		const searchEnd = Math.min(wordCursor + LOOK_AHEAD, answerWords.length)
 		for (let i = wordCursor; i < searchEnd; i++) {
 			const dist = normalizedDistance(
@@ -46,16 +54,30 @@ export function alignTokensToAnswer(
 		if (bestIdx >= 0 && bestDist <= MAX_DISTANCE) {
 			const aw = answerWords[bestIdx]
 			tokenMap[token.id] = { start: aw.start, end: aw.end }
+			assignedWordIndices.add(bestIdx)
 			wordCursor = bestIdx + 1
-			alignedCount++
+			fuzzyCount++
 		}
 	}
 
-	const confidence = alignedCount / tokens.length
+	// ── Pass 2: positional fill for unmatched tokens ────────────────────
+	const unmatchedTokens = tokens.filter((t) => !tokenMap[t.id])
+	if (unmatchedTokens.length > 0 && assignedWordIndices.size > 0) {
+		const freeWords: number[] = []
+		for (let i = 0; i < answerWords.length; i++) {
+			if (!assignedWordIndices.has(i)) freeWords.push(i)
+		}
 
-	if (confidence < MIN_CONFIDENCE) {
-		return { tokenMap: {}, confidence }
+		const limit = Math.min(unmatchedTokens.length, freeWords.length)
+		for (let i = 0; i < limit; i++) {
+			const token = unmatchedTokens[i]
+			const wordIdx = freeWords[i]
+			const aw = answerWords[wordIdx]
+			tokenMap[token.id] = { start: aw.start, end: aw.end }
+		}
 	}
+
+	const confidence = fuzzyCount / tokens.length
 
 	return { tokenMap, confidence }
 }

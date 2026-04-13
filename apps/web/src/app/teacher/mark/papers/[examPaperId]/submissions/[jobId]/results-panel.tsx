@@ -52,7 +52,6 @@ type SharedPanelProps = {
 		input: UpsertTeacherOverrideInput | null,
 	) => void
 	onDerivedAnnotations?: (annotations: StudentPaperAnnotation[]) => void
-	hoveredTokenId?: string | null
 	onTokenHighlight?: (tokenIds: string[] | null) => void
 }
 
@@ -66,7 +65,6 @@ function DigitalPanelContent({
 	overridesByQuestionId,
 	onOverrideChange,
 	onDerivedAnnotations,
-	hoveredTokenId,
 	onTokenHighlight,
 }: SharedPanelProps) {
 	switch (phase) {
@@ -93,7 +91,6 @@ function DigitalPanelContent({
 					overridesByQuestionId={overridesByQuestionId}
 					onOverrideChange={onOverrideChange}
 					onDerivedAnnotations={onDerivedAnnotations}
-					hoveredTokenId={hoveredTokenId}
 					onTokenHighlight={onTokenHighlight}
 				/>
 			)
@@ -116,12 +113,14 @@ export function ResultsPanel({
 	overridesByQuestionId,
 	onOverrideChange,
 	onDerivedAnnotations,
-	hoveredTokenId,
 	onTokenHighlight,
 }: SharedPanelProps) {
 	return (
-		<ScrollArea data-results-panel className="h-full w-full">
-			<div className="p-4 space-y-5 max-w-2xl w-full">
+		<ScrollArea
+			data-results-panel
+			className="h-full w-full bg-zinc-100 dark:bg-zinc-900"
+		>
+			<div className="p-4 space-y-5 w-full">
 				<DigitalPanelContent
 					jobId={jobId}
 					data={data}
@@ -132,7 +131,6 @@ export function ResultsPanel({
 					overridesByQuestionId={overridesByQuestionId}
 					onOverrideChange={onOverrideChange}
 					onDerivedAnnotations={onDerivedAnnotations}
-					hoveredTokenId={hoveredTokenId}
 					onTokenHighlight={onTokenHighlight}
 				/>
 				<LlmSnapshotPanel

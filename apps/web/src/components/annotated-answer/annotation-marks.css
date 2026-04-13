@@ -1,16 +1,16 @@
-/* Tick/cross leading symbols via ::before pseudo-elements */
-span[data-mark-type="tick"]::before {
+/* Tick/cross trailing symbols via ::after pseudo-elements */
+span[data-mark-type="tick"]::after {
 	content: "✓";
 	color: #22c55e;
 	font-weight: 700;
 	font-size: 0.75em;
-	margin-right: 2px;
+	margin-left: 2px;
 }
 
-span[data-mark-type="cross"]::before {
+span[data-mark-type="cross"]::after {
 	content: "✗";
 	color: #ef4444;
 	font-weight: 700;
 	font-size: 0.75em;
-	margin-right: 2px;
+	margin-left: 2px;
 }

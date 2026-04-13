@@ -7,8 +7,8 @@
  */
 import type { AnnotationSignal } from "@/lib/marking/token-alignment"
 import type {
-	AnyAnnotationPayload,
 	AnnotationPayload,
+	AnyAnnotationPayload,
 	OverlayType,
 } from "@/lib/marking/types"
 import { MARK_SIGNAL_NAMES } from "@mcp-gcse/shared"
@@ -39,8 +39,10 @@ function buildSignalPayload(
 		...(attrs.ao_category
 			? {
 					ao_category: attrs.ao_category as string,
-					ao_display: (attrs.ao_display as string) ?? (attrs.ao_category as string),
-					ao_quality: (attrs.ao_quality as AnnotationPayload["ao_quality"]) ?? "valid",
+					ao_display:
+						(attrs.ao_display as string) ?? (attrs.ao_category as string),
+					ao_quality:
+						(attrs.ao_quality as AnnotationPayload["ao_quality"]) ?? "valid",
 				}
 			: {}),
 		...(attrs.comment ? { comment: attrs.comment as string } : {}),

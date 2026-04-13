@@ -81,7 +81,6 @@ const CHAIN_KEY = [
 	},
 ] as const
 
-
 /**
  * Sheet panel showing an annotation key/legend.
  * Static signal descriptions + dynamic AO labels from grading results.
@@ -97,8 +96,12 @@ export function AnnotationLegend({
 		...new Set(
 			annotations
 				.filter(
-					(a): a is Extract<StudentPaperAnnotation, { overlay_type: "annotation" }> =>
-						a.overlay_type === "annotation" && !!a.payload.ao_category,
+					(
+						a,
+					): a is Extract<
+						StudentPaperAnnotation,
+						{ overlay_type: "annotation" }
+					> => a.overlay_type === "annotation" && !!a.payload.ao_category,
 				)
 				.map((a) => a.payload.ao_category as string),
 		),

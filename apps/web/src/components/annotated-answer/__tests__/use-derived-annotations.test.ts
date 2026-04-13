@@ -92,6 +92,8 @@ const TOKEN_A: PageToken = {
 	word_index: 0,
 	confidence: 0.99,
 	question_id: "q1",
+	answer_char_start: null,
+	answer_char_end: null,
 }
 
 const TOKEN_B: PageToken = {
@@ -105,6 +107,8 @@ const TOKEN_B: PageToken = {
 	word_index: 1,
 	confidence: 0.99,
 	question_id: "q1",
+	answer_char_start: null,
+	answer_char_end: null,
 }
 
 const TOKEN_C: PageToken = {
@@ -118,6 +122,8 @@ const TOKEN_C: PageToken = {
 	word_index: 2,
 	confidence: 0.99,
 	question_id: "q1",
+	answer_char_start: null,
+	answer_char_end: null,
 }
 
 // "The answer is" → tokens at char offsets 0-3, 4-10, 11-13
@@ -388,6 +394,8 @@ describe("deriveAnnotationsFromDoc", () => {
 			word_index: 0,
 			confidence: 0.99,
 			question_id: "q2",
+			answer_char_start: null,
+			answer_char_end: null,
 		}
 
 		const q2Alignment: TokenAlignment = {
@@ -527,6 +535,8 @@ describe("deriveAnnotationsFromDoc (real PM schema)", () => {
 				word_index: 0,
 				confidence: 0.99,
 				question_id: "q1",
+				answer_char_start: null,
+				answer_char_end: null,
 			},
 			{
 				id: "t2",
@@ -539,6 +549,8 @@ describe("deriveAnnotationsFromDoc (real PM schema)", () => {
 				word_index: 1,
 				confidence: 0.99,
 				question_id: "q1",
+				answer_char_start: null,
+				answer_char_end: null,
 			},
 			{
 				id: "t3",
@@ -551,6 +563,8 @@ describe("deriveAnnotationsFromDoc (real PM schema)", () => {
 				word_index: 2,
 				confidence: 0.99,
 				question_id: "q1",
+				answer_char_start: null,
+				answer_char_end: null,
 			},
 			{
 				id: "t4",
@@ -563,6 +577,8 @@ describe("deriveAnnotationsFromDoc (real PM schema)", () => {
 				word_index: 3,
 				confidence: 0.99,
 				question_id: "q1",
+				answer_char_start: null,
+				answer_char_end: null,
 			},
 		]
 

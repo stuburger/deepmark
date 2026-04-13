@@ -57,10 +57,8 @@ type Props = {
 	showChains?: boolean
 	/** Called when an enrichment annotation is clicked, with the question ID. */
 	onEnrichmentAnnotationClick?: (questionId: string) => void
-	/** Token IDs to highlight (from PM hover → scan). */
+	/** Token IDs to highlight (from PM selection/annotation → scan). */
 	highlightedTokenIds?: Set<string> | null
-	/** Called when a token is hovered on the scan (scan → PM). */
-	onTokenHover?: (tokenId: string | null) => void
 }
 
 export function BoundingBoxViewer({
@@ -78,7 +76,6 @@ export function BoundingBoxViewer({
 	showChains = false,
 	onEnrichmentAnnotationClick,
 	highlightedTokenIds,
-	onTokenHover,
 }: Props) {
 	const [imageDims, setImageDims] = useState<{ w: number; h: number } | null>(
 		null,
@@ -346,43 +343,14 @@ export function BoundingBoxViewer({
 																y={yMin * scaleY}
 																width={(xMax - xMin) * scaleX}
 																height={(yMax - yMin) * scaleY}
-																fill="#fde047"
-																fillOpacity={0.45}
-																stroke="#eab308"
+																fill="#93c5fd"
+																fillOpacity={0.4}
+																stroke="#3b82f6"
 																strokeWidth={1.5}
-																strokeOpacity={0.7}
+																strokeOpacity={0.6}
 															/>
 														)
 													})}
-											</svg>
-										)}
-
-										{/* Scan→PM hover interaction layer — invisible rects for mouseenter */}
-										{onTokenHover && tokens.length > 0 && (
-											<svg
-												aria-hidden="true"
-												viewBox={viewBox}
-												preserveAspectRatio="none"
-												className="absolute inset-0 h-full w-full"
-												style={{ pointerEvents: "none" }}
-												onMouseLeave={() => onTokenHover(null)}
-											>
-												{tokens.map((t) => {
-													const [yMin, xMin, yMax, xMax] = t.bbox
-													return (
-														<rect
-															key={t.id}
-															x={xMin * scaleX}
-															y={yMin * scaleY}
-															width={(xMax - xMin) * scaleX}
-															height={(yMax - yMin) * scaleY}
-															fill="transparent"
-															style={{ pointerEvents: "all" }}
-															onMouseEnter={() => onTokenHover(t.id)}
-															onMouseLeave={() => onTokenHover(null)}
-														/>
-													)
-												})}
 											</svg>
 										)}
 

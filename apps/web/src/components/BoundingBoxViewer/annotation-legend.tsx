@@ -96,15 +96,15 @@ export function AnnotationLegend({
 	levelDescriptors,
 	trigger,
 }: Props) {
-	// Extract unique AO labels from tag annotations
+	// Extract unique AO labels from signal annotations with ao_category
 	const aoLabels = [
 		...new Set(
 			annotations
 				.filter(
-					(a): a is Extract<StudentPaperAnnotation, { overlay_type: "tag" }> =>
-						a.overlay_type === "tag",
+					(a): a is Extract<StudentPaperAnnotation, { overlay_type: "annotation" }> =>
+						a.overlay_type === "annotation" && !!a.payload.ao_category,
 				)
-				.map((a) => a.payload.category),
+				.map((a) => a.payload.ao_category as string),
 		),
 	].sort()
 

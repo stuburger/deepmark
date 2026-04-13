@@ -7,7 +7,7 @@ import { parseAnnotationPayload } from "@mcp-gcse/shared"
 import { Resource } from "sst"
 import { auth } from "../../auth"
 import type {
-	AnnotationPayload,
+	AnyAnnotationPayload,
 	GetJobAnnotationsResult,
 	GetJobPageTokensResult,
 	GetJobScanPageUrlsResult,
@@ -178,7 +178,7 @@ export async function getJobAnnotations(
 	// parseAnnotationPayload validates the overlay_type/payload pairing via Zod,
 	// so the cast to StudentPaperAnnotation (discriminated union) is safe here.
 	const annotations = rows.map((row) => {
-		let payload: AnnotationPayload
+		let payload: AnyAnnotationPayload
 		try {
 			payload = parseAnnotationPayload(
 				row.overlay_type as OverlayType,
@@ -186,7 +186,7 @@ export async function getJobAnnotations(
 			)
 		} catch {
 			// Fallback for unparseable payloads — should not happen but be resilient
-			payload = { _v: 1, text: "" } as AnnotationPayload
+			payload = { _v: 2, signal: "tick", reason: "" } as AnyAnnotationPayload
 		}
 
 		return {
@@ -198,7 +198,6 @@ export async function getJobAnnotations(
 			sentiment: row.sentiment,
 			payload,
 			bbox: row.bbox as [number, number, number, number],
-			parent_annotation_id: row.parent_annotation_id,
 			anchor_token_start_id: row.anchor_token_start_id,
 			anchor_token_end_id: row.anchor_token_end_id,
 		} as StudentPaperAnnotation

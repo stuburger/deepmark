@@ -47,9 +47,8 @@ function makeAnnotation(
 		page_order: 1,
 		overlay_type: overlayType,
 		sentiment: "positive",
-		payload: { _v: 1, ...payload },
+		payload: { _v: 2, ...payload },
 		bbox: [0, 0, 100, 100],
-		parent_annotation_id: null,
 		anchor_token_start_id: startTokenId,
 		anchor_token_end_id: endTokenId,
 	} as StudentPaperAnnotation
@@ -303,7 +302,7 @@ describe("deriveTextMarks", () => {
 
 	it("derives a tick mark", () => {
 		const annotations = [
-			makeAnnotation("a1", "t1", "t2", "mark", { signal: "tick" }),
+			makeAnnotation("a1", "t1", "t2", "annotation", { signal: "tick" }),
 		]
 		const marks = deriveTextMarks(annotations, alignment)
 
@@ -315,14 +314,14 @@ describe("deriveTextMarks", () => {
 	})
 
 	it("skips annotations without anchor tokens", () => {
-		const annotations = [makeAnnotation("a1", null, null, "mark")]
+		const annotations = [makeAnnotation("a1", null, null, "annotation")]
 		const marks = deriveTextMarks(annotations, alignment)
 		expect(marks).toHaveLength(0)
 	})
 
 	it("skips annotations with missing start token in alignment", () => {
 		const annotations = [
-			makeAnnotation("a1", "missing", "t2", "mark", { signal: "tick" }),
+			makeAnnotation("a1", "missing", "t2", "annotation", { signal: "tick" }),
 		]
 		const marks = deriveTextMarks(annotations, alignment)
 		expect(marks).toHaveLength(0)
@@ -330,15 +329,15 @@ describe("deriveTextMarks", () => {
 
 	it("skips annotations with missing end token in alignment", () => {
 		const annotations = [
-			makeAnnotation("a1", "t1", "missing", "mark", { signal: "tick" }),
+			makeAnnotation("a1", "t1", "missing", "annotation", { signal: "tick" }),
 		]
 		const marks = deriveTextMarks(annotations, alignment)
 		expect(marks).toHaveLength(0)
 	})
 
-	it("skips comment annotations", () => {
+	it("skips annotations with unknown overlay type", () => {
 		const annotations = [
-			makeAnnotation("a1", "t1", "t2", "comment", {
+			makeAnnotation("a1", "t1", "t2", "unknown_type", {
 				text: "good point",
 			}),
 		]
@@ -348,8 +347,8 @@ describe("deriveTextMarks", () => {
 
 	it("derives multiple annotation types correctly", () => {
 		const annotations = [
-			makeAnnotation("a1", "t1", "t1", "mark", { signal: "tick" }),
-			makeAnnotation("a2", "t2", "t3", "mark", { signal: "underline" }),
+			makeAnnotation("a1", "t1", "t1", "annotation", { signal: "tick" }),
+			makeAnnotation("a2", "t2", "t3", "annotation", { signal: "underline" }),
 			makeAnnotation("a3", "t1", "t3", "chain", {
 				chainType: "reasoning",
 				phrase: "because",
@@ -363,23 +362,22 @@ describe("deriveTextMarks", () => {
 		expect(marks.map((m) => m.type)).toContain("chain")
 	})
 
-	it("carries attrs through from payload", () => {
+	it("carries AO attrs through from signal annotation payload", () => {
 		const annotations = [
-			makeAnnotation("a1", "t1", "t2", "tag", {
-				category: "AO2",
-				display: "AO2",
-				awarded: true,
-				quality: "strong",
+			makeAnnotation("a1", "t1", "t2", "annotation", {
+				signal: "underline",
 				reason: "good evaluation",
+				ao_category: "AO2",
+				ao_display: "AO2",
+				ao_quality: "strong",
 			}),
 		]
 		const marks = deriveTextMarks(annotations, alignment)
 
 		expect(marks).toHaveLength(1)
-		expect(marks[0].type).toBe("ao_tag")
-		expect(marks[0].attrs.category).toBe("AO2")
-		expect(marks[0].attrs.display).toBe("AO2")
-		expect(marks[0].attrs.awarded).toBe(true)
+		expect(marks[0].type).toBe("underline")
+		expect(marks[0].attrs.ao_category).toBe("AO2")
+		expect(marks[0].attrs.ao_display).toBe("AO2")
 		expect(marks[0].attrs.reason).toBe("good evaluation")
 	})
 })

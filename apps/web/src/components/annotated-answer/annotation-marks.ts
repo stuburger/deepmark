@@ -5,6 +5,10 @@ const sharedAttrs = {
 	sentiment: { default: "neutral" },
 	reason: { default: null },
 	annotationId: { default: null },
+	ao_category: { default: null },
+	ao_display: { default: null },
+	ao_quality: { default: null },
+	comment: { default: null },
 }
 
 // ─── Mark signals ───────────────────────────────────────────────────────────
@@ -136,42 +140,15 @@ export const CircleMark = Mark.create({
 	},
 })
 
-// ─── Tag (AO badge) ────────────────────────────────────────────────────────
-
-export const AoTagMark = Mark.create({
-	name: "aoTag",
-	addAttributes() {
-		return {
-			...sharedAttrs,
-			display: { default: null },
-			category: { default: null },
-			awarded: { default: null },
-			quality: { default: null },
-		}
-	},
-	parseHTML() {
-		return [{ tag: 'span[data-mark-type="ao_tag"]' }]
-	},
-	renderHTML({ HTMLAttributes }) {
-		return [
-			"span",
-			mergeAttributes(HTMLAttributes, {
-				"data-mark-type": "ao_tag",
-				"data-tag-display": HTMLAttributes.display ?? "",
-				title: HTMLAttributes.reason ?? undefined,
-			}),
-			0,
-		]
-	},
-})
-
 // ─── Chain highlight ────────────────────────────────────────────────────────
 
 export const ChainMark = Mark.create({
 	name: "chain",
 	addAttributes() {
 		return {
-			...sharedAttrs,
+			sentiment: { default: "neutral" },
+			reason: { default: null },
+			annotationId: { default: null },
 			chainType: { default: "reasoning" },
 			phrase: { default: null },
 		}
@@ -208,6 +185,5 @@ export const annotationMarks = [
 	DoubleUnderlineMark,
 	BoxMark,
 	CircleMark,
-	AoTagMark,
 	ChainMark,
 ]

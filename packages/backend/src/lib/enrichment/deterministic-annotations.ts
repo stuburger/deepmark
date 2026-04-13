@@ -36,10 +36,10 @@ export function pointBasedAnnotations(
 		{
 			questionId: gradingResult.question_id,
 			pageOrder: answerRegion.page_order,
-			overlayType: "mark",
+			overlayType: "annotation",
 			sentiment: awarded > 0 ? "positive" : "negative",
 			payload: {
-				_v: 1,
+				_v: 2,
 				signal: awarded > 0 ? "tick" : "cross",
 				reason: `${awarded}/${max}`,
 				markPoints,
@@ -47,7 +47,6 @@ export function pointBasedAnnotations(
 			anchorTokenStartId: null,
 			anchorTokenEndId: null,
 			bbox: tickBox,
-			parentIndex: undefined,
 			sortOrder: 0,
 		},
 	]
@@ -73,17 +72,16 @@ export function deterministicMcqAnnotation(
 		{
 			questionId: gradingResult.question_id,
 			pageOrder: answerRegion.page_order,
-			overlayType: "mark",
+			overlayType: "annotation",
 			sentiment: correct ? "positive" : "negative",
 			payload: {
-				_v: 1,
+				_v: 2,
 				signal: correct ? "tick" : "cross",
 				reason,
 			},
 			anchorTokenStartId: null,
 			anchorTokenEndId: null,
 			bbox,
-			parentIndex: undefined,
 			sortOrder: 0,
 		},
 	]

@@ -170,18 +170,25 @@ function questionTypeGuidance(maxScore: number): string {
 
 const ANNOTATION_STRATEGY = `ANNOTATION STRATEGY:
 - Use the mark scheme, mark point results, and LoR summary (if present) to decide what to annotate
-- For each AWARDED mark point: find the specific text that earned it, place a tick or appropriate mark, and tag the relevant AO skill
-- For each DENIED mark point: identify what is missing or weak, and annotate with a cross/circle and a brief comment explaining what was needed
+- For each AWARDED mark point: find the specific text that earned it, place a tick or appropriate mark, and optionally tag the relevant AO skill using the ao_category field
+- For each DENIED mark point: identify what is missing or weak, and annotate with a cross/circle and a brief comment in the comment field explaining what was needed
 - Use your examiner judgement to classify AO skills from the content and context — do not rely on keyword matching
 - The AO labels (e.g. AO1, AO2) and their meanings come from the level descriptors and mark scheme. Use the exact labels and definitions from those descriptors. Do not assume which AOs exist or what they mean.
 - Chain annotations should highlight genuine reasoning structures where the student builds an argument, not just words like "because"
 - If the mark scheme or level descriptors describe what good analysis looks like, use that to assess quality — not a checklist of trigger words`
 
-const OVERLAY_TYPES = `OVERLAY TYPES:
-- "mark": physical signal ON the script (tick, cross, underline, double_underline, box, circle). MUST include a "reason" field.
-- "tag": semantic skill badge attached to a mark (e.g. [AO2]). Must have a parent_index pointing to a mark. MUST include a "reason" field.
-- "comment": short margin note. Format: "[diagnosis] → [specific issue]". Max 8-14 words, one idea only. Must have a parent_index pointing to a mark.
-- "chain": highlighted connective phrase showing reasoning flow. Standalone (no parent).`
+const ANNOTATION_TYPES = `ANNOTATION TYPES:
+There are two types of annotation. Each annotation is a SELF-CONTAINED record.
+
+1. SIGNAL ANNOTATION: a physical mark ON the script with optional AO tag and comment.
+   - MUST have: signal (tick/cross/underline/double_underline/box/circle), reason
+   - OPTIONAL: label, ao_category + ao_quality, comment
+   - When ao_category is set, also set ao_quality ("strong"/"partial"/"incorrect"/"valid")
+   - When comment is set, use format: "[diagnosis] → [specific issue]", max 8-14 words
+
+2. CHAIN: a highlighted connective phrase showing reasoning flow.
+   - MUST have: chain_type (reasoning/evaluation/judgement), trigger_phrase
+   - Standalone — no signal, no AO data`
 
 const MARK_TYPES = `MARK TYPES:
 - tick (✓): correct/valid point → sentiment="positive"
@@ -191,7 +198,7 @@ const MARK_TYPES = `MARK TYPES:
 - box: precise technical term or key concept → sentiment="positive"
 - circle: vague/unclear term → sentiment="negative" (ONLY when marks were lost)`
 
-const REASON_FIELD = `REASON FIELD (REQUIRED on every mark and tag):
+const REASON_FIELD = `REASON FIELD (REQUIRED on every signal annotation):
 Write like an examiner annotating a real script — short, specific, no waffle.
 - For ticks: what was credited. e.g. "correct — osmosis", "✓ identifies active transport"
 - For crosses: what was wrong or missing. e.g. "needed named example", "confused with mitosis"
@@ -199,26 +206,13 @@ Write like an examiner annotating a real script — short, specific, no waffle.
 - For double_underlines: what analysis was developed. e.g. "consequence chain — job loss → depopulation"
 - For boxes: what term was used. e.g. "precise — 'tectonic hazard'"
 - For circles: what was vague. e.g. "which type of energy?"
-- For AO tags: what skill was shown. e.g. "evaluates both sides", "recalls formation process"
 Max ~10 words. Never generic ("valid point", "good answer"). Always reference the specific content.`
-
-const COMMENT_FORMAT = `COMMENT FORMAT (STRICT):
-- Format: "[diagnosis] → [specific issue]"
-- Max 8-14 words, one idea only
-- Reference the specific mark point or skill, not generic feedback
-- Positive: "correct — matches mark point 2", "clear application to case"
-- Negative: "weak analysis → no consequence stated", "missing — needed link to data"
-- NEVER write negative comments for answers that scored full marks`
 
 const POINT_BASED_GUIDANCE = `POINT-BASED / DETERMINISTIC QUESTIONS:
 - For short-answer questions, use ONE tick (if marks awarded) or ONE cross (if zero marks) per question
 - The reason field should summarise which mark points were hit, e.g. "3/4 — osmosis ✓, diffusion ✓, active transport ✓"
 - Do NOT place a separate tick for every mark point — keep it clean
 - AO tags are optional for short-answer recall questions`
-
-const PARENT_LINKING = `PARENT LINKING:
-- Tags and comments MUST include parent_index pointing to the index of their parent mark in the annotations array
-- Marks and chains do NOT have parent_index`
 
 const GLOBAL_RULES = `GLOBAL RULES:
 - CRITICAL: Annotation sentiment MUST match the score — do not contradict the grading result
@@ -231,6 +225,7 @@ const GLOBAL_RULES = `GLOBAL RULES:
 const INSTRUCTIONS = `<Instructions>
 Analyse the student answer against the mark scheme and mark point results. Place annotations that show this answer has been carefully read and evaluated. Output valid JSON matching the schema.
 Return annotations ordered by reading position (ascending token index).
+Each annotation is self-contained — signal annotations include their own reason, optional AO tag, and optional comment. No parent linking.
 </Instructions>`
 
 // ─── Density section (dynamic — depends on maxScore) ─────────────────────────
@@ -238,8 +233,8 @@ Return annotations ordered by reading position (ascending token index).
 function densitySection(maxScore: number): string {
 	const d = densityTarget(maxScore)
 	return `DENSITY:
-- Target ${d.min}-${d.max} annotations total for this ${maxScore}-mark question
-- Maximum ${d.maxComments} margin comments
+- Target ${d.min}-${d.max} signal annotations total for this ${maxScore}-mark question
+- Maximum ${d.maxComments} annotations with comment field set
 - For full marks: fewer annotations is better — just confirm correctness
 - Avoid over-marking`
 }
@@ -294,14 +289,12 @@ export function buildAnnotationPrompt(args: AnnotationPromptArgs): string {
 		scoreGuidance(r.awarded_score, maxScore),
 		questionTypeGuidance(maxScore),
 		ANNOTATION_STRATEGY,
-		OVERLAY_TYPES,
+		ANNOTATION_TYPES,
 		MARK_TYPES,
 		REASON_FIELD,
-		COMMENT_FORMAT,
 		POINT_BASED_GUIDANCE,
 		densitySection(maxScore),
 		anchoringSection(tokens.length),
-		PARENT_LINKING,
 		GLOBAL_RULES,
 	]
 

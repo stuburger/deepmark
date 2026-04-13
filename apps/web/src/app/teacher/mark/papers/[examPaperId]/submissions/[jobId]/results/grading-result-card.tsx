@@ -127,11 +127,11 @@ export function GradingResultCard({
 								a,
 							): a is Extract<
 								StudentPaperAnnotation,
-								{ overlay_type: "comment" }
-							> => a.overlay_type === "comment",
+								{ overlay_type: "annotation" }
+							> => a.overlay_type === "annotation" && !!a.payload.comment,
 						)
 						.map((a) => {
-							const text = a.payload.text
+							const text = a.payload.comment
 							const borderColor =
 								a.sentiment === "positive"
 									? "border-green-400 text-green-700 dark:text-green-400"

@@ -138,29 +138,28 @@ describe("buildAnnotatedDoc", () => {
 		expect(content[0].marks?.[0].type).toBe("tick")
 	})
 
-	it("passes attrs for ao_tag marks", () => {
+	it("passes AO attrs for signal annotations with ao_category", () => {
 		const results = [makeGradingResult("q1", "1a", "good analysis")]
-		const tagMark: TextMark = {
+		const aoMark: TextMark = {
 			from: 0,
 			to: 13,
-			type: "ao_tag",
+			type: "underline",
 			sentiment: "positive",
 			attrs: {
-				display: "AO2",
-				category: "AO2",
-				awarded: true,
-				quality: "strong",
+				ao_category: "AO2",
+				ao_display: "AO2",
+				ao_quality: "strong",
 				reason: "good eval",
 			},
 			annotationId: "a1",
 		}
-		const marks = new Map([["q1", [tagMark]]])
+		const marks = new Map([["q1", [aoMark]]])
 		const doc = buildAnnotatedDoc(results, marks)
 		const content = doc.content?.[0].content ?? []
 
-		expect(content[0].marks?.[0].type).toBe("aoTag")
-		expect(content[0].marks?.[0].attrs?.display).toBe("AO2")
-		expect(content[0].marks?.[0].attrs?.awarded).toBe(true)
+		expect(content[0].marks?.[0].type).toBe("annotationUnderline")
+		expect(content[0].marks?.[0].attrs?.ao_category).toBe("AO2")
+		expect(content[0].marks?.[0].attrs?.ao_display).toBe("AO2")
 	})
 
 	it("passes attrs for chain marks", () => {

@@ -155,7 +155,7 @@ describe("deriveAnnotationsFromDoc", () => {
 
 		expect(result).toHaveLength(1)
 		expect(result[0].id).toBe("ai-1")
-		expect(result[0].overlay_type).toBe("mark")
+		expect(result[0].overlay_type).toBe("annotation")
 		expect(result[0].question_id).toBe("q1")
 		expect(result[0].anchor_token_start_id).toBe("t2")
 		expect(result[0].anchor_token_end_id).toBe("t2")
@@ -184,7 +184,7 @@ describe("deriveAnnotationsFromDoc", () => {
 		// Teacher marks get a deterministic key-based ID
 		expect(result[0].id).toBe("q1-cross-0-3")
 		expect(result[0].enrichment_run_id).toBe("teacher")
-		expect(result[0].overlay_type).toBe("mark")
+		expect(result[0].overlay_type).toBe("annotation")
 		expect(result[0].sentiment).toBe("negative")
 		expect((result[0].payload as { signal: string }).signal).toBe("cross")
 	})
@@ -295,19 +295,18 @@ describe("deriveAnnotationsFromDoc", () => {
 		expect(result).toHaveLength(0)
 	})
 
-	it("derives AO tag annotations with tag payload", () => {
+	it("derives signal annotation with AO attrs from tick mark", () => {
 		const doc = mockDoc([
 			mockQuestionAnswer("q1", [
 				{
 					text: "answer",
 					offset: 4,
 					marks: [
-						mockMark("aoTag", {
+						mockMark("tick", {
 							sentiment: "positive",
-							category: "AO2",
-							display: "AO2",
-							awarded: true,
-							quality: "valid",
+							ao_category: "AO2",
+							ao_display: "AO2",
+							ao_quality: "valid",
 						}),
 					],
 				},
@@ -320,8 +319,8 @@ describe("deriveAnnotationsFromDoc", () => {
 		const result = deriveAnnotationsFromDoc(doc, alignments, tokensMap)
 
 		expect(result).toHaveLength(1)
-		expect(result[0].overlay_type).toBe("tag")
-		expect((result[0].payload as { category: string }).category).toBe("AO2")
+		expect(result[0].overlay_type).toBe("annotation")
+		expect((result[0].payload as { ao_category: string }).ao_category).toBe("AO2")
 	})
 
 	it("derives chain annotations", () => {
@@ -573,7 +572,7 @@ describe("deriveAnnotationsFromDoc (real PM schema)", () => {
 		// Should produce exactly one annotation for the tick on "answer"
 		expect(result).toHaveLength(1)
 		expect(result[0].id).toBe("ann-1")
-		expect(result[0].overlay_type).toBe("mark")
+		expect(result[0].overlay_type).toBe("annotation")
 		expect(result[0].anchor_token_start_id).toBe("t2")
 		expect(result[0].anchor_token_end_id).toBe("t2")
 		expect(result[0].bbox).toEqual([10, 50, 20, 100])

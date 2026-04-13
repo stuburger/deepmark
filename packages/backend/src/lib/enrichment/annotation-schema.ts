@@ -4,11 +4,11 @@ import { z } from "zod/v4"
 /**
  * Zod schema for the Gemini structured output when generating annotations
  * for a single question's student answer.
+ *
+ * Flat model: each item is either a signal annotation or a chain — no
+ * parent_index linking. AO tags and comments are fields on the annotation.
  */
 export const AnnotationPlanItemSchema = z.object({
-	overlay_type: z
-		.enum(["mark", "tag", "comment", "chain"])
-		.describe("The annotation overlay type"),
 	anchor_start: z
 		.number()
 		.describe(
@@ -23,69 +23,55 @@ export const AnnotationPlanItemSchema = z.object({
 		.enum(["positive", "negative", "neutral"])
 		.describe("Sentiment for color coding"),
 
-	// Mark fields
+	// ── Signal annotation fields ────────────────────────────────────────────
 	signal: z
 		.enum(MARK_SIGNAL_NAMES)
 		.optional()
-		.describe("Required for overlay_type=mark. The physical signal type."),
-	label: z
-		.string()
-		.optional()
-		.describe("Optional short label for marks, e.g. 'AO1', 'vague'"),
+		.describe(
+			"Required for signal annotations. The physical signal type (tick, cross, underline, etc.).",
+		),
 	reason: z
 		.string()
 		.optional()
 		.describe(
-			"Required for overlay_type=mark and overlay_type=tag. Short examiner-style note (max ~10 words) explaining what this mark refers to. For marks: which mark point or skill. For tags: what skill was demonstrated.",
+			"Required for signal annotations. Short examiner-style note (max ~10 words) explaining what this mark refers to.",
 		),
+	label: z
+		.string()
+		.optional()
+		.describe("Optional short label for annotations, e.g. '3/4', 'vague'"),
 
-	// Tag fields
-	category: z
+	// ── AO tag fields (optional on signal annotations) ──────────────────────
+	ao_category: z
 		.string()
 		.optional()
 		.describe(
-			"Required for overlay_type=tag. Skill category e.g. 'AO1', 'AO2', 'AO3'",
+			"Optional AO skill category e.g. 'AO1', 'AO2', 'AO3'. Only on signal annotations.",
 		),
-	awarded: z
-		.boolean()
-		.optional()
-		.describe(
-			"Required for overlay_type=tag. Whether the skill was demonstrated.",
-		),
-	quality: z
+	ao_quality: z
 		.enum(["strong", "partial", "incorrect", "valid"])
 		.optional()
 		.describe(
-			"Required for overlay_type=tag. Quality of the skill demonstration.",
+			"Quality of the AO skill demonstration. Only when ao_category is set.",
 		),
 
-	// Comment fields
-	comment_text: z
+	// ── Comment field (optional on signal annotations) ───────────────────────
+	comment: z
 		.string()
 		.optional()
 		.describe(
-			"Required for overlay_type=comment. Format: '[diagnosis] → [specific issue]'. Max ~14 words.",
+			"Optional margin note. Format: '[diagnosis] → [specific issue]'. Max 8-14 words.",
 		),
 
-	// Chain fields
+	// ── Chain fields ────────────────────────────────────────────────────────
 	chain_type: z
 		.enum(["reasoning", "evaluation", "judgement"])
 		.optional()
-		.describe("Required for overlay_type=chain. The chain category."),
+		.describe("Required for chain annotations. The chain category."),
 	trigger_phrase: z
 		.string()
 		.optional()
-		.describe(
-			"Required for overlay_type=chain. The connective phrase matched.",
-		),
-
-	// Parent linking
-	parent_index: z
-		.number()
-		.optional()
-		.describe(
-			"For tag/comment: index of the parent mark annotation in this array",
-		),
+		.describe("Required for chain annotations. The connective phrase matched."),
 })
 
 export const AnnotationPlanSchema = z.object({

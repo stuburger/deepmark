@@ -7,8 +7,8 @@
  */
 import type { AnnotationSignal } from "@/lib/marking/token-alignment"
 import type {
+	AnyAnnotationPayload,
 	AnnotationPayload,
-	MarkPayload,
 	OverlayType,
 } from "@/lib/marking/types"
 import { MARK_SIGNAL_NAMES } from "@mcp-gcse/shared"
@@ -16,14 +16,35 @@ import { MARK_SIGNAL_NAMES } from "@mcp-gcse/shared"
 // ─── Registry entry ────────────────────────────────────────────────────────
 
 export type MarkRegistryEntry = {
-	/** Domain-level signal name (e.g. "tick", "underline", "ao_tag", "chain") */
+	/** Domain-level signal name (e.g. "tick", "underline", "chain") */
 	signal: AnnotationSignal
-	/** Tiptap mark extension name (e.g. "annotationUnderline", "aoTag") */
+	/** Tiptap mark extension name (e.g. "annotationUnderline") */
 	tiptapName: string
 	/** Which overlay category this mark belongs to */
 	overlayType: OverlayType
 	/** Build a typed payload from tiptap mark attrs */
-	buildPayload: (attrs: Record<string, unknown>) => AnnotationPayload
+	buildPayload: (attrs: Record<string, unknown>) => AnyAnnotationPayload
+}
+
+// ─── Payload builder for signal annotations ───────────────────────────────
+
+function buildSignalPayload(
+	signal: AnnotationPayload["signal"],
+	attrs: Record<string, unknown>,
+): AnnotationPayload {
+	return {
+		_v: 2,
+		signal,
+		reason: (attrs.reason as string) ?? "",
+		...(attrs.ao_category
+			? {
+					ao_category: attrs.ao_category as string,
+					ao_display: (attrs.ao_display as string) ?? (attrs.ao_category as string),
+					ao_quality: (attrs.ao_quality as AnnotationPayload["ao_quality"]) ?? "valid",
+				}
+			: {}),
+		...(attrs.comment ? { comment: attrs.comment as string } : {}),
+	}
 }
 
 // ─── The registry ──────────────────────────────────────────────────────────
@@ -32,66 +53,38 @@ export const MARK_REGISTRY: readonly MarkRegistryEntry[] = [
 	{
 		signal: "tick",
 		tiptapName: "tick",
-		overlayType: "mark",
-		buildPayload: (a) =>
-			({ _v: 1, signal: "tick", reason: a.reason ?? "" }) as MarkPayload,
+		overlayType: "annotation",
+		buildPayload: (a) => buildSignalPayload("tick", a),
 	},
 	{
 		signal: "cross",
 		tiptapName: "cross",
-		overlayType: "mark",
-		buildPayload: (a) =>
-			({ _v: 1, signal: "cross", reason: a.reason ?? "" }) as MarkPayload,
+		overlayType: "annotation",
+		buildPayload: (a) => buildSignalPayload("cross", a),
 	},
 	{
 		signal: "underline",
 		tiptapName: "annotationUnderline",
-		overlayType: "mark",
-		buildPayload: (a) =>
-			({
-				_v: 1,
-				signal: "underline",
-				reason: a.reason ?? "",
-			}) as MarkPayload,
+		overlayType: "annotation",
+		buildPayload: (a) => buildSignalPayload("underline", a),
 	},
 	{
 		signal: "double_underline",
 		tiptapName: "doubleUnderline",
-		overlayType: "mark",
-		buildPayload: (a) =>
-			({
-				_v: 1,
-				signal: "double_underline",
-				reason: a.reason ?? "",
-			}) as MarkPayload,
+		overlayType: "annotation",
+		buildPayload: (a) => buildSignalPayload("double_underline", a),
 	},
 	{
 		signal: "box",
 		tiptapName: "box",
-		overlayType: "mark",
-		buildPayload: (a) =>
-			({ _v: 1, signal: "box", reason: a.reason ?? "" }) as MarkPayload,
+		overlayType: "annotation",
+		buildPayload: (a) => buildSignalPayload("box", a),
 	},
 	{
 		signal: "circle",
 		tiptapName: "circle",
-		overlayType: "mark",
-		buildPayload: (a) =>
-			({ _v: 1, signal: "circle", reason: a.reason ?? "" }) as MarkPayload,
-	},
-	{
-		signal: "ao_tag",
-		tiptapName: "aoTag",
-		overlayType: "tag",
-		buildPayload: (a) =>
-			({
-				_v: 1,
-				category: a.category ?? "AO1",
-				display: a.display ?? "AO1",
-				awarded: a.awarded ?? true,
-				quality: a.quality ?? "valid",
-				reason: a.reason ?? "",
-			}) as AnnotationPayload,
+		overlayType: "annotation",
+		buildPayload: (a) => buildSignalPayload("circle", a),
 	},
 	{
 		signal: "chain",
@@ -99,10 +92,10 @@ export const MARK_REGISTRY: readonly MarkRegistryEntry[] = [
 		overlayType: "chain",
 		buildPayload: (a) =>
 			({
-				_v: 1,
-				chainType: a.chainType ?? "reasoning",
-				phrase: a.phrase ?? "",
-			}) as AnnotationPayload,
+				_v: 2,
+				chainType: (a.chainType as string) ?? "reasoning",
+				phrase: (a.phrase as string) ?? "",
+			}) as AnyAnnotationPayload,
 	},
 ] as const
 
@@ -125,17 +118,13 @@ export function resolveSignal(
 	payload: Record<string, unknown>,
 ): AnnotationSignal | null {
 	switch (overlayType) {
-		case "mark": {
+		case "annotation": {
 			const signal = payload.signal as string | undefined
 			if (signal && MARK_SIGNALS.has(signal)) return signal as AnnotationSignal
 			return "underline" // fallback for unknown signals
 		}
-		case "tag":
-			return "ao_tag"
 		case "chain":
 			return "chain"
-		case "comment":
-			return null
 		default:
 			return null
 	}

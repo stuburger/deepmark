@@ -71,16 +71,3 @@ export const TAG_BORDER = 0.015
 /** Tag pill corner radius. */
 export const TAG_RADIUS = 0.06
 
-// ─── Hover highlight ratios ─────────────────────────────────────────────────
-
-/** Stroke width for the tag-hover highlight rect. */
-export const HOVER_HIGHLIGHT_STROKE = 0.04
-
-/** Dash length for the tag-hover highlight. */
-export const HOVER_HIGHLIGHT_DASH = 0.15
-
-/** Gap length for the tag-hover highlight. */
-export const HOVER_HIGHLIGHT_GAP = 0.1
-
-/** Corner radius for the tag-hover highlight. */
-export const HOVER_HIGHLIGHT_RADIUS = 0.06

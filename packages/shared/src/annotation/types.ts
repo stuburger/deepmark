@@ -4,8 +4,8 @@ import { z } from "zod/v4"
 // OVERLAY TYPES
 // ============================================
 
-/** The four annotation overlay types rendered on or alongside a scanned student paper. */
-export type OverlayType = "mark" | "tag" | "comment" | "chain"
+/** The two annotation overlay types: signal annotations and chains. */
+export type OverlayType = "annotation" | "chain"
 
 // ============================================
 // MARK SIGNAL VOCABULARY
@@ -39,42 +39,32 @@ export const MarkPointEntrySchema = z.object({
 	criteria: z.string(),
 })
 
-/** Mark: a physical signal placed ON the scanned page (tick, cross, underline, etc.) */
-export const MarkPayloadSchema = z.object({
-	_v: z.literal(1),
+/**
+ * Annotation: a physical signal placed ON the scanned page (tick, cross, underline, etc.)
+ * with optional AO tag data and margin comment — all self-contained in one record.
+ */
+export const AnnotationPayloadSchema = z.object({
+	_v: z.literal(2),
 	signal: z.enum(MARK_SIGNAL_NAMES),
+	/** Short examiner-style note explaining what this mark refers to. REQUIRED. */
+	reason: z.string(),
+	/** Optional short label (e.g. "3/4") */
 	label: z.string().max(20).optional(),
-	/** Short examiner-style note explaining what this mark refers to. */
-	reason: z.string().max(80).optional(),
+	/** Optional AO category — "AO1", "AO2", "AO3", etc. */
+	ao_category: z.string().optional(),
+	/** Exam-board-specific display label — "AO2", "App", "K", etc. */
+	ao_display: z.string().optional(),
+	/** Quality of the AO skill demonstration */
+	ao_quality: z.enum(["strong", "partial", "incorrect", "valid"]).optional(),
+	/** Optional margin comment */
+	comment: z.string().optional(),
 	/** Structured mark point results for point-based annotations. */
 	markPoints: z.array(MarkPointEntrySchema).optional(),
 })
 
-/** Tag: a semantic skill badge attached to a mark (e.g. [AO2]) */
-export const TagPayloadSchema = z.object({
-	_v: z.literal(1),
-	/** Free-string category label — "AO1", "AO2", "M1", "B1", etc. */
-	category: z.string(),
-	/** Exam-board-specific display label — "AO2", "App", "K", etc. */
-	display: z.string(),
-	/** Whether the skill was demonstrated (true = tick, false = cross) */
-	awarded: z.boolean(),
-	/** Quality assessment for the demonstrated skill */
-	quality: z.enum(["strong", "partial", "incorrect", "valid"]),
-	/** Short examiner-style note explaining what skill was demonstrated. */
-	reason: z.string().max(80).optional(),
-})
-
-/** Comment: a short margin note rendered in the results panel (not on the scan) */
-export const CommentPayloadSchema = z.object({
-	_v: z.literal(1),
-	/** Format: "[diagnosis] → [specific issue]", max ~14 words */
-	text: z.string(),
-})
-
 /** Chain: a connective/reasoning phrase highlighted on the scan */
 export const ChainPayloadSchema = z.object({
-	_v: z.literal(1),
+	_v: z.literal(2),
 	chainType: z.enum(["reasoning", "evaluation", "judgement"]),
 	/** The trigger phrase matched in the student's text */
 	phrase: z.string(),
@@ -84,16 +74,10 @@ export const ChainPayloadSchema = z.object({
 // INFERRED TYPES
 // ============================================
 
-export type MarkPayload = z.infer<typeof MarkPayloadSchema>
-export type TagPayload = z.infer<typeof TagPayloadSchema>
-export type CommentPayload = z.infer<typeof CommentPayloadSchema>
+export type AnnotationPayload = z.infer<typeof AnnotationPayloadSchema>
 export type ChainPayload = z.infer<typeof ChainPayloadSchema>
 
-export type AnnotationPayload =
-	| MarkPayload
-	| TagPayload
-	| CommentPayload
-	| ChainPayload
+export type AnyAnnotationPayload = AnnotationPayload | ChainPayload
 
 // ============================================
 // PARSE FUNCTION
@@ -106,14 +90,10 @@ export type AnnotationPayload =
 export function parseAnnotationPayload(
 	overlayType: OverlayType,
 	raw: unknown,
-): AnnotationPayload {
+): AnyAnnotationPayload {
 	switch (overlayType) {
-		case "mark":
-			return MarkPayloadSchema.parse(raw)
-		case "tag":
-			return TagPayloadSchema.parse(raw)
-		case "comment":
-			return CommentPayloadSchema.parse(raw)
+		case "annotation":
+			return AnnotationPayloadSchema.parse(raw)
 		case "chain":
 			return ChainPayloadSchema.parse(raw)
 	}

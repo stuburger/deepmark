@@ -1,12 +1,10 @@
 import type { EnrichmentStatus, JobEvent } from "@mcp-gcse/db"
 import type {
+	AnyAnnotationPayload as SharedAnyAnnotationPayload,
 	AnnotationPayload as SharedAnnotationPayload,
 	ChainPayload as SharedChainPayload,
-	CommentPayload as SharedCommentPayload,
-	MarkPayload as SharedMarkPayload,
 	MarkSignal as SharedMarkSignal,
 	OverlayType as SharedOverlayType,
-	TagPayload as SharedTagPayload,
 } from "@mcp-gcse/shared"
 
 /** Per-page OCR result from the Gemini transcript call. */
@@ -78,11 +76,9 @@ export type AnswerRegion = {
 
 export type OverlayType = SharedOverlayType
 export type MarkSignal = SharedMarkSignal
-export type MarkPayload = SharedMarkPayload
-export type TagPayload = SharedTagPayload
-export type CommentPayload = SharedCommentPayload
-export type ChainPayload = SharedChainPayload
 export type AnnotationPayload = SharedAnnotationPayload
+export type ChainPayload = SharedChainPayload
+export type AnyAnnotationPayload = SharedAnyAnnotationPayload
 
 /** Shared fields present on every annotation variant. */
 type AnnotationBase = {
@@ -92,7 +88,6 @@ type AnnotationBase = {
 	page_order: number
 	sentiment: string | null
 	bbox: [number, number, number, number]
-	parent_annotation_id: string | null
 	/** FK to the first token in this annotation's span (null for older enrichment runs). */
 	anchor_token_start_id: string | null
 	/** FK to the last token in this annotation's span (null for older enrichment runs). */
@@ -101,12 +96,10 @@ type AnnotationBase = {
 
 /**
  * Discriminated union on `overlay_type`.
- * Checking `a.overlay_type === "mark"` narrows `a.payload` to `MarkPayload`.
+ * Checking `a.overlay_type === "annotation"` narrows `a.payload` to `AnnotationPayload`.
  */
 export type StudentPaperAnnotation =
-	| (AnnotationBase & { overlay_type: "mark"; payload: MarkPayload })
-	| (AnnotationBase & { overlay_type: "tag"; payload: TagPayload })
-	| (AnnotationBase & { overlay_type: "comment"; payload: CommentPayload })
+	| (AnnotationBase & { overlay_type: "annotation"; payload: AnnotationPayload })
 	| (AnnotationBase & { overlay_type: "chain"; payload: ChainPayload })
 
 export type GetJobAnnotationsResult =

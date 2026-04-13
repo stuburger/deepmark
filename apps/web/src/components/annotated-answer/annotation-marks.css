@@ -14,13 +14,3 @@ span[data-mark-type="cross"]::before {
 	font-size: 0.75em;
 	margin-right: 2px;
 }
-
-/* AO tag trailing badge via ::after pseudo-element */
-span[data-mark-type="ao_tag"]::after {
-	content: " [" attr(data-tag-display) "]";
-	font-size: 0.65em;
-	font-weight: 600;
-	vertical-align: super;
-	color: #3b82f6;
-	margin-left: 1px;
-}

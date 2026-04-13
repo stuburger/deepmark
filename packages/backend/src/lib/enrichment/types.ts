@@ -10,7 +10,6 @@ export type PendingAnnotation = {
 	anchorTokenStartId: string | null
 	anchorTokenEndId: string | null
 	bbox: NormalisedBox
-	parentIndex: number | undefined
 	sortOrder: number
 }
 

@@ -329,8 +329,8 @@ export function DownloadPdfButton({
 				doc.setFont("IndieFlower", "normal")
 				doc.setFontSize(11)
 
-				const inlineMarks = seg.marks.filter((m) => m.type !== "ao_tag")
-				const tagMarks = seg.marks.filter((m) => m.type === "ao_tag")
+				const inlineMarks = seg.marks
+				const aoMarks = seg.marks.filter((m) => m.attrs.ao_category)
 
 				// Determine text colour from marks
 				let textColour: RGB = [55, 65, 81]
@@ -440,8 +440,8 @@ export function DownloadPdfButton({
 				// AO tag pills
 				doc.setFont("helvetica", "bold")
 				doc.setFontSize(7)
-				for (const tm of tagMarks) {
-					const display = (tm.attrs.display as string) ?? "?"
+				for (const tm of aoMarks) {
+					const display = (tm.attrs.ao_display as string) ?? (tm.attrs.ao_category as string) ?? "?"
 					const tagColour = AO_COLOURS[display] ?? [107, 114, 128]
 					const tagW = doc.getTextWidth(display) + 3
 					if (cx + tagW + 2 > maxX) {
@@ -708,8 +708,8 @@ export function DownloadPdfButton({
 				const aoLabels = [
 					...new Set(
 						(annotations ?? [])
-							.filter((a) => a.overlay_type === "tag")
-							.map((a) => (a.payload as { category?: string }).category)
+							.filter((a) => a.overlay_type === "annotation")
+							.map((a) => (a.payload as { ao_category?: string }).ao_category)
 							.filter((c): c is string => !!c),
 					),
 				].sort()

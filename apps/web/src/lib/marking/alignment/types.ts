@@ -6,8 +6,8 @@ export type TokenAlignment = {
 	confidence: number
 }
 
-/** All annotation signal names — the 6 physical mark signals plus ao_tag and chain. */
-export type AnnotationSignal = MarkSignal | "ao_tag" | "chain"
+/** All annotation signal names — the 6 physical mark signals plus chain. */
+export type AnnotationSignal = MarkSignal | "chain"
 
 /** PM-style mark: typed decoration over a character range */
 export type TextMark = {

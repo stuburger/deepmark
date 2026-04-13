@@ -4,7 +4,7 @@ import { parseMarkPointsFromPrisma } from "@mcp-gcse/shared"
 import { generateText } from "ai"
 import { buildAnnotationPrompt } from "./annotation-prompt"
 import { AnnotationPlanSchema } from "./annotation-schema"
-import { buildPayload } from "./payload-builder"
+import { buildPayload, inferOverlayType } from "./payload-builder"
 import { resolveTokenSpan } from "./token-spans"
 import type { AnnotateOneQuestionArgs, PendingAnnotation } from "./types"
 
@@ -109,18 +109,17 @@ export async function annotateOneQuestion(
 			continue
 		}
 
-		const payload = buildPayload(item, examBoard)
+		const payload = buildPayload(item)
 
 		pending.push({
 			questionId: gradingResult.question_id,
 			pageOrder: span.pageOrder,
-			overlayType: item.overlay_type,
+			overlayType: inferOverlayType(item),
 			sentiment: item.sentiment,
 			payload,
 			anchorTokenStartId: span.startTokenId,
 			anchorTokenEndId: span.endTokenId,
 			bbox: span.bbox,
-			parentIndex: item.parent_index,
 			sortOrder: i,
 		})
 	}

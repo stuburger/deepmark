@@ -72,7 +72,6 @@ export function deriveAnnotationsFromDoc(
 					sentiment: (attrs.sentiment as string) ?? "neutral",
 					payload: entry.buildPayload(attrs),
 					bbox: span.bbox,
-					parent_annotation_id: null,
 					anchor_token_start_id: span.startTokenId,
 					anchor_token_end_id: span.endTokenId,
 				} as StudentPaperAnnotation)

@@ -42,8 +42,7 @@ function markClasses(mark: TextMark): string {
 				return "bg-violet-100/40 dark:bg-violet-900/20"
 			return "bg-blue-100/40 dark:bg-blue-900/20"
 		}
-		case "ao_tag":
-			return "" // tags render as trailing pills, not span styling
+		// no default needed — all AnnotationSignal values covered above
 		default:
 			return ""
 	}
@@ -61,9 +60,9 @@ function AnnotatedSpan({ segment }: { segment: TextSegment }) {
 	const { text, marks } = segment
 	if (marks.length === 0) return <>{text}</>
 
-	// Separate tag marks (render as trailing pills) from inline marks (render as span styles)
-	const inlineMarks = marks.filter((m) => m.type !== "ao_tag")
-	const tagMarks = marks.filter((m) => m.type === "ao_tag")
+	// All marks are inline; marks with ao_category also render a trailing AO pill
+	const inlineMarks = marks
+	const aoMarks = marks.filter((m) => m.attrs.ao_category)
 
 	// Compute leading symbols
 	const symbols: Array<{ char: string; className: string }> = []
@@ -93,8 +92,8 @@ function AnnotatedSpan({ segment }: { segment: TextSegment }) {
 			<span className={classes || undefined} title={title}>
 				{text}
 			</span>
-			{tagMarks.map((tm) => {
-				const display = (tm.attrs.display as string) ?? "?"
+			{aoMarks.map((tm) => {
+				const display = (tm.attrs.ao_display as string) ?? (tm.attrs.ao_category as string) ?? "?"
 				const colorClass = AO_TAG_CLASSES[display] ?? AO_TAG_FALLBACK
 				return (
 					<span

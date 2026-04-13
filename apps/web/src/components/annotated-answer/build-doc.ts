@@ -38,13 +38,15 @@ function buildTextContent(text: string, marks: TextMark[]): JSONContent[] {
 					sentiment: m.sentiment,
 					reason: (m.attrs.reason as string) ?? null,
 					annotationId: m.annotationId,
-					...(m.type === "ao_tag"
+					...(m.attrs.ao_category
 						? {
-								display: m.attrs.display ?? null,
-								category: m.attrs.category ?? null,
-								awarded: m.attrs.awarded ?? null,
-								quality: m.attrs.quality ?? null,
+								ao_category: m.attrs.ao_category ?? null,
+								ao_display: m.attrs.ao_display ?? null,
+								ao_quality: m.attrs.ao_quality ?? null,
 							}
+						: {}),
+					...(m.attrs.comment
+						? { comment: m.attrs.comment ?? null }
 						: {}),
 					...(m.type === "chain"
 						? {

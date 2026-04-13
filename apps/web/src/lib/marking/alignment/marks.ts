@@ -42,11 +42,10 @@ export function deriveTextMarks(
 		const attrs: Record<string, unknown> = {}
 		if (payload.reason) attrs.reason = payload.reason
 		if (payload.label) attrs.label = payload.label
-		if (payload.text) attrs.text = payload.text
-		if (payload.category) attrs.category = payload.category
-		if (payload.display) attrs.display = payload.display
-		if (payload.awarded !== undefined) attrs.awarded = payload.awarded
-		if (payload.quality) attrs.quality = payload.quality
+		if (payload.ao_category) attrs.ao_category = payload.ao_category
+		if (payload.ao_display) attrs.ao_display = payload.ao_display
+		if (payload.ao_quality) attrs.ao_quality = payload.ao_quality
+		if (payload.comment) attrs.comment = payload.comment
 		if (payload.chainType) attrs.chainType = payload.chainType
 		if (payload.phrase) attrs.phrase = payload.phrase
 

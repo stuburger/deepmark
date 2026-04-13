@@ -39,7 +39,7 @@ export function pointBasedAnnotations(
 			overlayType: "annotation",
 			sentiment: awarded > 0 ? "positive" : "negative",
 			payload: {
-				_v: 2,
+				_v: 1,
 				signal: awarded > 0 ? "tick" : "cross",
 				reason: `${awarded}/${max}`,
 				markPoints,
@@ -75,7 +75,7 @@ export function deterministicMcqAnnotation(
 			overlayType: "annotation",
 			sentiment: correct ? "positive" : "negative",
 			payload: {
-				_v: 2,
+				_v: 1,
 				signal: correct ? "tick" : "cross",
 				reason,
 			},

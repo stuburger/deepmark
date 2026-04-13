@@ -7,6 +7,7 @@ import {
 	SheetTitle,
 	SheetTrigger,
 } from "@/components/ui/sheet"
+import { aoLegendClass } from "@/lib/marking/ao-palette"
 import type { GradingResult, StudentPaperAnnotation } from "@/lib/marking/types"
 import type { ReactElement } from "react"
 
@@ -80,11 +81,6 @@ const CHAIN_KEY = [
 	},
 ] as const
 
-const AO_LEGEND_STYLES: Record<string, string> = {
-	AO1: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
-	AO2: "bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-400",
-	AO3: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
-}
 
 /**
  * Sheet panel showing an annotation key/legend.
@@ -181,7 +177,7 @@ export function AnnotationLegend({
 								{aoLabels.map((ao) => (
 									<span
 										key={ao}
-										className={`inline-flex items-center rounded px-2 py-0.5 text-[10px] font-semibold ${AO_LEGEND_STYLES[ao] ?? "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"}`}
+										className={`inline-flex items-center rounded px-2 py-0.5 text-[10px] font-semibold ${aoLegendClass(ao)}`}
 									>
 										{ao}
 									</span>

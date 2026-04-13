@@ -1,5 +1,6 @@
 "use client"
 
+import { aoQualityClass } from "@/lib/marking/ao-palette"
 import { bboxToPercentStyle } from "@/lib/marking/bounding-box"
 import type { StudentPaperAnnotation } from "@/lib/marking/types"
 import { cn } from "@/lib/utils"
@@ -89,7 +90,7 @@ function AnnotationPopoverContent({ annotation }: { annotation: SignalAnnotation
 				{payload.ao_category && (
 					<div className="flex items-start gap-1.5">
 						<span
-							className={`inline-flex items-center shrink-0 rounded border px-1.5 py-0.5 text-[11px] font-semibold ${aoColorClass(payload.ao_quality)}`}
+							className={`inline-flex items-center shrink-0 rounded border px-1.5 py-0.5 text-[11px] font-semibold ${aoQualityClass(payload.ao_quality)}`}
 						>
 							{payload.ao_display ?? payload.ao_category}
 						</span>
@@ -146,14 +147,6 @@ function PopoverHeader({
 			<span className="text-sm font-semibold">{title}</span>
 		</div>
 	)
-}
-
-function aoColorClass(quality: string | undefined): string {
-	if (quality === "strong" || quality === "valid")
-		return "text-green-700 bg-green-50 border-green-200 dark:text-green-400 dark:bg-green-950 dark:border-green-800"
-	if (quality === "partial")
-		return "text-amber-700 bg-amber-50 border-amber-200 dark:text-amber-400 dark:bg-amber-950 dark:border-amber-800"
-	return "text-red-700 bg-red-50 border-red-200 dark:text-red-400 dark:bg-red-950 dark:border-red-800"
 }
 
 // ─── Main component ──────────────────────────────────────────────────────────

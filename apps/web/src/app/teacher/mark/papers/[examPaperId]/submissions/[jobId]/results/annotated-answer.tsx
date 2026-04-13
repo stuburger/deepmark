@@ -1,5 +1,6 @@
 "use client"
 
+import { aoLabel, aoPillClass } from "@/lib/marking/ao-palette"
 import {
 	type TextMark,
 	type TextSegment,
@@ -7,16 +8,6 @@ import {
 } from "@/lib/marking/token-alignment"
 import { cn } from "@/lib/utils"
 import { useMemo } from "react"
-
-// ─── AO tag colours (matches tag-overlay.tsx) ───────────────────────────────
-
-const AO_TAG_CLASSES: Record<string, string> = {
-	AO1: "border-blue-400 text-blue-600 bg-blue-50 dark:border-blue-500 dark:text-blue-400 dark:bg-blue-950/40",
-	AO2: "border-pink-400 text-pink-600 bg-pink-50 dark:border-pink-500 dark:text-pink-400 dark:bg-pink-950/40",
-	AO3: "border-green-400 text-green-600 bg-green-50 dark:border-green-500 dark:text-green-400 dark:bg-green-950/40",
-}
-const AO_TAG_FALLBACK =
-	"border-zinc-300 text-zinc-600 bg-zinc-50 dark:border-zinc-500 dark:text-zinc-400 dark:bg-zinc-800/40"
 
 // ─── Mark styling ───────────────────────────────────────────────────────────
 
@@ -60,13 +51,11 @@ function AnnotatedSpan({ segment }: { segment: TextSegment }) {
 	const { text, marks } = segment
 	if (marks.length === 0) return <>{text}</>
 
-	// All marks are inline; marks with ao_category also render a trailing AO pill
-	const inlineMarks = marks
 	const aoMarks = marks.filter((m) => m.attrs.ao_category)
 
 	// Compute leading symbols
 	const symbols: Array<{ char: string; className: string }> = []
-	for (const m of inlineMarks) {
+	for (const m of marks) {
 		if (m.type === "tick")
 			symbols.push({ char: "\u2713", className: "text-green-500" })
 		if (m.type === "cross")
@@ -74,8 +63,8 @@ function AnnotatedSpan({ segment }: { segment: TextSegment }) {
 	}
 
 	// Merge class names and find first title
-	const classes = inlineMarks.map(markClasses).filter(Boolean).join(" ")
-	const title = inlineMarks.map(markTitle).find(Boolean)
+	const classes = marks.map(markClasses).filter(Boolean).join(" ")
+	const title = marks.map(markTitle).find(Boolean)
 
 	return (
 		<>
@@ -93,14 +82,13 @@ function AnnotatedSpan({ segment }: { segment: TextSegment }) {
 				{text}
 			</span>
 			{aoMarks.map((tm) => {
-				const display = (tm.attrs.ao_display as string) ?? (tm.attrs.ao_category as string) ?? "?"
-				const colorClass = AO_TAG_CLASSES[display] ?? AO_TAG_FALLBACK
+				const display = aoLabel(tm.attrs)
 				return (
 					<span
 						key={tm.annotationId}
 						className={cn(
 							"inline-flex items-center rounded border px-1 py-0 text-[10px] font-semibold ml-0.5 align-super leading-none",
-							colorClass,
+							aoPillClass(display),
 						)}
 						title={tm.attrs.reason as string | undefined}
 					>

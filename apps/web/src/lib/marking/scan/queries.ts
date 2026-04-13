@@ -186,7 +186,7 @@ export async function getJobAnnotations(
 			)
 		} catch {
 			// Fallback for unparseable payloads — should not happen but be resilient
-			payload = { _v: 2, signal: "tick", reason: "" } as AnyAnnotationPayload
+			payload = { _v: 1, signal: "tick", reason: "" } as AnyAnnotationPayload
 		}
 
 		return {

@@ -1,6 +1,7 @@
 "use client"
 
 import type { StudentPaperAnnotation } from "@/lib/marking/types"
+import { aoHex } from "@/lib/marking/ao-palette"
 import {
 	CIRCLE_PAD_X,
 	DOUBLE_UNDERLINE_GAP,
@@ -37,13 +38,6 @@ const SIGNAL_COLORS = {
 	circle: "#f59e0b",
 } as const
 
-/** Colour by AO category — blue for knowledge, pink for analysis, green for AO3. */
-const AO_COLORS: Record<string, string> = {
-	AO1: "#3b82f6",
-	AO2: "#ec4899",
-	AO3: "#22c55e",
-}
-const AO_FALLBACK_COLOR = "#6b7280"
 
 /**
  * Renders a mark signal (tick/cross/underline/box/circle) on the scanned page,
@@ -243,7 +237,7 @@ function AoBadge({ category, x, y, sz }: { category: string; x: number; y: numbe
 	const pillHeight = fontSize + paddingV * 2
 	const borderWidth = sz * TAG_BORDER
 	const borderRadius = sz * TAG_RADIUS
-	const color = AO_COLORS[category] ?? AO_FALLBACK_COLOR
+	const color = aoHex(category)
 	const pillWidth = category.length * fontSize * TAG_CHAR_WIDTH + paddingH * 2
 
 	return (

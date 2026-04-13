@@ -7,6 +7,7 @@ import {
 	DropdownMenuItem,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { aoLabel, aoRgb } from "@/lib/marking/ao-palette"
 import { alignTokensToAnswer } from "@/lib/marking/alignment/align"
 import { deriveTextMarks } from "@/lib/marking/alignment/marks"
 import { splitIntoSegments } from "@/lib/marking/alignment/segments"
@@ -60,11 +61,6 @@ const CHAIN_BG: Record<string, RGB> = {
 	judgement: [237, 233, 254],
 }
 
-const AO_COLOURS: Record<string, RGB> = {
-	AO1: [37, 99, 235],
-	AO2: [219, 39, 119],
-	AO3: [22, 163, 74],
-}
 
 // ── Legend data (matches annotation-legend.tsx) ─────────────────────────────
 
@@ -441,8 +437,8 @@ export function DownloadPdfButton({
 				doc.setFont("helvetica", "bold")
 				doc.setFontSize(7)
 				for (const tm of aoMarks) {
-					const display = (tm.attrs.ao_display as string) ?? (tm.attrs.ao_category as string) ?? "?"
-					const tagColour = AO_COLOURS[display] ?? [107, 114, 128]
+					const display = aoLabel(tm.attrs)
+					const tagColour = aoRgb(display)
 					const tagW = doc.getTextWidth(display) + 3
 					if (cx + tagW + 2 > maxX) {
 						cx = margin + 4
@@ -723,7 +719,7 @@ export function DownloadPdfButton({
 					gap(3)
 					let aoX = margin + 2
 					for (const ao of aoLabels) {
-						const aoColour = AO_COLOURS[ao] ?? [107, 114, 128]
+						const aoColour = aoRgb(ao)
 						doc.setFontSize(8)
 						doc.setFont("helvetica", "bold")
 						const aoW = doc.getTextWidth(ao) + 4

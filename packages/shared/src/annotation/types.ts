@@ -44,7 +44,7 @@ export const MarkPointEntrySchema = z.object({
  * with optional AO tag data and margin comment — all self-contained in one record.
  */
 export const AnnotationPayloadSchema = z.object({
-	_v: z.literal(2),
+	_v: z.literal(1),
 	signal: z.enum(MARK_SIGNAL_NAMES),
 	/** Short examiner-style note explaining what this mark refers to. REQUIRED. */
 	reason: z.string(),
@@ -64,7 +64,7 @@ export const AnnotationPayloadSchema = z.object({
 
 /** Chain: a connective/reasoning phrase highlighted on the scan */
 export const ChainPayloadSchema = z.object({
-	_v: z.literal(2),
+	_v: z.literal(1),
 	chainType: z.enum(["reasoning", "evaluation", "judgement"]),
 	/** The trigger phrase matched in the student's text */
 	phrase: z.string(),

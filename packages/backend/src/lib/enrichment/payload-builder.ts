@@ -17,7 +17,7 @@ export function buildPayload(
 ): Record<string, unknown> {
 	if (isSignalAnnotation(item)) {
 		return {
-			_v: 2,
+			_v: 1,
 			signal: item.signal ?? "tick",
 			reason: item.reason ?? "",
 			...(item.label ? { label: item.label } : {}),
@@ -34,7 +34,7 @@ export function buildPayload(
 
 	// Chain
 	return {
-		_v: 2,
+		_v: 1,
 		chainType: item.chain_type ?? "reasoning",
 		phrase: item.trigger_phrase ?? "",
 	}

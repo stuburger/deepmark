@@ -47,7 +47,7 @@ function makeAnnotation(
 		page_order: 1,
 		overlay_type: overlayType,
 		sentiment: "positive",
-		payload: { _v: 2, ...payload },
+		payload: { _v: 1, ...payload },
 		bbox: [0, 0, 100, 100],
 		anchor_token_start_id: startTokenId,
 		anchor_token_end_id: endTokenId,

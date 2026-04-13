@@ -33,7 +33,7 @@ function buildSignalPayload(
 	attrs: Record<string, unknown>,
 ): AnnotationPayload {
 	return {
-		_v: 2,
+		_v: 1,
 		signal,
 		reason: (attrs.reason as string) ?? "",
 		...(attrs.ao_category
@@ -92,7 +92,7 @@ export const MARK_REGISTRY: readonly MarkRegistryEntry[] = [
 		overlayType: "chain",
 		buildPayload: (a) =>
 			({
-				_v: 2,
+				_v: 1,
 				chainType: (a.chainType as string) ?? "reasoning",
 				phrase: (a.phrase as string) ?? "",
 			}) as AnyAnnotationPayload,

@@ -79,6 +79,13 @@ export const MarkSchemeSchema = z.object({
 				)
 				.nullable()
 				.optional(),
+			content: z
+				.string()
+				.nullable()
+				.optional()
+				.describe(
+					"For level_of_response questions: the COMPLETE mark scheme as markdown — level descriptors, indicative content, exemplar answers, marker notes, caps, command word. For other question types: null.",
+				),
 			matched_question_id: z
 				.string()
 				.nullable()

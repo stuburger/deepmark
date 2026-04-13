@@ -41,25 +41,6 @@ type MarkPointRow = {
 	criteria: string
 }
 
-type MarkingRulesValue =
-	| {
-			command_word: string | undefined
-			items_required: number | undefined
-			levels: Array<{
-				level: number
-				mark_range: [number, number]
-				descriptor: string
-				ao_requirements?: string[]
-			}>
-			caps?: Array<{
-				condition: string
-				max_level?: number
-				max_mark?: number
-				reason: string
-			}>
-	  }
-	| undefined
-
 /** All derived fields needed to persist a question + mark scheme. */
 type ResolvedMarkScheme = {
 	raw: ExtractedQuestion
@@ -71,8 +52,8 @@ type ResolvedMarkScheme = {
 	pointsTotal: number
 	correctOptionLabels: string[]
 	markingMethod: MarkingMethod
-	markingRules: MarkingRulesValue
 	aoDescription: string
+	content: string
 }
 
 // ─── Stage 1: Match ─────────────────────────────────────────────────────────
@@ -155,16 +136,6 @@ export function resolveMarkSchemeFields(
 				? "level_of_response"
 				: "point_based"
 
-	const markingRules: MarkingRulesValue =
-		markingMethod === "level_of_response" && q.levels && q.levels.length > 0
-			? ({
-					command_word: q.command_word ?? undefined,
-					items_required: q.items_required ?? undefined,
-					levels: q.levels,
-					caps: q.caps?.length ? q.caps : undefined,
-				} as MarkingRulesValue)
-			: undefined
-
 	const markPoints = (q.mark_points ?? []).map((mp, idx) => ({
 		point_number: idx + 1,
 		description: mp.description,
@@ -185,8 +156,8 @@ export function resolveMarkSchemeFields(
 		pointsTotal,
 		correctOptionLabels,
 		markingMethod,
-		markingRules,
 		aoDescription: formatAoAllocations(q.ao_allocations ?? undefined) ?? "",
+		content: q.content ?? "",
 	}
 }
 
@@ -300,7 +271,7 @@ async function upsertMarkScheme(
 		mark_points: r.markPoints,
 		correct_option_labels: r.correctOptionLabels,
 		marking_method: r.markingMethod,
-		marking_rules: r.markingRules ?? undefined,
+		content: r.content,
 		link_status: linkStatus,
 	}
 
@@ -344,7 +315,7 @@ async function maybeRunAdversarialTests(
 		pointsTotal: r.pointsTotal,
 		markPointsPrisma: r.markPoints,
 		effectiveMarkingMethod: r.markingMethod,
-		markingRules: r.markingRules,
+		content: r.content,
 		correctOptionLabels: r.correctOptionLabels,
 		aoDescription: r.aoDescription,
 		guidance: r.raw.guidance,

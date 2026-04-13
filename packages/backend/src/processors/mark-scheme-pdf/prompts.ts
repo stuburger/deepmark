@@ -54,6 +54,18 @@ MARK POINTS, GUIDANCE AND TOTAL MARKS — CRITICAL RULES:
   * For calculation questions: description="Correct calculation method", criteria="Show the exact working required (e.g. step-by-step calculation shown in the mark scheme)".
   * Always copy the specific example answers, bullet-point lists, and any worked examples from the document into the criteria or guidance fields — never summarise or omit them.
 
+CONTENT FIELD — LEVEL OF RESPONSE QUESTIONS:
+- For every level_of_response question, populate the \`content\` field with the COMPLETE mark scheme as clean markdown.
+- The markdown MUST include ALL of the following sections that appear in the document for this question:
+  * **## Level descriptors** — each level with its mark range, descriptor text, and AO requirements (e.g. "### Level 3 (7–9 marks)")
+  * **## Indicative content** — the "Answers may include" or "Indicative content" section, copied verbatim with all bullet points
+  * **## Exemplar answer** — any "Example of a Level N developed answer" text, labelled with the level it represents
+  * **## Marker notes** — any "Do not accept…", "Accept…", "Credit if…" instructions
+  * **## Caps** — any capping rules (e.g. "If no evaluation, cap at Level 2")
+  * Command word and items_required if stated (include at the top under a "## Question" heading)
+- Use ## headings for each section. Copy content verbatim from the document — do not summarise.
+- For point_based and multiple_choice questions, set \`content\` to null — it is not needed.
+
 AO BREAKDOWN — CRITICAL RULES:
 - AQA mark schemes print a "Marks for this question:" header above the level table, e.g. "AO2 – 3 marks    AO3 – 6 marks". Extract ONLY the AO codes and mark values stated in that line as ao_allocations.
 - For level_of_response questions, the right-hand column of each level's bullet points is labelled with an AO code (e.g. AO3, AO2). Copy these labels verbatim into ao_requirements for each level — include ONLY the codes that appear in the document for that level.

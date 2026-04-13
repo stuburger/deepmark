@@ -76,7 +76,6 @@ export async function ensureExamPaper(): Promise<void> {
 			mark_points: ms.mark_points,
 			correct_option_labels: ms.correct_option_labels,
 			marking_method: ms.marking_method as never,
-			marking_rules: ms.marking_rules ?? undefined,
 			tags: ms.tags,
 			created_by_id: fixture.user.id,
 		})),

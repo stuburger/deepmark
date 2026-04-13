@@ -16,30 +16,6 @@ export interface GcseMarkPoint {
 	isRequired: boolean
 }
 
-/** Level-of-response level descriptor (stored in marking_rules.levels). */
-export interface MarkingRulesLevel {
-	level: number
-	mark_range: [number, number]
-	descriptor: string
-	ao_requirements?: string[] | null
-}
-
-/** Level-of-response cap (stored in marking_rules.caps). */
-export interface MarkingRulesCap {
-	condition: string
-	max_level?: number
-	max_mark?: number
-	reason: string
-}
-
-/** Marking rules for level_of_response (stored in MarkScheme.marking_rules Json). */
-export interface MarkingRules {
-	command_word?: string
-	items_required?: number | null
-	levels: MarkingRulesLevel[]
-	caps?: MarkingRulesCap[]
-}
-
 /** A question with its mark scheme, adapted for GCSE (written | multiple_choice). */
 export interface QuestionWithMarkScheme {
 	id: string
@@ -53,7 +29,9 @@ export interface QuestionWithMarkScheme {
 	correctOptionLabels?: string[]
 	availableOptions?: Array<{ optionLabel: string; optionText: string }>
 	markingMethod?: "deterministic" | "point_based" | "level_of_response"
-	markingRules?: MarkingRules | null
+	/** Rich markdown content — indicative content, exemplar answers, marker notes, level descriptors.
+	 *  Primary source of question-specific marking guidance for LoR. */
+	content?: string | null
 }
 
 /** Response parsed from student submission. */

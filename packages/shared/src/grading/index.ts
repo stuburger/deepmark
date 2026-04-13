@@ -3,10 +3,7 @@ export * from "./schemas"
 export * from "./score"
 export * from "./build-question"
 export { Grader } from "./grader"
-export {
-	parseMarkPointsFromPrisma,
-	parseMarkingRulesFromPrisma,
-} from "./grader-prisma"
+export { parseMarkPointsFromPrisma } from "./grader-prisma"
 export {
 	parseGradingResults,
 	GradingResultDbSchema,

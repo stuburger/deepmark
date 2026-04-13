@@ -1,5 +1,4 @@
 import { parseMarkPointsFromPrisma } from "./grader-prisma"
-import { parseMarkingRulesFromPrisma } from "./grader-prisma"
 import type { QuestionWithMarkScheme } from "./types"
 
 // ============================================
@@ -18,8 +17,8 @@ export interface BuildQuestionInput {
 		pointsTotal: number
 		markPoints: unknown
 		markingMethod?: string | null
-		markingRules?: unknown
 		correctOptionLabels?: string[]
+		content?: string | null
 	}
 }
 
@@ -60,7 +59,7 @@ function normalizeMarkingMethod(
 
 /**
  * Build a QuestionWithMarkScheme domain object from flat question + mark scheme data.
- * Handles all internal parsing (mark points, marking rules, MCQ options, type normalization).
+ * Handles all internal parsing (mark points, MCQ options, type normalization).
  */
 export function buildQuestionWithMarkScheme(
 	input: BuildQuestionInput,
@@ -80,6 +79,6 @@ export function buildQuestionWithMarkScheme(
 		correctOptionLabels: markScheme.correctOptionLabels,
 		availableOptions: parseMultipleChoiceOptions(input.multipleChoiceOptions),
 		markingMethod: normalizeMarkingMethod(markScheme.markingMethod),
-		markingRules: parseMarkingRulesFromPrisma(markScheme.markingRules),
+		content: markScheme.content ?? null,
 	}
 }

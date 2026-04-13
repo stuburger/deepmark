@@ -12,7 +12,6 @@ import {
 	type MarkerOrchestrator,
 	type QuestionWithMarkScheme,
 	parseMarkPointsFromPrisma,
-	parseMarkingRulesFromPrisma,
 } from "@mcp-gcse/shared"
 
 const TAG = "grade-questions"
@@ -314,6 +313,6 @@ function buildQuestionWithScheme(
 				| "deterministic"
 				| "point_based"
 				| "level_of_response") ?? undefined,
-		markingRules: parseMarkingRulesFromPrisma(ms.marking_rules),
+		content: ms.content,
 	}
 }

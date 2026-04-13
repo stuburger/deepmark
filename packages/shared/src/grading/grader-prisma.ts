@@ -1,5 +1,5 @@
 import { z } from "zod/v4"
-import type { GcseMarkPoint, MarkingRules } from "./types"
+import type { GcseMarkPoint } from "./types"
 
 // ============================================
 // PRISMA JSON → DOMAIN TYPE PARSERS
@@ -24,36 +24,4 @@ export function parseMarkPointsFromPrisma(json: unknown): GcseMarkPoint[] {
 		criteria: mp.criteria,
 		isRequired: false,
 	}))
-}
-
-const markingRulesLevelSchema = z.object({
-	level: z.number(),
-	mark_range: z.tuple([z.number(), z.number()]),
-	descriptor: z.string(),
-	ao_requirements: z.array(z.string()).nullish(),
-})
-
-const markingRulesCapSchema = z.object({
-	condition: z.string(),
-	max_level: z.number().optional(),
-	max_mark: z.number().optional(),
-	reason: z.string(),
-})
-
-const markingRulesPrismaSchema = z.object({
-	command_word: z.string().optional(),
-	items_required: z.number().nullish(),
-	levels: z.array(markingRulesLevelSchema),
-	caps: z.array(markingRulesCapSchema).optional(),
-})
-
-/**
- * Parse Prisma marking_rules JSON into MarkingRules, or null if invalid/empty.
- */
-export function parseMarkingRulesFromPrisma(
-	json: unknown,
-): MarkingRules | null {
-	if (json == null) return null
-	const result = markingRulesPrismaSchema.safeParse(json)
-	return result.success ? result.data : null
 }

@@ -331,13 +331,6 @@ export function SubmissionToolbar({
 							onNavigateToJob={onNavigateToJob ?? (() => {})}
 							onReAnnotate={canGenerate ? onGenerateAnnotations : undefined}
 						/>
-						<Link
-							href={`/teacher/exam-papers/${examPaperId}`}
-							className={buttonVariants({ size: "sm" })}
-						>
-							<PlusCircle className="h-3.5 w-3.5 mr-1.5" />
-							<span className="hidden sm:inline">Mark another</span>
-						</Link>
 					</div>
 				)}
 

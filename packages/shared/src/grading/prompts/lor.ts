@@ -12,37 +12,11 @@ export function buildLoRPrompt(
 	learningContent?: LearningContentItem[],
 	levelDescriptors?: string,
 ): string {
-	const rules = question.markingRules
-	if (!rules?.levels?.length) {
+	if (!question.content?.trim()) {
 		throw new Error(
-			`LevelOfResponse marking requires markingRules.levels for question ${question.id}`,
+			`LevelOfResponse marking requires content for question ${question.id}`,
 		)
 	}
-
-	const levelSections = rules.levels
-		.map(
-			(l) =>
-				`Level ${l.level} (${l.mark_range[0]}-${l.mark_range[1]} marks): ${l.descriptor}${l.ao_requirements?.length ? `\n  AO requirements: ${l.ao_requirements.join("; ")}` : ""}`,
-		)
-		.join("\n\n")
-
-	const capsSection =
-		rules.caps && rules.caps.length > 0
-			? `\n<Caps>\n${rules.caps
-					.map(
-						(c) =>
-							`- ${c.condition}: max_level=${c.max_level ?? "—"}, max_mark=${c.max_mark ?? "—"}. ${c.reason}`,
-					)
-					.join("\n")}\n</Caps>`
-			: ""
-
-	const commandWordNote = rules.command_word
-		? `\nCommand word: ${rules.command_word}.`
-		: ""
-	const itemsNote =
-		rules.items_required != null
-			? ` Number of items required: ${rules.items_required}.`
-			: ""
 
 	const learningSection =
 		learningContent && learningContent.length > 0
@@ -60,12 +34,12 @@ ${learningSection}<Topic>\n${question.topic}\n</Topic>
 
 <Question>\nQuestion ID: ${question.id}\n\n${question.questionText}\n</Question>
 
-<MarkScheme>\n${question.rubric}${question.guidance ? `\nGuidance: ${question.guidance}` : ""}\n\nTotal marks available: ${question.totalPoints}.${commandWordNote}${itemsNote}
+<MarkScheme>\n${question.rubric}${question.guidance ? `\nGuidance: ${question.guidance}` : ""}\n\nTotal marks available: ${question.totalPoints}.
 </MarkScheme>
 
-<LevelDescriptors>
-${levelSections}
-</LevelDescriptors>${capsSection}${levelDescriptors ? `\n\n<ExamLevelDescriptors>\nGeneral level descriptors provided by the teacher for this exam.\nUse alongside the question-specific mark scheme to inform your marking.\n${levelDescriptors}\n</ExamLevelDescriptors>` : ""}
+<MarkSchemeContent>
+${question.content}
+</MarkSchemeContent>${levelDescriptors ? `\n\n<ExamLevelDescriptors>\nGeneral level descriptors provided by the teacher for this exam.\nUse alongside the question-specific mark scheme to inform your marking.\n${levelDescriptors}\n</ExamLevelDescriptors>` : ""}
 
 <StudentAnswer>\n${answer || "[No answer provided]"}\n</StudentAnswer>${parsingNote}
 

@@ -22,7 +22,7 @@ export async function runAndPersistAdversarialTests(args: {
 	pointsTotal: number
 	markPointsPrisma: unknown
 	effectiveMarkingMethod: string
-	markingRules: unknown
+	content: string
 	correctOptionLabels: string[]
 	aoDescription: string
 	guidance: string | null | undefined
@@ -39,7 +39,7 @@ export async function runAndPersistAdversarialTests(args: {
 			pointsTotal: args.pointsTotal,
 			markPoints: args.markPointsPrisma,
 			markingMethod: args.effectiveMarkingMethod,
-			markingRules: args.markingRules ?? null,
+			content: args.content ?? "",
 			correctOptionLabels: args.correctOptionLabels,
 		},
 	})

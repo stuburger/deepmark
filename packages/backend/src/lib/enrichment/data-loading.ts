@@ -93,7 +93,7 @@ export async function loadEnrichmentData(
 						guidance: true,
 						mark_points: true,
 						marking_method: true,
-						marking_rules: true,
+						content: true,
 					},
 				})
 			: []

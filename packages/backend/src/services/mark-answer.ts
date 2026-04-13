@@ -74,7 +74,7 @@ export async function markAnswerById(answer_id: string): Promise<{
 			pointsTotal: markScheme.points_total,
 			markPoints: markScheme.mark_points,
 			markingMethod: markScheme.marking_method,
-			markingRules: markScheme.marking_rules,
+			content: markScheme.content,
 			correctOptionLabels: markScheme.correct_option_labels,
 		},
 	})

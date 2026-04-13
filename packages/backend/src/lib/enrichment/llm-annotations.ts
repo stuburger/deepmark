@@ -56,7 +56,7 @@ export async function annotateOneQuestion(
 					}),
 				),
 				markingMethod: markScheme.marking_method,
-				markingRules: markScheme.marking_rules,
+				content: markScheme.content,
 			}
 		: null
 

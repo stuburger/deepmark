@@ -102,7 +102,7 @@ export type QuestionMarkScheme = {
 	points_total: number
 	marking_method: string
 	mark_points: unknown
-	marking_rules: unknown
+	content: string
 	link_status: string
 	correct_option_labels: string[]
 }

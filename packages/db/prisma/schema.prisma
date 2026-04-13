@@ -237,8 +237,9 @@ model MarkScheme {
   mark_points           Json             @default("[]")
   correct_option_labels String[]
   marking_method        MarkingMethod    @default(point_based)
-  // For level_of_response: { command_word?, items_required?, levels[], caps[] }
-  marking_rules         Json?
+  // Rich markdown content — indicative content, exemplar answers, marker notes, level descriptors.
+  // Primary source of question-specific marking guidance for LoR; optional for point_based/deterministic.
+  content               String           @default("")
   link_status           MarkSchemeStatus @default(linked)
   refined_at            DateTime?
   refinement_iterations Int              @default(0)

@@ -9,7 +9,6 @@ import {
 	MarkerOrchestrator,
 	type QuestionWithMarkScheme,
 	parseMarkPointsFromPrisma,
-	parseMarkingRulesFromPrisma,
 } from "@mcp-gcse/shared"
 import { Resource } from "sst"
 import { auth } from "../auth"
@@ -79,7 +78,7 @@ export async function evaluateStudentAnswer(
 						points_total: true,
 						marking_method: true,
 						mark_points: true,
-						marking_rules: true,
+						content: true,
 						correct_option_labels: true,
 					},
 				},
@@ -94,7 +93,6 @@ export async function evaluateStudentAnswer(
 		}
 
 		const markPoints = parseMarkPointsFromPrisma(markScheme.mark_points)
-		const markingRules = parseMarkingRulesFromPrisma(markScheme.marking_rules)
 
 		type RawOption = { option_label: string; option_text: string }
 		const availableOptions = Array.isArray(question.multiple_choice_options)
@@ -125,7 +123,7 @@ export async function evaluateStudentAnswer(
 					? markScheme.correct_option_labels
 					: undefined,
 			availableOptions,
-			markingRules,
+			content: markScheme.content,
 		}
 
 		const { getDefaultRunner } = await import("@/lib/llm-runtime")

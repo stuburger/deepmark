@@ -10,7 +10,6 @@ import {
 } from "@/components/ui/tooltip"
 import { getQuestionDetail } from "@/lib/exam-paper/questions/queries"
 import type { ExamPaperQuestion, QuestionDetail } from "@/lib/exam-paper/types"
-import type { MarkingRulesInput } from "@/lib/mark-scheme/manual"
 import { cn } from "@/lib/utils"
 import { useSortable } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
@@ -363,7 +362,8 @@ function buildEditProps(
 			markingMethod: "level_of_response" as const,
 			initialDescription: ms.description ?? "",
 			initialGuidance: ms.guidance ?? "",
-			initialMarkingRules: (ms.marking_rules as MarkingRulesInput) ?? null,
+			initialContent: ms.content ?? "",
+			pointsTotal: ms.points_total,
 		}
 	}
 	return {

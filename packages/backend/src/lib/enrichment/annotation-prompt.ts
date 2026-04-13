@@ -19,7 +19,7 @@ type MarkSchemeContext = {
 		criteria: string
 	}>
 	markingMethod: string
-	markingRules: unknown | null
+	content: string
 }
 
 type AnnotationPromptArgs = {
@@ -76,14 +76,15 @@ function markSchemeSection(markScheme: MarkSchemeContext | null): string {
 		markScheme.markPoints.length > 0
 			? `\nMark points:\n${markScheme.markPoints.map((mp) => `  Point ${mp.pointNumber}: ${mp.description}\n    Criteria: ${mp.criteria}`).join("\n")}`
 			: ""
-	const rules = markScheme.markingRules
-		? `\nMarking rules: ${JSON.stringify(markScheme.markingRules)}`
+	const hasContent = !!markScheme.content?.trim()
+	const contentBlock = hasContent
+		? `\n<MarkSchemeContent>\n${markScheme.content}\n</MarkSchemeContent>`
 		: ""
 	return `<MarkScheme>
 Description: ${markScheme.description}
 ${markScheme.guidance ? `Guidance: ${markScheme.guidance}` : ""}
-Marking method: ${markScheme.markingMethod}${points}${rules}
-</MarkScheme>`
+Marking method: ${markScheme.markingMethod}${points}
+</MarkScheme>${contentBlock}`
 }
 
 function gradingResultSection(r: GradingResult, maxScore: number): string {

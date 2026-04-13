@@ -3,7 +3,7 @@ import { tool } from "@/tools/shared/tool-utils"
 import { UpdateMarkSchemeSchema } from "./schema"
 
 export const handler = tool(UpdateMarkSchemeSchema, async (args) => {
-	const { id, points_total, mark_points, marking_method, marking_rules } = args
+	const { id, points_total, mark_points, marking_method, content } = args
 
 	console.log("[update-mark-scheme] Handler invoked", {
 		id,
@@ -36,8 +36,8 @@ export const handler = tool(UpdateMarkSchemeSchema, async (args) => {
 		updateData.marking_method = marking_method
 	}
 
-	if (marking_rules !== undefined) {
-		updateData.marking_rules = marking_rules
+	if (content !== undefined) {
+		updateData.content = content
 	}
 
 	const effectiveMethod =

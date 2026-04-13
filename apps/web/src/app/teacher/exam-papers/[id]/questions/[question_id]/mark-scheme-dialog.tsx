@@ -12,11 +12,7 @@ import {
 } from "@/components/ui/dialog"
 import { Spinner } from "@/components/ui/spinner"
 import { autofillMarkScheme } from "@/lib/mark-scheme/autofill"
-import {
-	type MarkingRulesInput,
-	createMarkScheme,
-	updateMarkScheme,
-} from "@/lib/mark-scheme/manual"
+import { createMarkScheme, updateMarkScheme } from "@/lib/mark-scheme/manual"
 import { CheckCircle2, Sparkles } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 import { LorMarkSchemeEditForm } from "./lor-mark-scheme-edit-form"
@@ -39,6 +35,11 @@ type AutofillValues =
 			description: string
 			guidance: string
 			mark_points: MarkPoint[]
+	  }
+	| {
+			marking_method: "level_of_response"
+			description: string
+			content: string
 	  }
 
 // ─── Props ────────────────────────────────────────────────────────────────────
@@ -87,7 +88,8 @@ type EditLorProps = {
 	multipleChoiceOptions?: never
 	initialDescription: string
 	initialGuidance: string
-	initialMarkingRules: MarkingRulesInput | null
+	initialContent: string
+	pointsTotal: number
 }
 
 export type MarkSchemeDialogProps = (
@@ -138,11 +140,16 @@ export function MarkSchemeDialog(props: MarkSchemeDialogProps) {
 	const isLor =
 		props.mode === "edit" && props.markingMethod === "level_of_response"
 
+	const effectiveMarkingMethod = isLor ? "level_of_response" : undefined
+
 	async function handleAutofill() {
 		setAutofilling(true)
 		setAutofillError(null)
 
-		const result = await autofillMarkScheme(props.questionId)
+		const result = await autofillMarkScheme(
+			props.questionId,
+			effectiveMarkingMethod,
+		)
 
 		setAutofilling(false)
 
@@ -160,7 +167,10 @@ export function MarkSchemeDialog(props: MarkSchemeDialogProps) {
 		setQuickSaved(false)
 		setQuickError(null)
 
-		const autofill = await autofillMarkScheme(props.questionId)
+		const autofill = await autofillMarkScheme(
+			props.questionId,
+			effectiveMarkingMethod,
+		)
 		if (!autofill.ok) {
 			setQuickSaving(false)
 			setQuickError(autofill.error)
@@ -168,26 +178,37 @@ export function MarkSchemeDialog(props: MarkSchemeDialogProps) {
 		}
 
 		const suggestion = autofill.suggestion
-		const input =
-			suggestion.marking_method === "deterministic"
-				? {
-						marking_method: "deterministic" as const,
-						description: suggestion.description,
-						guidance: null,
-						correct_option_labels: suggestion.correct_option_labels,
-					}
-				: {
-						marking_method: "point_based" as const,
-						description: suggestion.description,
-						guidance: suggestion.guidance || null,
-						mark_points: suggestion.mark_points,
-					}
+		let input: Parameters<typeof createMarkScheme>[1]
+		if (suggestion.marking_method === "deterministic") {
+			input = {
+				marking_method: "deterministic" as const,
+				description: suggestion.description,
+				guidance: null,
+				correct_option_labels: suggestion.correct_option_labels,
+			}
+		} else if (suggestion.marking_method === "level_of_response") {
+			input = {
+				marking_method: "level_of_response" as const,
+				description: suggestion.description,
+				guidance: null,
+				content: suggestion.content,
+				points_total: (props as EditLorProps).pointsTotal,
+			}
+		} else {
+			input = {
+				marking_method: "point_based" as const,
+				description: suggestion.description,
+				guidance: suggestion.guidance || null,
+				mark_points: suggestion.mark_points,
+			}
+		}
 
 		const result =
 			props.mode === "create"
 				? await createMarkScheme(props.questionId, input)
 				: await updateMarkScheme(
-						(props as EditMcqProps | EditWrittenProps).markSchemeId,
+						(props as EditMcqProps | EditWrittenProps | EditLorProps)
+							.markSchemeId,
 						input,
 					)
 
@@ -227,34 +248,30 @@ export function MarkSchemeDialog(props: MarkSchemeDialogProps) {
 
 	return (
 		<div className="flex items-center gap-1">
-			{!isLor && (
-				<>
-					{quickError && (
-						<span className="text-xs text-destructive">{quickError}</span>
-					)}
-					{quickSaved ? (
-						<span className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
-							<CheckCircle2 className="h-3.5 w-3.5" />
-							Saved
-						</span>
+			{quickError && (
+				<span className="text-xs text-destructive">{quickError}</span>
+			)}
+			{quickSaved ? (
+				<span className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
+					<CheckCircle2 className="h-3.5 w-3.5" />
+					Saved
+				</span>
+			) : (
+				<Button
+					type="button"
+					variant="ghost"
+					size="sm"
+					onClick={handleQuickGenerate}
+					disabled={quickSaving}
+					title="Generate & save mark scheme automatically"
+					className="text-muted-foreground hover:text-foreground"
+				>
+					{quickSaving ? (
+						<Spinner className="h-3.5 w-3.5" />
 					) : (
-						<Button
-							type="button"
-							variant="ghost"
-							size="sm"
-							onClick={handleQuickGenerate}
-							disabled={quickSaving}
-							title="Generate & save mark scheme automatically"
-							className="text-muted-foreground hover:text-foreground"
-						>
-							{quickSaving ? (
-								<Spinner className="h-3.5 w-3.5" />
-							) : (
-								<Sparkles className="h-3.5 w-3.5" />
-							)}
-						</Button>
+						<Sparkles className="h-3.5 w-3.5" />
 					)}
-				</>
+				</Button>
 			)}
 			<Dialog open={open} onOpenChange={handleOpenChange}>
 				{!props.hideTrigger && (
@@ -269,28 +286,26 @@ export function MarkSchemeDialog(props: MarkSchemeDialogProps) {
 					<DialogHeader>
 						<div className="flex items-center justify-between gap-3">
 							<DialogTitle>{dialogTitle}</DialogTitle>
-							{!isLor && (
-								<Button
-									type="button"
-									variant="secondary"
-									size="sm"
-									onClick={handleAutofill}
-									disabled={autofilling}
-									className="shrink-0"
-								>
-									{autofilling ? (
-										<>
-											<Spinner className="h-3.5 w-3.5 mr-1.5" />
-											Generating…
-										</>
-									) : (
-										<>
-											<Sparkles className="h-3.5 w-3.5 mr-1.5" />
-											Autofill
-										</>
-									)}
-								</Button>
-							)}
+							<Button
+								type="button"
+								variant="secondary"
+								size="sm"
+								onClick={handleAutofill}
+								disabled={autofilling}
+								className="shrink-0"
+							>
+								{autofilling ? (
+									<>
+										<Spinner className="h-3.5 w-3.5 mr-1.5" />
+										Generating…
+									</>
+								) : (
+									<>
+										<Sparkles className="h-3.5 w-3.5 mr-1.5" />
+										Autofill
+									</>
+								)}
+							</Button>
 						</div>
 						<DialogDescription>{dialogDescription}</DialogDescription>
 					</DialogHeader>
@@ -302,12 +317,20 @@ export function MarkSchemeDialog(props: MarkSchemeDialogProps) {
 					<div className="pt-1">
 						{isLor ? (
 							<LorMarkSchemeEditForm
+								key={formKey}
 								markSchemeId={(props as EditLorProps).markSchemeId}
-								initialDescription={(props as EditLorProps).initialDescription}
-								initialGuidance={(props as EditLorProps).initialGuidance}
-								initialMarkingRules={
-									(props as EditLorProps).initialMarkingRules
+								initialDescription={
+									autofillValues?.marking_method === "level_of_response"
+										? autofillValues.description
+										: (props as EditLorProps).initialDescription
 								}
+								initialGuidance={(props as EditLorProps).initialGuidance}
+								initialContent={
+									autofillValues?.marking_method === "level_of_response"
+										? autofillValues.content
+										: (props as EditLorProps).initialContent
+								}
+								pointsTotal={(props as EditLorProps).pointsTotal}
 								paperId={props.paperId}
 								onSuccess={props.onSuccess}
 							/>
@@ -321,7 +344,11 @@ export function MarkSchemeDialog(props: MarkSchemeDialogProps) {
 										| EditMcqProps
 										| EditWrittenProps
 								}
-								autofillValues={autofillValues}
+								autofillValues={
+									autofillValues?.marking_method === "level_of_response"
+										? null
+										: autofillValues
+								}
 								paperId={props.paperId}
 								onSuccess={props.onSuccess}
 							/>

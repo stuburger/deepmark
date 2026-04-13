@@ -348,7 +348,9 @@ export const LLM_CALL_SITE_DEFAULTS: Array<{
 		phase: "answer-detection",
 		step: 2,
 		multiplier: "per-page",
-		models: [{ provider: "google", model: "gemini-2.5-pro", temperature: 0.1 }],
+		models: [
+			{ provider: "anthropic", model: "claude-sonnet-4-6", temperature: 0.2 },
+		],
 	},
 	{
 		key: "vision-attribution",
@@ -359,7 +361,9 @@ export const LLM_CALL_SITE_DEFAULTS: Array<{
 		phase: "answer-detection",
 		step: 3,
 		multiplier: "per-page",
-		models: [{ provider: "google", model: "gemini-2.5-pro", temperature: 0.1 }],
+		models: [
+			{ provider: "anthropic", model: "claude-sonnet-4-6", temperature: 0.2 },
+		],
 	},
 	{
 		key: "vision-attribution-mcq-fallback",

@@ -17,29 +17,6 @@ const MarkPointSchema = z.object({
 	criteria: z.string().describe("Criteria for awarding the mark point"),
 })
 
-const MarkingRulesLevelSchema = z.object({
-	level: z.number().int().min(1),
-	mark_range: z.tuple([z.number().int().min(0), z.number().int().min(0)]),
-	descriptor: z.string(),
-	ao_requirements: z.array(z.string()).optional(),
-})
-
-const MarkingRulesCapSchema = z.object({
-	condition: z.string(),
-	max_level: z.number().int().optional(),
-	max_mark: z.number().int().optional(),
-	reason: z.string(),
-})
-
-const MarkingRulesSchema = z
-	.object({
-		command_word: z.string().optional(),
-		items_required: z.number().int().positive().optional(),
-		levels: z.array(MarkingRulesLevelSchema),
-		caps: z.array(MarkingRulesCapSchema).optional(),
-	})
-	.optional()
-
 export const CreateMarkSchemeSchema = {
 	question_id: z
 		.string()
@@ -65,9 +42,12 @@ export const CreateMarkSchemeSchema = {
 		.describe(
 			"How to mark: deterministic (MCQ), point_based (default), or level_of_response",
 		),
-	marking_rules: MarkingRulesSchema.describe(
-		"For level_of_response: levels, caps, command_word, items_required",
-	),
+	content: z
+		.string()
+		.optional()
+		.describe(
+			"The full mark scheme content text (level descriptors, caps, guidance, etc.)",
+		),
 	tags: z
 		.array(z.string())
 		.optional()

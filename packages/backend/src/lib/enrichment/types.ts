@@ -25,7 +25,7 @@ export type MarkSchemeForAnnotation = {
 	guidance: string | null
 	mark_points: unknown
 	marking_method: string
-	marking_rules: unknown | null
+	content: string
 }
 
 export type TokenRow = {

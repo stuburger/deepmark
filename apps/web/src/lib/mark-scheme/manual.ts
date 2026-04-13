@@ -9,13 +9,7 @@ const TAG = "mark-scheme/manual"
 const db = createPrismaClient(Resource.NeonPostgres.databaseUrl)
 
 import type { MarkSchemeInput } from "./types"
-export type {
-	MarkSchemeInput,
-	MarkSchemePointInput,
-	MarkingRulesCapInput,
-	MarkingRulesInput,
-	MarkingRulesLevelInput,
-} from "./types"
+export type { MarkSchemeInput, MarkSchemePointInput } from "./types"
 
 // ─── Create ───────────────────────────────────────────────────────────────────
 
@@ -39,21 +33,24 @@ export async function createMarkScheme(
 	) {
 		return { ok: false, error: "Select at least one correct answer" }
 	}
-	if (
-		input.marking_method === "level_of_response" &&
-		input.marking_rules.levels.length === 0
-	) {
-		return { ok: false, error: "At least one level descriptor is required" }
+	if (input.marking_method === "level_of_response" && !input.content?.trim()) {
+		return { ok: false, error: "Mark scheme content is required" }
 	}
 
 	const isDeterministic = input.marking_method === "deterministic"
 	const isPointBased = input.marking_method === "point_based"
 	const isLevelOfResponse = input.marking_method === "level_of_response"
-	const pointsTotal = isDeterministic
-		? 1
-		: isPointBased
-			? input.mark_points.reduce((sum, mp) => sum + mp.points, 0)
-			: Math.max(...input.marking_rules.levels.map((l) => l.mark_range[1]))
+
+	let pointsTotal: number
+	if (isDeterministic) {
+		pointsTotal = 1
+	} else if (isPointBased) {
+		pointsTotal = input.mark_points.reduce((sum, mp) => sum + mp.points, 0)
+	} else if (input.points_total != null && input.points_total > 0) {
+		pointsTotal = input.points_total
+	} else {
+		return { ok: false, error: "Cannot determine total marks" }
+	}
 	const markPoints = isPointBased
 		? input.mark_points.map((mp, i) => ({
 				point_number: i + 1,
@@ -72,7 +69,7 @@ export async function createMarkScheme(
 				points_total: pointsTotal,
 				mark_points: markPoints,
 				marking_method: input.marking_method,
-				...(isLevelOfResponse ? { marking_rules: input.marking_rules } : {}),
+				...(isLevelOfResponse ? { content: input.content ?? "" } : {}),
 				correct_option_labels: correctOptionLabels,
 				link_status: "linked",
 				created_by_id: session.userId,
@@ -142,18 +139,24 @@ export async function updateMarkScheme(
 		if (
 			isLevelOfResponse &&
 			input.marking_method === "level_of_response" &&
-			input.marking_rules.levels.length === 0
+			!input.content?.trim()
 		) {
-			return { ok: false, error: "At least one level descriptor is required" }
+			return { ok: false, error: "Mark scheme content is required" }
 		}
 
-		const pointsTotal = isPointBased
-			? input.marking_method === "point_based"
-				? input.mark_points.reduce((sum, mp) => sum + mp.points, 0)
-				: 0
-			: isLevelOfResponse && input.marking_method === "level_of_response"
-				? Math.max(...input.marking_rules.levels.map((l) => l.mark_range[1]))
-				: null
+		let pointsTotal: number | null = null
+		if (isPointBased && input.marking_method === "point_based") {
+			pointsTotal = input.mark_points.reduce((sum, mp) => sum + mp.points, 0)
+		} else if (
+			isLevelOfResponse &&
+			input.marking_method === "level_of_response"
+		) {
+			if (input.points_total != null && input.points_total > 0) {
+				pointsTotal = input.points_total
+			} else {
+				return { ok: false, error: "Cannot determine total marks" }
+			}
+		}
 		const markPoints =
 			isPointBased && input.marking_method === "point_based"
 				? input.mark_points.map((mp, i) => ({
@@ -179,7 +182,7 @@ export async function updateMarkScheme(
 				pointsTotal !== null
 					? {
 							points_total: pointsTotal,
-							marking_rules: input.marking_rules,
+							content: input.content ?? "",
 						}
 					: {}),
 				...(isDeterministic && input.marking_method === "deterministic"

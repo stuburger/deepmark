@@ -11,7 +11,7 @@ export const handler = tool(CreateMarkSchemeSchema, async (args, extra) => {
 		points_total,
 		mark_points,
 		marking_method = "point_based",
-		marking_rules,
+		content,
 		tags = [],
 	} = args
 
@@ -72,7 +72,7 @@ export const handler = tool(CreateMarkSchemeSchema, async (args, extra) => {
 			tags: tags || [],
 			mark_points,
 			marking_method: marking_method ?? "point_based",
-			marking_rules: marking_rules ?? undefined,
+			content: content ?? "",
 			created_by_id: extra.authInfo.extra.userId,
 		},
 	})

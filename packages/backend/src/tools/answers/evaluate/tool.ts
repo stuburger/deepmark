@@ -92,7 +92,7 @@ export const handler = tool(EvaluateAnswerSchema, async (args, extra) => {
 			pointsTotal: markScheme.points_total,
 			markPoints: markScheme.mark_points,
 			markingMethod: markScheme.marking_method,
-			markingRules: markScheme.marking_rules,
+			content: markScheme.content,
 			correctOptionLabels: markScheme.correct_option_labels,
 		},
 	})

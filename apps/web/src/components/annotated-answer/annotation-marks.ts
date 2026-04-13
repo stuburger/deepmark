@@ -9,6 +9,12 @@ const sharedAttrs = {
 	ao_display: { default: null },
 	ao_quality: { default: null },
 	comment: { default: null },
+	// Scan overlay metadata — carried through for AI marks, null for teacher marks.
+	// Avoids lossy reverse-mapping via charRangeToTokens when deriving back.
+	scanBbox: { default: null },
+	scanPageOrder: { default: null },
+	scanTokenStartId: { default: null },
+	scanTokenEndId: { default: null },
 }
 
 // ─── Mark signals ───────────────────────────────────────────────────────────

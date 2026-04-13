@@ -320,7 +320,9 @@ describe("deriveAnnotationsFromDoc", () => {
 
 		expect(result).toHaveLength(1)
 		expect(result[0].overlay_type).toBe("annotation")
-		expect((result[0].payload as { ao_category: string }).ao_category).toBe("AO2")
+		expect((result[0].payload as { ao_category: string }).ao_category).toBe(
+			"AO2",
+		)
 	})
 
 	it("derives chain annotations", () => {

@@ -45,15 +45,18 @@ function buildTextContent(text: string, marks: TextMark[]): JSONContent[] {
 								ao_quality: m.attrs.ao_quality ?? null,
 							}
 						: {}),
-					...(m.attrs.comment
-						? { comment: m.attrs.comment ?? null }
-						: {}),
+					...(m.attrs.comment ? { comment: m.attrs.comment ?? null } : {}),
 					...(m.type === "chain"
 						? {
 								chainType: m.attrs.chainType ?? "reasoning",
 								phrase: m.attrs.phrase ?? null,
 							}
 						: {}),
+					// Carry scan metadata through for lossless round-trip
+					scanBbox: m.attrs.scanBbox ?? null,
+					scanPageOrder: m.attrs.scanPageOrder ?? null,
+					scanTokenStartId: m.attrs.scanTokenStartId ?? null,
+					scanTokenEndId: m.attrs.scanTokenEndId ?? null,
 				},
 			}))
 		}

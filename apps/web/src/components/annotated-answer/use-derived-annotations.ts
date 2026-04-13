@@ -47,33 +47,48 @@ export function deriveAnnotationsFromDoc(
 				if (!entry) continue
 
 				const attrs = mark.attrs as Record<string, unknown>
+				const existingId = attrs.annotationId as string | null
 				const charFrom = childOffset
 				const charTo = childOffset + child.nodeSize
 
-				const span = charRangeToTokens(charFrom, charTo, alignment, tokens)
-				if (!span) continue
+				// For AI marks, use the original scan metadata carried through attrs.
+				// For teacher marks, reverse-map via charRangeToTokens (best effort).
+				const hasScanData = attrs.scanBbox != null
+				let bbox: [number, number, number, number]
+				let pageOrder: number
+				let startTokenId: string | null
+				let endTokenId: string | null
 
-				const existingId = attrs.annotationId as string | null
+				if (hasScanData) {
+					bbox = attrs.scanBbox as [number, number, number, number]
+					pageOrder = attrs.scanPageOrder as number
+					startTokenId = (attrs.scanTokenStartId as string) ?? null
+					endTokenId = (attrs.scanTokenEndId as string) ?? null
+				} else {
+					const span = charRangeToTokens(charFrom, charTo, alignment, tokens)
+					if (!span) continue
+					bbox = span.bbox
+					pageOrder = span.pageOrder
+					startTokenId = span.startTokenId
+					endTokenId = span.endTokenId
+				}
+
 				const key = `${questionId}-${mark.type.name}-${charFrom}-${charTo}`
-
-				// Deduplicate — O(1) lookup via Set
 				const dedupeKey = existingId ?? key
 				if (seenKeys.has(dedupeKey)) continue
 				seenKeys.add(dedupeKey)
 
-				// Registry guarantees overlayType and buildPayload are paired correctly,
-				// so the cast to the discriminated union is safe at this construction site.
 				annotations.push({
 					id: dedupeKey,
 					enrichment_run_id: existingId ? "ai" : "teacher",
 					question_id: questionId,
-					page_order: span.pageOrder,
+					page_order: pageOrder,
 					overlay_type: entry.overlayType,
 					sentiment: (attrs.sentiment as string) ?? "neutral",
 					payload: entry.buildPayload(attrs),
-					bbox: span.bbox,
-					anchor_token_start_id: span.startTokenId,
-					anchor_token_end_id: span.endTokenId,
+					bbox,
+					anchor_token_start_id: startTokenId,
+					anchor_token_end_id: endTokenId,
 				} as StudentPaperAnnotation)
 			}
 		})

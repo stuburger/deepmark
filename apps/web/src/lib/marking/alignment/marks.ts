@@ -49,6 +49,12 @@ export function deriveTextMarks(
 		if (payload.chainType) attrs.chainType = payload.chainType
 		if (payload.phrase) attrs.phrase = payload.phrase
 
+		// Carry original scan metadata so the PM round-trip is lossless
+		attrs.scanBbox = a.bbox
+		attrs.scanPageOrder = a.page_order
+		attrs.scanTokenStartId = a.anchor_token_start_id
+		attrs.scanTokenEndId = a.anchor_token_end_id
+
 		marks.push({ from, to, type, sentiment, attrs, annotationId: a.id })
 	}
 

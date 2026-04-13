@@ -22,7 +22,7 @@ import type {
 import { queryKeys } from "@/lib/query-keys"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { parseAsString, useQueryState } from "nuqs"
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
 import { EventLog } from "./event-log"
 import { useJobQuery } from "./hooks/use-job-query"
@@ -176,11 +176,20 @@ export function SubmissionView({
 	}, [annotations])
 
 	// When sheet view is active, PM doc is the state — scan derives from it.
+	// MCQ/deterministic annotations (no token anchors) bypass the PM doc and
+	// pass through directly — they're spatial-only marks on the scan.
 	// When card view is active, DB annotations are the state (no PM editor running).
-	const effectiveAnnotations =
-		resultsView === "sheet" && sheetAnnotations.length > 0
-			? sheetAnnotations
-			: annotations
+	const effectiveAnnotations = useMemo(() => {
+		if (resultsView !== "sheet" || sheetAnnotations.length === 0)
+			return annotations
+
+		// Union: PM-derived annotations + spatial-only DB annotations that
+		// can't be represented in the PM doc (no anchor tokens)
+		const spatialOnly = annotations.filter(
+			(a) => !a.anchor_token_start_id || !a.anchor_token_end_id,
+		)
+		return [...sheetAnnotations, ...spatialOnly]
+	}, [resultsView, sheetAnnotations, annotations])
 
 	// Trigger enrichment mutation
 	const enrichMutation = useMutation({

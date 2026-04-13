@@ -48,7 +48,8 @@ ${learningSection}<Topic>\n${question.topic}\n</Topic>
 For each mark point provide pointNumber, awarded, reasoning (max 15 words), expectedCriteria, studentCovered.
 Set correctAnswer and relevantLearningSnippet to empty string.
 feedbackSummary: 1 sentence, max 20 words — mark and key reason.
-whatWentWell: 1-3 bullets, max 6 words each. whatDidntGoWell: 1-3 bullets, max 6 words each, actionable.
+whatWentWell: 1-3 bullets, max 8 words each. Reference question context where possible.
+whatDidntGoWell: 1-3 actionable improvement tips. Phrase as "Try..." or "Next time...". Reference question context. Max 8 words each. Never state what was wrong — only what to do better.
 Output valid JSON matching the schema.
 </Instructions>`
 }

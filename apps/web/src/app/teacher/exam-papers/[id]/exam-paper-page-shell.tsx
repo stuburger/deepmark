@@ -272,6 +272,7 @@ export function ExamPaperPageShell({
 								questionsWithMarkScheme={questionsWithMarkScheme}
 								totalQuestions={totalQuestions}
 								hasExemplar={hasExemplar}
+								hasLevelDescriptors={!!paper.level_descriptors}
 							/>
 							<DocumentUploadCards
 								examPaperId={paper.id}
@@ -282,7 +283,12 @@ export function ExamPaperPageShell({
 										queryKey: queryKeys.examPaperLiveState(paper.id),
 									})
 								}
-							/>
+							>
+								<LevelDescriptorsCard
+									examPaperId={paper.id}
+									initialValue={paper.level_descriptors}
+								/>
+							</DocumentUploadCards>
 						</CardContent>
 					</Card>
 
@@ -333,11 +339,6 @@ export function ExamPaperPageShell({
 					/>
 
 					<ExamPaperQuestionsCard paper={paper} similarPairs={similarPairs} />
-
-					<LevelDescriptorsCard
-						examPaperId={paper.id}
-						initialValue={paper.level_descriptors}
-					/>
 				</TabsContent>
 
 				{/* ── Submissions tab ── */}

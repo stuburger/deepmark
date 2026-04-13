@@ -25,12 +25,12 @@ export const QuestionGradeSchema = z.object({
 	whatWentWell: z
 		.array(z.string())
 		.describe(
-			"1-3 short bullets on what the student did well. Max 3 items, max 6 words each.",
+			"1-3 short bullets on what the student did well, referencing question context where possible. Max 3 items, max 8 words each.",
 		),
 	whatDidntGoWell: z
 		.array(z.string())
 		.describe(
-			"1-3 short bullets on what was missing or weak. Actionable, student-facing. Max 3 items, max 6 words each.",
+			"1-3 actionable improvement tips phrased as 'Try...' or 'Next time...'. Reference the question context. Max 3 items, max 8 words each. Never state what was wrong — only what to do better.",
 		),
 })
 
@@ -67,12 +67,12 @@ export const LoRQuestionGradeSchema = z.object({
 	whatWentWell: z
 		.array(z.string())
 		.describe(
-			"1-3 short bullets on what the student did well. Max 3 items, max 6 words each.",
+			"1-3 short bullets on what the student did well, referencing question context where possible. Max 3 items, max 8 words each.",
 		),
 	whatDidntGoWell: z
 		.array(z.string())
 		.describe(
-			"1-3 short bullets on what was missing or weak. Actionable, student-facing. Max 3 items, max 6 words each.",
+			"1-3 actionable improvement tips phrased as 'Try...' or 'Next time...'. Reference the question context. Max 3 items, max 8 words each. Never state what was wrong — only what to do better.",
 		),
 })
 

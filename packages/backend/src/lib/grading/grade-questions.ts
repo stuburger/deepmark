@@ -147,6 +147,31 @@ async function gradeOneQuestion({
 	const studentAnswer = answerMap.get(qItem.question_id) ?? ""
 	const ms = qItem.mark_scheme
 
+	if (!studentAnswer.trim()) {
+		logger.info(TAG, "No answer provided — awarding 0", {
+			jobId,
+			question_id: qItem.question_id,
+			question_number: qItem.question_number,
+		})
+		return {
+			_v: 1 as const,
+			question_id: qItem.question_id,
+			question_number: qItem.question_number,
+			question_text: qItem.question_text,
+			student_answer: studentAnswer,
+			awarded_score: 0,
+			max_score: ms?.points_total ?? qItem.question_obj.points ?? 0,
+			llm_reasoning: "No answer provided by the student.",
+			feedback_summary: "No answer was provided for this question.",
+			marking_method:
+				(ms?.marking_method as GradingResult["marking_method"]) ?? null,
+			what_went_well: [],
+			even_better_if: [],
+			mark_points_results: [],
+			mark_scheme_id: ms?.id ?? null,
+		}
+	}
+
 	if (!ms) {
 		logger.warn(TAG, "No mark scheme for question — skipping grade", {
 			jobId,

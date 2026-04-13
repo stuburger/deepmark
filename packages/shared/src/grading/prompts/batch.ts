@@ -57,7 +57,7 @@ Mark Points:\n${markPointsList}
 </MarkingRules>
 
 <Instructions>
-For EACH question: questionId, markPointsResults (pointNumber, awarded, reasoning max 15 words, expectedCriteria, studentCovered), totalScore, llmReasoning, feedbackSummary (1 sentence max 20 words), whatWentWell (1-3 bullets max 6 words), whatDidntGoWell (1-3 bullets max 6 words).
+For EACH question: questionId, markPointsResults (pointNumber, awarded, reasoning max 15 words, expectedCriteria, studentCovered), totalScore, llmReasoning, feedbackSummary (1 sentence max 20 words), whatWentWell (1-3 bullets max 8 words, reference question context), whatDidntGoWell (1-3 actionable tips phrased as "Try..." or "Next time...", max 8 words, reference question context, never state what was wrong).
 Set correctAnswer and relevantLearningSnippet to empty string.
 Output valid JSON matching the schema.
 </Instructions>`

@@ -1,14 +1,8 @@
 "use client"
 
-import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
-import { Textarea } from "@/components/ui/textarea"
-import { updateLevelDescriptors } from "@/lib/exam-paper/paper/mutations"
-import { queryKeys } from "@/lib/query-keys"
-import { useQueryClient } from "@tanstack/react-query"
-import { ChevronDown, Save } from "lucide-react"
-import { useRef, useState } from "react"
-import { toast } from "sonner"
+import { AlignLeft, CheckCircle2, PenLine } from "lucide-react"
+import { useState } from "react"
+import { LevelDescriptorsDialog } from "./level-descriptors-dialog"
 
 export function LevelDescriptorsCard({
 	examPaperId,
@@ -17,77 +11,68 @@ export function LevelDescriptorsCard({
 	examPaperId: string
 	initialValue: string | null
 }) {
-	const [open, setOpen] = useState(false)
-	const [value, setValue] = useState(initialValue ?? "")
-	const [saving, setSaving] = useState(false)
-	const savedRef = useRef(initialValue ?? "")
-	const queryClient = useQueryClient()
+	const [dialogOpen, setDialogOpen] = useState(false)
+	const [savedValue, setSavedValue] = useState(initialValue)
 
-	const isDirty = value !== savedRef.current
-
-	async function handleSave() {
-		setSaving(true)
-		const result = await updateLevelDescriptors(examPaperId, value)
-		setSaving(false)
-		if (!result.ok) {
-			toast.error(result.error)
-			return
-		}
-		savedRef.current = value.trim()
-		setValue(value.trim())
-		toast.success("Level descriptors saved")
-		void queryClient.invalidateQueries({
-			queryKey: queryKeys.examPaper(examPaperId),
-		})
-	}
-
-	const hasContent = (initialValue ?? "").length > 0
+	const hasContent = (savedValue ?? "").length > 0
 
 	return (
-		<Card>
-			<button
-				type="button"
-				onClick={() => setOpen((o) => !o)}
-				className="flex w-full items-center justify-between px-5 py-3 text-left"
+		<>
+			<div
+				role="button"
+				tabIndex={0}
+				onClick={() => setDialogOpen(true)}
+				onKeyDown={(e) => {
+					if (e.key === "Enter" || e.key === " ") setDialogOpen(true)
+				}}
+				className={[
+					"rounded-xl border p-4 flex flex-col gap-3 transition-colors cursor-pointer",
+					hasContent
+						? "border-green-500/40 bg-green-500/5"
+						: "border-dashed border-border hover:bg-muted/30 hover:border-primary/40",
+				].join(" ")}
 			>
-				<div className="flex items-center gap-2">
-					<span className="text-sm font-medium">Level Descriptors</span>
-					{hasContent && (
-						<span className="inline-flex items-center rounded-full bg-green-100 px-1.5 py-0.5 text-[10px] font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400">
+				{/* Icon + title */}
+				<div className="flex items-start gap-2.5">
+					{hasContent ? (
+						<CheckCircle2 className="h-5 w-5 text-green-500 shrink-0 mt-0.5" />
+					) : (
+						<AlignLeft className="h-5 w-5 text-muted-foreground shrink-0 mt-0.5" />
+					)}
+					<div className="min-w-0">
+						<p className="text-sm font-medium">Level Descriptors</p>
+						<p className="text-xs text-muted-foreground leading-snug">
+							Guides marking for level-of-response questions
+						</p>
+					</div>
+				</div>
+
+				{/* Status line */}
+				{hasContent ? (
+					<div className="flex items-center justify-between gap-2">
+						<span className="text-xs font-medium text-green-700 dark:text-green-400">
 							Set
 						</span>
-					)}
-				</div>
-				<ChevronDown
-					className={`h-4 w-4 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`}
-				/>
-			</button>
-
-			{open && (
-				<CardContent className="pt-0 pb-4 space-y-3">
-					<p className="text-xs text-muted-foreground leading-relaxed">
-						Paste your exam board&apos;s level descriptors here. These guide
-						marking for all level-of-response questions on this paper.
-					</p>
-					<Textarea
-						value={value}
-						onChange={(e) => setValue(e.target.value)}
-						placeholder="e.g. Level 1 (1-3 marks): Simple statements, generic points..."
-						rows={8}
-						className="text-xs font-mono"
-					/>
-					<div className="flex justify-end">
-						<Button
-							size="sm"
-							onClick={handleSave}
-							disabled={!isDirty || saving}
-						>
-							<Save className="h-3.5 w-3.5 mr-1.5" />
-							{saving ? "Saving..." : "Save"}
-						</Button>
+						<span className="text-xs text-muted-foreground flex items-center gap-1">
+							<PenLine className="h-3 w-3" />
+							Click to edit
+						</span>
 					</div>
-				</CardContent>
-			)}
-		</Card>
+				) : (
+					<p className="text-xs text-muted-foreground flex items-center gap-1">
+						<PenLine className="h-3 w-3" />
+						Click to add
+					</p>
+				)}
+			</div>
+
+			<LevelDescriptorsDialog
+				open={dialogOpen}
+				onOpenChange={setDialogOpen}
+				examPaperId={examPaperId}
+				initialValue={savedValue}
+				onSaved={(v) => setSavedValue(v)}
+			/>
+		</>
 	)
 }

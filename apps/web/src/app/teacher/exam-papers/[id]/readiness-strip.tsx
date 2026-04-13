@@ -29,12 +29,14 @@ export function ReadinessStrip({
 	questionsWithMarkScheme,
 	totalQuestions,
 	hasExemplar,
+	hasLevelDescriptors,
 }: {
 	hasQuestionPaper: boolean
 	allQuestionsHaveMarkSchemes: boolean
 	questionsWithMarkScheme: number
 	totalQuestions: number
 	hasExemplar: boolean
+	hasLevelDescriptors: boolean
 }) {
 	return (
 		<div className="flex items-center gap-3 rounded-lg border px-3 py-2 text-xs text-muted-foreground">
@@ -58,6 +60,20 @@ export function ReadinessStrip({
 							({questionsWithMarkScheme}/{totalQuestions})
 						</span>
 					)}
+				</span>
+				<span
+					className={`flex items-center gap-1.5 ${
+						hasLevelDescriptors
+							? "text-green-600 dark:text-green-400"
+							: "text-amber-600 dark:text-amber-400"
+					}`}
+				>
+					<span
+						className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+							hasLevelDescriptors ? "bg-green-500" : "bg-amber-500"
+						}`}
+					/>
+					Level descriptors (recommended)
 				</span>
 				<span className="flex items-center gap-1.5">
 					<span

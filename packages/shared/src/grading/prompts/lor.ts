@@ -79,7 +79,8 @@ ${levelSections}
 <Instructions>
 Set correctAnswer and relevantLearningSnippet to empty string.
 feedbackSummary: 1 sentence, max 20 words — level, mark, and key reason.
-whatWentWell and whatDidntGoWell: 1-3 bullets each, max 6 words each.
+whatWentWell: 1-3 bullets, max 8 words each. Reference the question context where possible.
+whatDidntGoWell: 1-3 actionable improvement tips. Phrase as "Try..." or "Next time...". Reference the question context. Max 8 words each. Never state what was wrong — only what to do better.
 markPointsResults reasoning: max 15 words per point.
 Output valid JSON matching the schema.
 </Instructions>`

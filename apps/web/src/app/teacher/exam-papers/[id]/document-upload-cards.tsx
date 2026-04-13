@@ -223,11 +223,13 @@ export function DocumentUploadCards({
 	completedDocs,
 	activeJobs,
 	onJobStarted,
+	children,
 }: {
 	examPaperId: string
 	completedDocs: PdfDocument[]
 	activeJobs: ActiveJob[]
 	onJobStarted: () => void
+	children?: React.ReactNode
 }) {
 	return (
 		<div className="grid grid-cols-3 gap-3">
@@ -245,6 +247,7 @@ export function DocumentUploadCards({
 					onJobStarted={onJobStarted}
 				/>
 			))}
+			{children}
 		</div>
 	)
 }

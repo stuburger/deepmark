@@ -13,6 +13,7 @@ import type {
 	RetriggerOcrResult,
 	SubmissionFeedback,
 	SubmissionFeedbackRating,
+	TeacherOverride,
 	TriggerEnrichmentResult,
 	TriggerGradingResult,
 	UpdateExtractedAnswerResult,
@@ -472,10 +473,7 @@ export async function upsertTeacherOverride(
 		reason?: string | null
 		feedback_override?: string | null
 	},
-): Promise<
-	| { ok: true; override: import("./types").TeacherOverride }
-	| { ok: false; error: string }
-> {
+): Promise<{ ok: true; override: TeacherOverride } | { ok: false; error: string }> {
 	const session = await auth()
 	if (!session) return { ok: false, error: "Not authenticated" }
 

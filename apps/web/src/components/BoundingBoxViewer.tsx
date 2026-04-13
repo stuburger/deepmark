@@ -57,6 +57,10 @@ type Props = {
 	showChains?: boolean
 	/** Called when an enrichment annotation is clicked, with the question ID. */
 	onEnrichmentAnnotationClick?: (questionId: string) => void
+	/** Token IDs to highlight (from PM hover → scan). */
+	highlightedTokenIds?: Set<string> | null
+	/** Called when a token is hovered on the scan (scan → PM). */
+	onTokenHover?: (tokenId: string | null) => void
 }
 
 export function BoundingBoxViewer({
@@ -73,6 +77,8 @@ export function BoundingBoxViewer({
 	showMarks = false,
 	showChains = false,
 	onEnrichmentAnnotationClick,
+	highlightedTokenIds,
+	onTokenHover,
 }: Props) {
 	const [imageDims, setImageDims] = useState<{ w: number; h: number } | null>(
 		null,
@@ -314,6 +320,66 @@ export function BoundingBoxViewer({
 															fill={TOKEN_COLOR}
 															fillOpacity={0.25}
 															stroke="none"
+														/>
+													)
+												})}
+											</svg>
+										)}
+
+										{/* PM→Scan hover highlight layer */}
+										{highlightedTokenIds && highlightedTokenIds.size > 0 && (
+											<svg
+												aria-hidden="true"
+												viewBox={viewBox}
+												preserveAspectRatio="none"
+												className="absolute inset-0 h-full w-full"
+												style={{ pointerEvents: "none" }}
+											>
+												{tokens
+													.filter((t) => highlightedTokenIds.has(t.id))
+													.map((t) => {
+														const [yMin, xMin, yMax, xMax] = t.bbox
+														return (
+															<rect
+																key={t.id}
+																x={xMin * scaleX}
+																y={yMin * scaleY}
+																width={(xMax - xMin) * scaleX}
+																height={(yMax - yMin) * scaleY}
+																fill="#fde047"
+																fillOpacity={0.45}
+																stroke="#eab308"
+																strokeWidth={1.5}
+																strokeOpacity={0.7}
+															/>
+														)
+													})}
+											</svg>
+										)}
+
+										{/* Scan→PM hover interaction layer — invisible rects for mouseenter */}
+										{onTokenHover && tokens.length > 0 && (
+											<svg
+												aria-hidden="true"
+												viewBox={viewBox}
+												preserveAspectRatio="none"
+												className="absolute inset-0 h-full w-full"
+												style={{ pointerEvents: "none" }}
+												onMouseLeave={() => onTokenHover(null)}
+											>
+												{tokens.map((t) => {
+													const [yMin, xMin, yMax, xMax] = t.bbox
+													return (
+														<rect
+															key={t.id}
+															x={xMin * scaleX}
+															y={yMin * scaleY}
+															width={(xMax - xMin) * scaleX}
+															height={(yMax - yMin) * scaleY}
+															fill="transparent"
+															style={{ pointerEvents: "all" }}
+															onMouseEnter={() => onTokenHover(t.id)}
+															onMouseLeave={() => onTokenHover(null)}
 														/>
 													)
 												})}

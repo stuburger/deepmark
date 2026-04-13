@@ -15,6 +15,7 @@ import type {
 	ExtractedAnswer,
 	GetStudentPaperJobResult,
 	GradingResult,
+	TeacherOverride,
 } from "../types"
 
 const db = createPrismaClient(Resource.NeonPostgres.databaseUrl)
@@ -387,8 +388,7 @@ export async function getSubmissionVersions(
 export async function getTeacherOverrides(
 	submissionId: string,
 ): Promise<
-	| { ok: true; overrides: import("../types").TeacherOverride[] }
-	| { ok: false; error: string }
+	{ ok: true; overrides: TeacherOverride[] } | { ok: false; error: string }
 > {
 	const session = await auth()
 	if (!session) return { ok: false, error: "Not authenticated" }

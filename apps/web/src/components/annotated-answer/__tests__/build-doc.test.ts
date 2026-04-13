@@ -103,7 +103,7 @@ describe("buildAnnotatedDoc", () => {
 		expect(content[2].marks).toHaveLength(1) // tick only
 	})
 
-	it("skips MCQ questions", () => {
+	it("emits MCQ questions as mcqAnswer atom nodes", () => {
 		const results = [
 			makeGradingResult("q1", "1a", "Answer one"),
 			makeGradingResult("q2", "1b", "B", "deterministic"),
@@ -111,9 +111,13 @@ describe("buildAnnotatedDoc", () => {
 		]
 		const doc = buildAnnotatedDoc(results, new Map())
 
-		expect(doc.content).toHaveLength(2)
+		expect(doc.content).toHaveLength(3)
+		expect(doc.content?.[0].type).toBe("questionAnswer")
 		expect(doc.content?.[0].attrs?.questionId).toBe("q1")
-		expect(doc.content?.[1].attrs?.questionId).toBe("q3")
+		expect(doc.content?.[1].type).toBe("mcqAnswer")
+		expect(doc.content?.[1].attrs?.questionId).toBe("q2")
+		expect(doc.content?.[2].type).toBe("questionAnswer")
+		expect(doc.content?.[2].attrs?.questionId).toBe("q3")
 	})
 
 	it("handles empty answer with a space text node", () => {

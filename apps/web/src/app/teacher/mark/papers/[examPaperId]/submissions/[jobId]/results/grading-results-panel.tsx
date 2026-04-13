@@ -1,8 +1,12 @@
 "use client"
 
 import { AnnotatedAnswerSheet } from "@/components/annotated-answer/annotated-answer-sheet"
+import { buildAnnotatedDoc } from "@/components/annotated-answer/build-doc"
+import {
+	type GradingDataContextValue,
+	GradingDataProvider,
+} from "@/components/annotated-answer/grading-data-context"
 import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { useQuestionAlignments } from "@/lib/marking/token-alignment"
@@ -14,8 +18,7 @@ import type {
 	TeacherOverride,
 	UpsertTeacherOverrideInput,
 } from "@/lib/marking/types"
-import { FileText, LayoutList } from "lucide-react"
-import { GradingResultCard } from "./grading-result-card"
+import { useMemo } from "react"
 
 function scoreBadgeVariant(
 	awarded: number,
@@ -28,8 +31,6 @@ function scoreBadgeVariant(
 	return "destructive"
 }
 
-export type ResultsView = "cards" | "sheet"
-
 export function GradingResultsPanel({
 	jobId,
 	data,
@@ -40,9 +41,9 @@ export function GradingResultsPanel({
 	pageTokens = [],
 	overridesByQuestionId,
 	onOverrideChange,
-	view = "cards",
-	onViewChange,
 	onDerivedAnnotations,
+	hoveredTokenId,
+	onTokenHighlight,
 }: {
 	jobId: string
 	data: StudentPaperResultPayload
@@ -56,9 +57,9 @@ export function GradingResultsPanel({
 		questionId: string,
 		input: UpsertTeacherOverrideInput | null,
 	) => void
-	view?: ResultsView
-	onViewChange?: (view: ResultsView) => void
 	onDerivedAnnotations?: (annotations: StudentPaperAnnotation[]) => void
+	hoveredTokenId?: string | null
+	onTokenHighlight?: (tokenIds: string[] | null) => void
 }) {
 	// Compute effective totals using overrides where present
 	const effectiveTotalAwarded = data.grading_results.reduce((sum, r) => {
@@ -73,13 +74,46 @@ export function GradingResultsPanel({
 			? Math.round((effectiveTotalAwarded / data.total_max) * 100)
 			: 0
 
-	// Compute alignment data once — shared by both card and sheet views
+	// Compute alignment data for the answer sheet
 	const { marksByQuestion, alignmentByQuestion, tokensByQuestion } =
 		useQuestionAlignments(data.grading_results, annotations, pageTokens)
 
-	// Only show the sheet toggle when we have annotations with token anchors
-	const hasAnnotationsWithAnchors = annotations.some(
-		(a) => a.anchor_token_start_id && a.anchor_token_end_id,
+	// Build PM document from grading results + alignment marks
+	const doc = useMemo(
+		() => buildAnnotatedDoc(data.grading_results, marksByQuestion),
+		[data.grading_results, marksByQuestion],
+	)
+
+	// Build grading results lookup map for context
+	const gradingResultsMap = useMemo(() => {
+		const map = new Map<string, GradingResult>()
+		for (const r of data.grading_results) {
+			map.set(r.question_id, r)
+		}
+		return map
+	}, [data.grading_results])
+
+	// Build context value — consumed by NodeViews via useGradingData()
+	const ctxValue: GradingDataContextValue = useMemo(
+		() => ({
+			gradingResults: gradingResultsMap,
+			answers,
+			overridesByQuestionId: overridesByQuestionId ?? new Map(),
+			activeQuestionNumber,
+			isEditing: !!onOverrideChange,
+			jobId,
+			onAnswerSaved,
+			onOverrideChange: onOverrideChange ?? (() => {}),
+		}),
+		[
+			gradingResultsMap,
+			answers,
+			overridesByQuestionId,
+			activeQuestionNumber,
+			jobId,
+			onAnswerSaved,
+			onOverrideChange,
+		],
 	)
 
 	return (
@@ -127,77 +161,26 @@ export function GradingResultsPanel({
 				</Card>
 			)}
 
-			{/* Question breakdown */}
+			{/* Question breakdown — always the answer sheet */}
 			<div>
-				<div className="flex items-center justify-between mb-3">
-					<h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-						Question breakdown
-					</h2>
-					{hasAnnotationsWithAnchors && (
-						<div className="flex items-center rounded-md border bg-muted/40 p-0.5">
-							<Button
-								variant={view === "cards" ? "default" : "ghost"}
-								size="sm"
-								className="h-6 px-2 text-xs gap-1"
-								onClick={() => onViewChange?.("cards")}
-							>
-								<LayoutList className="h-3 w-3" />
-								Cards
-							</Button>
-							<Button
-								variant={view === "sheet" ? "default" : "ghost"}
-								size="sm"
-								className="h-6 px-2 text-xs gap-1"
-								onClick={() => onViewChange?.("sheet")}
-							>
-								<FileText className="h-3 w-3" />
-								Answer Sheet
-							</Button>
-						</div>
-					)}
-				</div>
+				<h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-3">
+					Question breakdown
+				</h2>
 				{data.grading_results.length === 0 ? (
 					<p className="text-sm text-muted-foreground">
 						No questions were graded.
 					</p>
-				) : view === "sheet" && hasAnnotationsWithAnchors ? (
-					<AnnotatedAnswerSheet
-						gradingResults={data.grading_results}
-						marksByQuestion={marksByQuestion}
-						alignmentByQuestion={alignmentByQuestion}
-						tokensByQuestion={tokensByQuestion}
-						onDerivedAnnotations={onDerivedAnnotations}
-					/>
 				) : (
-					<div className="rounded-xl border shadow-sm overflow-hidden">
-						<div className="bg-zinc-50 dark:bg-zinc-900 border-b px-5 py-3">
-							<span className="text-xs font-mono font-bold tracking-widest uppercase text-muted-foreground">
-								Student Answer Sheet
-							</span>
-						</div>
-						<div className="bg-white dark:bg-zinc-950 divide-y divide-zinc-100 dark:divide-zinc-800/60">
-							{data.grading_results.map((r: GradingResult) => (
-								<GradingResultCard
-									key={r.question_id}
-									jobId={jobId}
-									result={r}
-									currentAnswer={answers[r.question_id] ?? ""}
-									isActive={activeQuestionNumber === r.question_number}
-									onAnswerSaved={onAnswerSaved}
-									questionMarks={marksByQuestion.get(r.question_id)}
-									annotations={annotations.filter(
-										(a) => a.question_id === r.question_id,
-									)}
-									override={overridesByQuestionId?.get(r.question_id)}
-									onOverrideChange={
-										onOverrideChange
-											? (input) => onOverrideChange(r.question_id, input)
-											: undefined
-									}
-								/>
-							))}
-						</div>
-					</div>
+					<GradingDataProvider value={ctxValue}>
+						<AnnotatedAnswerSheet
+							doc={doc}
+							alignmentByQuestion={alignmentByQuestion}
+							tokensByQuestion={tokensByQuestion}
+							onDerivedAnnotations={onDerivedAnnotations}
+							hoveredTokenId={hoveredTokenId}
+							onTokenHighlight={onTokenHighlight}
+						/>
+					</GradingDataProvider>
 				)}
 			</div>
 		</div>

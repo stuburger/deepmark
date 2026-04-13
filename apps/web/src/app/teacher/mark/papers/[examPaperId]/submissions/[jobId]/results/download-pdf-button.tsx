@@ -7,11 +7,11 @@ import {
 	DropdownMenuItem,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { aoLabel, aoRgb } from "@/lib/marking/ao-palette"
 import { alignTokensToAnswer } from "@/lib/marking/alignment/align"
 import { deriveTextMarks } from "@/lib/marking/alignment/marks"
 import { splitIntoSegments } from "@/lib/marking/alignment/segments"
 import type { TextMark, TextSegment } from "@/lib/marking/alignment/types"
+import { aoLabel, aoRgb } from "@/lib/marking/ao-palette"
 import type {
 	PageToken,
 	StudentPaperAnnotation,
@@ -60,7 +60,6 @@ const CHAIN_BG: Record<string, RGB> = {
 	evaluation: [254, 243, 199],
 	judgement: [237, 233, 254],
 }
-
 
 // ── Legend data (matches annotation-legend.tsx) ─────────────────────────────
 

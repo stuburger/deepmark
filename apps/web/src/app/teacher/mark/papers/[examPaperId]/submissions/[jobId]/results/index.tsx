@@ -8,7 +8,7 @@ import type {
 	UpsertTeacherOverrideInput,
 } from "@/lib/marking/types"
 import { useState } from "react"
-import { GradingResultsPanel, type ResultsView } from "./grading-results-panel"
+import { GradingResultsPanel } from "./grading-results-panel"
 
 /**
  * Digital tab content for the completed phase.
@@ -23,9 +23,9 @@ export function MarkingResults({
 	pageTokens,
 	overridesByQuestionId,
 	onOverrideChange,
-	view,
-	onViewChange,
 	onDerivedAnnotations,
+	hoveredTokenId,
+	onTokenHighlight,
 }: {
 	jobId: string
 	data: StudentPaperJobPayload
@@ -37,9 +37,9 @@ export function MarkingResults({
 		questionId: string,
 		input: UpsertTeacherOverrideInput | null,
 	) => void
-	view?: ResultsView
-	onViewChange?: (view: ResultsView) => void
 	onDerivedAnnotations?: (annotations: StudentPaperAnnotation[]) => void
+	hoveredTokenId?: string | null
+	onTokenHighlight?: (tokenIds: string[] | null) => void
 }) {
 	const [answers, setAnswers] = useState<Record<string, string>>(
 		Object.fromEntries(
@@ -60,9 +60,9 @@ export function MarkingResults({
 			pageTokens={pageTokens}
 			overridesByQuestionId={overridesByQuestionId}
 			onOverrideChange={onOverrideChange}
-			view={view}
-			onViewChange={onViewChange}
 			onDerivedAnnotations={onDerivedAnnotations}
+			hoveredTokenId={hoveredTokenId}
+			onTokenHighlight={onTokenHighlight}
 		/>
 	)
 }

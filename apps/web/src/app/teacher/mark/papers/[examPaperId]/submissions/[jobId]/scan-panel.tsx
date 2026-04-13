@@ -20,6 +20,8 @@ export function ScanPanel({
 	annotations = [],
 	showMarks = false,
 	showChains = false,
+	highlightedTokenIds,
+	onTokenHover,
 }: {
 	scanPages: ScanPageUrl[]
 	pageTokens: PageToken[]
@@ -31,6 +33,8 @@ export function ScanPanel({
 	annotations?: StudentPaperAnnotation[]
 	showMarks?: boolean
 	showChains?: boolean
+	highlightedTokenIds?: Set<string> | null
+	onTokenHover?: (tokenId: string | null) => void
 }) {
 	return (
 		<ScrollArea className="h-full w-full bg-muted/20">
@@ -45,6 +49,8 @@ export function ScanPanel({
 				annotations={annotations}
 				showMarks={showMarks}
 				showChains={showChains}
+				highlightedTokenIds={highlightedTokenIds}
+				onTokenHover={onTokenHover}
 			/>
 		</ScrollArea>
 	)

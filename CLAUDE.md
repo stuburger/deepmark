@@ -415,6 +415,17 @@ function process(data: unknown) {
 }
 ```
 
+**No inline `import()` types** — never use `import("./types").Foo` in function signatures or return types. Always use a top-level `import type { Foo } from "./types"`. Inline import types are hard to read, hard to search for, and hide dependencies. The one exception is dynamic `await import()` for runtime lazy-loading — that's a different pattern and is fine.
+
+```ts
+// ❌ Inline import type in a signature
+function save(): Promise<{ ok: true; data: import("./types").Result }> { ... }
+
+// ✅ Top-level import
+import type { Result } from "./types"
+function save(): Promise<{ ok: true; data: Result }> { ... }
+```
+
 **Prefer Zod over type-casting** — when data crosses a boundary (API response, form input, queue payload, URL param), parse it with a Zod schema. Do not cast with `as`. A parse failure is a loud, traceable error; a bad cast is a silent bug.
 
 ```ts

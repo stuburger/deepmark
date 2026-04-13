@@ -96,6 +96,8 @@ export function AnnotatedScanColumn({
 	annotations = [],
 	showMarks = false,
 	showChains = false,
+	highlightedTokenIds,
+	onTokenHover,
 }: {
 	pages: ScanPageUrl[]
 	/** Cloud Vision word-level tokens for all pages — filtered per page internally. */
@@ -114,6 +116,10 @@ export function AnnotatedScanColumn({
 	showMarks?: boolean
 	/** Controls chain indicator highlight visibility. */
 	showChains?: boolean
+	/** Token IDs to highlight (from PM hover). */
+	highlightedTokenIds?: Set<string> | null
+	/** Called when a token is hovered on the scan. */
+	onTokenHover?: (tokenId: string | null) => void
 }) {
 	// Map question_id → question_number for enrichment annotation clicks
 	const questionIdToNumber = new Map(
@@ -174,6 +180,8 @@ export function AnnotatedScanColumn({
 								showMarks={showMarks}
 								showChains={showChains}
 								onEnrichmentAnnotationClick={handleEnrichmentClick}
+								highlightedTokenIds={highlightedTokenIds}
+								onTokenHover={onTokenHover}
 							/>
 						) : (
 							<div className="relative overflow-hidden rounded-xl border bg-muted/20">

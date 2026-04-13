@@ -80,8 +80,23 @@ export function buildAnnotatedDoc(
 	const blocks: JSONContent[] = []
 
 	for (const r of gradingResults) {
-		// Skip MCQ questions — they have their own UI
-		if (r.marking_method === "deterministic") continue
+		// MCQ questions → atom node with all data in attrs
+		if (r.marking_method === "deterministic") {
+			blocks.push({
+				type: "mcqAnswer",
+				attrs: {
+					questionId: r.question_id,
+					questionNumber: r.question_number,
+					questionText: r.question_text || null,
+					maxScore: r.max_score,
+					options: r.multiple_choice_options ?? [],
+					correctLabels: r.correct_option_labels ?? [],
+					studentAnswer: r.student_answer,
+					awardedScore: r.awarded_score,
+				},
+			})
+			continue
+		}
 
 		const marks = marksByQuestion.get(r.question_id) ?? []
 		const content = buildTextContent(r.student_answer, marks)

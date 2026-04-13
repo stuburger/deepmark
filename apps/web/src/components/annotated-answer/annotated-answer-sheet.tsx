@@ -1,12 +1,9 @@
 "use client"
 
-import type { TextMark, TokenAlignment } from "@/lib/marking/token-alignment"
-import type {
-	GradingResult,
-	PageToken,
-	StudentPaperAnnotation,
-} from "@/lib/marking/types"
+import type { TokenAlignment } from "@/lib/marking/token-alignment"
+import type { PageToken, StudentPaperAnnotation } from "@/lib/marking/types"
 import { cn } from "@/lib/utils"
+import type { JSONContent } from "@tiptap/core"
 import Document from "@tiptap/extension-document"
 import HardBreak from "@tiptap/extension-hard-break"
 import History from "@tiptap/extension-history"
@@ -22,10 +19,17 @@ import {
 	Underline,
 	X,
 } from "lucide-react"
-import { useCallback, useMemo } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
+import { useGradingData } from "./grading-data-context"
 import "./annotation-marks.css"
 import { annotationMarks } from "./annotation-marks"
-import { buildAnnotatedDoc } from "./build-doc"
+import { CommentSidebar } from "./comment-sidebar"
+import {
+	HoverHighlightPlugin,
+	setAnnotationHighlight,
+	setHoverHighlight,
+} from "./hover-highlight-plugin"
+import { McqAnswerNode } from "./mcq-answer-node"
 import { QuestionAnswerNode } from "./question-answer-node"
 import { useDerivedAnnotations } from "./use-derived-annotations"
 
@@ -85,36 +89,62 @@ const MARK_ACTIONS: MarkAction[] = [
 
 // ─── Main component ─────────────────────────────────────────────────────────
 
+/**
+ * Pure PM editor component. Renders a tiptap document with annotation marks,
+ * bubble menu toolbar, comment sidebar, and hover word linking.
+ *
+ * Grading data (scores, overrides, feedback) is consumed by NodeViews via
+ * GradingDataContext — the provider must be wrapped by the parent.
+ */
 export function AnnotatedAnswerSheet({
-	gradingResults,
-	marksByQuestion,
+	doc,
 	alignmentByQuestion,
 	tokensByQuestion,
 	onDerivedAnnotations,
+	hoveredTokenId,
+	onTokenHighlight,
 }: {
-	gradingResults: GradingResult[]
-	marksByQuestion: Map<string, TextMark[]>
+	doc: JSONContent
 	alignmentByQuestion: Map<string, TokenAlignment>
 	tokensByQuestion: Map<string, PageToken[]>
 	onDerivedAnnotations?: (annotations: StudentPaperAnnotation[]) => void
+	hoveredTokenId?: string | null
+	onTokenHighlight?: (tokenIds: string[] | null) => void
 }) {
-	// Build PM document
-	const doc = useMemo(
-		() => buildAnnotatedDoc(gradingResults, marksByQuestion),
-		[gradingResults, marksByQuestion],
+	// Comment sidebar hover state — declared early so its setter can go into a ref.
+	const [hoveredAnnotationId, setHoveredAnnotationId] = useState<string | null>(
+		null,
 	)
+
+	// Mutable refs so the hover plugin always reads current values
+	// even though the plugin instance is created once per editor lifetime.
+	const alignmentRef = useRef(alignmentByQuestion)
+	alignmentRef.current = alignmentByQuestion
+	const tokensRef = useRef(tokensByQuestion)
+	tokensRef.current = tokensByQuestion
+	const onTokenHighlightRef = useRef(onTokenHighlight)
+	onTokenHighlightRef.current = onTokenHighlight
+	const onAnnotationHoverRef = useRef(setHoveredAnnotationId)
+	onAnnotationHoverRef.current = setHoveredAnnotationId
 
 	const editor = useEditor(
 		{
 			immediatelyRender: false,
 			editable: true,
 			extensions: [
-				Document.extend({ content: "questionAnswer+" }),
+				Document.extend({ content: "(questionAnswer | mcqAnswer)+" }),
 				Text,
 				HardBreak,
 				History,
 				QuestionAnswerNode,
+				McqAnswerNode,
 				...annotationMarks,
+				HoverHighlightPlugin.configure({
+					alignmentRef,
+					tokensRef,
+					onTokenHighlightRef,
+					onAnnotationHoverRef,
+				}),
 			],
 			content: doc,
 			editorProps: {
@@ -135,7 +165,6 @@ export function AnnotatedAnswerSheet({
 	)
 
 	// Derive annotations from PM state for the scan overlay.
-	// Calls stableOnDerived synchronously inside the transaction handler.
 	useDerivedAnnotations(
 		editor,
 		alignmentByQuestion,
@@ -143,48 +172,88 @@ export function AnnotatedAnswerSheet({
 		stableOnDerived,
 	)
 
+	// Persist changed answer text when editing is toggled off.
+	// Reads from GradingDataContext (provided by parent) — the only context
+	// dependency in this component. Kept here because it needs the editor ref.
+	const { isEditing, answers, onAnswerSaved } = useGradingData()
+	const prevEditingRef = useRef(isEditing)
+	useEffect(() => {
+		if (prevEditingRef.current && !isEditing && editor) {
+			editor.state.doc.descendants((node) => {
+				if (node.type.name !== "questionAnswer") return
+				const questionId = node.attrs.questionId as string | null
+				if (!questionId) return
+				const currentText = node.textContent
+				const originalText = answers[questionId] ?? ""
+				if (currentText !== originalText) {
+					onAnswerSaved(questionId, currentText)
+				}
+			})
+		}
+		prevEditingRef.current = isEditing
+	}, [isEditing, editor, answers, onAnswerSaved])
+
+	// Scan → PM hover: when a token is hovered on the scan, highlight it in PM
+	useEffect(() => {
+		if (!editor) return
+		setHoverHighlight(editor, hoveredTokenId ?? null, alignmentByQuestion)
+	}, [editor, hoveredTokenId, alignmentByQuestion])
+
+	// Sidebar → PM: highlight the mark range when a sidebar card is hovered
+	useEffect(() => {
+		if (!editor) return
+		setAnnotationHighlight(editor, hoveredAnnotationId)
+	}, [editor, hoveredAnnotationId])
+
 	if (!editor) return null
 
 	return (
 		<div className="rounded-xl border shadow-sm overflow-hidden">
-			<div className="bg-zinc-50 dark:bg-zinc-900 border-b px-5 py-3">
-				<span className="text-xs font-mono font-bold tracking-widest uppercase text-muted-foreground">
-					Annotated Answer Sheet
-				</span>
-			</div>
-			<div className="bg-white dark:bg-zinc-950 relative">
-				<BubbleMenu
-					editor={editor}
-					className="flex items-center gap-0.5 rounded-lg border bg-background shadow-lg px-1 py-0.5"
-				>
-					{MARK_ACTIONS.map((action) => {
-						const isActive = editor.isActive(action.name)
-						return (
-							<button
-								key={action.name}
-								type="button"
-								onClick={() =>
-									editor
-										.chain()
-										.focus()
-										.toggleMark(action.name, action.attrs)
-										.run()
-								}
-								className={cn(
-									"flex items-center gap-1 rounded px-2 py-1 text-xs font-medium transition-colors",
-									"hover:bg-muted",
-									isActive &&
-										"bg-primary text-primary-foreground hover:bg-primary/90",
-								)}
-								title={action.label}
-							>
-								{action.icon}
-								<span className="hidden sm:inline">{action.label}</span>
-							</button>
-						)
-					})}
-				</BubbleMenu>
-				<EditorContent editor={editor} />
+			<div className="bg-white dark:bg-zinc-950 relative flex">
+				{/* Editor — takes remaining space */}
+				<div className="flex-1 min-w-0 relative">
+					<BubbleMenu
+						editor={editor}
+						className="flex items-center gap-0.5 rounded-lg border bg-background shadow-lg px-1 py-0.5"
+					>
+						{MARK_ACTIONS.map((action) => {
+							const isActive = editor.isActive(action.name)
+							return (
+								<button
+									key={action.name}
+									type="button"
+									onClick={() =>
+										editor
+											.chain()
+											.focus()
+											.toggleMark(action.name, action.attrs)
+											.run()
+									}
+									className={cn(
+										"flex items-center gap-1 rounded px-2 py-1 text-xs font-medium transition-colors",
+										"hover:bg-muted",
+										isActive &&
+											"bg-primary text-primary-foreground hover:bg-primary/90",
+									)}
+									title={action.label}
+								>
+									{action.icon}
+									<span className="hidden sm:inline">{action.label}</span>
+								</button>
+							)
+						})}
+					</BubbleMenu>
+					<EditorContent editor={editor} />
+				</div>
+
+				{/* Comment sidebar — positioned alongside editor */}
+				<div className="w-48 shrink-0 border-l bg-zinc-50/50 dark:bg-zinc-900/30 overflow-y-auto hidden lg:block">
+					<CommentSidebar
+						editor={editor}
+						hoveredAnnotationId={hoveredAnnotationId}
+						onHoverAnnotation={setHoveredAnnotationId}
+					/>
+				</div>
 			</div>
 		</div>
 	)

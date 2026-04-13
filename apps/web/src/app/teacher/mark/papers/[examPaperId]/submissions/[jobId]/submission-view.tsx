@@ -18,6 +18,7 @@ import type {
 	ScanPageUrl,
 	StudentPaperAnnotation,
 	StudentPaperJobPayload,
+	UpsertTeacherOverrideInput,
 } from "@/lib/marking/types"
 import { queryKeys } from "@/lib/query-keys"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
@@ -35,7 +36,6 @@ import type { MarkingPhase } from "./phase"
 import { derivePhase } from "./phase"
 import { ResultsPanel } from "./results-panel"
 import { AnnotatedScanColumn } from "./results/annotated-scan-column"
-import type { ResultsView } from "./results/grading-results-panel"
 import { ScanPanel } from "./scan-panel"
 import { SubmissionToolbar } from "./submission-toolbar"
 
@@ -68,17 +68,18 @@ export function SubmissionView({
 	const [showMarks, setShowMarks] = useState(false)
 	const [showChains, setShowChains] = useState(false)
 	const [isEditing, setIsEditing] = useState(false)
-	const [resultsView, setResultsView] = useState<ResultsView>("cards")
 	const [sheetAnnotations, setSheetAnnotations] = useState<
 		StudentPaperAnnotation[]
 	>([])
 
-	// Clear stale derived annotations when leaving sheet view so the scan
-	// doesn't flash old data when switching back later.
-	const handleViewChange = useCallback((view: ResultsView) => {
-		if (view !== "sheet") setSheetAnnotations([])
-		setResultsView(view)
+	// Hover word linking — bidirectional between scan and PM editor
+	const [hoveredTokenId, setHoveredTokenId] = useState<string | null>(null)
+	const [highlightedTokenIds, setHighlightedTokenIds] =
+		useState<Set<string> | null>(null)
+	const handleTokenHighlight = useCallback((tokenIds: string[] | null) => {
+		setHighlightedTokenIds(tokenIds ? new Set(tokenIds) : null)
 	}, [])
+
 	const [activeQuestionNumber, setActiveQuestionNumber] = useQueryState(
 		"question",
 		parseAsString,
@@ -95,7 +96,7 @@ export function SubmissionView({
 	)
 
 	// When an annotation is clicked, switch the mobile tab to "results" so the
-	// card is in the DOM and visible before scrollToQuestion runs its rAF.
+	// question is in the DOM and visible before scrollToQuestion runs its rAF.
 	const handleAnnotationClick = useCallback(
 		(questionNumber: string) => {
 			setMobileTab("results")
@@ -113,10 +114,7 @@ export function SubmissionView({
 	)
 
 	const handleOverrideChange = useCallback(
-		(
-			questionId: string,
-			input: import("@/lib/marking/types").UpsertTeacherOverrideInput | null,
-		) => {
+		(questionId: string, input: UpsertTeacherOverrideInput | null) => {
 			if (input === null) {
 				deleteOverride(questionId)
 			} else {
@@ -175,13 +173,11 @@ export function SubmissionView({
 		}
 	}, [annotations])
 
-	// When sheet view is active, PM doc is the state — scan derives from it.
+	// PM doc is the authoritative state — scan derives from it.
 	// MCQ/deterministic annotations (no token anchors) bypass the PM doc and
 	// pass through directly — they're spatial-only marks on the scan.
-	// When card view is active, DB annotations are the state (no PM editor running).
 	const effectiveAnnotations = useMemo(() => {
-		if (resultsView !== "sheet" || sheetAnnotations.length === 0)
-			return annotations
+		if (sheetAnnotations.length === 0) return annotations
 
 		// Union: PM-derived annotations + spatial-only DB annotations that
 		// can't be represented in the PM doc (no anchor tokens)
@@ -189,7 +185,7 @@ export function SubmissionView({
 			(a) => !a.anchor_token_start_id || !a.anchor_token_end_id,
 		)
 		return [...sheetAnnotations, ...spatialOnly]
-	}, [resultsView, sheetAnnotations, annotations])
+	}, [sheetAnnotations, annotations])
 
 	// Trigger enrichment mutation
 	const enrichMutation = useMutation({
@@ -222,8 +218,7 @@ export function SubmissionView({
 	}, [data.enrichment_status, jobId, queryClient])
 
 	// When OCR completes (scan_processing → marking_in_progress), invalidate the
-	// scan URLs query so page.analysis data is fetched. This replaces the old
-	// router.refresh() which re-ran the entire server component just for this.
+	// scan URLs query so page.analysis data is fetched.
 	const prevPhaseRef = useRef(initialPhase)
 	useEffect(() => {
 		if (
@@ -311,9 +306,9 @@ export function SubmissionView({
 							pageTokens={pageTokens}
 							overridesByQuestionId={overridesByQuestionId}
 							onOverrideChange={isEditing ? handleOverrideChange : undefined}
-							view={resultsView}
-							onViewChange={handleViewChange}
 							onDerivedAnnotations={setSheetAnnotations}
+							hoveredTokenId={hoveredTokenId}
+							onTokenHighlight={handleTokenHighlight}
 						/>
 					</TabsContent>
 				</Tabs>
@@ -336,6 +331,8 @@ export function SubmissionView({
 						annotations={effectiveAnnotations}
 						showMarks={showMarks}
 						showChains={showChains}
+						highlightedTokenIds={highlightedTokenIds}
+						onTokenHover={setHoveredTokenId}
 					/>
 				</ResizablePanel>
 
@@ -351,9 +348,9 @@ export function SubmissionView({
 						pageTokens={pageTokens}
 						overridesByQuestionId={overridesByQuestionId}
 						onOverrideChange={isEditing ? handleOverrideChange : undefined}
-						view={resultsView}
-						onViewChange={handleViewChange}
 						onDerivedAnnotations={setSheetAnnotations}
+						hoveredTokenId={hoveredTokenId}
+						onTokenHighlight={handleTokenHighlight}
 					/>
 				</ResizablePanel>
 			</ResizablePanelGroup>

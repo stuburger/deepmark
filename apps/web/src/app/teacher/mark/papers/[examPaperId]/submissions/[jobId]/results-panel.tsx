@@ -13,7 +13,6 @@ import { Loader2 } from "lucide-react"
 import { CancelledPanel } from "./cancelled"
 import { FailedPanel } from "./failed"
 import type { MarkingPhase } from "./phase"
-import type { ResultsView } from "./results/grading-results-panel"
 import { MarkingResults } from "./results/index"
 import { LlmSnapshotPanel } from "./results/llm-snapshot-panel"
 
@@ -40,19 +39,7 @@ function ScanProcessingDisplay({ status }: { status: string }) {
 	)
 }
 
-function DigitalPanelContent({
-	jobId,
-	data,
-	phase,
-	activeQuestionNumber,
-	annotations = [],
-	pageTokens,
-	overridesByQuestionId,
-	onOverrideChange,
-	view,
-	onViewChange,
-	onDerivedAnnotations,
-}: {
+type SharedPanelProps = {
 	jobId: string
 	data: StudentPaperJobPayload
 	phase: MarkingPhase
@@ -64,10 +51,24 @@ function DigitalPanelContent({
 		questionId: string,
 		input: UpsertTeacherOverrideInput | null,
 	) => void
-	view?: ResultsView
-	onViewChange?: (view: ResultsView) => void
 	onDerivedAnnotations?: (annotations: StudentPaperAnnotation[]) => void
-}) {
+	hoveredTokenId?: string | null
+	onTokenHighlight?: (tokenIds: string[] | null) => void
+}
+
+function DigitalPanelContent({
+	jobId,
+	data,
+	phase,
+	activeQuestionNumber,
+	annotations = [],
+	pageTokens,
+	overridesByQuestionId,
+	onOverrideChange,
+	onDerivedAnnotations,
+	hoveredTokenId,
+	onTokenHighlight,
+}: SharedPanelProps) {
 	switch (phase) {
 		case "scan_processing":
 			return <ScanProcessingDisplay status={data.status} />
@@ -91,9 +92,9 @@ function DigitalPanelContent({
 					pageTokens={pageTokens}
 					overridesByQuestionId={overridesByQuestionId}
 					onOverrideChange={onOverrideChange}
-					view={view}
-					onViewChange={onViewChange}
 					onDerivedAnnotations={onDerivedAnnotations}
+					hoveredTokenId={hoveredTokenId}
+					onTokenHighlight={onTokenHighlight}
 				/>
 			)
 
@@ -114,25 +115,10 @@ export function ResultsPanel({
 	pageTokens,
 	overridesByQuestionId,
 	onOverrideChange,
-	view,
-	onViewChange,
 	onDerivedAnnotations,
-}: {
-	jobId: string
-	data: StudentPaperJobPayload
-	phase: MarkingPhase
-	activeQuestionNumber: string | null
-	annotations?: StudentPaperAnnotation[]
-	pageTokens?: PageToken[]
-	overridesByQuestionId?: Map<string, TeacherOverride>
-	onOverrideChange?: (
-		questionId: string,
-		input: UpsertTeacherOverrideInput | null,
-	) => void
-	view?: ResultsView
-	onViewChange?: (view: ResultsView) => void
-	onDerivedAnnotations?: (annotations: StudentPaperAnnotation[]) => void
-}) {
+	hoveredTokenId,
+	onTokenHighlight,
+}: SharedPanelProps) {
 	return (
 		<ScrollArea data-results-panel className="h-full w-full">
 			<div className="p-4 space-y-5 max-w-2xl w-full">
@@ -145,9 +131,9 @@ export function ResultsPanel({
 					pageTokens={pageTokens}
 					overridesByQuestionId={overridesByQuestionId}
 					onOverrideChange={onOverrideChange}
-					view={view}
-					onViewChange={onViewChange}
 					onDerivedAnnotations={onDerivedAnnotations}
+					hoveredTokenId={hoveredTokenId}
+					onTokenHighlight={onTokenHighlight}
 				/>
 				<LlmSnapshotPanel
 					ocrSnapshot={data.ocr_llm_snapshot}

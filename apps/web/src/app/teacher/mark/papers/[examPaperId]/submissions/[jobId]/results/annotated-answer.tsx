@@ -33,10 +33,9 @@ function markClasses(mark: TextMark): string {
 				return "bg-violet-100/40 dark:bg-violet-900/20"
 			return "bg-blue-100/40 dark:bg-blue-900/20"
 		}
-		// no default needed — all AnnotationSignal values covered above
-		default:
-			return ""
 	}
+	const _exhaustive: never = mark.type
+	return ""
 }
 
 function markTitle(mark: TextMark): string | undefined {

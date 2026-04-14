@@ -25,7 +25,6 @@ import {
 	type VisionAttributeQuestion,
 	visionAttributeRegions,
 } from "@/lib/scan-extraction/vision-attribute"
-import { reconcilePageTokens } from "@/lib/scan-extraction/vision-reconcile"
 import { SQSClient, SendMessageCommand } from "@aws-sdk/client-sqs"
 import { type OcrStatus, type Subject, logOcrRunEvent } from "@mcp-gcse/db"
 import { Resource } from "sst"
@@ -222,17 +221,9 @@ export async function handler(
 				visionResults,
 			)
 
-			// Phase 2a — correct raw Vision token text against the page image.
-			// Returns the same tokens with text_corrected populated, which are
-			// passed directly to Phase 2b — making the dependency explicit.
-			const correctedTokens = await reconcilePageTokens({
-				pages: sortedPages,
-				tokens: insertedTokens,
-				jobId,
-				llm,
-			})
-
-			// Phase 2b — assign corrected tokens to questions, derive answer regions.
+			// Phase 2a — assign raw tokens to questions, derive answer regions.
+			// Attribution uses the raw OCR text + extracted answers as matching
+			// anchors. Correction happens in phase 2b alongside mapping.
 			void logOcrRunEvent(db, jobId, {
 				type: "region_attribution_started",
 				at: new Date().toISOString(),
@@ -245,19 +236,26 @@ export async function handler(
 					is_mcq: s.question_type === "multiple_choice",
 				}),
 			)
+			// Pass raw tokens with text_corrected: null — attribution falls back
+			// to text_raw which is sufficient for spatial question assignment.
+			const rawTokensAsCorrected = insertedTokens.map((t) => ({
+				...t,
+				text_corrected: null as string | null,
+			}))
 			await visionAttributeRegions({
 				questions: attributeQuestions,
 				extractedAnswers: extraction.answers,
 				pages: sortedPages,
 				s3Bucket: bucket,
-				tokens: correctedTokens,
+				tokens: rawTokensAsCorrected,
 				jobId,
 				llm,
 			})
 
-			// Phase 2c — LLM-powered token-to-answer mapping.
-			// Sends each question's tokens + student answer + page image to the LLM
-			// to map every OCR token to its corresponding answer word.
+			// Phase 2b — token correction + answer mapping (merged).
+			// Sends each question's tokens + student answer + page image to the LLM.
+			// Outputs: text_corrected (OCR correction) + answer_char_start/end (word mapping).
+			// Replaces the old separate reconciliation + Levenshtein alignment steps.
 			await alignAndPersistTokenOffsets({
 				extractedAnswers: extraction.answers,
 				pages: sortedPages,

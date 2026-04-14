@@ -340,26 +340,13 @@ export const LLM_CALL_SITE_DEFAULTS: Array<{
 		],
 	},
 	{
-		key: "vision-token-reconciliation",
-		display_name: "Token Reconciliation",
-		description:
-			"Corrects Cloud Vision OCR tokens against original page images for accuracy.",
-		input_type: "vision",
-		phase: "answer-detection",
-		step: 2,
-		multiplier: "per-page",
-		models: [
-			{ provider: "anthropic", model: "claude-sonnet-4-6", temperature: 0.2 },
-		],
-	},
-	{
 		key: "vision-attribution",
 		display_name: "Answer Region Attribution",
 		description:
 			"Assigns OCR tokens to questions and derives answer region bounding boxes.",
 		input_type: "vision",
 		phase: "answer-detection",
-		step: 3,
+		step: 2,
 		multiplier: "per-page",
 		models: [
 			{ provider: "anthropic", model: "claude-sonnet-4-6", temperature: 0.2 },
@@ -372,7 +359,7 @@ export const LLM_CALL_SITE_DEFAULTS: Array<{
 			"Fallback for locating MCQ answers when primary attribution misses them.",
 		input_type: "vision",
 		phase: "answer-detection",
-		step: 4,
+		step: 3,
 		multiplier: "per-page",
 		models: [
 			{ provider: "google", model: "gemini-2.5-flash", temperature: 0.1 },
@@ -380,9 +367,9 @@ export const LLM_CALL_SITE_DEFAULTS: Array<{
 	},
 	{
 		key: "token-answer-mapping",
-		display_name: "Token-to-Answer Mapping",
+		display_name: "Token Correction + Answer Mapping",
 		description:
-			"Maps OCR tokens to student answer words using the page image, producing character offsets for scan highlighting.",
+			"Corrects OCR token text and maps each token to its corresponding student answer word. Replaces the old separate reconciliation step.",
 		input_type: "vision",
 		phase: "answer-detection",
 		step: 4,

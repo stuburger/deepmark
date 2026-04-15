@@ -4,6 +4,12 @@ import { AnnotationLegend } from "@/components/BoundingBoxViewer/annotation-lege
 import { Button } from "@/components/ui/button"
 import { buttonVariants } from "@/components/ui/button-variants"
 import {
+	DropdownMenu,
+	DropdownMenuCheckboxItem,
+	DropdownMenuContent,
+	DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import {
 	Tooltip,
 	TooltipContent,
 	TooltipProvider,
@@ -18,14 +24,11 @@ import type {
 import { cn } from "@/lib/utils"
 import {
 	BookOpen,
-	Check,
+	ChevronDown,
 	ChevronRight,
 	FileText,
-	Link2,
-	MapPin,
+	Layers,
 	Pencil,
-	PlusCircle,
-	ScanText,
 	StickyNote,
 } from "lucide-react"
 import Link from "next/link"
@@ -36,7 +39,7 @@ import { DownloadPdfButton } from "./results/download-pdf-button"
 import { ReRunMenu } from "./results/re-run-menu"
 import { StudentNameEditor } from "./results/student-name-editor"
 import { SubmissionFeedbackButton } from "./results/submission-feedback"
-import { GroupToggle, ScoreBadge } from "./submission-toolbar-controls"
+import { ScoreBadge } from "./submission-toolbar-controls"
 import { VersionSwitcher } from "./version-switcher"
 
 // ─── Main toolbar ─────────────────────────────────────────────────────────────
@@ -171,49 +174,49 @@ export function SubmissionToolbar({
 
 			{/* ── Row 2: Tool strip ────────────────────────────────────────────── */}
 			<div className="shrink-0 flex items-center gap-3 border-b bg-background px-4 h-11">
-				{/* Overlay toggles group */}
-				<div className="flex">
-					<GroupToggle
-						active={showOcr}
-						disabled={!hasOcr}
-						disabledReason={ocrDisabledReason}
-						onClick={onToggleOcr}
-						icon={<ScanText className="h-3.5 w-3.5" />}
-						label="OCR"
-						position="first"
-					/>
-					<GroupToggle
-						active={showRegions}
-						disabled={!hasRegions}
-						disabledReason={regionsDisabledReason}
-						onClick={onToggleRegions}
-						icon={<MapPin className="h-3.5 w-3.5" />}
-						label="Regions"
-						position={onToggleMarks ? "middle" : "last"}
-					/>
-					{onToggleMarks && (
-						<GroupToggle
-							active={showMarks}
-							disabled={!hasAnnotations}
-							disabledReason={annotationsDisabledReason}
-							onClick={onToggleMarks}
-							icon={<Check className="h-3.5 w-3.5" />}
-							label="Marks"
-							position="middle"
-						/>
-					)}
-					{onToggleChains && (
-						<GroupToggle
-							active={showChains}
-							disabled={!hasAnnotations}
-							disabledReason={annotationsDisabledReason}
-							onClick={onToggleChains}
-							icon={<Link2 className="h-3.5 w-3.5" />}
-							label="Chains"
-							position="last"
-						/>
-					)}
-				</div>
+				{/* Overlay toggles — dropdown */}
+				<DropdownMenu>
+					<DropdownMenuTrigger
+						className={cn(
+							"inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium transition-colors",
+							"rounded-md border bg-background text-muted-foreground border-border",
+							"hover:bg-muted hover:text-foreground",
+							"data-popup-open:bg-muted data-popup-open:text-foreground",
+						)}
+					>
+						<Layers className="h-3.5 w-3.5" />
+						<span className="hidden sm:inline">Overlays</span>
+						<ChevronDown className="h-3 w-3 opacity-50" />
+					</DropdownMenuTrigger>
+					<DropdownMenuContent align="start" className="w-40">
+						<DropdownMenuCheckboxItem
+							checked={showOcr}
+							disabled={!hasOcr}
+							onCheckedChange={() => onToggleOcr()}
+						>
+							Words
+						</DropdownMenuCheckboxItem>
+						{(onToggleMarks ?? onToggleChains) && (
+							<DropdownMenuCheckboxItem
+								checked={showMarks || showChains}
+								disabled={!hasAnnotations}
+								onCheckedChange={() => {
+									onToggleMarks?.()
+									onToggleChains?.()
+								}}
+							>
+								Annotations
+							</DropdownMenuCheckboxItem>
+						)}
+						<DropdownMenuCheckboxItem
+							checked={showRegions}
+							disabled={!hasRegions}
+							onCheckedChange={() => onToggleRegions()}
+						>
+							Answers
+						</DropdownMenuCheckboxItem>
+					</DropdownMenuContent>
+				</DropdownMenu>
 
 				{/* View panels group */}
 				<div className="flex">

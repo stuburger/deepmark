@@ -131,7 +131,7 @@ export async function bulkUpdateLlmCallSiteModels(
 // ─── Seed / sync defaults ────────────────────────────────────────────────────
 
 export type SeedLlmCallSitesResult =
-	| { ok: true; created: number; updated: number }
+	| { ok: true; created: number; updated: number; deleted: number }
 	| { ok: false; error: string }
 
 export async function seedLlmCallSites(): Promise<SeedLlmCallSitesResult> {
@@ -147,45 +147,38 @@ export async function seedLlmCallSites(): Promise<SeedLlmCallSitesResult> {
 				where: { key: def.key },
 			})
 
+			const data = {
+				display_name: def.display_name,
+				description: def.description,
+				input_type: def.input_type,
+				phase: def.phase,
+				models: def.models as unknown as Parameters<
+					typeof db.llmCallSite.create
+				>[0]["data"]["models"],
+				updated_by: session.userId,
+			}
+
 			if (!existing) {
 				await db.llmCallSite.create({
-					data: {
-						key: def.key,
-						display_name: def.display_name,
-						description: def.description,
-						input_type: def.input_type,
-						phase: def.phase,
-						models: def.models as unknown as Parameters<
-							typeof db.llmCallSite.create
-						>[0]["data"]["models"],
-						updated_by: session.userId,
-					},
+					data: { key: def.key, ...data },
 				})
 				created++
 			} else {
-				// Update display_name, description, input_type, and phase if they changed, but leave models untouched
-				if (
-					existing.display_name !== def.display_name ||
-					existing.description !== def.description ||
-					existing.input_type !== def.input_type ||
-					existing.phase !== def.phase
-				) {
-					await db.llmCallSite.update({
-						where: { key: def.key },
-						data: {
-							display_name: def.display_name,
-							description: def.description,
-							input_type: def.input_type,
-							phase: def.phase,
-							updated_by: session.userId,
-						},
-					})
-					updated++
-				}
+				await db.llmCallSite.update({
+					where: { key: def.key },
+					data,
+				})
+				updated++
 			}
 		}
 
-		return { ok: true, created, updated }
+		// Delete orphaned rows whose key no longer exists in defaults
+		const validKeys = new Set(LLM_CALL_SITE_DEFAULTS.map((d) => d.key))
+		const { count: deleted } = await db.llmCallSite.deleteMany({
+			where: { key: { notIn: [...validKeys] } },
+		})
+
+		return { ok: true, created, updated, deleted }
 	} catch (err) {
 		const msg = err instanceof Error ? err.message : String(err)
 		return { ok: false, error: `Failed to seed call sites: ${msg}` }

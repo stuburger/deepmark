@@ -369,29 +369,16 @@ export const LLM_CALL_SITE_DEFAULTS: Array<{
 		key: "token-answer-mapping",
 		display_name: "Token Correction + Answer Mapping",
 		description:
-			"Corrects OCR token text and maps each token to its corresponding student answer word. Replaces the old separate reconciliation step.",
-		input_type: "vision",
+			"Text-only: maps OCR tokens to student answer words and corrects OCR text. No image needed — answer text is ground truth.",
+		input_type: "text",
 		phase: "answer-detection",
 		step: 4,
 		multiplier: "per-question",
 		models: [
-			{ provider: "anthropic", model: "claude-sonnet-4-6", temperature: 0.2 },
+			{ provider: "google", model: "gemini-2.5-flash-lite", temperature: 0.1 },
+			{ provider: "google", model: "gemini-2.5-flash", temperature: 0.1 },
 		],
 	},
-	{
-		key: "answer-alignment",
-		display_name: "Answer Alignment",
-		description:
-			"LLM fallback to align OCR-extracted answers to exam questions when string matching fails.",
-		input_type: "text",
-		phase: "answer-detection",
-		step: 5,
-		multiplier: "once",
-		models: [
-			{ provider: "google", model: "gemini-2.5-flash", temperature: 0.3 },
-		],
-	},
-
 	// ── Grading ──────────────────────────────────────────────────────────
 	// Phase 2: grade each answer against the mark scheme.
 	{

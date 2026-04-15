@@ -13,7 +13,11 @@ import {
 	markJobFailed,
 	parseSqsJobId,
 } from "@/lib/infra/sqs-job-runner"
-import { alignAndPersistTokenOffsets } from "@/lib/scan-extraction/align-tokens-to-answer"
+import {
+	type QuestionTokenGroup,
+	type TokenOffsetUpdate,
+	alignTokensToAnswers,
+} from "@/lib/scan-extraction/align-tokens-to-answer"
 import { runVisionOcr } from "@/lib/scan-extraction/cloud-vision-ocr"
 import {
 	type PageMimeType,
@@ -252,16 +256,37 @@ export async function handler(
 				llm,
 			})
 
-			// Phase 2b — token correction + answer mapping (merged).
-			// Sends each question's tokens + student answer + page image to the LLM.
+			// Phase 2b — token correction + answer mapping.
+			// Text-only LLM: maps OCR tokens to answer words, corrects OCR text.
 			// Outputs: text_corrected (OCR correction) + answer_char_start/end (word mapping).
-			// Replaces the old separate reconciliation + Levenshtein alignment steps.
-			await alignAndPersistTokenOffsets({
-				extractedAnswers: extraction.answers,
-				pages: sortedPages,
-				jobId,
-				llm,
+			const answerByQuestion = new Map(
+				extraction.answers.map((a) => [a.question_id, a.answer_text]),
+			)
+			const attributedTokens = await db.studentPaperPageToken.findMany({
+				where: { submission_id: jobId, question_id: { not: null } },
+				orderBy: [
+					{ page_order: "asc" },
+					{ para_index: "asc" },
+					{ line_index: "asc" },
+					{ word_index: "asc" },
+				],
+				select: {
+					id: true,
+					question_id: true,
+					text_raw: true,
+					text_corrected: true,
+				},
 			})
+			const questionNumberById = new Map(
+				questionSeeds.map((s) => [s.question_id, s.question_number]),
+			)
+			const questionGroups = buildQuestionGroups(
+				attributedTokens,
+				answerByQuestion,
+				questionNumberById,
+			)
+			const tokenUpdates = await alignTokensToAnswers(questionGroups, llm)
+			await persistTokenOffsets(tokenUpdates)
 
 			await db.ocrRun.update({
 				where: { id: jobId },
@@ -301,4 +326,69 @@ export async function handler(
 	}
 
 	return failures.length > 0 ? { batchItemFailures: failures } : {}
+}
+
+// ─── Helpers for Phase 2b ──────────────────────────────────────────────────
+
+function buildQuestionGroups(
+	tokens: Array<{
+		id: string
+		question_id: string | null
+		text_raw: string
+		text_corrected: string | null
+	}>,
+	answerByQuestion: Map<string, string>,
+	questionNumberById: Map<string, string>,
+): QuestionTokenGroup[] {
+	const grouped = new Map<
+		string,
+		Array<{ id: string; text_raw: string; text_corrected: string | null }>
+	>()
+	for (const t of tokens) {
+		if (!t.question_id) continue
+		const list = grouped.get(t.question_id) ?? []
+		list.push({
+			id: t.id,
+			text_raw: t.text_raw,
+			text_corrected: t.text_corrected,
+		})
+		grouped.set(t.question_id, list)
+	}
+
+	const groups: QuestionTokenGroup[] = []
+	for (const [questionId, qTokens] of grouped) {
+		const answerText = answerByQuestion.get(questionId)
+		if (!answerText) continue
+		groups.push({
+			questionId,
+			questionNumber: questionNumberById.get(questionId) ?? "?",
+			tokens: qTokens,
+			answerText,
+		})
+	}
+	return groups
+}
+
+async function persistTokenOffsets(
+	updates: TokenOffsetUpdate[],
+): Promise<void> {
+	if (updates.length === 0) return
+	const CHUNK_SIZE = 50
+	for (let i = 0; i < updates.length; i += CHUNK_SIZE) {
+		const chunk = updates.slice(i, i + CHUNK_SIZE)
+		await Promise.all(
+			chunk.map((u) =>
+				db.studentPaperPageToken.update({
+					where: { id: u.id },
+					data: {
+						answer_char_start: u.charStart,
+						answer_char_end: u.charEnd,
+						...(u.textCorrected != null
+							? { text_corrected: u.textCorrected }
+							: {}),
+					},
+				}),
+			),
+		)
+	}
 }

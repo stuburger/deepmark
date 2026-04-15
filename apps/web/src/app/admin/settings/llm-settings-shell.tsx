@@ -126,9 +126,12 @@ export function LlmSettingsShell({
 				toast.error(result.error)
 				return
 			}
-			toast.success(
-				`Synced defaults: ${result.created} created, ${result.updated} updated`,
-			)
+			const parts = [
+				result.created > 0 && `${result.created} created`,
+				result.updated > 0 && `${result.updated} updated`,
+				result.deleted > 0 && `${result.deleted} removed`,
+			].filter(Boolean)
+			toast.success(`Synced defaults: ${parts.join(", ") || "no changes"}`)
 			queryClient.invalidateQueries({ queryKey: queryKeys.llmCallSites() })
 		},
 		onError: () => toast.error("Failed to sync defaults"),
@@ -291,13 +294,13 @@ export function LlmSettingsShell({
 									</p>
 								</div>
 								<div className="rounded-lg border">
-									<Table>
+									<Table className="table-fixed">
 										<TableHeader>
 											<TableRow>
 												<TableHead className="w-[36px]" />
-												<TableHead className="w-[260px]">Call Site</TableHead>
+												<TableHead className="w-[40%]">Call Site</TableHead>
 												<TableHead className="w-[80px]">Input</TableHead>
-												<TableHead>Model Chain</TableHead>
+												<TableHead className="w-[35%]">Model Chain</TableHead>
 												<TableHead className="w-[60px]" />
 											</TableRow>
 										</TableHeader>
@@ -336,13 +339,13 @@ export function LlmSettingsShell({
 																	)}
 																</div>
 															</TableCell>
-															<TableCell>
-																<div>
+															<TableCell className="whitespace-normal">
+																<div className="min-w-0">
 																	<p className="font-medium text-sm">
 																		{cs.display_name}
 																	</p>
 																	{cs.description && (
-																		<p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">
+																		<p className="text-xs text-muted-foreground mt-0.5 break-words">
 																			{cs.description}
 																		</p>
 																	)}

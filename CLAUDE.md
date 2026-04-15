@@ -402,6 +402,8 @@ Leave every file cleaner than you found it. This does not mean a full refactor o
 
 **Tight scope** — every function, class, and component should do one thing. If you find yourself writing "and" in a description of what something does, split it.
 
+**Fast by default** — tasks, tests, and LLM calls that should finish quickly must finish quickly. Never increase a timeout to accommodate slow code — fix the underlying problem instead (chunk the work, reduce payload size, parallelise). Integration tests should complete in under 30 seconds each. If an LLM structured-output call takes longer than ~20 seconds, the input is too large — chunk it and run the chunks in parallel.
+
 **No `any`** — `any` is never acceptable. Use `unknown` when the type is genuinely unknown and narrow it explicitly, or model the type properly with Zod/TypeScript.
 
 ```ts

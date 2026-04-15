@@ -269,6 +269,7 @@ export function BoundingBoxViewer({
 															annotation={a}
 															scaleX={scaleX}
 															scaleY={scaleY}
+															tokens={tokens}
 														/>
 													))}
 											</svg>

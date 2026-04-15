@@ -1,6 +1,26 @@
 import type { Editor } from "@tiptap/core"
 import type { Node as PmNode } from "@tiptap/pm/model"
 import { TextSelection } from "@tiptap/pm/state"
+import { MARK_ACTIONS } from "./mark-actions"
+
+const ANNOTATION_MARK_NAMES = MARK_ACTIONS.map((a) => a.name)
+
+/** Returns true if any text node in [from, to) carries the named mark. */
+function hasMarkInRange(
+	doc: PmNode,
+	from: number,
+	to: number,
+	markName: string,
+): boolean {
+	let found = false
+	doc.nodesBetween(from, to, (node) => {
+		if (found) return false
+		if (node.isText && node.marks.some((m) => m.type.name === markName)) {
+			found = true
+		}
+	})
+	return found
+}
 
 /**
  * Snaps a character range to word boundaries within a questionAnswer node.
@@ -64,9 +84,7 @@ export function applyAnnotationMark(
 	const { from, to } = snapToWordBounds(editor.state.doc, selFrom, selTo)
 
 	// Check if this mark is already active on the range — if so, remove it (toggle)
-	const $from = editor.state.doc.resolve(from)
-	const existingMark = $from.marks().find((m) => m.type.name === markName)
-	if (existingMark) {
+	if (hasMarkInRange(editor.state.doc, from, to, markName)) {
 		const tr = editor.state.tr.removeMark(from, to, markType)
 		// Restore the selection so the bubble menu stays visible
 		tr.setSelection(TextSelection.create(tr.doc, from, to))
@@ -85,4 +103,35 @@ export function applyAnnotationMark(
 	tr.setSelection(TextSelection.create(tr.doc, from, to))
 	editor.view.dispatch(tr)
 	return annotationId
+}
+
+/**
+ * Returns true when the current selection overlaps at least one annotation mark.
+ * Used to gate the "remove all" button.
+ */
+export function hasAnnotationMarkInSelection(editor: Editor): boolean {
+	const { from, to } = editor.state.selection
+	if (from === to) return false
+	return ANNOTATION_MARK_NAMES.some((name) =>
+		hasMarkInRange(editor.state.doc, from, to, name),
+	)
+}
+
+/**
+ * Removes every annotation mark from the word-snapped selection range and
+ * restores the selection so the toolbar / bubble menu stays visible.
+ */
+export function removeAllAnnotationMarks(editor: Editor): void {
+	const { from: selFrom, to: selTo } = editor.state.selection
+	if (selFrom === selTo) return
+
+	const { from, to } = snapToWordBounds(editor.state.doc, selFrom, selTo)
+
+	let tr = editor.state.tr
+	for (const name of ANNOTATION_MARK_NAMES) {
+		const markType = editor.schema.marks[name]
+		if (markType) tr = tr.removeMark(from, to, markType)
+	}
+	tr.setSelection(TextSelection.create(tr.doc, from, to))
+	editor.view.dispatch(tr)
 }

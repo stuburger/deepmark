@@ -13,11 +13,16 @@ import {
 	Check,
 	ChevronsUp,
 	Circle,
+	Eraser,
 	Link2,
 	Underline,
 	X,
 } from "lucide-react"
-import { applyAnnotationMark } from "./apply-annotation-mark"
+import {
+	applyAnnotationMark,
+	hasAnnotationMarkInSelection,
+	removeAllAnnotationMarks,
+} from "./apply-annotation-mark"
 import type { MARK_ACTIONS } from "./mark-actions"
 
 // ─── Icon map ───────────────────────────────────────────────────────────────
@@ -57,7 +62,8 @@ export function AnnotationToolbar({
 								render={
 									<button
 										type="button"
-										onClick={() => {
+										onMouseDown={(e) => {
+											e.preventDefault()
 											const id = applyAnnotationMark(
 												editor,
 												action.name,
@@ -89,6 +95,33 @@ export function AnnotationToolbar({
 						</Tooltip>
 					)
 				})}
+
+				{/* Divider */}
+				<div className="mx-1 h-4 w-px bg-border" />
+
+				{/* Remove all annotations in selection */}
+				<Tooltip>
+					<TooltipTrigger
+						render={
+							<button
+								type="button"
+								onMouseDown={(e) => {
+									e.preventDefault()
+									removeAllAnnotationMarks(editor)
+								}}
+								disabled={!hasAnnotationMarkInSelection(editor)}
+								className={cn(
+									"relative flex items-center justify-center rounded w-8 h-7 text-xs font-medium transition-colors",
+									"hover:bg-destructive/10 hover:text-destructive",
+									"disabled:opacity-30 disabled:cursor-not-allowed",
+								)}
+							/>
+						}
+					>
+						<Eraser className="h-3.5 w-3.5" />
+					</TooltipTrigger>
+					<TooltipContent side="bottom">Remove all annotations</TooltipContent>
+				</Tooltip>
 
 				<div className="ml-auto text-[10px] text-muted-foreground hidden sm:block">
 					Select text, then press{" "}

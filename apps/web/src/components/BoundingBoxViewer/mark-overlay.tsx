@@ -1,7 +1,7 @@
 "use client"
 
 import { aoHex } from "@/lib/marking/ao-palette"
-import type { StudentPaperAnnotation } from "@/lib/marking/types"
+import type { PageToken, StudentPaperAnnotation } from "@/lib/marking/types"
 import {
 	CIRCLE_PAD_X,
 	DOUBLE_UNDERLINE_GAP,
@@ -27,6 +27,63 @@ type Props = {
 	annotation: Extract<StudentPaperAnnotation, { overlay_type: "annotation" }>
 	scaleX: number
 	scaleY: number
+	/** Full token list for the page — used to compute per-row underlines. */
+	tokens?: PageToken[]
+}
+
+// ─── Row-hull helpers ────────────────────────────────────────────────────────
+
+function hullBboxes(
+	bboxes: [number, number, number, number][],
+): [number, number, number, number] {
+	let yMin = Number.POSITIVE_INFINITY
+	let xMin = Number.POSITIVE_INFINITY
+	let yMax = Number.NEGATIVE_INFINITY
+	let xMax = Number.NEGATIVE_INFINITY
+	for (const [y1, x1, y2, x2] of bboxes) {
+		if (y1 < yMin) yMin = y1
+		if (x1 < xMin) xMin = x1
+		if (y2 > yMax) yMax = y2
+		if (x2 > xMax) xMax = x2
+	}
+	return [yMin, xMin, yMax, xMax]
+}
+
+/**
+ * Slices the tokens that belong to the annotation's span (by start/end ID)
+ * and groups them by Cloud Vision paragraph + line index, returning one
+ * hulled bbox per row — sorted top-to-bottom.
+ *
+ * Falls back to an empty array when token lookup fails (caller uses hull bbox).
+ */
+function getRowBboxes(
+	tokens: PageToken[],
+	startId: string | null,
+	endId: string | null,
+	pageOrder: number,
+): [number, number, number, number][] {
+	if (!startId || !endId) return []
+
+	const pageTokens = tokens.filter((t) => t.page_order === pageOrder)
+	const startIdx = pageTokens.findIndex((t) => t.id === startId)
+	const endIdx = pageTokens.findIndex((t) => t.id === endId)
+	if (startIdx === -1 || endIdx === -1) return []
+
+	const lo = Math.min(startIdx, endIdx)
+	const hi = Math.max(startIdx, endIdx)
+	const span = pageTokens.slice(lo, hi + 1)
+
+	// Group by paragraph + line index so multi-paragraph spans are handled correctly
+	const lineMap = new Map<string, [number, number, number, number][]>()
+	for (const token of span) {
+		const key = `${token.para_index}-${token.line_index}`
+		if (!lineMap.has(key)) lineMap.set(key, [])
+		lineMap.get(key)!.push(token.bbox)
+	}
+
+	return [...lineMap.values()]
+		.sort((a, b) => a[0][0] - b[0][0]) // sort row groups top-to-bottom by yMin
+		.map(hullBboxes)
 }
 
 const SIGNAL_COLORS = {
@@ -41,8 +98,11 @@ const SIGNAL_COLORS = {
 /**
  * Renders a mark signal (tick/cross/underline/box/circle) on the scanned page,
  * with an optional AO badge pill when ao_category is present.
+ *
+ * For underline/double_underline signals, draws one line per text row so that
+ * multi-line annotations are underlined on every row instead of just the bottom.
  */
-export function MarkOverlay({ annotation, scaleX, scaleY }: Props) {
+export function MarkOverlay({ annotation, scaleX, scaleY, tokens }: Props) {
 	const { payload, bbox } = annotation
 	const [yMin, xMin, yMax, xMax] = bbox
 	const color = SIGNAL_COLORS[payload.signal]
@@ -56,7 +116,21 @@ export function MarkOverlay({ annotation, scaleX, scaleY }: Props) {
 	const thinStrokeW = sz * DOUBLE_UNDERLINE_STROKE
 	const labelSize = sz * LABEL_SIZE
 
-	// Compute where the label/AO badge goes (right side of bbox)
+	// For underline signals, split into per-row bboxes using page tokens.
+	// Falls back to the hull bbox (single row) when tokens aren't available.
+	const isUnderlineSig =
+		payload.signal === "underline" || payload.signal === "double_underline"
+	const rowBboxes: [number, number, number, number][] = isUnderlineSig
+		? (tokens &&
+				getRowBboxes(
+					tokens,
+					annotation.anchor_token_start_id,
+					annotation.anchor_token_end_id,
+					annotation.page_order,
+				)) || [[yMin, xMin, yMax, xMax]]
+		: [[yMin, xMin, yMax, xMax]]
+
+	// Compute where the label/AO badge goes (right side of hull bbox)
 	const labelX = (() => {
 		switch (payload.signal) {
 			case "box":
@@ -68,21 +142,46 @@ export function MarkOverlay({ annotation, scaleX, scaleY }: Props) {
 		}
 	})()
 
-	const labelY =
-		payload.signal === "underline" || payload.signal === "double_underline"
-			? y + h
-			: y + labelSize
+	const labelY = isUnderlineSig ? y + h : y + labelSize
 
-	const signalElement = renderSignal(payload.signal, {
-		x,
-		y,
-		w,
-		h,
-		color,
-		sz,
-		strokeW,
-		thinStrokeW,
-	})
+	// For underlines, render one signal element per row
+	const signalElement = isUnderlineSig ? (
+		<>
+			{rowBboxes.map((rowBbox, i) => {
+				const [rYMin, rXMin, rYMax, rXMax] = rowBbox
+				const rx = rXMin * scaleX
+				const ry = rYMin * scaleY
+				const rw = (rXMax - rXMin) * scaleX
+				const rh = (rYMax - rYMin) * scaleY
+				return (
+					// biome-ignore lint/suspicious/noArrayIndexKey: stable per-row underline
+					<g key={i}>
+						{renderSignal(payload.signal, {
+							x: rx,
+							y: ry,
+							w: rw,
+							h: rh,
+							color,
+							sz,
+							strokeW,
+							thinStrokeW,
+						})}
+					</g>
+				)
+			})}
+		</>
+	) : (
+		renderSignal(payload.signal, {
+			x,
+			y,
+			w,
+			h,
+			color,
+			sz,
+			strokeW,
+			thinStrokeW,
+		})
+	)
 
 	// Label text (if present)
 	const labelElement = payload.label ? (

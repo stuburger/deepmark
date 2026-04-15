@@ -14,6 +14,7 @@ import {
 	Check,
 	ChevronsUp,
 	Circle,
+	Eraser,
 	Link2,
 	Underline,
 	X,
@@ -23,7 +24,11 @@ import "./annotation-marks.css"
 import { annotationMarks } from "./annotation-marks"
 import { AnnotationShortcuts } from "./annotation-shortcuts"
 import { AnnotationToolbar } from "./annotation-toolbar"
-import { applyAnnotationMark } from "./apply-annotation-mark"
+import {
+	applyAnnotationMark,
+	hasAnnotationMarkInSelection,
+	removeAllAnnotationMarks,
+} from "./apply-annotation-mark"
 import { CommentSidebar } from "./comment-sidebar"
 import { HoverHighlightPlugin } from "./hover-highlight-plugin"
 import { MARK_ACTIONS } from "./mark-actions"
@@ -44,6 +49,8 @@ const BUBBLE_ICONS: Record<string, React.ReactNode> = {
 	circle: <Circle className="h-3.5 w-3.5" />,
 	chain: <Link2 className="h-3.5 w-3.5" />,
 }
+
+const BUBBLE_ERASER = <Eraser className="h-3.5 w-3.5" />
 
 // ─── Helpers: resolve PM marks to scan token IDs ────────────────────────────
 
@@ -106,6 +113,37 @@ function resolveTokensForAnnotation(
 	})
 
 	return tokenIds.length > 0 ? tokenIds : null
+}
+
+/**
+ * Returns the ocrToken ID at a collapsed cursor position.
+ * Checks the text node to the right of the cursor first (the word the cursor
+ * is inside or immediately before), then falls back to the node on the left
+ * (cursor at the trailing edge of a word).
+ */
+function resolveTokenAtCursor(
+	editor: { state: { doc: import("@tiptap/pm/model").Node } },
+	pos: number,
+): string | null {
+	const $pos = editor.state.doc.resolve(pos)
+
+	// Text node to the right of the cursor
+	const after = $pos.nodeAfter
+	if (after?.isText) {
+		for (const mark of after.marks) {
+			if (mark.type.name === "ocrToken") return mark.attrs.tokenId as string
+		}
+	}
+
+	// Text node to the left of the cursor (cursor at trailing edge of a word)
+	const before = $pos.nodeBefore
+	if (before?.isText) {
+		for (const mark of before.marks) {
+			if (mark.type.name === "ocrToken") return mark.attrs.tokenId as string
+		}
+	}
+
+	return null
 }
 
 // ─── Main component ─────────────────────────────────────────────────────────
@@ -205,7 +243,9 @@ export function AnnotatedAnswerSheet({
 				return
 			}
 
-			onTokenHighlight(null)
+			// Priority 3: cursor position → highlight the single word under the cursor
+			const cursorToken = resolveTokenAtCursor(editor, from)
+			onTokenHighlight(cursorToken ? [cursorToken] : null)
 		}
 
 		// Run once immediately + on every transaction
@@ -240,7 +280,8 @@ export function AnnotatedAnswerSheet({
 							<button
 								key={action.name}
 								type="button"
-								onClick={() => {
+								onMouseDown={(e) => {
+									e.preventDefault()
 									const id = applyAnnotationMark(
 										editor,
 										action.name,
@@ -264,6 +305,28 @@ export function AnnotatedAnswerSheet({
 							</button>
 						)
 					})}
+
+					{/* Divider */}
+					<div className="mx-0.5 h-4 w-px bg-border" />
+
+					{/* Remove all annotations in selection */}
+					<button
+						type="button"
+						onMouseDown={(e) => {
+							e.preventDefault()
+							removeAllAnnotationMarks(editor)
+						}}
+						disabled={!hasAnnotationMarkInSelection(editor)}
+						className={cn(
+							"flex items-center gap-1 rounded px-2 py-1 text-xs font-medium transition-colors",
+							"hover:bg-destructive/10 hover:text-destructive",
+							"disabled:opacity-30 disabled:cursor-not-allowed",
+						)}
+						title="Remove all annotations"
+					>
+						{BUBBLE_ERASER}
+						<span className="hidden sm:inline">Clear</span>
+					</button>
 				</BubbleMenu>
 
 				{/* Editor content */}

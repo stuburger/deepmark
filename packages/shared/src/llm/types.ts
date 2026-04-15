@@ -314,23 +314,10 @@ export const LLM_CALL_SITE_DEFAULTS: Array<{
 	// ── OCR & Answer Detection ───────────────────────────────────────────
 	// Phase 1 of the marking pipeline: extract answers from scanned scripts.
 	{
-		key: "student-paper-extraction",
-		display_name: "Answer Extraction",
-		description:
-			"Extracts student name, subject, and per-question answers from scanned exam pages.",
-		input_type: "vision",
-		phase: "answer-detection",
-		step: 1,
-		multiplier: "once",
-		models: [
-			{ provider: "google", model: "gemini-2.5-flash", temperature: 0.1 },
-		],
-	},
-	{
 		key: "handwriting-ocr",
 		display_name: "Handwriting OCR",
 		description:
-			"Transcribes handwritten text and provides handwriting analysis from page images.",
+			"Transcribes handwritten text from page images. The first-page call also extracts student name and detected subject.",
 		input_type: "vision",
 		phase: "answer-detection",
 		step: 1,
@@ -362,20 +349,6 @@ export const LLM_CALL_SITE_DEFAULTS: Array<{
 		step: 3,
 		multiplier: "per-page",
 		models: [
-			{ provider: "google", model: "gemini-2.5-flash", temperature: 0.1 },
-		],
-	},
-	{
-		key: "token-answer-mapping",
-		display_name: "Token Correction + Answer Mapping",
-		description:
-			"Text-only: maps OCR tokens to student answer words and corrects OCR text. No image needed — answer text is ground truth.",
-		input_type: "text",
-		phase: "answer-detection",
-		step: 4,
-		multiplier: "per-question",
-		models: [
-			{ provider: "google", model: "gemini-2.5-flash-lite", temperature: 0.1 },
 			{ provider: "google", model: "gemini-2.5-flash", temperature: 0.1 },
 		],
 	},

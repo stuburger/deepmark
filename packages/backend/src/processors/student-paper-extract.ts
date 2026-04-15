@@ -13,19 +13,16 @@ import {
 	markJobFailed,
 	parseSqsJobId,
 } from "@/lib/infra/sqs-job-runner"
-import {
-	type QuestionTokenGroup,
-	type TokenOffsetUpdate,
-	alignTokensToAnswers,
-} from "@/lib/scan-extraction/align-tokens-to-answer"
 import { runVisionOcr } from "@/lib/scan-extraction/cloud-vision-ocr"
 import {
-	type PageMimeType,
-	extractStudentPaper,
-} from "@/lib/scan-extraction/gemini-extract"
+	type TokenCharOffset,
+	computeTokenCharOffsets,
+} from "@/lib/scan-extraction/compute-token-offsets"
+import { runOcr } from "@/lib/scan-extraction/gemini-ocr"
 import { persistTokens } from "@/lib/scan-extraction/persist-tokens"
+import { reconstructAnswersFromTokens } from "@/lib/scan-extraction/reconstruct-answers"
 import { saveVisionRaw } from "@/lib/scan-extraction/save-vision-raw"
-import { preCorrectFromTranscripts } from "@/lib/scan-extraction/transcript-pre-correct"
+import { sortTokensSpatially } from "@/lib/scan-extraction/spatial-sort"
 import {
 	type VisionAttributeQuestion,
 	visionAttributeRegions,
@@ -99,7 +96,7 @@ export async function handler(
 				Promise.all(
 					sortedPages.map(async (page) => ({
 						data: await getFileBase64(bucket, page.key),
-						mimeType: page.mime_type as PageMimeType,
+						mimeType: page.mime_type,
 					})),
 				),
 				loadQuestionSeeds(job.exam_paper_id),
@@ -111,7 +108,7 @@ export async function handler(
 			})
 
 			if (cancellation.isCancelled()) {
-				logger.info(TAG, "Job cancelled before Gemini call — skipping", {
+				logger.info(TAG, "Job cancelled before OCR calls — skipping", {
 					jobId,
 				})
 				continue
@@ -119,14 +116,29 @@ export async function handler(
 
 			logger.info(
 				TAG,
-				"Calling Gemini (answer extraction + transcripts) and Cloud Vision (word tokens) in parallel",
+				"Calling Gemini (per-page transcripts) and Cloud Vision (word tokens) in parallel",
 				{ jobId, page_count: pageData.length },
 			)
 
-			// Fan out: Gemini answer extraction (all pages), per-page Gemini transcript,
-			// and per-page Cloud Vision word token detection — all in parallel.
-			const [extraction, ...visionResults] = await Promise.all([
-				extractStudentPaper(pageData, questionSeeds, llm),
+			// Fan out: per-page Gemini transcript + Cloud Vision word token detection — all in parallel.
+			// First page also extracts student name and detected subject.
+			const [pageOcrResults, ...visionResults] = await Promise.all([
+				Promise.all(
+					sortedPages.map((page, i) => {
+						const pageEntry = pageData[i]
+						if (!pageEntry) {
+							throw new Error(
+								`pageData[${i}] is undefined — sortedPages and pageData are out of sync`,
+							)
+						}
+						return runOcr(
+							pageEntry.data,
+							page.mime_type,
+							{ extractMetadata: i === 0 },
+							llm,
+						)
+					}),
+				),
 				...sortedPages.map((page, i) => {
 					const pageEntry = pageData[i]
 					if (!pageEntry) {
@@ -152,66 +164,61 @@ export async function handler(
 				continue
 			}
 
-			// Map each OCR result back to its page order number (transcript + observations only)
-			const pageAnalyses = extraction.ocrResults.map((analysis, i) => {
-				const pageOrder = sortedPages[i]?.order
-				if (pageOrder == null) {
-					throw new Error(
-						`sortedPages[${i}] is undefined while mapping ocrResults — arrays are out of sync`,
-					)
-				}
-				return {
-					page: pageOrder,
-					transcript: analysis.transcript,
-					observations: analysis.observations,
-				}
-			})
-
-			const answersExtracted = extraction.answers.filter((a) =>
-				a.answer_text.trim(),
-			).length
-
-			const rawSubject = extraction.detectedSubject?.trim().toLowerCase()
+			// Extract student metadata from first-page OCR result
+			const firstPageOcr = pageOcrResults[0]
+			const rawSubject = firstPageOcr?.detectedSubject?.trim().toLowerCase()
 			const detectedSubject: Subject | null =
 				rawSubject && isValidSubject(rawSubject) ? rawSubject : null
+			const studentName = firstPageOcr?.studentName?.trim() || null
+
+			const pageAnalyses = sortedPages.map((page, i) => ({
+				page: page.order,
+				transcript: pageOcrResults[i]?.transcript ?? "",
+				observations: pageOcrResults[i]?.observations ?? [],
+			}))
 
 			logger.info(TAG, "Gemini OCR complete", {
 				jobId,
-				student_name: extraction.studentName,
-				detected_subject: extraction.detectedSubject,
-				answers_extracted: answersExtracted,
-				answers_total: extraction.answers.length,
+				student_name: studentName,
+				detected_subject: detectedSubject,
 				pages_analysed: pageAnalyses.length,
 			})
 
 			void logOcrRunEvent(db, jobId, {
 				type: "answers_extracted",
 				at: new Date().toISOString(),
-				count: answersExtracted,
-				student_name: extraction.studentName?.trim() || null,
+				count: 0,
+				student_name: studentName,
 			})
 
 			// Persist student metadata on the submission
 			await db.studentSubmission.update({
 				where: { id: jobId },
 				data: {
-					student_name: extraction.studentName?.trim() || null,
+					student_name: studentName,
 					detected_subject: detectedSubject,
 				},
 			})
 
-			// Persist extracted answers on the OcrRun so the UI can show them
-			// while Vision token work (reconciliation + region attribution) runs below.
+			// Persist page analyses on OcrRun for UI display while Vision token work runs
 			await db.ocrRun.update({
 				where: { id: jobId },
-				data: {
-					extracted_answers_raw: {
-						student_name: extraction.studentName?.trim() || null,
-						answers: extraction.answers,
-					},
-					page_analyses: pageAnalyses,
-				},
+				data: { page_analyses: pageAnalyses },
 			})
+
+			const insertedTokens = await persistTokens(
+				jobId,
+				sortedPages,
+				visionResults,
+			)
+
+			// Build page transcripts map for attribution context
+			const pageTranscripts = new Map(
+				sortedPages.map((page, i) => [
+					page.order,
+					pageOcrResults[i]?.transcript ?? "",
+				]),
+			)
 
 			const visionRawKey = await saveVisionRaw(
 				jobId,
@@ -220,44 +227,14 @@ export async function handler(
 				visionResults,
 			)
 
-			const insertedTokens = await persistTokens(
-				jobId,
-				sortedPages,
-				visionResults,
-			)
-
-			// Phase 1.5 — Pre-correct token text against Gemini page transcripts.
-			// Deterministic Levenshtein alignment — no LLM call. Persists
-			// text_corrected to DB so Phase 2b starts with better baseline text.
-			// NOT fed into attribution — corrected text destabilises spatial
-			// assignments (see bbox overlap regression).
-			const transcriptCorrections = preCorrectFromTranscripts(
-				insertedTokens,
-				pageAnalyses,
-			)
-			if (transcriptCorrections.length > 0) {
-				const CHUNK_SIZE = 50
-				for (let i = 0; i < transcriptCorrections.length; i += CHUNK_SIZE) {
-					const chunk = transcriptCorrections.slice(i, i + CHUNK_SIZE)
-					await Promise.all(
-						chunk.map((c) =>
-							db.studentPaperPageToken.update({
-								where: { id: c.id },
-								data: { text_corrected: c.textCorrected },
-							}),
-						),
-					)
-				}
-			}
-
-			// Phase 2a — assign tokens to questions, derive answer regions.
-			// Attribution sees raw text only — feeding corrected text into
-			// the prompt destabilises spatial assignments (causes bbox overlap).
-			// Pre-corrections are persisted to DB for Phase 2b to pick up.
+			// Phase 2a — assign tokens to questions, derive answer regions, and
+			// apply OCR corrections. All three happen in a single attribution LLM
+			// call per page — the model sees the image, transcript, and token list.
 			void logOcrRunEvent(db, jobId, {
 				type: "region_attribution_started",
 				at: new Date().toISOString(),
 			})
+
 			const attributeQuestions: VisionAttributeQuestion[] = questionSeeds.map(
 				(s) => ({
 					question_id: s.question_id,
@@ -266,51 +243,87 @@ export async function handler(
 					is_mcq: s.question_type === "multiple_choice",
 				}),
 			)
-			const rawTokensForAttribution = insertedTokens.map((t) => ({
-				...t,
-				text_corrected: null as string | null,
-			}))
+
 			await visionAttributeRegions({
 				questions: attributeQuestions,
-				extractedAnswers: extraction.answers,
+				pageTranscripts,
 				pages: sortedPages,
 				s3Bucket: bucket,
-				tokens: rawTokensForAttribution,
+				tokens: insertedTokens,
 				jobId,
 				llm,
 			})
 
-			// Phase 2b — token correction + answer mapping.
-			// Text-only LLM: maps OCR tokens to answer words, corrects OCR text.
-			// Outputs: text_corrected (OCR correction) + answer_char_start/end (word mapping).
-			const answerByQuestion = new Map(
-				extraction.answers.map((a) => [a.question_id, a.answer_text]),
-			)
-			const attributedTokens = await db.studentPaperPageToken.findMany({
+			// Phase 2b — reconstruct answer text from attributed tokens and compute char offsets.
+			// Fetch with bbox so we can sort spatially — Vision's para_index order is
+			// unreliable when paragraphs are detected out of reading order.
+			const attributedTokensRaw = await db.studentPaperPageToken.findMany({
 				where: { submission_id: jobId, question_id: { not: null } },
-				orderBy: [
-					{ page_order: "asc" },
-					{ para_index: "asc" },
-					{ line_index: "asc" },
-					{ word_index: "asc" },
-				],
 				select: {
 					id: true,
 					question_id: true,
+					page_order: true,
+					para_index: true,
+					line_index: true,
+					word_index: true,
 					text_raw: true,
 					text_corrected: true,
+					bbox: true,
 				},
 			})
-			const questionNumberById = new Map(
-				questionSeeds.map((s) => [s.question_id, s.question_number]),
+
+			// Sort spatially per page, then flatten — replaces unreliable para_index ordering.
+			const tokensByPageRaw = new Map<number, typeof attributedTokensRaw>()
+			for (const t of attributedTokensRaw) {
+				const list = tokensByPageRaw.get(t.page_order) ?? []
+				list.push(t)
+				tokensByPageRaw.set(t.page_order, list)
+			}
+			const spatiallyOrdered = [...tokensByPageRaw.values()].flatMap(
+				(pageTokens) => sortTokensSpatially(pageTokens),
 			)
-			const questionGroups = buildQuestionGroups(
-				attributedTokens,
-				answerByQuestion,
-				questionNumberById,
+
+			// Narrow: DB guarantees question_id is non-null due to the where clause
+			const typedTokens = spatiallyOrdered.filter(
+				(t): t is typeof t & { question_id: string } => t.question_id !== null,
 			)
-			const tokenUpdates = await alignTokensToAnswers(questionGroups, llm)
-			await persistTokenOffsets(tokenUpdates)
+
+			const reconstructedAnswers = reconstructAnswersFromTokens(
+				typedTokens,
+				questionSeeds.map((s) => s.question_id),
+			)
+
+			const answersExtracted = reconstructedAnswers.filter((a) =>
+				a.answer_text.trim(),
+			).length
+
+			logger.info(TAG, "Answers reconstructed from tokens", {
+				jobId,
+				answers_with_text: answersExtracted,
+				answers_total: reconstructedAnswers.length,
+			})
+
+			// Persist reconstructed answers on OcrRun
+			await db.ocrRun.update({
+				where: { id: jobId },
+				data: {
+					extracted_answers_raw: {
+						student_name: studentName,
+						answers: reconstructedAnswers,
+					},
+				},
+			})
+
+			// Build token-by-question map for offset computation
+			const tokensByQuestion = new Map<string, typeof typedTokens>()
+			for (const token of typedTokens) {
+				const list = tokensByQuestion.get(token.question_id) ?? []
+				list.push(token)
+				tokensByQuestion.set(token.question_id, list)
+			}
+
+			const tokenOffsets = computeTokenCharOffsets(tokensByQuestion)
+			await persistTokenCharOffsets(tokenOffsets)
 
 			await db.ocrRun.update({
 				where: { id: jobId },
@@ -352,64 +365,22 @@ export async function handler(
 	return failures.length > 0 ? { batchItemFailures: failures } : {}
 }
 
-// ─── Helpers for Phase 2b ──────────────────────────────────────────────────
+// ─── Helpers ───────────────────────────────────────────────────────────────
 
-function buildQuestionGroups(
-	tokens: Array<{
-		id: string
-		question_id: string | null
-		text_raw: string
-		text_corrected: string | null
-	}>,
-	answerByQuestion: Map<string, string>,
-	questionNumberById: Map<string, string>,
-): QuestionTokenGroup[] {
-	const grouped = new Map<
-		string,
-		Array<{ id: string; text_raw: string; text_corrected: string | null }>
-	>()
-	for (const t of tokens) {
-		if (!t.question_id) continue
-		const list = grouped.get(t.question_id) ?? []
-		list.push({
-			id: t.id,
-			text_raw: t.text_raw,
-			text_corrected: t.text_corrected,
-		})
-		grouped.set(t.question_id, list)
-	}
-
-	const groups: QuestionTokenGroup[] = []
-	for (const [questionId, qTokens] of grouped) {
-		const answerText = answerByQuestion.get(questionId)
-		if (!answerText) continue
-		groups.push({
-			questionId,
-			questionNumber: questionNumberById.get(questionId) ?? "?",
-			tokens: qTokens,
-			answerText,
-		})
-	}
-	return groups
-}
-
-async function persistTokenOffsets(
-	updates: TokenOffsetUpdate[],
+async function persistTokenCharOffsets(
+	offsets: TokenCharOffset[],
 ): Promise<void> {
-	if (updates.length === 0) return
+	if (offsets.length === 0) return
 	const CHUNK_SIZE = 50
-	for (let i = 0; i < updates.length; i += CHUNK_SIZE) {
-		const chunk = updates.slice(i, i + CHUNK_SIZE)
+	for (let i = 0; i < offsets.length; i += CHUNK_SIZE) {
+		const chunk = offsets.slice(i, i + CHUNK_SIZE)
 		await Promise.all(
-			chunk.map((u) =>
+			chunk.map((o) =>
 				db.studentPaperPageToken.update({
-					where: { id: u.id },
+					where: { id: o.id },
 					data: {
-						answer_char_start: u.charStart,
-						answer_char_end: u.charEnd,
-						...(u.textCorrected != null
-							? { text_corrected: u.textCorrected }
-							: {}),
+						answer_char_start: o.charStart,
+						answer_char_end: o.charEnd,
 					},
 				}),
 			),

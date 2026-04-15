@@ -7,28 +7,31 @@ export const AttributionSchema = z.object({
 				question_id: z
 					.string()
 					.describe("The question_id as provided in the question list"),
-				ranges: z
-					.array(
-						z.object({
-							start: z
-								.number()
-								.describe(
-									"First token index as an integer (0-based, inclusive)",
-								),
-							end: z
-								.number()
-								.describe(
-									"Last token index as an integer (0-based, inclusive)",
-								),
-						}),
-					)
+				token_indices: z
+					.array(z.number())
 					.describe(
-						"Contiguous token ranges for this question's answer. Use multiple ranges if the answer is non-contiguous. Each range is [start, end] inclusive (0-based).",
+						"The 0-based indices of every token that belongs to this question's answer. List each index individually — do NOT include question number labels, only the actual answer content.",
 					),
 			}),
 		)
 		.describe(
-			"For each question answered on this page, provide one or more token ranges that cover the full extent of the student's answer",
+			"For each question answered on this page, list the individual token indices that belong to the student's answer",
+		),
+	corrections: z
+		.array(
+			z.object({
+				token_index: z
+					.number()
+					.describe("0-based index of the token from the input list"),
+				corrected: z
+					.string()
+					.describe(
+						"The correct word — use the transcript as reference, confirm visually from the image",
+					),
+			}),
+		)
+		.describe(
+			"Tokens where Cloud Vision misread the handwriting. Compare each token against the transcript. If Vision clearly got a word wrong (e.g. Vision says 'Suly', transcript says 'Sales'), include a correction. Skip tokens Vision read correctly. Do NOT correct genuine student spelling mistakes — only fix Vision OCR failures.",
 		),
 })
 
@@ -46,28 +49,47 @@ export const McqFallbackSchema = z.object({
 	),
 })
 
+/**
+ * Builds the attribution prompt for a single page.
+ *
+ * Tokens are serialised as compact [index,"word"] tuples rather than one line
+ * per token, saving ~40–50% of prompt tokens on dense pages.
+ *
+ * The page transcript is included as:
+ * 1. A context anchor for locating short/numeric answers.
+ * 2. The reference for OCR correction — Vision misreads are corrected against it.
+ */
 export function buildAttributionPrompt(
 	tokenList: string,
 	questionsText: string,
+	pageTranscript: string,
 ): string {
-	return `You are examining a student's handwritten exam answer script. The image above shows one page of the script.
+	return `You are examining a student's handwritten exam answer script.
 
-Below is a list of words (tokens) detected by OCR on this page, numbered 0-based in reading order:
+Below is a list of words (tokens) detected by OCR on this page, as [index,"word"] tuples in reading order:
 ${tokenList}
 
-The exam contains these questions (with the student's already-extracted answer text shown as a matching anchor):
+Page transcript — a clean reading of the same page (use as the authoritative reference for what was actually written):
+${pageTranscript}
+
+The exam contains these questions:
 ${questionsText}
 
-For each question answered on this page, identify the FULL extent of the student's ANSWER TEXT using token ranges [start, end].
+Do TWO things:
 
-IMPORTANT:
-- EXCLUDE question number labels (e.g. "01.5", "Q2", "1.6)") from the ranges — only include the actual answer content the student wrote. The answer region should start at the first word of the response, not at the question number.
-- Use the image to visually confirm where each answer starts and ends on the page.
-- Use the extracted answer text as a matching guide — especially for short/numeric answers where OCR tokens may be garbled.
-- For long answers that span many lines, the range end must cover ALL the answer tokens, not just the opening lines. If an answer fills most of the page, the range end should be near the last token.
-- Include crossing-out, corrections, and continuation text in the range.
-- Use multiple ranges only if an answer is genuinely non-contiguous (e.g. a MCQ letter near its question number).
-- Omit questions that have no answer on this page.`
+1. ASSIGN tokens to questions:
+   - For each question answered on this page, list the token indices belonging to the student's answer.
+   - EXCLUDE question number labels (e.g. "01.5", "Q2", "1.6)") — only the answer content.
+   - List every index individually. Use the image to confirm where each answer starts and ends.
+   - For long answers, include ALL tokens. Include crossing-out and corrections.
+   - Omit questions with no answer on this page.
+
+2. CORRECT OCR misreads:
+   - Compare each token's text against the transcript.
+   - If Vision clearly misread a word (e.g. Vision "Suly", transcript "Sales"), provide the correction.
+   - Use the image to visually confirm the actual word when uncertain.
+   - Do NOT correct genuine student spelling errors — only fix Vision OCR failures.
+   - Skip tokens Vision read correctly.`
 }
 
 export function buildMcqFallbackPrompt(questionsText: string): string {

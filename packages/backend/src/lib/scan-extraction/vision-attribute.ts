@@ -4,7 +4,7 @@ import { logger } from "@/lib/infra/logger"
 import { outputSchema } from "@/lib/infra/output-schema"
 import { getFileBase64 } from "@/lib/infra/s3"
 import { filterSpatialOutliers } from "@/lib/scan-extraction/filter-spatial-outliers"
-import type { CorrectedPageToken } from "@/lib/scan-extraction/vision-reconcile"
+import { sortTokensSpatially } from "@/lib/scan-extraction/spatial-sort"
 import { logOcrRunEvent } from "@mcp-gcse/db"
 import { type LlmRunner, computeBboxHull } from "@mcp-gcse/shared"
 import { generateText } from "ai"
@@ -16,6 +16,9 @@ import {
 } from "./vision-attribute-prompt"
 
 const TAG = "vision-attribute"
+
+/** Set to true to re-enable spatial outlier filtering on hull computation. */
+const FILTER_SPATIAL_OUTLIERS = false
 
 class AttributionError extends Error {
 	constructor(
@@ -42,17 +45,27 @@ export type VisionAttributePageEntry = {
 	mime_type: string
 }
 
+/** Raw token row as returned from the DB insert. */
+export type PageToken = {
+	id: string
+	page_order: number
+	para_index: number
+	line_index: number
+	word_index: number
+	text_raw: string
+	bbox: unknown
+}
+
 export type VisionAttributeArgs = {
 	questions: VisionAttributeQuestion[]
-	/** Per-question answer text already extracted by the OCR pass — used as a
-	 *  matching anchor so the LLM can locate short/numeric answers (e.g. calculations). */
-	extractedAnswers: Array<{ question_id: string; answer_text: string }>
+	/** Page transcripts keyed by page order — used as an anchor for locating
+	 *  short/numeric answers (e.g. calculations, MCQ letters). */
+	pageTranscripts: Map<number, string>
 	pages: VisionAttributePageEntry[]
 	s3Bucket: string
 	jobId: string
-	/** Corrected token rows from reconcilePageTokens — must be provided by the
-	 *  caller. Attribution does not read tokens from the DB. */
-	tokens: CorrectedPageToken[]
+	/** Token rows from the DB insert. Attribution does not read tokens from the DB. */
+	tokens: PageToken[]
 	llm?: LlmRunner
 }
 
@@ -84,7 +97,7 @@ function parseBbox(
  */
 export async function visionAttributeRegions({
 	questions,
-	extractedAnswers,
+	pageTranscripts,
 	pages,
 	s3Bucket,
 	jobId,
@@ -103,7 +116,7 @@ export async function visionAttributeRegions({
 	}
 
 	// Group tokens by page_order.
-	const tokensByPage = new Map<number, CorrectedPageToken[]>()
+	const tokensByPage = new Map<number, PageToken[]>()
 	for (const t of tokens) {
 		const existing = tokensByPage.get(t.page_order) ?? []
 		existing.push(t)
@@ -114,23 +127,12 @@ export async function visionAttributeRegions({
 		questions.map((q) => [q.question_id, q.question_number]),
 	)
 
-	// Build a map of question_id → extracted answer text for the prompt anchor.
-	const extractedAnswerById = new Map(
-		extractedAnswers
-			.filter((a) => a.answer_text.trim())
-			.map((a) => [a.question_id, a.answer_text]),
-	)
-
 	const questionsText = questions
 		.map((q) => {
 			const hint = q.is_mcq
 				? " [MCQ — look for a circled/ticked letter A/B/C/D]"
 				: ""
-			const extracted = extractedAnswerById.get(q.question_id)
-			const answerHint = extracted
-				? ` | student's extracted answer: "${extracted}"`
-				: ""
-			return `Q${q.question_number} (id: ${q.question_id})${hint}${answerHint}: ${q.question_text}`
+			return `Q${q.question_number} (id: ${q.question_id})${hint}: ${q.question_text}`
 		})
 		.join("\n")
 
@@ -138,8 +140,8 @@ export async function visionAttributeRegions({
 
 	await Promise.all(
 		imagePages.map(async (page): Promise<void> => {
-			const tokens = tokensByPage.get(page.order) ?? []
-			if (tokens.length === 0) return
+			const pageTokens = sortTokensSpatially(tokensByPage.get(page.order) ?? [])
+			if (pageTokens.length === 0) return
 
 			let imageBase64: string
 			try {
@@ -160,17 +162,28 @@ export async function visionAttributeRegions({
 				)
 			}
 
-			// Build the token list shown to the LLM — use corrected text where available.
-			const tokenList = tokens
-				.map((t, i) => `${i}: "${t.text_corrected ?? t.text_raw}"`)
-				.join("\n")
+			// Compact [index,"word"] tuple format — ~40–50% fewer prompt tokens
+			// than the previous line-per-token format. Raw text only — corrections
+			// are produced by this same call and applied afterwards.
+			const tokenList = pageTokens
+				.map((t, i) => `[${i},"${t.text_raw}"]`)
+				.join(",")
 
-			const prompt = buildAttributionPrompt(tokenList, questionsText)
+			const transcript = pageTranscripts.get(page.order) ?? ""
+			const prompt = buildAttributionPrompt(
+				tokenList,
+				questionsText,
+				transcript,
+			)
 
 			let parsed: {
 				assignments: Array<{
 					question_id: string
-					ranges: Array<{ start: number; end: number }>
+					token_indices: number[]
+				}>
+				corrections?: Array<{
+					token_index: number
+					corrected: string
 				}>
 			}
 			try {
@@ -217,20 +230,20 @@ export async function visionAttributeRegions({
 				)
 			}
 
-			// Expand ranges into individual token indices and validate.
+			// Validate individual token indices from the LLM response.
 			const rawAssignments = parsed.assignments ?? []
 			const validAssignments = rawAssignments
 				.filter(
-					(a) => questionNumberById.has(a.question_id) && a.ranges?.length > 0,
+					(a) =>
+						questionNumberById.has(a.question_id) &&
+						a.token_indices?.length > 0,
 				)
-				.map((a) => {
-					const indices = a.ranges.flatMap(({ start, end }) => {
-						const s = Math.max(0, start)
-						const e = Math.min(tokens.length - 1, end)
-						return Array.from({ length: e - s + 1 }, (_, i) => s + i)
-					})
-					return { question_id: a.question_id, token_indices: indices }
-				})
+				.map((a) => ({
+					question_id: a.question_id,
+					token_indices: a.token_indices.filter(
+						(idx) => idx >= 0 && idx < pageTokens.length,
+					),
+				}))
 				.filter((a) => a.token_indices.length > 0)
 
 			if (validAssignments.length === 0) {
@@ -254,11 +267,18 @@ export async function visionAttributeRegions({
 				return
 			}
 
-			// 1. Update question_id on assigned token rows.
-			await Promise.all(
-				validAssignments.flatMap((assignment) =>
+			// 1. Update question_id on assigned token rows and persist OCR corrections.
+			const validCorrections = (parsed.corrections ?? []).filter(
+				(c) =>
+					c.token_index >= 0 &&
+					c.token_index < pageTokens.length &&
+					c.corrected.trim().length > 0,
+			)
+
+			await Promise.all([
+				...validAssignments.flatMap((assignment) =>
 					assignment.token_indices.map((idx) => {
-						const token = tokens[idx]
+						const token = pageTokens[idx]
 						if (!token) return Promise.resolve()
 						return db.studentPaperPageToken.update({
 							where: { id: token.id },
@@ -266,20 +286,38 @@ export async function visionAttributeRegions({
 						})
 					}),
 				),
-			)
+				...validCorrections.map((c) => {
+					const token = pageTokens[c.token_index]
+					if (!token || c.corrected === token.text_raw) return Promise.resolve()
+					return db.studentPaperPageToken.update({
+						where: { id: token.id },
+						data: { text_corrected: c.corrected },
+					})
+				}),
+			])
+
+			if (validCorrections.length > 0) {
+				logger.info(TAG, "OCR corrections applied", {
+					jobId,
+					pageOrder: page.order,
+					corrected: validCorrections.length,
+				})
+			}
 
 			// 2. Compute hull for each question from its assigned token bboxes.
 			// Filter spatial outliers first — a single misattributed token can
 			// stretch the hull across the entire page (see Q01.7 overlap bug).
 			const regionRows = validAssignments.flatMap((assignment) => {
 				const assignedBboxes = assignment.token_indices
-					.map((idx) => tokens[idx])
-					.filter((t): t is CorrectedPageToken => t != null)
+					.map((idx) => pageTokens[idx])
+					.filter((t): t is PageToken => t != null)
 					.map((t) => parseBbox(t.bbox, `token ${t.id} (page ${page.order})`))
 
 				if (assignedBboxes.length === 0) return []
 
-				const filteredBboxes = filterSpatialOutliers(assignedBboxes)
+				const filteredBboxes = FILTER_SPATIAL_OUTLIERS
+					? filterSpatialOutliers(assignedBboxes)
+					: assignedBboxes
 				if (filteredBboxes.length === 0) return []
 
 				const hull = computeBboxHull(filteredBboxes)
@@ -341,7 +379,6 @@ export async function visionAttributeRegions({
 
 		const fallbackLocated = await runMcqFallback({
 			questions: unassignedMcqQuestions,
-			extractedAnswers,
 			pages,
 			s3Bucket,
 			jobId,
@@ -361,7 +398,6 @@ export async function visionAttributeRegions({
 
 type McqFallbackArgs = {
 	questions: VisionAttributeQuestion[]
-	extractedAnswers: Array<{ question_id: string; answer_text: string }>
 	pages: VisionAttributePageEntry[]
 	s3Bucket: string
 	jobId: string
@@ -370,15 +406,11 @@ type McqFallbackArgs = {
 
 async function runMcqFallback({
 	questions,
-	extractedAnswers,
 	pages,
 	s3Bucket,
 	jobId,
 	llm,
 }: McqFallbackArgs): Promise<number> {
-	const extractedAnswerById = new Map(
-		extractedAnswers.map((a) => [a.question_id, a.answer_text]),
-	)
 	const questionNumberById = new Map(
 		questions.map((q) => [q.question_id, q.question_number]),
 	)
@@ -401,11 +433,7 @@ async function runMcqFallback({
 			}
 
 			const questionsText = questions
-				.map((q) => {
-					const selected = extractedAnswerById.get(q.question_id)
-					const hint = selected ? ` — student selected: ${selected}` : ""
-					return `Q${q.question_number} (id: ${q.question_id})${hint}`
-				})
+				.map((q) => `Q${q.question_number} (id: ${q.question_id})`)
 				.join("\n")
 
 			const prompt = buildMcqFallbackPrompt(questionsText)

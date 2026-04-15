@@ -227,8 +227,10 @@ export async function handler(
 			)
 
 			// Phase 1.5 — Pre-correct token text against Gemini page transcripts.
-			// Deterministic Levenshtein alignment — no LLM call. Gives the
-			// attribution step cleaner text to match against answer hints.
+			// Deterministic Levenshtein alignment — no LLM call. Persists
+			// text_corrected to DB so Phase 2b starts with better baseline text.
+			// NOT fed into attribution — corrected text destabilises spatial
+			// assignments (see bbox overlap regression).
 			const transcriptCorrections = preCorrectFromTranscripts(
 				insertedTokens,
 				pageAnalyses,
@@ -248,13 +250,10 @@ export async function handler(
 				}
 			}
 
-			// Build correction lookup so attribution sees pre-corrected text.
-			const correctionMap = new Map(
-				transcriptCorrections.map((c) => [c.id, c.textCorrected]),
-			)
-
 			// Phase 2a — assign tokens to questions, derive answer regions.
-			// Attribution now sees transcript-corrected text where available.
+			// Attribution sees raw text only — feeding corrected text into
+			// the prompt destabilises spatial assignments (causes bbox overlap).
+			// Pre-corrections are persisted to DB for Phase 2b to pick up.
 			void logOcrRunEvent(db, jobId, {
 				type: "region_attribution_started",
 				at: new Date().toISOString(),
@@ -267,16 +266,16 @@ export async function handler(
 					is_mcq: s.question_type === "multiple_choice",
 				}),
 			)
-			const preCorrectedTokens = insertedTokens.map((t) => ({
+			const rawTokensForAttribution = insertedTokens.map((t) => ({
 				...t,
-				text_corrected: correctionMap.get(t.id) ?? null,
+				text_corrected: null as string | null,
 			}))
 			await visionAttributeRegions({
 				questions: attributeQuestions,
 				extractedAnswers: extraction.answers,
 				pages: sortedPages,
 				s3Bucket: bucket,
-				tokens: preCorrectedTokens,
+				tokens: rawTokensForAttribution,
 				jobId,
 				llm,
 			})

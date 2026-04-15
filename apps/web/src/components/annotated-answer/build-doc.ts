@@ -79,12 +79,15 @@ export function buildAnnotatedDoc(
 ): JSONContent {
 	const blocks: JSONContent[] = []
 
-	for (const r of gradingResults) {
-		// MCQ questions → atom node with all data in attrs
-		if (r.marking_method === "deterministic") {
-			blocks.push({
-				type: "mcqAnswer",
-				attrs: {
+	// Group all MCQ questions into a single table node
+	const mcqResults = gradingResults.filter(
+		(r) => r.marking_method === "deterministic",
+	)
+	if (mcqResults.length > 0) {
+		blocks.push({
+			type: "mcqTable",
+			attrs: {
+				results: mcqResults.map((r) => ({
 					questionId: r.question_id,
 					questionNumber: r.question_number,
 					questionText: r.question_text || null,
@@ -93,10 +96,14 @@ export function buildAnnotatedDoc(
 					correctLabels: r.correct_option_labels ?? [],
 					studentAnswer: r.student_answer,
 					awardedScore: r.awarded_score,
-				},
-			})
-			continue
-		}
+				})),
+			},
+		})
+	}
+
+	// Written questions as individual blocks
+	for (const r of gradingResults) {
+		if (r.marking_method === "deterministic") continue
 
 		const marks = marksByQuestion.get(r.question_id) ?? []
 		const content = buildTextContent(r.student_answer, marks)

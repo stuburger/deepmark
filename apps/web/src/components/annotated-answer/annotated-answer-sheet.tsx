@@ -29,7 +29,7 @@ import { applyAnnotationMark } from "./apply-annotation-mark"
 import { CommentSidebar } from "./comment-sidebar"
 import { HoverHighlightPlugin } from "./hover-highlight-plugin"
 import { MARK_ACTIONS } from "./mark-actions"
-import { McqAnswerNode } from "./mcq-answer-node"
+import { McqTableNode } from "./mcq-table-node"
 import { QuestionAnswerNode } from "./question-answer-node"
 import { ReadOnlyText } from "./read-only-text"
 import { useDerivedAnnotations } from "./use-derived-annotations"
@@ -48,7 +48,8 @@ const BUBBLE_ICONS: Record<string, React.ReactNode> = {
 
 // ─── Helpers: resolve PM ranges to scan token IDs ──────────────────────────
 
-/** Maps a PM doc position range to OCR token IDs via the alignment data. */
+/** Maps a PM doc position range to OCR token IDs via the alignment data.
+ *  Supports selections that span multiple questionAnswer nodes. */
 function resolveTokensForRange(
 	editor: { state: { doc: import("@tiptap/pm/model").Node } },
 	from: number,
@@ -56,29 +57,34 @@ function resolveTokensForRange(
 	alignmentByQuestion: Map<string, TokenAlignment>,
 	tokensByQuestion: Map<string, PageToken[]>,
 ): string[] | null {
-	const $from = editor.state.doc.resolve(from)
+	const allTokenIds: string[] = []
 
-	// Find the questionAnswer ancestor
-	let questionId: string | null = null
-	let nodeStart = 0
-	for (let d = $from.depth; d >= 0; d--) {
-		const ancestor = $from.node(d)
-		if (ancestor.type.name === "questionAnswer") {
-			questionId = ancestor.attrs.questionId as string | null
-			nodeStart = $from.start(d)
-			break
-		}
-	}
-	if (!questionId) return null
+	editor.state.doc.nodesBetween(from, to, (node, pos) => {
+		if (node.type.name !== "questionAnswer") return true
 
-	const alignment = alignmentByQuestion.get(questionId)
-	const tokens = tokensByQuestion.get(questionId)
-	if (!alignment || !tokens) return null
+		const questionId = node.attrs.questionId as string | null
+		if (!questionId) return false
 
-	const charFrom = from - nodeStart
-	const charTo = to - nodeStart
-	const span = charRangeToTokens(charFrom, charTo, alignment, tokens)
-	return span?.tokenIds ?? null
+		const alignment = alignmentByQuestion.get(questionId)
+		const tokens = tokensByQuestion.get(questionId)
+		if (!alignment || !tokens) return false
+
+		// Content starts after the block node's opening token
+		const contentStart = pos + 1
+		const contentEnd = pos + node.nodeSize - 1
+
+		// Clamp selection range to this node's content boundaries
+		const charFrom = Math.max(from, contentStart) - contentStart
+		const charTo = Math.min(to, contentEnd) - contentStart
+		if (charFrom >= charTo) return false
+
+		const span = charRangeToTokens(charFrom, charTo, alignment, tokens)
+		if (span?.tokenIds) allTokenIds.push(...span.tokenIds)
+
+		return false
+	})
+
+	return allTokenIds.length > 0 ? allTokenIds : null
 }
 
 /** Maps an annotation ID to its OCR token IDs by finding the mark in the doc. */
@@ -167,12 +173,12 @@ export function AnnotatedAnswerSheet({
 			immediatelyRender: false,
 			editable: true,
 			extensions: [
-				Document.extend({ content: "(questionAnswer | mcqAnswer)+" }),
+				Document.extend({ content: "(questionAnswer | mcqTable)+" }),
 				Text,
 				HardBreak,
 				History,
 				QuestionAnswerNode,
-				McqAnswerNode,
+				McqTableNode,
 				...annotationMarks,
 				ReadOnlyText,
 				AnnotationShortcuts.configure({ onMarkAppliedRef }),

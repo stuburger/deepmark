@@ -25,6 +25,7 @@ import {
 } from "@/lib/scan-extraction/gemini-extract"
 import { persistTokens } from "@/lib/scan-extraction/persist-tokens"
 import { saveVisionRaw } from "@/lib/scan-extraction/save-vision-raw"
+import { preCorrectFromTranscripts } from "@/lib/scan-extraction/transcript-pre-correct"
 import {
 	type VisionAttributeQuestion,
 	visionAttributeRegions,
@@ -225,9 +226,35 @@ export async function handler(
 				visionResults,
 			)
 
-			// Phase 2a — assign raw tokens to questions, derive answer regions.
-			// Attribution uses the raw OCR text + extracted answers as matching
-			// anchors. Correction happens in phase 2b alongside mapping.
+			// Phase 1.5 — Pre-correct token text against Gemini page transcripts.
+			// Deterministic Levenshtein alignment — no LLM call. Gives the
+			// attribution step cleaner text to match against answer hints.
+			const transcriptCorrections = preCorrectFromTranscripts(
+				insertedTokens,
+				pageAnalyses,
+			)
+			if (transcriptCorrections.length > 0) {
+				const CHUNK_SIZE = 50
+				for (let i = 0; i < transcriptCorrections.length; i += CHUNK_SIZE) {
+					const chunk = transcriptCorrections.slice(i, i + CHUNK_SIZE)
+					await Promise.all(
+						chunk.map((c) =>
+							db.studentPaperPageToken.update({
+								where: { id: c.id },
+								data: { text_corrected: c.textCorrected },
+							}),
+						),
+					)
+				}
+			}
+
+			// Build correction lookup so attribution sees pre-corrected text.
+			const correctionMap = new Map(
+				transcriptCorrections.map((c) => [c.id, c.textCorrected]),
+			)
+
+			// Phase 2a — assign tokens to questions, derive answer regions.
+			// Attribution now sees transcript-corrected text where available.
 			void logOcrRunEvent(db, jobId, {
 				type: "region_attribution_started",
 				at: new Date().toISOString(),
@@ -240,18 +267,16 @@ export async function handler(
 					is_mcq: s.question_type === "multiple_choice",
 				}),
 			)
-			// Pass raw tokens with text_corrected: null — attribution falls back
-			// to text_raw which is sufficient for spatial question assignment.
-			const rawTokensAsCorrected = insertedTokens.map((t) => ({
+			const preCorrectedTokens = insertedTokens.map((t) => ({
 				...t,
-				text_corrected: null as string | null,
+				text_corrected: correctionMap.get(t.id) ?? null,
 			}))
 			await visionAttributeRegions({
 				questions: attributeQuestions,
 				extractedAnswers: extraction.answers,
 				pages: sortedPages,
 				s3Bucket: bucket,
-				tokens: rawTokensAsCorrected,
+				tokens: preCorrectedTokens,
 				jobId,
 				llm,
 			})

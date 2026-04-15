@@ -1,8 +1,6 @@
 "use client"
 
-import { charRangeToTokens } from "@/lib/marking/alignment/reverse"
-import type { TokenAlignment } from "@/lib/marking/token-alignment"
-import type { PageToken, StudentPaperAnnotation } from "@/lib/marking/types"
+import type { StudentPaperAnnotation } from "@/lib/marking/types"
 import { cn } from "@/lib/utils"
 import type { JSONContent } from "@tiptap/core"
 import Document from "@tiptap/extension-document"
@@ -30,6 +28,7 @@ import { CommentSidebar } from "./comment-sidebar"
 import { HoverHighlightPlugin } from "./hover-highlight-plugin"
 import { MARK_ACTIONS } from "./mark-actions"
 import { McqTableNode } from "./mcq-table-node"
+import { OcrTokenMark } from "./ocr-token-mark"
 import { QuestionAnswerNode } from "./question-answer-node"
 import { ReadOnlyText } from "./read-only-text"
 import { useDerivedAnnotations } from "./use-derived-annotations"
@@ -46,87 +45,67 @@ const BUBBLE_ICONS: Record<string, React.ReactNode> = {
 	chain: <Link2 className="h-3.5 w-3.5" />,
 }
 
-// ─── Helpers: resolve PM ranges to scan token IDs ──────────────────────────
+// ─── Helpers: resolve PM marks to scan token IDs ────────────────────────────
 
-/** Maps a PM doc position range to OCR token IDs via the alignment data.
- *  Supports selections that span multiple questionAnswer nodes. */
+/**
+ * Collects ocrToken mark token IDs from all text nodes in a PM range.
+ * Each word in the document carries an ocrToken mark with its OCR token ID,
+ * so this is a direct structural lookup — no side-channel alignment needed.
+ */
 function resolveTokensForRange(
 	editor: { state: { doc: import("@tiptap/pm/model").Node } },
 	from: number,
 	to: number,
-	alignmentByQuestion: Map<string, TokenAlignment>,
-	tokensByQuestion: Map<string, PageToken[]>,
 ): string[] | null {
-	const allTokenIds: string[] = []
+	const tokenIds: string[] = []
+	const seen = new Set<string>()
 
-	editor.state.doc.nodesBetween(from, to, (node, pos) => {
-		if (node.type.name !== "questionAnswer") return true
+	editor.state.doc.nodesBetween(from, to, (node) => {
+		if (!node.isText) return
 
-		const questionId = node.attrs.questionId as string | null
-		if (!questionId) return false
-
-		const alignment = alignmentByQuestion.get(questionId)
-		const tokens = tokensByQuestion.get(questionId)
-		if (!alignment || !tokens) return false
-
-		// Content starts after the block node's opening token
-		const contentStart = pos + 1
-		const contentEnd = pos + node.nodeSize - 1
-
-		// Clamp selection range to this node's content boundaries
-		const charFrom = Math.max(from, contentStart) - contentStart
-		const charTo = Math.min(to, contentEnd) - contentStart
-		if (charFrom >= charTo) return false
-
-		const span = charRangeToTokens(charFrom, charTo, alignment, tokens)
-		if (span?.tokenIds) allTokenIds.push(...span.tokenIds)
-
-		return false
+		for (const mark of node.marks) {
+			if (mark.type.name !== "ocrToken") continue
+			const id = mark.attrs.tokenId as string | null
+			if (id && !seen.has(id)) {
+				seen.add(id)
+				tokenIds.push(id)
+			}
+		}
 	})
 
-	return allTokenIds.length > 0 ? allTokenIds : null
+	return tokenIds.length > 0 ? tokenIds : null
 }
 
-/** Maps an annotation ID to its OCR token IDs by finding the mark in the doc. */
+/**
+ * Finds all ocrToken marks on text that also carries a specific annotation ID.
+ * Returns the union of token IDs across all matching text nodes.
+ */
 function resolveTokensForAnnotation(
 	editor: { state: { doc: import("@tiptap/pm/model").Node } },
 	annotationId: string,
-	alignmentByQuestion: Map<string, TokenAlignment>,
-	tokensByQuestion: Map<string, PageToken[]>,
 ): string[] | null {
-	let result: string[] | null = null
+	const tokenIds: string[] = []
+	const seen = new Set<string>()
 
-	editor.state.doc.descendants((node, pos) => {
-		if (result) return false
-		if (node.type.name !== "questionAnswer") return
+	editor.state.doc.descendants((node) => {
+		if (!node.isText) return
 
-		const questionId = node.attrs.questionId as string | null
-		if (!questionId) return
+		const hasAnnotation = node.marks.some(
+			(m) => (m.attrs.annotationId as string | null) === annotationId,
+		)
+		if (!hasAnnotation) return
 
-		const alignment = alignmentByQuestion.get(questionId)
-		const tokens = tokensByQuestion.get(questionId)
-		if (!alignment || !tokens) return
-
-		node.forEach((child, childOffset) => {
-			if (result) return
-			if (!child.isText || !child.marks.length) return
-
-			for (const mark of child.marks) {
-				if ((mark.attrs.annotationId as string | null) !== annotationId)
-					continue
-				const span = charRangeToTokens(
-					childOffset,
-					childOffset + child.nodeSize,
-					alignment,
-					tokens,
-				)
-				if (span) result = span.tokenIds
-				return
+		for (const mark of node.marks) {
+			if (mark.type.name !== "ocrToken") continue
+			const id = mark.attrs.tokenId as string | null
+			if (id && !seen.has(id)) {
+				seen.add(id)
+				tokenIds.push(id)
 			}
-		})
+		}
 	})
 
-	return result
+	return tokenIds.length > 0 ? tokenIds : null
 }
 
 // ─── Main component ─────────────────────────────────────────────────────────
@@ -135,19 +114,16 @@ function resolveTokensForAnnotation(
  * Pure PM editor component. Renders a tiptap document with annotation marks,
  * floating toolbar, bubble menu, comment sidebar, and hover word linking.
  *
- * Grading data (scores, overrides, feedback) is consumed by NodeViews via
- * GradingDataContext — the provider must be wrapped by the parent.
+ * OCR token data is embedded in the document as ocrToken marks — no external
+ * alignment maps needed. Grading data (scores, overrides, feedback) is
+ * consumed by NodeViews via GradingDataContext.
  */
 export function AnnotatedAnswerSheet({
 	doc,
-	alignmentByQuestion,
-	tokensByQuestion,
 	onDerivedAnnotations,
 	onTokenHighlight,
 }: {
 	doc: JSONContent
-	alignmentByQuestion: Map<string, TokenAlignment>
-	tokensByQuestion: Map<string, PageToken[]>
 	onDerivedAnnotations?: (annotations: StudentPaperAnnotation[]) => void
 	onTokenHighlight?: (tokenIds: string[] | null) => void
 }) {
@@ -179,6 +155,7 @@ export function AnnotatedAnswerSheet({
 				History,
 				QuestionAnswerNode,
 				McqTableNode,
+				OcrTokenMark,
 				...annotationMarks,
 				ReadOnlyText,
 				AnnotationShortcuts.configure({ onMarkAppliedRef }),
@@ -204,12 +181,7 @@ export function AnnotatedAnswerSheet({
 	)
 
 	// Derive annotations from PM state for the scan overlay.
-	useDerivedAnnotations(
-		editor,
-		alignmentByQuestion,
-		tokensByQuestion,
-		stableOnDerived,
-	)
+	useDerivedAnnotations(editor, stableOnDerived)
 
 	// Editor → Scan: highlight handwritten words that correspond to the
 	// current text selection OR the active annotation card.
@@ -223,26 +195,15 @@ export function AnnotatedAnswerSheet({
 
 			// Priority 1: text selection → highlight those words
 			if (hasSelection) {
-				const tokenIds = resolveTokensForRange(
-					editor,
-					from,
-					to,
-					alignmentByQuestion,
-					tokensByQuestion,
-				)
-				onTokenHighlight(tokenIds)
+				onTokenHighlight(resolveTokensForRange(editor, from, to))
 				return
 			}
 
 			// Priority 2: active annotation card → highlight its words
 			if (activeAnnotationId) {
-				const tokenIds = resolveTokensForAnnotation(
-					editor,
-					activeAnnotationId,
-					alignmentByQuestion,
-					tokensByQuestion,
+				onTokenHighlight(
+					resolveTokensForAnnotation(editor, activeAnnotationId),
 				)
-				onTokenHighlight(tokenIds)
 				return
 			}
 
@@ -255,13 +216,7 @@ export function AnnotatedAnswerSheet({
 		return () => {
 			editor.off("transaction", handleUpdate)
 		}
-	}, [
-		editor,
-		activeAnnotationId,
-		alignmentByQuestion,
-		tokensByQuestion,
-		onTokenHighlight,
-	])
+	}, [editor, activeAnnotationId, onTokenHighlight])
 
 	if (!editor) return null
 

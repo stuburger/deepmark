@@ -1,5 +1,5 @@
-import type { TextMark } from "@/lib/marking/token-alignment"
-import type { GradingResult } from "@/lib/marking/types"
+import type { TextMark, TokenAlignment } from "@/lib/marking/token-alignment"
+import type { GradingResult, PageToken } from "@/lib/marking/types"
 import { describe, expect, it } from "vitest"
 import { buildAnnotatedDoc } from "../build-doc"
 
@@ -37,10 +37,14 @@ function makeMark(
 	}
 }
 
+/** Shorthand: no alignment data (most tests don't need it). */
+const NO_ALIGNMENT = new Map<string, TokenAlignment>()
+const NO_TOKENS = new Map<string, PageToken[]>()
+
 describe("buildAnnotatedDoc", () => {
 	it("builds a doc with one question and no marks", () => {
 		const results = [makeGradingResult("q1", "1a", "The cell membrane")]
-		const doc = buildAnnotatedDoc(results, new Map())
+		const doc = buildAnnotatedDoc(results, new Map(), NO_ALIGNMENT, NO_TOKENS)
 
 		expect(doc.type).toBe("doc")
 		expect(doc.content).toHaveLength(1)
@@ -54,7 +58,7 @@ describe("buildAnnotatedDoc", () => {
 	it("builds a doc with one question and one mark", () => {
 		const results = [makeGradingResult("q1", "1a", "The cell membrane")]
 		const marks = new Map([["q1", [makeMark(4, 8, "underline")]]])
-		const doc = buildAnnotatedDoc(results, marks)
+		const doc = buildAnnotatedDoc(results, marks, NO_ALIGNMENT, NO_TOKENS)
 
 		const content = doc.content?.[0].content ?? []
 		// Should split into: "The " (plain), "cell" (marked), " membrane" (plain)
@@ -72,7 +76,7 @@ describe("buildAnnotatedDoc", () => {
 			makeGradingResult("q1", "1a", "Answer one"),
 			makeGradingResult("q2", "1b", "Answer two"),
 		]
-		const doc = buildAnnotatedDoc(results, new Map())
+		const doc = buildAnnotatedDoc(results, new Map(), NO_ALIGNMENT, NO_TOKENS)
 
 		expect(doc.content).toHaveLength(2)
 		expect(doc.content?.[0].attrs?.questionNumber).toBe("1a")
@@ -90,7 +94,7 @@ describe("buildAnnotatedDoc", () => {
 				],
 			],
 		])
-		const doc = buildAnnotatedDoc(results, marks)
+		const doc = buildAnnotatedDoc(results, marks, NO_ALIGNMENT, NO_TOKENS)
 		const content = doc.content?.[0].content ?? []
 
 		// Boundaries: 0, 4, 8, 17 → 3 segments
@@ -109,7 +113,7 @@ describe("buildAnnotatedDoc", () => {
 			makeGradingResult("q2", "1b", "B", "deterministic"),
 			makeGradingResult("q3", "2", "Answer three"),
 		]
-		const doc = buildAnnotatedDoc(results, new Map())
+		const doc = buildAnnotatedDoc(results, new Map(), NO_ALIGNMENT, NO_TOKENS)
 
 		// MCQ table first, then written questions in order
 		expect(doc.content).toHaveLength(3)
@@ -124,7 +128,7 @@ describe("buildAnnotatedDoc", () => {
 
 	it("handles empty answer with a space text node", () => {
 		const results = [makeGradingResult("q1", "1a", "")]
-		const doc = buildAnnotatedDoc(results, new Map())
+		const doc = buildAnnotatedDoc(results, new Map(), NO_ALIGNMENT, NO_TOKENS)
 
 		const content = doc.content?.[0].content ?? []
 		expect(content).toHaveLength(1)
@@ -134,7 +138,7 @@ describe("buildAnnotatedDoc", () => {
 	it("places marks at text boundaries correctly", () => {
 		const results = [makeGradingResult("q1", "1a", "hello")]
 		const marks = new Map([["q1", [makeMark(0, 5, "tick")]]])
-		const doc = buildAnnotatedDoc(results, marks)
+		const doc = buildAnnotatedDoc(results, marks, NO_ALIGNMENT, NO_TOKENS)
 		const content = doc.content?.[0].content ?? []
 
 		// Entire text is marked
@@ -160,7 +164,7 @@ describe("buildAnnotatedDoc", () => {
 			annotationId: "a1",
 		}
 		const marks = new Map([["q1", [aoMark]]])
-		const doc = buildAnnotatedDoc(results, marks)
+		const doc = buildAnnotatedDoc(results, marks, NO_ALIGNMENT, NO_TOKENS)
 		const content = doc.content?.[0].content ?? []
 
 		expect(content[0].marks?.[0].type).toBe("annotationUnderline")
@@ -182,11 +186,127 @@ describe("buildAnnotatedDoc", () => {
 			annotationId: "a1",
 		}
 		const marks = new Map([["q1", [chainMark]]])
-		const doc = buildAnnotatedDoc(results, marks)
+		const doc = buildAnnotatedDoc(results, marks, NO_ALIGNMENT, NO_TOKENS)
 		const content = doc.content?.[0].content ?? []
 
 		expect(content[0].marks?.[0].type).toBe("chain")
 		expect(content[0].marks?.[0].attrs?.chainType).toBe("evaluation")
 		expect(content[0].marks?.[0].attrs?.phrase).toBe("because")
+	})
+
+	it("embeds ocrToken marks when alignment data is provided", () => {
+		const results = [makeGradingResult("q1", "1a", "The answer")]
+
+		const tokens: PageToken[] = [
+			{
+				id: "t1",
+				text_raw: "The",
+				text_corrected: "The",
+				bbox: [10, 10, 20, 40],
+				page_order: 1,
+				para_index: 0,
+				line_index: 0,
+				word_index: 0,
+				confidence: 0.99,
+				question_id: "q1",
+				answer_char_start: null,
+				answer_char_end: null,
+			},
+			{
+				id: "t2",
+				text_raw: "answer",
+				text_corrected: "answer",
+				bbox: [10, 50, 20, 100],
+				page_order: 1,
+				para_index: 0,
+				line_index: 0,
+				word_index: 1,
+				confidence: 0.99,
+				question_id: "q1",
+				answer_char_start: null,
+				answer_char_end: null,
+			},
+		]
+
+		const alignment: TokenAlignment = {
+			tokenMap: {
+				t1: { start: 0, end: 3 },
+				t2: { start: 4, end: 10 },
+			},
+			confidence: 1.0,
+		}
+
+		const doc = buildAnnotatedDoc(
+			results,
+			new Map(),
+			new Map([["q1", alignment]]),
+			new Map([["q1", tokens]]),
+		)
+
+		const content = doc.content?.[0].content ?? []
+
+		// "The" (0-3), " " (3-4, no token), "answer" (4-10)
+		expect(content).toHaveLength(3)
+
+		// "The" has ocrToken mark
+		expect(content[0].text).toBe("The")
+		expect(content[0].marks).toHaveLength(1)
+		expect(content[0].marks?.[0].type).toBe("ocrToken")
+		expect(content[0].marks?.[0].attrs?.tokenId).toBe("t1")
+		expect(content[0].marks?.[0].attrs?.bbox).toEqual([10, 10, 20, 40])
+
+		// " " (space between words) has no marks
+		expect(content[1].text).toBe(" ")
+		expect(content[1].marks).toBeUndefined()
+
+		// "answer" has ocrToken mark
+		expect(content[2].text).toBe("answer")
+		expect(content[2].marks).toHaveLength(1)
+		expect(content[2].marks?.[0].type).toBe("ocrToken")
+		expect(content[2].marks?.[0].attrs?.tokenId).toBe("t2")
+	})
+
+	it("combines annotation marks with ocrToken marks on the same word", () => {
+		const results = [makeGradingResult("q1", "1a", "The answer")]
+		const marks = new Map([["q1", [makeMark(4, 10, "tick")]]])
+
+		const tokens: PageToken[] = [
+			{
+				id: "t2",
+				text_raw: "answer",
+				text_corrected: "answer",
+				bbox: [10, 50, 20, 100],
+				page_order: 1,
+				para_index: 0,
+				line_index: 0,
+				word_index: 1,
+				confidence: 0.99,
+				question_id: "q1",
+				answer_char_start: null,
+				answer_char_end: null,
+			},
+		]
+
+		const alignment: TokenAlignment = {
+			tokenMap: { t2: { start: 4, end: 10 } },
+			confidence: 1.0,
+		}
+
+		const doc = buildAnnotatedDoc(
+			results,
+			marks,
+			new Map([["q1", alignment]]),
+			new Map([["q1", tokens]]),
+		)
+
+		const content = doc.content?.[0].content ?? []
+		// "The " (no marks), "answer" (tick + ocrToken)
+		expect(content).toHaveLength(2)
+		expect(content[1].text).toBe("answer")
+		expect(content[1].marks).toHaveLength(2)
+
+		const markTypes = content[1].marks?.map((m) => m.type) ?? []
+		expect(markTypes).toContain("tick")
+		expect(markTypes).toContain("ocrToken")
 	})
 })

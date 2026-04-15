@@ -75,10 +75,16 @@ export function GradingResultsPanel({
 	const { marksByQuestion, alignmentByQuestion, tokensByQuestion } =
 		useQuestionAlignments(data.grading_results, annotations, pageTokens)
 
-	// Build PM document from grading results + alignment marks
+	// Build PM document from grading results + alignment marks + token data
 	const doc = useMemo(
-		() => buildAnnotatedDoc(data.grading_results, marksByQuestion),
-		[data.grading_results, marksByQuestion],
+		() =>
+			buildAnnotatedDoc(
+				data.grading_results,
+				marksByQuestion,
+				alignmentByQuestion,
+				tokensByQuestion,
+			),
+		[data.grading_results, marksByQuestion, alignmentByQuestion, tokensByQuestion],
 	)
 
 	// Build grading results lookup map for context
@@ -148,8 +154,6 @@ export function GradingResultsPanel({
 				<GradingDataProvider value={ctxValue}>
 					<AnnotatedAnswerSheet
 						doc={doc}
-						alignmentByQuestion={alignmentByQuestion}
-						tokensByQuestion={tokensByQuestion}
 						onDerivedAnnotations={onDerivedAnnotations}
 						onTokenHighlight={onTokenHighlight}
 					/>

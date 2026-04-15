@@ -155,8 +155,8 @@ export function AnnotatedAnswerSheet({
 				History,
 				QuestionAnswerNode,
 				McqTableNode,
-				OcrTokenMark,
 				...annotationMarks,
+				OcrTokenMark,
 				ReadOnlyText,
 				AnnotationShortcuts.configure({ onMarkAppliedRef }),
 				HoverHighlightPlugin.configure({
@@ -201,9 +201,7 @@ export function AnnotatedAnswerSheet({
 
 			// Priority 2: active annotation card → highlight its words
 			if (activeAnnotationId) {
-				onTokenHighlight(
-					resolveTokensForAnnotation(editor, activeAnnotationId),
-				)
+				onTokenHighlight(resolveTokensForAnnotation(editor, activeAnnotationId))
 				return
 			}
 

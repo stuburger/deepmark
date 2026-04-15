@@ -11,6 +11,11 @@ import { Mark } from "@tiptap/core"
  */
 export const OcrTokenMark = Mark.create({
 	name: "ocrToken",
+	// Low priority ensures annotation marks render as outer DOM elements and
+	// ocrToken spans render as inner elements. This keeps annotation mark spans
+	// contiguous (single <span> per annotation) even though every word carries
+	// a distinct ocrToken mark with different tokenId/bbox attributes.
+	priority: 1,
 	inclusive: false,
 
 	addAttributes() {
@@ -27,10 +32,6 @@ export const OcrTokenMark = Mark.create({
 	},
 
 	renderHTML({ HTMLAttributes }) {
-		return [
-			"span",
-			{ "data-token-id": HTMLAttributes.tokenId as string },
-			0,
-		]
+		return ["span", { "data-token-id": HTMLAttributes.tokenId as string }, 0]
 	},
 })

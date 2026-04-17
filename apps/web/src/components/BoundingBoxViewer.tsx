@@ -18,8 +18,12 @@ import type {
 } from "@/lib/marking/types"
 import { cn } from "@/lib/utils"
 import { Minus, Plus, RotateCcw } from "lucide-react"
-import { useState } from "react"
-import { TransformComponent, TransformWrapper } from "react-zoom-pan-pinch"
+import { useEffect, useRef, useState } from "react"
+import {
+	type ReactZoomPanPinchRef,
+	TransformComponent,
+	TransformWrapper,
+} from "react-zoom-pan-pinch"
 
 export type { GradingAnnotation }
 
@@ -80,6 +84,8 @@ export function BoundingBoxViewer({
 	const [imageDims, setImageDims] = useState<{ w: number; h: number } | null>(
 		null,
 	)
+	const transformRef = useRef<ReactZoomPanPinchRef>(null)
+	const imageRef = useRef<HTMLImageElement>(null)
 
 	const handleImageLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
 		setImageDims({
@@ -87,6 +93,30 @@ export function BoundingBoxViewer({
 			h: e.currentTarget.naturalHeight,
 		})
 	}
+
+	// Pan to the single highlighted token (cursor position or 1-word annotation hover).
+	// Only fires for exactly one token — multi-word selections are not auto-panned.
+	useEffect(() => {
+		if (!highlightedTokenIds || highlightedTokenIds.size !== 1) return
+		if (!imageDims || !transformRef.current || !imageRef.current) return
+
+		const [focusId] = highlightedTokenIds
+		const token = tokens.find((t) => t.id === focusId)
+		if (!token) return
+
+		const [yMin, xMin, yMax, xMax] = token.bbox
+		const tokenCx = ((xMin + xMax) / 2 / 1000) * imageRef.current.offsetWidth
+		const tokenCy = ((yMin + yMax) / 2 / 1000) * imageRef.current.offsetHeight
+
+		const wrapper = transformRef.current.wrapperComponent
+		if (!wrapper) return
+
+		const { scale } = transformRef.current.transformState
+		const newX = wrapper.offsetWidth / 2 - tokenCx * scale
+		const newY = wrapper.offsetHeight / 2 - tokenCy * scale
+
+		transformRef.current.setTransform(newX, newY, scale, 350, "easeOut")
+	}, [highlightedTokenIds, tokens, imageDims])
 
 	const viewBox = imageDims
 		? `0 0 ${imageDims.w} ${imageDims.h}`
@@ -100,6 +130,7 @@ export function BoundingBoxViewer({
 	return (
 		<div className={cn("space-y-2", className)}>
 			<TransformWrapper
+				ref={transformRef}
 				minScale={TRANSFORM_MIN_SCALE}
 				maxScale={TRANSFORM_MAX_SCALE}
 				wheel={TRANSFORM_WHEEL}
@@ -149,6 +180,7 @@ export function BoundingBoxViewer({
 							<div className="relative w-full overflow-visible rounded-lg border bg-muted cursor-grab active:cursor-grabbing">
 								{/* eslint-disable-next-line @next/next/no-img-element -- presigned S3 URL */}
 								<img
+									ref={imageRef}
 									src={imageUrl}
 									alt="Uploaded handwritten page"
 									className="block w-full rounded-lg"

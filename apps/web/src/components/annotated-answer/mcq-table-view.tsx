@@ -67,11 +67,9 @@ export function McqTableView({
 				{/* Data rows */}
 				{results.map((r) => {
 					const override = overridesByQuestionId.get(r.questionId)
-					const effectiveScore =
-						override?.score_override ?? r.awardedScore
+					const effectiveScore = override?.score_override ?? r.awardedScore
 					const isCorrect = effectiveScore === r.maxScore
-					const isActive =
-						activeQuestionNumber === r.questionNumber
+					const isActive = activeQuestionNumber === r.questionNumber
 
 					return (
 						<Popover key={r.questionId}>
@@ -97,10 +95,7 @@ export function McqTableView({
 											strokeWidth={3}
 										/>
 									) : (
-										<X
-											className="h-3.5 w-3.5 text-red-500"
-											strokeWidth={3}
-										/>
+										<X className="h-3.5 w-3.5 text-red-500" strokeWidth={3} />
 									)}
 								</span>
 								<span
@@ -116,11 +111,7 @@ export function McqTableView({
 									{effectiveScore}/{r.maxScore}
 								</span>
 							</PopoverTrigger>
-							<PopoverContent
-								side="right"
-								align="start"
-								className="w-64"
-							>
+							<PopoverContent side="right" align="start" className="w-64">
 								{r.questionText && (
 									<p className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-2 leading-snug">
 										{r.questionText}

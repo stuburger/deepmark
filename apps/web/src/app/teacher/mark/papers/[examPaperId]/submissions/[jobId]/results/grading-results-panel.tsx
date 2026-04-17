@@ -84,7 +84,12 @@ export function GradingResultsPanel({
 				alignmentByQuestion,
 				tokensByQuestion,
 			),
-		[data.grading_results, marksByQuestion, alignmentByQuestion, tokensByQuestion],
+		[
+			data.grading_results,
+			marksByQuestion,
+			alignmentByQuestion,
+			tokensByQuestion,
+		],
 	)
 
 	// Build grading results lookup map for context

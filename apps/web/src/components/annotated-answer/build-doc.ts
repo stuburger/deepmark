@@ -5,7 +5,13 @@ import type { JSONContent } from "@tiptap/core"
 
 // ─── Token range: inverted view of a TokenAlignment for mark generation ─────
 
-type TokenRange = { from: number; to: number; tokenId: string; bbox: [number, number, number, number]; pageOrder: number }
+type TokenRange = {
+	from: number
+	to: number
+	tokenId: string
+	bbox: [number, number, number, number]
+	pageOrder: number
+}
 
 /** Invert a TokenAlignment + token list into sorted char ranges with bbox. */
 function tokenRangesFromAlignment(
@@ -86,9 +92,7 @@ function buildTextContent(
 								ao_quality: m.attrs.ao_quality ?? null,
 							}
 						: {}),
-					...(m.attrs.comment
-						? { comment: m.attrs.comment ?? null }
-						: {}),
+					...(m.attrs.comment ? { comment: m.attrs.comment ?? null } : {}),
 					...(m.type === "chain"
 						? {
 								chainType: m.attrs.chainType ?? "reasoning",
@@ -173,9 +177,7 @@ export function buildAnnotatedDoc(
 		const alignment = alignmentByQuestion.get(r.question_id)
 		const tokens = tokensByQuestion.get(r.question_id)
 		const tokenRanges =
-			alignment && tokens
-				? tokenRangesFromAlignment(alignment, tokens)
-				: []
+			alignment && tokens ? tokenRangesFromAlignment(alignment, tokens) : []
 
 		const content = buildTextContent(r.student_answer, marks, tokenRanges)
 

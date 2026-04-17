@@ -27,10 +27,7 @@ export const McqTableNode = Node.create({
 	},
 
 	renderHTML({ HTMLAttributes }) {
-		return [
-			"div",
-			mergeAttributes(HTMLAttributes, { "data-mcq-table": "" }),
-		]
+		return ["div", mergeAttributes(HTMLAttributes, { "data-mcq-table": "" })]
 	},
 
 	addNodeView() {

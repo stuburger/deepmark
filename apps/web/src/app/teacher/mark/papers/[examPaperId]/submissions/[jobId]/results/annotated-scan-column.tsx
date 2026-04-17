@@ -10,6 +10,7 @@ import type {
 	ScanPageUrl,
 	StudentPaperAnnotation,
 } from "@/lib/marking/types"
+import { useEffect, useRef } from "react"
 
 /**
  * Lightweight clickable region overlay for pages that have no OCR analysis.
@@ -128,10 +129,29 @@ export function AnnotatedScanColumn({
 		if (questionNumber) onAnnotationClick?.(questionNumber)
 	}
 
+	// Outer scroll: when a single token is highlighted, scroll the containing
+	// ScrollArea to bring the right page into view before the viewer pans.
+	const containerRef = useRef<HTMLDivElement>(null)
+	useEffect(() => {
+		if (
+			!highlightedTokenIds ||
+			highlightedTokenIds.size !== 1 ||
+			!containerRef.current
+		)
+			return
+		const [focusId] = highlightedTokenIds
+		const token = pageTokens.find((t) => t.id === focusId)
+		if (!token) return
+		const pageEl = containerRef.current.querySelector<HTMLElement>(
+			`[data-page-order="${token.page_order}"]`,
+		)
+		pageEl?.scrollIntoView({ behavior: "smooth", block: "nearest" })
+	}, [highlightedTokenIds, pageTokens])
+
 	if (pages.length === 0) return null
 
 	return (
-		<div className="flex flex-col gap-8 px-6 py-6">
+		<div ref={containerRef} className="flex flex-col gap-8 px-6 py-6">
 			{pages.map((page, i) => {
 				const isPdf = page.mimeType === "application/pdf"
 				const label =
@@ -145,7 +165,11 @@ export function AnnotatedScanColumn({
 				)
 
 				return (
-					<div key={page.order} className="flex flex-col gap-2">
+					<div
+						key={page.order}
+						data-page-order={page.order}
+						className="flex flex-col gap-2"
+					>
 						{label && (
 							<p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
 								{label}

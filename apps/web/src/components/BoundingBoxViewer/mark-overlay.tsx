@@ -78,7 +78,7 @@ function getRowBboxes(
 	for (const token of span) {
 		const key = `${token.para_index}-${token.line_index}`
 		if (!lineMap.has(key)) lineMap.set(key, [])
-		lineMap.get(key)!.push(token.bbox)
+		lineMap.get(key)?.push(token.bbox)
 	}
 
 	return [...lineMap.values()]

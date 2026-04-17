@@ -1,5 +1,6 @@
 "use server"
 
+import { db } from "@/lib/db"
 import {
 	CopyObjectCommand,
 	GetObjectCommand,
@@ -7,7 +8,6 @@ import {
 	S3Client,
 } from "@aws-sdk/client-s3"
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner"
-import { createPrismaClient } from "@mcp-gcse/db"
 import type { Subject } from "@mcp-gcse/db"
 import { Output, generateText } from "ai"
 import { Resource } from "sst"
@@ -15,8 +15,6 @@ import { z } from "zod"
 import { auth } from "../auth"
 import { callLlmWithFallback } from "../llm-runtime"
 import { log } from "../logger"
-
-const db = createPrismaClient(Resource.NeonPostgres.databaseUrl)
 
 const TAG = "pdf-metadata-actions"
 const s3 = new S3Client({})

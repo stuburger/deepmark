@@ -1,12 +1,9 @@
 "use server"
 
-import { createPrismaClient } from "@mcp-gcse/db"
-import { Resource } from "sst"
+import { db } from "@/lib/db"
 import { auth } from "../../auth"
 import type { StudentPaperAnnotation } from "../types"
 import { diffAnnotations } from "./diff"
-
-const db = createPrismaClient(Resource.NeonPostgres.databaseUrl)
 
 export type SaveAnnotationEditsResult =
 	| { ok: true; inserted: number; updated: number; deleted: number }
@@ -33,38 +30,14 @@ export async function saveAnnotationEdits(
 
 	const submission = await db.studentSubmission.findFirst({
 		where: { id: jobId },
-		select: {
-			id: true,
-			grading_runs: {
-				orderBy: { created_at: "desc" },
-				take: 1,
-				select: {
-					enrichment_runs: {
-						orderBy: { created_at: "desc" },
-						take: 1,
-						select: { id: true },
-					},
-				},
-			},
-		},
+		select: { id: true },
 	})
 	if (!submission) return { ok: false, error: "Submission not found" }
 
-	const latestEnrichmentId =
-		submission.grading_runs[0]?.enrichment_runs[0]?.id ?? null
-
-	// Current active DB state: non-deleted annotations for this submission,
-	// either linked to the latest enrichment run or teacher-authored.
+	// Every annotation (AI and teacher) is written with submission_id set, so
+	// filtering on it alone catches the full active set.
 	const dbRows = await db.studentPaperAnnotation.findMany({
-		where: {
-			deleted_at: null,
-			OR: [
-				{ submission_id: submission.id },
-				latestEnrichmentId
-					? { enrichment_run_id: latestEnrichmentId }
-					: { id: "__never__" },
-			],
-		},
+		where: { submission_id: submission.id, deleted_at: null },
 	})
 
 	// The cast on the whole array is needed because TS can't prove that

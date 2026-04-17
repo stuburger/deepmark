@@ -1,12 +1,9 @@
 "use server"
 
-import { createPrismaClient } from "@mcp-gcse/db"
-import { Resource } from "sst"
+import { db } from "@/lib/db"
 import { auth } from "../../auth"
 import { deriveStageStatus } from "./derive"
 import type { GetJobStagesResult, JobStages, Stage } from "./types"
-
-const db = createPrismaClient(Resource.NeonPostgres.databaseUrl)
 
 /**
  * Returns explicit per-stage status for a submission.

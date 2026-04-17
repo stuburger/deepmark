@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { updateStudentName } from "@/lib/marking/mutations"
+import { updateStudentName } from "@/lib/marking/submissions/mutations"
 import { Check, Pencil, X } from "lucide-react"
 import { useState } from "react"
 

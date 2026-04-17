@@ -1,11 +1,8 @@
 "use server"
 
-import { createPrismaClient } from "@mcp-gcse/db"
-import { Resource } from "sst"
+import { db } from "@/lib/db"
 import { auth } from "../../auth"
 import type { GetExamPaperStatsResult, GradingResult } from "../types"
-
-const db = createPrismaClient(Resource.NeonPostgres.databaseUrl)
 
 export async function getExamPaperStats(
 	examPaperId: string,

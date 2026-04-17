@@ -1,9 +1,9 @@
 "use server"
 
+import { db } from "@/lib/db"
 import { GetObjectCommand, S3Client } from "@aws-sdk/client-s3"
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner"
 import type { BatchStatus } from "@mcp-gcse/db"
-import { createPrismaClient } from "@mcp-gcse/db"
 import { Resource } from "sst"
 import { auth } from "../auth"
 import { deriveScanStatus } from "../marking/status"
@@ -15,7 +15,6 @@ import {
 
 const bucketName = Resource.ScansBucket.name
 const s3 = new S3Client({})
-const db = createPrismaClient(Resource.NeonPostgres.databaseUrl)
 
 const submissionInclude = {
 	student_submissions: {

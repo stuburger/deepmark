@@ -1,7 +1,7 @@
 "use client"
 
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
-import { deleteSubmission } from "@/lib/marking/mutations"
+import { deleteSubmission } from "@/lib/marking/submissions/mutations"
 import type { SubmissionHistoryItem } from "@/lib/marking/types"
 import { useState } from "react"
 import { toast } from "sonner"

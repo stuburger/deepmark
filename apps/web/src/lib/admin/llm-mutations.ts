@@ -1,12 +1,9 @@
 "use server"
 
-import { createPrismaClient } from "@mcp-gcse/db"
-import { Resource } from "sst"
+import { db } from "@/lib/db"
 import { auth } from "../auth"
 import type { LlmCallSiteRow, LlmModelEntry } from "./llm-types"
 import { LLM_CALL_SITE_DEFAULTS } from "./llm-types"
-
-const db = createPrismaClient(Resource.NeonPostgres.databaseUrl)
 
 // ─── Update model chain ──────────────────────────────────────────────────────
 

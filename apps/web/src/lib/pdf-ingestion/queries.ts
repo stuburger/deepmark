@@ -1,14 +1,12 @@
 "use server"
 
-import { createPrismaClient } from "@mcp-gcse/db"
-import { Resource } from "sst"
+import { db } from "@/lib/db"
 import { auth } from "../auth"
 import { log } from "../logger"
 import type { ActiveExamPaperIngestionJob, PdfDocument } from "./types"
 export type { ActiveExamPaperIngestionJob, PdfDocument } from "./types"
 
 const TAG = "pdf-ingestion-actions"
-const db = createPrismaClient(Resource.NeonPostgres.databaseUrl)
 
 export type GetActiveIngestionJobsForExamPaperResult =
 	| { ok: true; jobs: ActiveExamPaperIngestionJob[] }

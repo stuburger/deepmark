@@ -1,14 +1,10 @@
 "use server"
 
+import { db } from "@/lib/db"
 import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3"
 import { SQSClient, SendMessageCommand } from "@aws-sdk/client-sqs"
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner"
-import {
-	type BatchStatus,
-	type ClassificationMode,
-	type ReviewMode,
-	createPrismaClient,
-} from "@mcp-gcse/db"
+import type { BatchStatus, ClassificationMode, ReviewMode } from "@mcp-gcse/db"
 import { Resource } from "sst"
 import { auth } from "../auth"
 import { log } from "../logger"
@@ -19,7 +15,6 @@ const TAG = "batch/mutations"
 const bucketName = Resource.ScansBucket.name
 const s3 = new S3Client({})
 const sqs = new SQSClient({})
-const db = createPrismaClient(Resource.NeonPostgres.databaseUrl)
 
 // ─── createBatchIngestJob ───────────────────────────────────────────────────
 

@@ -1,7 +1,7 @@
 "use client"
 
 import { Button } from "@/components/ui/button"
-import { retriggerOcr } from "@/lib/marking/mutations"
+import { retriggerOcr } from "@/lib/marking/stages/mutations"
 import { useMutation } from "@tanstack/react-query"
 import { Loader2 } from "lucide-react"
 import { toast } from "sonner"

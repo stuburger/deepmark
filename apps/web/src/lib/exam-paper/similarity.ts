@@ -1,7 +1,6 @@
 "use server"
 
-import { createPrismaClient } from "@mcp-gcse/db"
-import { Resource } from "sst"
+import { db } from "@/lib/db"
 import { auth } from "../auth"
 import { embedText } from "../embeddings"
 import { log } from "../logger"
@@ -9,7 +8,6 @@ import { log } from "../logger"
 import type { SimilarPair } from "./types"
 
 const TAG = "exam-paper/similarity"
-const db = createPrismaClient(Resource.NeonPostgres.databaseUrl)
 
 // ─── Query ───────────────────────────────────────────────────────────────────
 

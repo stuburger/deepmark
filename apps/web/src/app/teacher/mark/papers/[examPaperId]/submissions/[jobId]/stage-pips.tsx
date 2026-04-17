@@ -1,22 +1,21 @@
 "use client"
 
-import { retriggerGrading, retriggerOcr } from "@/lib/marking/mutations"
-import { getJobStages } from "@/lib/marking/stages/queries"
 import type { JobStages } from "@/lib/marking/stages/types"
-import { useJobStream } from "@/lib/marking/stages/use-job-stream"
-import { queryKeys } from "@/lib/query-keys"
-import { useMutation, useQuery } from "@tanstack/react-query"
-import { toast } from "sonner"
 import { StagePip } from "./stage-pip"
+import {
+	type StageRetriggerMutation,
+	useStageData,
+	useStageMutations,
+} from "./stage-pips-hooks"
 
 /**
  * Three-pip cluster showing OCR / grading / enrichment status independently.
  * Each pip's popover exposes the corresponding re-run action.
  *
- * Data flow:
- *   - `useJobStream` holds a persistent SSE connection and writes into the
- *     React Query cache under `queryKeys.jobStages(jobId)`
- *   - `useQuery` reads from the cache with an initial SSR/CSR fallback fetch
+ * Thin wrapper that binds the data + mutation hooks to the presentation
+ * component below — callers pass only a jobId and navigation/annotate
+ * callbacks. Use `StagePipsView` directly when you already hold the stages
+ * and mutations (e.g. for tests or reuse in other toolbars).
  */
 export function StagePips({
 	jobId,
@@ -27,66 +26,67 @@ export function StagePips({
 	onNavigateToJob: (newJobId: string) => void
 	onReAnnotate?: () => void
 }) {
-	useJobStream(jobId)
+	const stages = useStageData(jobId)
+	const { ocrMutation, gradingMutation } = useStageMutations(
+		jobId,
+		onNavigateToJob,
+	)
 
-	const { data } = useQuery<JobStages | null>({
-		queryKey: queryKeys.jobStages(jobId),
-		queryFn: async () => {
-			const r = await getJobStages(jobId)
-			if (!r.ok) throw new Error(r.error)
-			return r.stages
-		},
-		staleTime: Number.POSITIVE_INFINITY,
-	})
+	if (!stages) return null
 
-	const ocrMutation = useMutation({
-		mutationFn: () => retriggerOcr(jobId),
-		onSuccess: (r) => {
-			if (!r.ok) return toast.error(r.error)
-			onNavigateToJob(r.newJobId)
-		},
-		onError: () => toast.error("Failed to re-scan"),
-	})
+	return (
+		<StagePipsView
+			stages={stages}
+			ocrMutation={ocrMutation}
+			gradingMutation={gradingMutation}
+			onReAnnotate={onReAnnotate}
+		/>
+	)
+}
 
-	const gradingMutation = useMutation({
-		mutationFn: () => retriggerGrading(jobId),
-		onSuccess: (r) => {
-			if (!r.ok) return toast.error(r.error)
-			onNavigateToJob(r.newJobId)
-		},
-		onError: () => toast.error("Failed to re-grade"),
-	})
-
-	if (!data) return null
-
+/**
+ * Pure presentation — renders three pips and wires their popover re-run
+ * actions to the supplied mutations. No data fetching or side effects.
+ */
+export function StagePipsView({
+	stages,
+	ocrMutation,
+	gradingMutation,
+	onReAnnotate,
+}: {
+	stages: JobStages
+	ocrMutation: StageRetriggerMutation
+	gradingMutation: StageRetriggerMutation
+	onReAnnotate?: () => void
+}) {
 	return (
 		<div className="flex items-center gap-1.5">
 			<StagePip
 				stageKey="ocr"
-				stage={data.ocr}
+				stage={stages.ocr}
 				onRerun={() => ocrMutation.mutate()}
 				rerunDisabled={
-					ocrMutation.isPending || data.ocr.status === "generating"
+					ocrMutation.isPending || stages.ocr.status === "generating"
 				}
 			/>
 			<StagePip
 				stageKey="grading"
-				stage={data.grading}
+				stage={stages.grading}
 				onRerun={() => gradingMutation.mutate()}
 				rerunDisabled={
 					gradingMutation.isPending ||
-					data.grading.status === "generating" ||
-					data.ocr.status !== "done"
+					stages.grading.status === "generating" ||
+					stages.ocr.status !== "done"
 				}
 			/>
 			<StagePip
 				stageKey="enrichment"
-				stage={data.enrichment}
+				stage={stages.enrichment}
 				onRerun={onReAnnotate}
 				rerunDisabled={
 					!onReAnnotate ||
-					data.enrichment.status === "generating" ||
-					data.grading.status !== "done"
+					stages.enrichment.status === "generating" ||
+					stages.grading.status !== "done"
 				}
 			/>
 		</div>

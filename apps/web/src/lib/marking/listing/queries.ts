@@ -1,8 +1,7 @@
 "use server"
 
+import { db } from "@/lib/db"
 import type { GradingStatus, OcrStatus } from "@mcp-gcse/db"
-import { createPrismaClient } from "@mcp-gcse/db"
-import { Resource } from "sst"
 import { auth } from "../../auth"
 import { deriveScanStatus } from "../status"
 import type {
@@ -10,8 +9,6 @@ import type {
 	ListMySubmissionsResult,
 	SubmissionHistoryItem,
 } from "../types"
-
-const db = createPrismaClient(Resource.NeonPostgres.databaseUrl)
 
 const listingInclude = {
 	exam_paper: { select: { id: true, title: true } },

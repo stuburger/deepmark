@@ -1,24 +1,23 @@
 "use server"
 
-import {
-	type EnrichmentStatus,
-	type GradingStatus,
-	type JobEvent,
-	type OcrStatus,
-	createPrismaClient,
+import { db } from "@/lib/db"
+import type {
+	EnrichmentStatus,
+	GradingStatus,
+	JobEvent,
+	OcrStatus,
 } from "@mcp-gcse/db"
-import { Resource } from "sst"
 import { auth } from "../../auth"
 import { deriveScanStatus } from "../status"
 import type {
 	AnswerRegion,
 	ExtractedAnswer,
 	GetStudentPaperJobResult,
+	GetSubmissionFeedbackResult,
 	GradingResult,
 	TeacherOverride,
 } from "../types"
-
-const db = createPrismaClient(Resource.NeonPostgres.databaseUrl)
+import { toSubmissionFeedback } from "./feedback-mapper"
 
 // ─── Region helpers ───────────────────────────────────────────────────────────
 
@@ -409,5 +408,29 @@ export async function getTeacherOverrides(
 			created_at: r.created_at,
 			updated_at: r.updated_at,
 		})),
+	}
+}
+
+// ─── getSubmissionFeedback ──────────────────────────────────────────────────
+
+export async function getSubmissionFeedback(
+	submissionId: string,
+): Promise<GetSubmissionFeedbackResult> {
+	try {
+		const session = await auth()
+		if (!session) return { ok: false, error: "Not authenticated" }
+
+		const row = await db.submissionFeedback.findUnique({
+			where: {
+				submission_id_created_by: {
+					submission_id: submissionId,
+					created_by: session.userId,
+				},
+			},
+		})
+
+		return { ok: true, feedback: row ? toSubmissionFeedback(row) : null }
+	} catch {
+		return { ok: false, error: "Failed to fetch feedback" }
 	}
 }

@@ -1,13 +1,11 @@
 "use server"
 
+import { db } from "@/lib/db"
 import { GetObjectCommand, S3Client } from "@aws-sdk/client-s3"
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner"
-import { createPrismaClient } from "@mcp-gcse/db"
-import { Resource } from "sst"
 import { auth } from "../auth"
 
 const s3 = new S3Client({})
-const db = createPrismaClient(Resource.NeonPostgres.databaseUrl)
 
 // ─── getPdfIngestionJobStatus ───────────────────────────────────────────────
 

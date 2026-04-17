@@ -3,7 +3,7 @@
 import {
 	deleteTeacherOverride,
 	upsertTeacherOverride,
-} from "@/lib/marking/mutations"
+} from "@/lib/marking/overrides/mutations"
 import { getTeacherOverrides } from "@/lib/marking/submissions/queries"
 import type {
 	TeacherOverride,

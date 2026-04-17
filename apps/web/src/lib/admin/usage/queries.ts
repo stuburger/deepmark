@@ -1,7 +1,7 @@
 "use server"
 
-import { Prisma, createPrismaClient } from "@mcp-gcse/db"
-import { Resource } from "sst"
+import { db } from "@/lib/db"
+import { Prisma } from "@mcp-gcse/db"
 import { estimateCost } from "./pricing"
 import type {
 	RecentRun,
@@ -13,8 +13,6 @@ import type {
 	UsageByUser,
 	UsageSummary,
 } from "./types"
-
-const db = createPrismaClient(Resource.NeonPostgres.databaseUrl)
 
 const NOT_NULL = { not: Prisma.JsonNull }
 

@@ -1,6 +1,6 @@
 "use server"
 
-import { createPrismaClient } from "@mcp-gcse/db"
+import { db } from "@/lib/db"
 import {
 	DeterministicMarker,
 	Grader,
@@ -10,12 +10,10 @@ import {
 	type QuestionWithMarkScheme,
 	parseMarkPointsFromPrisma,
 } from "@mcp-gcse/shared"
-import { Resource } from "sst"
 import { auth } from "../auth"
 import { log } from "../logger"
 
 const TAG = "eval-actions"
-const db = createPrismaClient(Resource.NeonPostgres.databaseUrl)
 
 export type EvalMarkPoint = {
 	description: string

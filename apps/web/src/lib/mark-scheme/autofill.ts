@@ -1,15 +1,13 @@
 "use server"
 
-import { createPrismaClient } from "@mcp-gcse/db"
+import { db } from "@/lib/db"
 import { Output, generateText } from "ai"
-import { Resource } from "sst"
 import { z } from "zod"
 import { auth } from "../auth"
 import { callLlmWithFallback } from "../llm-runtime"
 import { log } from "../logger"
 
 const TAG = "autofill-mark-scheme-actions"
-const db = createPrismaClient(Resource.NeonPostgres.databaseUrl)
 
 export type AutofillMarkPointSuggestion = {
 	description: string

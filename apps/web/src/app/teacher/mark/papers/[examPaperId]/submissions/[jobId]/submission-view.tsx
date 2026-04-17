@@ -8,40 +8,30 @@ import {
 } from "@/components/ui/resizable"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { triggerEnrichment } from "@/lib/marking/mutations"
-import {
-	getJobAnnotations,
-	getJobPageTokens,
-	getJobScanPageUrls,
-} from "@/lib/marking/scan/queries"
+import { triggerEnrichment } from "@/lib/marking/stages/mutations"
+import type { JobStages } from "@/lib/marking/stages/types"
 import type {
 	PageToken,
 	ScanPageUrl,
-	StudentPaperAnnotation,
 	StudentPaperJobPayload,
 	UpsertTeacherOverrideInput,
 } from "@/lib/marking/types"
 import { queryKeys } from "@/lib/query-keys"
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { parseAsString, useQueryState } from "nuqs"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 import { EventLog } from "./event-log"
-import { useJobQuery } from "./hooks/use-job-query"
 import { useScrollToQuestion } from "./hooks/use-scroll-to-question"
+import { useSubmissionData } from "./hooks/use-submission-data"
 import {
 	useTeacherOverrideMutations,
 	useTeacherOverrides,
 } from "./hooks/use-teacher-overrides"
-import { getJobStages } from "@/lib/marking/stages/queries"
-import { derivePhase } from "@/lib/marking/stages/phase"
-import type { JobStages } from "@/lib/marking/stages/types"
 import { ResultsPanel } from "./results-panel"
 import { AnnotatedScanColumn } from "./results/annotated-scan-column"
 import { ScanPanel } from "./scan-panel"
 import { SubmissionToolbar } from "./submission-toolbar"
-
-const TERMINAL_STATUSES = new Set(["ocr_complete", "failed", "cancelled"])
 
 export function SubmissionView({
 	examPaperId,
@@ -65,6 +55,23 @@ export function SubmissionView({
 	onVersionChange?: (newJobId: string) => void
 }) {
 	const queryClient = useQueryClient()
+
+	const {
+		data,
+		stages,
+		scanPages,
+		pageTokens,
+		annotations,
+		phase,
+		isTerminal,
+	} = useSubmissionData({
+		jobId,
+		initialData,
+		initialScanPages,
+		initialPageTokens,
+		initialStages,
+	})
+
 	const [showOcr, setShowOcr] = useState(false)
 	const [showRegions, setShowRegions] = useState(true)
 	const [showMarks, setShowMarks] = useState(false)
@@ -84,15 +91,10 @@ export function SubmissionView({
 	)
 	const scrollToQuestion = useScrollToQuestion(setActiveQuestionNumber)
 
-	const initialHasExamPaper = initialData.exam_paper_id !== null
-	const initialPhase = derivePhase(initialStages, initialHasExamPaper)
-	const isTerminalPhase =
-		initialPhase === "completed" ||
-		initialPhase === "failed" ||
-		initialPhase === "cancelled"
-
 	const [mobileTab, setMobileTab] = useState(
-		isTerminalPhase ? "results" : "scan",
+		phase === "completed" || phase === "failed" || phase === "cancelled"
+			? "results"
+			: "scan",
 	)
 
 	// When an annotation is clicked, switch the mobile tab to "results" so the
@@ -124,68 +126,6 @@ export function SubmissionView({
 		[upsertOverride, deleteOverride],
 	)
 
-	// Live job data — replaces useState(initialData) + useJobPoller
-	const { data: jobData } = useJobQuery(jobId, initialData)
-	const data = jobData ?? initialData
-
-	// Live stages — seeded with SSR data, pushed via SSE (see useJobStream
-	// inside StagePips). Phase is derived purely from JobStages, which is
-	// now the single source of truth for pipeline status.
-	const { data: stages = initialStages } = useQuery<JobStages>({
-		queryKey: queryKeys.jobStages(jobId),
-		queryFn: async () => {
-			const r = await getJobStages(jobId)
-			if (!r.ok) throw new Error(r.error)
-			return r.stages
-		},
-		initialData: initialStages,
-		staleTime: Number.POSITIVE_INFINITY,
-	})
-	const phase = derivePhase(stages, data.exam_paper_id !== null)
-	const isTerminal = TERMINAL_STATUSES.has(data.status)
-	const isPolling = !isTerminal
-
-	// Scan pages — seeded with SSR data, refetched when OCR populates page.analysis
-	const { data: scanPages } = useQuery({
-		queryKey: queryKeys.jobScanUrls(jobId),
-		queryFn: async () => {
-			const r = await getJobScanPageUrls(jobId)
-			return r.ok ? r.pages : []
-		},
-		initialData: initialScanPages,
-		staleTime: Number.POSITIVE_INFINITY,
-	})
-
-	// Page tokens — seeded with SSR data, stable after initial load
-	const { data: pageTokens } = useQuery({
-		queryKey: queryKeys.jobPageTokens(jobId),
-		queryFn: async () => {
-			const r = await getJobPageTokens(jobId)
-			return r.ok ? r.tokens : []
-		},
-		initialData: initialPageTokens,
-		staleTime: Number.POSITIVE_INFINITY,
-	})
-
-	// Annotations — fetched as soon as any may exist. `getJobAnnotations`
-	// returns [] while enrichment is still running, so the editor can render
-	// with just text first and layer in marks when enrichment completes.
-	const { data: annotations = [] } = useQuery<StudentPaperAnnotation[]>({
-		queryKey: queryKeys.jobAnnotations(jobId),
-		queryFn: async () => {
-			const r = await getJobAnnotations(jobId)
-			return r.ok ? r.annotations : []
-		},
-		// Progressive: re-fetch while enrichment is still in progress so new
-		// annotations stream in as soon as they're persisted.
-		refetchInterval: (query) => {
-			if (data.enrichment_status === "complete") return false
-			if (data.enrichment_status === "failed") return false
-			return 3000
-		},
-		staleTime: 0,
-	})
-
 	// Auto-enable marks overlay when annotations first load
 	const annotationsLoadedRef = useRef(false)
 	useEffect(() => {
@@ -196,15 +136,12 @@ export function SubmissionView({
 	}, [annotations])
 
 	// Unified sync: editor transactions → React Query cache → server.
-	// The `jobAnnotations` cache is now the single source of truth for
-	// annotations (AI + teacher), so we no longer maintain a separate
-	// `sheetAnnotations` useState nor compute an `annotations` union.
-	// The callback writes derived state into the cache and schedules a
-	// debounced save mutation that races safely against enrichment refetches
-	// via `cancelQueries` in `onMutate`.
+	// The `jobAnnotations` cache is the single source of truth for
+	// annotations (AI + teacher). The callback writes derived state into the
+	// cache and schedules a debounced save mutation that races safely against
+	// enrichment refetches via `cancelQueries` in `onMutate`.
 	const handleDerivedAnnotations = useAnnotationSync(jobId)
 
-	// Trigger enrichment mutation
 	const enrichMutation = useMutation({
 		mutationFn: () => triggerEnrichment(jobId),
 		onSuccess: (result) => {
@@ -219,35 +156,6 @@ export function SubmissionView({
 		},
 		onError: () => toast.error("Failed to start annotation generation"),
 	})
-
-	// Poll for enrichment completion: when status changes to "complete", fetch annotations
-	const prevEnrichStatusRef = useRef(data.enrichment_status)
-	useEffect(() => {
-		if (
-			prevEnrichStatusRef.current !== "complete" &&
-			data.enrichment_status === "complete"
-		) {
-			void queryClient.invalidateQueries({
-				queryKey: queryKeys.jobAnnotations(jobId),
-			})
-		}
-		prevEnrichStatusRef.current = data.enrichment_status
-	}, [data.enrichment_status, jobId, queryClient])
-
-	// When OCR completes (scan_processing → marking_in_progress), invalidate the
-	// scan URLs query so page.analysis data is fetched.
-	const prevPhaseRef = useRef(initialPhase)
-	useEffect(() => {
-		if (
-			prevPhaseRef.current === "scan_processing" &&
-			phase === "marking_in_progress"
-		) {
-			void queryClient.invalidateQueries({
-				queryKey: queryKeys.jobScanUrls(jobId),
-			})
-		}
-		prevPhaseRef.current = phase
-	}, [phase, jobId, queryClient])
 
 	return (
 		<div className="flex flex-col overflow-hidden h-full">
@@ -369,7 +277,7 @@ export function SubmissionView({
 				</ResizablePanel>
 			</ResizablePanelGroup>
 
-			<EventLog events={data.job_events} isPolling={isPolling} />
+			<EventLog events={data.job_events} isPolling={!isTerminal} />
 		</div>
 	)
 }

@@ -11,10 +11,8 @@ import {
 	DialogTitle,
 } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
-import {
-	getSubmissionFeedback,
-	upsertSubmissionFeedback,
-} from "@/lib/marking/mutations"
+import { upsertSubmissionFeedback } from "@/lib/marking/submissions/mutations"
+import { getSubmissionFeedback } from "@/lib/marking/submissions/queries"
 import {
 	FEEDBACK_CATEGORY_LABELS,
 	type FeedbackCategory,

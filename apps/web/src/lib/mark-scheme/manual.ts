@@ -1,12 +1,10 @@
 "use server"
 
-import { createPrismaClient } from "@mcp-gcse/db"
-import { Resource } from "sst"
+import { db } from "@/lib/db"
 import { auth } from "../auth"
 import { log } from "../logger"
 
 const TAG = "mark-scheme/manual"
-const db = createPrismaClient(Resource.NeonPostgres.databaseUrl)
 
 import type { MarkSchemeInput } from "./types"
 export type { MarkSchemeInput, MarkSchemePointInput } from "./types"

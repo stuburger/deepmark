@@ -2,6 +2,7 @@
 
 import { LiveMarkingExamPaperPanel } from "@/components/ExamPaperPanel"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import type { MarkingPhase } from "@/lib/marking/stages/phase"
 import type {
 	PageToken,
 	StudentPaperAnnotation,
@@ -12,7 +13,6 @@ import type {
 import { Loader2 } from "lucide-react"
 import { CancelledPanel } from "./cancelled"
 import { FailedPanel } from "./failed"
-import type { MarkingPhase } from "@/lib/marking/stages/phase"
 import { MarkingResults } from "./results/index"
 import { LlmSnapshotPanel } from "./results/llm-snapshot-panel"
 

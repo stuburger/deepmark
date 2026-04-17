@@ -1,7 +1,7 @@
+import { db } from "@/lib/db"
 import { createAnthropic } from "@ai-sdk/anthropic"
 import { createGoogleGenerativeAI } from "@ai-sdk/google"
 import { createOpenAI } from "@ai-sdk/openai"
-import { createPrismaClient } from "@mcp-gcse/db"
 import {
 	type LlmCallReport,
 	type LlmModelEntry,
@@ -18,7 +18,6 @@ import { Resource } from "sst"
 
 async function getLlmConfig(key: string): Promise<LlmModelEntry[]> {
 	return sharedGetLlmConfig(key, async (k) => {
-		const db = createPrismaClient(Resource.NeonPostgres.databaseUrl)
 		const row = await db.llmCallSite.findUnique({ where: { key: k } })
 		return row ? (row.models as LlmModelEntry[]) : null
 	})

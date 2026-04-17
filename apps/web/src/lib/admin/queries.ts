@@ -1,9 +1,6 @@
 "use server"
 
-import { createPrismaClient } from "@mcp-gcse/db"
-import { Resource } from "sst"
-
-const db = createPrismaClient(Resource.NeonPostgres.databaseUrl)
+import { db } from "@/lib/db"
 
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 

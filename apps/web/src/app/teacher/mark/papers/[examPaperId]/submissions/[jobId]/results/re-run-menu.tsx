@@ -7,7 +7,7 @@ import {
 	DropdownMenuItem,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { retriggerGrading, retriggerOcr } from "@/lib/marking/mutations"
+import { retriggerGrading, retriggerOcr } from "@/lib/marking/stages/mutations"
 import { cn } from "@/lib/utils"
 import { useMutation } from "@tanstack/react-query"
 import {

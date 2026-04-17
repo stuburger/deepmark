@@ -1,10 +1,7 @@
 "use server"
 
-import { createPrismaClient } from "@mcp-gcse/db"
-import { Resource } from "sst"
+import { db } from "@/lib/db"
 import type { MultipleChoiceOption, QuestionDetail } from "../types"
-
-const db = createPrismaClient(Resource.NeonPostgres.databaseUrl)
 
 // ─── Question detail ──────────────────────────────────────────────────────────
 

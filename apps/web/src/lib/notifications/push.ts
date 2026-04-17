@@ -1,10 +1,8 @@
 "use server"
 
-import { createPrismaClient } from "@mcp-gcse/db"
+import { db } from "@/lib/db"
 import { Resource } from "sst"
 import { auth } from "../auth"
-
-const db = createPrismaClient(Resource.NeonPostgres.databaseUrl)
 
 // ─── getVapidPublicKey ────────────────────────────────────────────────────────
 

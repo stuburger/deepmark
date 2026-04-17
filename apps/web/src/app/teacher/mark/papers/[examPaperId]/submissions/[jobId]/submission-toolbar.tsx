@@ -15,6 +15,7 @@ import {
 	TooltipProvider,
 	TooltipTrigger,
 } from "@/components/ui/tooltip"
+import type { MarkingPhase } from "@/lib/marking/stages/phase"
 import type {
 	PageToken,
 	ScanPageUrl,
@@ -33,7 +34,6 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 import { ObservationsSheet, TranscriptSheet } from "./ocr-sheets"
-import type { MarkingPhase } from "@/lib/marking/stages/phase"
 import { ReScanButton } from "./re-scan-button"
 import { DownloadPdfButton } from "./results/download-pdf-button"
 import { ReRunMenu } from "./results/re-run-menu"

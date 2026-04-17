@@ -1,11 +1,8 @@
 "use server"
 
-import { createPrismaClient } from "@mcp-gcse/db"
+import { db } from "@/lib/db"
 import { LLM_CALL_SITE_DEFAULTS } from "@mcp-gcse/shared"
-import { Resource } from "sst"
 import type { LlmCallSiteRow, LlmModelEntry } from "./llm-types"
-
-const db = createPrismaClient(Resource.NeonPostgres.databaseUrl)
 
 /** Canonical sort order: matches the phase + temporal order in LLM_CALL_SITE_DEFAULTS. */
 const KEY_ORDER = new Map(LLM_CALL_SITE_DEFAULTS.map((d, i) => [d.key, i]))

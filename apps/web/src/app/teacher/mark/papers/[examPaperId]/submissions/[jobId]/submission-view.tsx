@@ -1,5 +1,6 @@
 "use client"
 
+import { useAnnotationSync } from "@/components/annotated-answer/use-annotation-sync"
 import {
 	ResizableHandle,
 	ResizablePanel,
@@ -23,7 +24,7 @@ import type {
 import { queryKeys } from "@/lib/query-keys"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { parseAsString, useQueryState } from "nuqs"
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 import { EventLog } from "./event-log"
 import { useJobQuery } from "./hooks/use-job-query"
@@ -32,8 +33,9 @@ import {
 	useTeacherOverrideMutations,
 	useTeacherOverrides,
 } from "./hooks/use-teacher-overrides"
-import type { MarkingPhase } from "./phase"
-import { derivePhase } from "./phase"
+import { getJobStages } from "@/lib/marking/stages/queries"
+import { derivePhase } from "@/lib/marking/stages/phase"
+import type { JobStages } from "@/lib/marking/stages/types"
 import { ResultsPanel } from "./results-panel"
 import { AnnotatedScanColumn } from "./results/annotated-scan-column"
 import { ScanPanel } from "./scan-panel"
@@ -47,7 +49,7 @@ export function SubmissionView({
 	initialData,
 	scanPages: initialScanPages,
 	pageTokens: initialPageTokens,
-	initialPhase,
+	initialStages,
 	debugMode = false,
 	onNavigateToJob,
 	onVersionChange,
@@ -57,7 +59,7 @@ export function SubmissionView({
 	initialData: StudentPaperJobPayload
 	scanPages: ScanPageUrl[]
 	pageTokens: PageToken[]
-	initialPhase: MarkingPhase
+	initialStages: JobStages
 	debugMode?: boolean
 	onNavigateToJob?: (newJobId: string) => void
 	onVersionChange?: (newJobId: string) => void
@@ -68,9 +70,6 @@ export function SubmissionView({
 	const [showMarks, setShowMarks] = useState(false)
 	const [showChains, setShowChains] = useState(false)
 	const [isEditing, setIsEditing] = useState(false)
-	const [sheetAnnotations, setSheetAnnotations] = useState<
-		StudentPaperAnnotation[]
-	>([])
 
 	// Hover word linking — bidirectional between scan and PM editor
 	const [highlightedTokenIds, setHighlightedTokenIds] =
@@ -85,6 +84,8 @@ export function SubmissionView({
 	)
 	const scrollToQuestion = useScrollToQuestion(setActiveQuestionNumber)
 
+	const initialHasExamPaper = initialData.exam_paper_id !== null
+	const initialPhase = derivePhase(initialStages, initialHasExamPaper)
 	const isTerminalPhase =
 		initialPhase === "completed" ||
 		initialPhase === "failed" ||
@@ -126,7 +127,21 @@ export function SubmissionView({
 	// Live job data — replaces useState(initialData) + useJobPoller
 	const { data: jobData } = useJobQuery(jobId, initialData)
 	const data = jobData ?? initialData
-	const phase = derivePhase(data)
+
+	// Live stages — seeded with SSR data, pushed via SSE (see useJobStream
+	// inside StagePips). Phase is derived purely from JobStages, which is
+	// now the single source of truth for pipeline status.
+	const { data: stages = initialStages } = useQuery<JobStages>({
+		queryKey: queryKeys.jobStages(jobId),
+		queryFn: async () => {
+			const r = await getJobStages(jobId)
+			if (!r.ok) throw new Error(r.error)
+			return r.stages
+		},
+		initialData: initialStages,
+		staleTime: Number.POSITIVE_INFINITY,
+	})
+	const phase = derivePhase(stages, data.exam_paper_id !== null)
 	const isTerminal = TERMINAL_STATUSES.has(data.status)
 	const isPolling = !isTerminal
 
@@ -152,15 +167,23 @@ export function SubmissionView({
 		staleTime: Number.POSITIVE_INFINITY,
 	})
 
-	// Annotations — fetched when enrichment is complete
+	// Annotations — fetched as soon as any may exist. `getJobAnnotations`
+	// returns [] while enrichment is still running, so the editor can render
+	// with just text first and layer in marks when enrichment completes.
 	const { data: annotations = [] } = useQuery<StudentPaperAnnotation[]>({
 		queryKey: queryKeys.jobAnnotations(jobId),
 		queryFn: async () => {
 			const r = await getJobAnnotations(jobId)
 			return r.ok ? r.annotations : []
 		},
-		enabled: data.enrichment_status === "complete",
-		staleTime: Number.POSITIVE_INFINITY,
+		// Progressive: re-fetch while enrichment is still in progress so new
+		// annotations stream in as soon as they're persisted.
+		refetchInterval: (query) => {
+			if (data.enrichment_status === "complete") return false
+			if (data.enrichment_status === "failed") return false
+			return 3000
+		},
+		staleTime: 0,
 	})
 
 	// Auto-enable marks overlay when annotations first load
@@ -172,19 +195,14 @@ export function SubmissionView({
 		}
 	}, [annotations])
 
-	// PM doc is the authoritative state — scan derives from it.
-	// MCQ/deterministic annotations (no token anchors) bypass the PM doc and
-	// pass through directly — they're spatial-only marks on the scan.
-	const effectiveAnnotations = useMemo(() => {
-		if (sheetAnnotations.length === 0) return annotations
-
-		// Union: PM-derived annotations + spatial-only DB annotations that
-		// can't be represented in the PM doc (no anchor tokens)
-		const spatialOnly = annotations.filter(
-			(a) => !a.anchor_token_start_id || !a.anchor_token_end_id,
-		)
-		return [...sheetAnnotations, ...spatialOnly]
-	}, [sheetAnnotations, annotations])
+	// Unified sync: editor transactions → React Query cache → server.
+	// The `jobAnnotations` cache is now the single source of truth for
+	// annotations (AI + teacher), so we no longer maintain a separate
+	// `sheetAnnotations` useState nor compute an `annotations` union.
+	// The callback writes derived state into the cache and schedules a
+	// debounced save mutation that races safely against enrichment refetches
+	// via `cancelQueries` in `onMutate`.
+	const handleDerivedAnnotations = useAnnotationSync(jobId)
 
 	// Trigger enrichment mutation
 	const enrichMutation = useMutation({
@@ -248,7 +266,7 @@ export function SubmissionView({
 				onToggleMarks={() => setShowMarks((v) => !v)}
 				onToggleChains={() => setShowChains((v) => !v)}
 				onGenerateAnnotations={() => enrichMutation.mutate()}
-				annotationCount={effectiveAnnotations.length}
+				annotationCount={annotations.length}
 				onNavigateToJob={onNavigateToJob}
 				onVersionChange={onVersionChange}
 				isEditing={isEditing}
@@ -285,7 +303,7 @@ export function SubmissionView({
 								gradingResults={data.grading_results}
 								onAnnotationClick={handleAnnotationClick}
 								debugMode={debugMode}
-								annotations={effectiveAnnotations}
+								annotations={annotations}
 								showMarks={showMarks}
 								showChains={showChains}
 							/>
@@ -305,7 +323,7 @@ export function SubmissionView({
 							pageTokens={pageTokens}
 							overridesByQuestionId={overridesByQuestionId}
 							onOverrideChange={isEditing ? handleOverrideChange : undefined}
-							onDerivedAnnotations={setSheetAnnotations}
+							onDerivedAnnotations={handleDerivedAnnotations}
 							onTokenHighlight={handleTokenHighlight}
 						/>
 					</TabsContent>
@@ -326,7 +344,7 @@ export function SubmissionView({
 						showRegions={showRegions}
 						onAnnotationClick={handleAnnotationClick}
 						debugMode={debugMode}
-						annotations={effectiveAnnotations}
+						annotations={annotations}
 						showMarks={showMarks}
 						showChains={showChains}
 						highlightedTokenIds={highlightedTokenIds}
@@ -345,7 +363,7 @@ export function SubmissionView({
 						pageTokens={pageTokens}
 						overridesByQuestionId={overridesByQuestionId}
 						onOverrideChange={isEditing ? handleOverrideChange : undefined}
-						onDerivedAnnotations={setSheetAnnotations}
+						onDerivedAnnotations={handleDerivedAnnotations}
 						onTokenHighlight={handleTokenHighlight}
 					/>
 				</ResizablePanel>

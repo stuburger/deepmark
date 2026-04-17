@@ -76,6 +76,11 @@ enum EnrichmentStatus {
   failed
 }
 
+enum AnnotationSource {
+  ai
+  teacher
+}
+
 enum OcrStatus {
   pending
   processing
@@ -480,7 +485,14 @@ model StudentPaperPageToken {
 
 model StudentPaperAnnotation {
   id              String   @id @default(cuid())
-  enrichment_run_id String
+  /// Null for teacher-authored annotations (source=teacher).
+  enrichment_run_id String?
+  /// Owning submission. Always set — required for every annotation.
+  submission_id     String
+  /// Origin of the annotation — AI pipeline or teacher edit.
+  source            AnnotationSource @default(ai)
+  /// Soft-delete timestamp. Null = active.
+  deleted_at        DateTime?
   question_id     String
   page_order      Int
 
@@ -500,11 +512,14 @@ model StudentPaperAnnotation {
 
   sort_order      Int      @default(0)
   created_at      DateTime @default(now())
+  updated_at      DateTime? @updatedAt 
 
-  enrichment_run  EnrichmentRun @relation("EnrichmentRunAnnotations", fields: [enrichment_run_id], references: [id], onDelete: Cascade)
+  enrichment_run  EnrichmentRun?    @relation("EnrichmentRunAnnotations", fields: [enrichment_run_id], references: [id], onDelete: Cascade)
+  submission      StudentSubmission @relation("SubmissionAnnotations", fields: [submission_id], references: [id])
 
   @@index([enrichment_run_id, page_order])
   @@index([enrichment_run_id, question_id])
+  @@index([submission_id, deleted_at])
   @@map("student_paper_annotations")
 }
 
@@ -541,6 +556,7 @@ model StudentSubmission {
   answer_regions     StudentPaperAnswerRegion[] @relation("SubmissionAnswerRegions")
   teacher_overrides  TeacherOverride[]          @relation("SubmissionOverrides")
   feedback           SubmissionFeedback[]       @relation("SubmissionFeedback")
+  annotations        StudentPaperAnnotation[]   @relation("SubmissionAnnotations")
 
   @@map("student_submissions")
 }

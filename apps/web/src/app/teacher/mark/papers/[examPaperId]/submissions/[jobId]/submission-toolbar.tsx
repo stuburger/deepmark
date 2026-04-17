@@ -33,12 +33,13 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 import { ObservationsSheet, TranscriptSheet } from "./ocr-sheets"
-import type { MarkingPhase } from "./phase"
+import type { MarkingPhase } from "@/lib/marking/stages/phase"
 import { ReScanButton } from "./re-scan-button"
 import { DownloadPdfButton } from "./results/download-pdf-button"
 import { ReRunMenu } from "./results/re-run-menu"
 import { StudentNameEditor } from "./results/student-name-editor"
 import { SubmissionFeedbackButton } from "./results/submission-feedback"
+import { StagePips } from "./stage-pips"
 import { ScoreBadge } from "./submission-toolbar-controls"
 import { VersionSwitcher } from "./version-switcher"
 
@@ -307,6 +308,13 @@ export function SubmissionToolbar({
 
 				{/* Spacer */}
 				<div className="flex-1" />
+
+				{/* Per-stage status pips (always visible) */}
+				<StagePips
+					jobId={jobId}
+					onNavigateToJob={onNavigateToJob ?? (() => {})}
+					onReAnnotate={canGenerate ? onGenerateAnnotations : undefined}
+				/>
 
 				{/* Phase-conditional actions */}
 				{phase === "completed" && (

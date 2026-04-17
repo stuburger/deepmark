@@ -223,6 +223,7 @@ export function ExamPaperPaperView({
 			{/* Questions with drag-and-drop */}
 			<div className="px-8 py-4">
 				<DndContext
+					id="exam-paper-sections"
 					sensors={sensors}
 					collisionDetection={closestCenter}
 					onDragEnd={onDragEnd}

@@ -19,6 +19,13 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 
+/**
+ * Teacher-facing menu to re-run any pipeline stage from a single entry point.
+ *
+ * The per-pip popovers in `StagePips` also expose stage-specific re-runs, but
+ * this dropdown is the discoverable starting point teachers reach for when
+ * they know something went wrong but haven't yet looked at individual stages.
+ */
 export function ReRunMenu({
 	jobId,
 	onNavigateToJob,

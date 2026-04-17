@@ -2,22 +2,25 @@
 
 import { getStudentPaperJob } from "@/lib/marking/submissions/queries"
 import type { StudentPaperJobPayload } from "@/lib/marking/types"
+import type { JobStages } from "@/lib/marking/stages/types"
+import { allTerminal } from "@/lib/marking/stages/types"
 import { queryKeys } from "@/lib/query-keys"
-import { useQuery } from "@tanstack/react-query"
-import { derivePhase } from "../phase"
-
-const TERMINAL_PHASES = new Set(["completed", "failed", "cancelled"])
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 
 /**
  * Subscribes to live job data via TanStack Query.
- * Polls automatically while the job is in a non-terminal phase,
- * using a faster interval during marking_in_progress (2s) and slower otherwise (5s).
- * Polling stops automatically once a terminal phase is reached.
+ *
+ * Polling cadence is driven by JobStages (the single source of truth for
+ * pipeline status): polls at 2s while any stage is still active, stops once
+ * every stage reaches a terminal state. JobStages itself is kept fresh by
+ * the SSE stream in useJobStream — this query just piggy-backs on its
+ * terminal signal to decide when to stop re-fetching the full payload.
  */
 export function useJobQuery(
 	jobId: string,
 	initialData?: StudentPaperJobPayload,
 ) {
+	const queryClient = useQueryClient()
 	return useQuery({
 		queryKey: queryKeys.studentJob(jobId),
 		queryFn: async () => {
@@ -27,12 +30,12 @@ export function useJobQuery(
 		},
 		initialData,
 		staleTime: 0,
-		refetchInterval: (query) => {
-			const data = query.state.data
-			if (!data) return 5000
-			const phase = derivePhase(data)
-			if (TERMINAL_PHASES.has(phase)) return false
-			return phase === "marking_in_progress" ? 2000 : 5000
+		refetchInterval: () => {
+			const stages = queryClient.getQueryData<JobStages | null>(
+				queryKeys.jobStages(jobId),
+			)
+			if (stages && allTerminal(stages)) return false
+			return 2000
 		},
 	})
 }

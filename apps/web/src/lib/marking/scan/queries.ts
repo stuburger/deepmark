@@ -159,23 +159,41 @@ export async function getJobAnnotations(
 	const session = await auth()
 	if (!session) return { ok: false, error: "Not authenticated" }
 
+	// Resolve: jobId → latest grading_run → latest enrichment_run
 	const sub = await db.studentSubmission.findFirst({
 		where: { id: jobId },
-		select: { id: true },
+		select: {
+			id: true,
+			grading_runs: {
+				orderBy: { created_at: "desc" },
+				take: 1,
+				select: { id: true },
+			},
+		},
 	})
 	if (!sub) return { ok: false, error: "Job not found" }
 
-	// Find the latest enrichment run and its annotations
-	const latestEnrichmentRun = await db.enrichmentRun.findFirst({
-		where: { grading_run_id: jobId },
-		orderBy: { created_at: "desc" },
-		select: { id: true },
-	})
+	const latestGradingId = sub.grading_runs[0]?.id ?? null
+	const latestEnrichmentRun = latestGradingId
+		? await db.enrichmentRun.findFirst({
+				where: { grading_run_id: latestGradingId },
+				orderBy: { created_at: "desc" },
+				select: { id: true },
+			})
+		: null
 
-	if (!latestEnrichmentRun) return { ok: true, annotations: [] }
-
+	// Load AI marks (current enrichment run) plus teacher-authored marks for
+	// this submission. Filter out soft-deleted rows in both branches.
 	const rows = await db.studentPaperAnnotation.findMany({
-		where: { enrichment_run_id: latestEnrichmentRun.id },
+		where: {
+			deleted_at: null,
+			OR: [
+				latestEnrichmentRun
+					? { enrichment_run_id: latestEnrichmentRun.id }
+					: { id: "__never__" },
+				{ submission_id: sub.id, source: "teacher" },
+			],
+		},
 		orderBy: [{ page_order: "asc" }, { sort_order: "asc" }],
 	})
 

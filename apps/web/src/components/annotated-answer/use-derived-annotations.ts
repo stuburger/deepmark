@@ -131,14 +131,12 @@ export function deriveAnnotationsFromDoc(
 				if (hasScanData) {
 					bbox = attrs.scanBbox as [number, number, number, number]
 					pageOrder = attrs.scanPageOrder as number
-					startTokenId =
-						(attrs.scanTokenStartId as string) ?? null
+					startTokenId = (attrs.scanTokenStartId as string) ?? null
 					endTokenId = (attrs.scanTokenEndId as string) ?? null
 				} else {
 					// Teacher marks: read co-located ocrToken marks
 					const annotKey =
-						existingId ??
-						`${mark.type.name}-${child.textContent}`
+						existingId ?? `${mark.type.name}-${child.textContent}`
 					const tokens = tokensByAnnotationKey.get(annotKey) ?? []
 					const hull = bboxHull(tokens)
 					if (!hull) continue
@@ -151,7 +149,9 @@ export function deriveAnnotationsFromDoc(
 
 				annotations.push({
 					id: dedupeKey,
-					enrichment_run_id: existingId ? "ai" : "teacher",
+					// Derived annotations don't carry the server-side enrichment_run_id.
+					// Source + linkage is decided by the server on save via the diff.
+					enrichment_run_id: null,
 					question_id: questionId,
 					page_order: pageOrder,
 					overlay_type: entry.overlayType,

@@ -6,6 +6,7 @@ import type { PendingAnnotation } from "./types"
  */
 export async function persistAnnotations(
 	enrichmentRunId: string,
+	submissionId: string,
 	perQuestionGroups: PendingAnnotation[][],
 ): Promise<number> {
 	let total = 0
@@ -15,6 +16,7 @@ export async function persistAnnotations(
 			await db.studentPaperAnnotation.create({
 				data: {
 					enrichment_run_id: enrichmentRunId,
+					submission_id: submissionId,
 					question_id: a.questionId,
 					page_order: a.pageOrder,
 					overlay_type: a.overlayType,

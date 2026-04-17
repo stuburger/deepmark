@@ -182,6 +182,10 @@ export function AnnotatedAnswerSheet({
 	const onMarkAppliedRef = useRef(handleMarkApplied)
 	onMarkAppliedRef.current = handleMarkApplied
 
+	// Editor is created ONCE and persists across doc changes (progressive
+	// rendering). Stage updates (OCR → grading → enrichment) apply as
+	// setContent calls rather than remounting the whole editor, which would
+	// lose focus/selection and create a visible flash.
 	const editor = useEditor(
 		{
 			immediatelyRender: false,
@@ -209,8 +213,53 @@ export function AnnotatedAnswerSheet({
 				},
 			},
 		},
-		[doc],
+		[],
 	)
+
+	// Sync new doc content into the existing editor when upstream stages
+	// produce new data (tokens arrive after OCR, marks arrive after
+	// enrichment). Only updates when content actually differs.
+	//
+	// Cursor preservation: replacing doc content via setContent would
+	// normally reset the selection to the start of the doc. Since the
+	// pipeline may emit new data while the teacher is actively reading or
+	// editing, we snapshot the selection and focus state before the
+	// replacement and restore them afterwards. Positions are clamped to
+	// the new doc size to guard against structural changes.
+	//
+	// IME guard: setContent while an IME composition is active can corrupt
+	// the composition buffer. We skip the update and reset the fingerprint
+	// so the next render retries — by then composition has usually ended.
+	const lastDocFpRef = useRef<string>("")
+	useEffect(() => {
+		if (!editor) return
+		const fp = JSON.stringify(doc)
+		if (fp === lastDocFpRef.current) return
+
+		if (editor.view.composing) {
+			// Leave lastDocFpRef untouched so the next render retries
+			return
+		}
+
+		lastDocFpRef.current = fp
+
+		const { from, to } = editor.state.selection
+		const wasFocused = editor.isFocused
+
+		// `emitUpdate: false` keeps the transaction out of the user's undo
+		// history — stage-driven updates are never something the teacher
+		// should be able to undo.
+		editor.commands.setContent(doc, { emitUpdate: false })
+
+		const docSize = editor.state.doc.content.size
+		const clampedFrom = Math.min(Math.max(from, 0), docSize)
+		const clampedTo = Math.min(Math.max(to, 0), docSize)
+		editor.commands.setTextSelection({
+			from: clampedFrom,
+			to: clampedTo,
+		})
+		if (wasFocused) editor.commands.focus(undefined, { scrollIntoView: false })
+	}, [editor, doc])
 
 	// Stable callback ref — avoids re-subscribing the transaction listener
 	const stableOnDerived = useCallback(

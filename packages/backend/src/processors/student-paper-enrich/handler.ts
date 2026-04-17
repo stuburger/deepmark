@@ -133,6 +133,7 @@ export async function handler(
 
 			const totalAnnotations = await persistAnnotations(
 				enrichmentRun.id,
+				jobId,
 				perQuestionGroups,
 			)
 

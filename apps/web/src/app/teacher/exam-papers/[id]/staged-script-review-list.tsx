@@ -226,6 +226,7 @@ export function StagedScriptReviewList({
 	return (
 		<>
 			<DndContext
+				id="staged-script-review"
 				sensors={sensors}
 				collisionDetection={closestCenter}
 				onDragStart={handleDragStart}

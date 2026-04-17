@@ -7,6 +7,7 @@ export const queryKeys = {
 	examPaperStats: (id: string) => ["examPaperStats", id] as const,
 	submissions: (examPaperId: string) => ["submissions", examPaperId] as const,
 	studentJob: (jobId: string) => ["studentJob", jobId] as const,
+	jobStages: (jobId: string) => ["jobStages", jobId] as const,
 	jobScanUrls: (jobId: string) => ["jobScanUrls", jobId] as const,
 	jobPageTokens: (jobId: string) => ["jobPageTokens", jobId] as const,
 	jobAnnotations: (jobId: string) => ["jobAnnotations", jobId] as const,

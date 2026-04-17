@@ -87,7 +87,8 @@ export type AnyAnnotationPayload = SharedAnyAnnotationPayload
 /** Shared fields present on every annotation variant. */
 type AnnotationBase = {
 	id: string
-	enrichment_run_id: string
+	/** Null for teacher-authored annotations (source=teacher) and for marks derived from the PM editor that never touched the server. */
+	enrichment_run_id: string | null
 	question_id: string
 	page_order: number
 	sentiment: string | null

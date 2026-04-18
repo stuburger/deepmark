@@ -193,12 +193,20 @@ export function buildAnnotatedDoc(
 		})
 	}
 
-	// If no blocks, add an empty paragraph to satisfy PM schema
+	// If no blocks, add a placeholder block to satisfy PM schema. This is
+	// the inert state shown while OCR/grading are still running — the
+	// editor is always mounted so it can progressively come to life as
+	// data arrives via setContent in annotated-answer-sheet.
 	if (blocks.length === 0) {
 		blocks.push({
 			type: "questionAnswer",
 			attrs: { questionId: null, questionNumber: null },
-			content: [{ type: "text", text: "No answers to display." }],
+			content: [
+				{
+					type: "text",
+					text: "Waiting for student answers…",
+				},
+			],
 		})
 	}
 

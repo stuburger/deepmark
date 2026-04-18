@@ -327,29 +327,16 @@ export const LLM_CALL_SITE_DEFAULTS: Array<{
 		],
 	},
 	{
-		key: "vision-attribution",
-		display_name: "Answer Region Attribution",
+		key: "script-attribution",
+		display_name: "Script-Level Answer Attribution",
 		description:
-			"Assigns OCR tokens to questions and derives answer region bounding boxes.",
+			"Holistic whole-script attribution: assigns OCR tokens to questions and authors clean per-question answer_text in a single cross-page LLM call. Handles multi-page continuation answers.",
 		input_type: "vision",
 		phase: "answer-detection",
 		step: 2,
-		multiplier: "per-page",
+		multiplier: "once",
 		models: [
-			{ provider: "anthropic", model: "claude-sonnet-4-6", temperature: 0.2 },
-		],
-	},
-	{
-		key: "vision-attribution-mcq-fallback",
-		display_name: "MCQ Region Fallback",
-		description:
-			"Fallback for locating MCQ answers when primary attribution misses them.",
-		input_type: "vision",
-		phase: "answer-detection",
-		step: 3,
-		multiplier: "per-page",
-		models: [
-			{ provider: "google", model: "gemini-2.5-flash", temperature: 0.1 },
+			{ provider: "anthropic", model: "claude-sonnet-4-6", temperature: 0.1 },
 		],
 	},
 	// ── Grading ──────────────────────────────────────────────────────────

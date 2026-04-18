@@ -245,6 +245,14 @@ export function CommentSidebar({
 		}
 	}, [editor, recompute])
 
+	// Layout-change observer: the editor's QuestionAnswerNode uses a React
+	// NodeView that mounts *after* the PM transaction commits. On first load
+	// (and whenever doc content changes via stage-sync) the NodeView DOM
+	// isn't yet in the tree when `recompute` first runs, so coordsAtPos
+	// returns approximately the editor's top for every position and cards
+	// stack at the top. Watching the editor DOM for size changes catches
+	// each NodeView mount and triggers a repositioning pass with the
+	// correct coordinates.
 	useLayoutEffect(() => {
 		const scrollEl = containerRef.current?.closest(
 			"[data-slot='scroll-area-viewport']",
@@ -258,12 +266,13 @@ export function CommentSidebar({
 		if (containerRef.current?.parentElement) {
 			observer.observe(containerRef.current.parentElement)
 		}
+		observer.observe(editor.view.dom)
 
 		return () => {
 			target.removeEventListener("scroll", handleReposition)
 			observer.disconnect()
 		}
-	}, [recompute])
+	}, [editor, recompute])
 
 	const positioned = useMemo(() => layoutCards(rawCards), [rawCards])
 

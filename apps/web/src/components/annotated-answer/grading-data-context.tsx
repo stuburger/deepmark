@@ -12,7 +12,6 @@ export type GradingDataContextValue = {
 	answers: Record<string, string>
 	overridesByQuestionId: Map<string, TeacherOverride>
 	activeQuestionNumber: string | null
-	isEditing: boolean
 	jobId: string
 	onAnswerSaved: (questionId: string, text: string) => void
 	onOverrideChange: (

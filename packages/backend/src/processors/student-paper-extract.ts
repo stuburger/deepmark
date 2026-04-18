@@ -13,20 +13,15 @@ import {
 	markJobFailed,
 	parseSqsJobId,
 } from "@/lib/infra/sqs-job-runner"
-import { runVisionOcr } from "@/lib/scan-extraction/cloud-vision-ocr"
 import {
-	type TokenCharOffset,
-	computeTokenCharOffsets,
-} from "@/lib/scan-extraction/compute-token-offsets"
+	type AttributeScriptQuestion,
+	attributeScript,
+} from "@/lib/scan-extraction/attribute-script"
+import { runVisionOcr } from "@/lib/scan-extraction/cloud-vision-ocr"
 import { runOcr } from "@/lib/scan-extraction/gemini-ocr"
 import { persistTokens } from "@/lib/scan-extraction/persist-tokens"
-import { reconstructAnswersFromTokens } from "@/lib/scan-extraction/reconstruct-answers"
+import { resolveMcqAnswers } from "@/lib/scan-extraction/resolve-mcq-answers"
 import { saveVisionRaw } from "@/lib/scan-extraction/save-vision-raw"
-import { sortTokensSpatially } from "@/lib/scan-extraction/spatial-sort"
-import {
-	type VisionAttributeQuestion,
-	visionAttributeRegions,
-} from "@/lib/scan-extraction/vision-attribute"
 import { SQSClient, SendMessageCommand } from "@aws-sdk/client-sqs"
 import { type OcrStatus, type Subject, logOcrRunEvent } from "@mcp-gcse/db"
 import { Resource } from "sst"
@@ -235,7 +230,7 @@ export async function handler(
 				at: new Date().toISOString(),
 			})
 
-			const attributeQuestions: VisionAttributeQuestion[] = questionSeeds.map(
+			const attributeQuestions: AttributeScriptQuestion[] = questionSeeds.map(
 				(s) => ({
 					question_id: s.question_id,
 					question_number: s.question_number,
@@ -244,7 +239,7 @@ export async function handler(
 				}),
 			)
 
-			await visionAttributeRegions({
+			const { answers: baseAnswers } = await attributeScript({
 				questions: attributeQuestions,
 				pageTranscripts,
 				pages: sortedPages,
@@ -254,56 +249,25 @@ export async function handler(
 				llm,
 			})
 
-			// Phase 2b — reconstruct answer text from attributed tokens and compute char offsets.
-			// Fetch with bbox so we can sort spatially — Vision's para_index order is
-			// unreliable when paragraphs are detected out of reading order.
-			const attributedTokensRaw = await db.studentPaperPageToken.findMany({
-				where: { submission_id: jobId, question_id: { not: null } },
-				select: {
-					id: true,
-					question_id: true,
-					page_order: true,
-					para_index: true,
-					line_index: true,
-					word_index: true,
-					text_raw: true,
-					text_corrected: true,
-					bbox: true,
-				},
+			// MCQ answer_text comes from the OCR pass, which reads ticks/crosses/
+			// circles/fills/handwriting holistically. Non-MCQ answers keep the
+			// LLM-authored text that attribution produced.
+			const reconstructedAnswers = resolveMcqAnswers({
+				baseAnswers,
+				ocrSelectionsByPage: pageOcrResults.map((r) => r.mcqSelections),
+				questionSeeds,
 			})
-
-			// Sort spatially per page, then flatten — replaces unreliable para_index ordering.
-			const tokensByPageRaw = new Map<number, typeof attributedTokensRaw>()
-			for (const t of attributedTokensRaw) {
-				const list = tokensByPageRaw.get(t.page_order) ?? []
-				list.push(t)
-				tokensByPageRaw.set(t.page_order, list)
-			}
-			const spatiallyOrdered = [...tokensByPageRaw.values()].flatMap(
-				(pageTokens) => sortTokensSpatially(pageTokens),
-			)
-
-			// Narrow: DB guarantees question_id is non-null due to the where clause
-			const typedTokens = spatiallyOrdered.filter(
-				(t): t is typeof t & { question_id: string } => t.question_id !== null,
-			)
-
-			const reconstructedAnswers = reconstructAnswersFromTokens(
-				typedTokens,
-				questionSeeds.map((s) => s.question_id),
-			)
 
 			const answersExtracted = reconstructedAnswers.filter((a) =>
 				a.answer_text.trim(),
 			).length
 
-			logger.info(TAG, "Answers reconstructed from tokens", {
+			logger.info(TAG, "Answers finalised", {
 				jobId,
 				answers_with_text: answersExtracted,
 				answers_total: reconstructedAnswers.length,
 			})
 
-			// Persist reconstructed answers on OcrRun
 			await db.ocrRun.update({
 				where: { id: jobId },
 				data: {
@@ -313,17 +277,6 @@ export async function handler(
 					},
 				},
 			})
-
-			// Build token-by-question map for offset computation
-			const tokensByQuestion = new Map<string, typeof typedTokens>()
-			for (const token of typedTokens) {
-				const list = tokensByQuestion.get(token.question_id) ?? []
-				list.push(token)
-				tokensByQuestion.set(token.question_id, list)
-			}
-
-			const tokenOffsets = computeTokenCharOffsets(tokensByQuestion)
-			await persistTokenCharOffsets(tokenOffsets)
 
 			await db.ocrRun.update({
 				where: { id: jobId },
@@ -363,27 +316,4 @@ export async function handler(
 	}
 
 	return failures.length > 0 ? { batchItemFailures: failures } : {}
-}
-
-// ─── Helpers ───────────────────────────────────────────────────────────────
-
-async function persistTokenCharOffsets(
-	offsets: TokenCharOffset[],
-): Promise<void> {
-	if (offsets.length === 0) return
-	const CHUNK_SIZE = 50
-	for (let i = 0; i < offsets.length; i += CHUNK_SIZE) {
-		const chunk = offsets.slice(i, i + CHUNK_SIZE)
-		await Promise.all(
-			chunk.map((o) =>
-				db.studentPaperPageToken.update({
-					where: { id: o.id },
-					data: {
-						answer_char_start: o.charStart,
-						answer_char_end: o.charEnd,
-					},
-				}),
-			),
-		)
-	}
 }

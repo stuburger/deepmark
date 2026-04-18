@@ -12,7 +12,8 @@
 			".sst",
 			"sst-env.d.ts",
 			"dist",
-			"**/generated"
+			"**/generated",
+			"**/tests/integration/fixtures/attribution/**/tokens.json"
 		]
 	},
 	"formatter": {

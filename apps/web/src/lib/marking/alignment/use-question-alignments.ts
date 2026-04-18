@@ -51,16 +51,33 @@ export function useQuestionAlignments(
 		const alignments = new Map<string, TokenAlignment>()
 		const tokensMap = new Map<string, PageToken[]>()
 
+		// Diagnostic — remove once the annotations-not-rendering issue is
+		// understood. Logs per-question counts so we can see where marks are
+		// being lost (tokens missing vs alignment failing vs annotations
+		// not matching question id vs deriveTextMarks skipping).
+		const diag: Record<string, unknown> = {
+			totalAnnotations: annotations.length,
+			totalPageTokens: pageTokens.length,
+			perQuestion: {} as Record<string, unknown>,
+		}
+
 		for (const r of gradingResults) {
 			if (r.marking_method === "deterministic") continue
 
 			const qTokens = pageTokens.filter((t) => t.question_id === r.question_id)
+			const qAnnotations = annotations.filter(
+				(a) => a.question_id === r.question_id,
+			)
+
+			;(diag.perQuestion as Record<string, unknown>)[r.question_number] = {
+				tokens: qTokens.length,
+				annotations: qAnnotations.length,
+			}
+
 			if (qTokens.length === 0) continue
 
 			tokensMap.set(r.question_id, qTokens)
 
-			// Prefer pre-computed offsets from the backend pipeline.
-			// Fall back to frontend Levenshtein for older submissions without them.
 			const precomputed = alignmentFromPrecomputed(qTokens)
 			const alignment =
 				precomputed ?? alignTokensToAnswer(r.student_answer, qTokens)
@@ -69,16 +86,26 @@ export function useQuestionAlignments(
 
 			alignments.set(r.question_id, alignment)
 
-			const qAnnotations = annotations.filter(
-				(a) => a.question_id === r.question_id,
-			)
 			if (qAnnotations.length === 0) continue
 
 			const derived = deriveTextMarks(qAnnotations, alignment)
 			if (derived.length > 0) {
 				marks.set(r.question_id, derived)
 			}
+
+			;(
+				(diag.perQuestion as Record<string, Record<string, unknown>>)[
+					r.question_number
+				]
+			).derivedMarks = derived.length
+			;(
+				(diag.perQuestion as Record<string, Record<string, unknown>>)[
+					r.question_number
+				]
+			).alignmentSize = Object.keys(alignment.tokenMap).length
 		}
+
+		console.log("[alignments]", diag)
 
 		return {
 			marksByQuestion: marks,

@@ -108,7 +108,6 @@ export function GradingResultsPanel({
 			answers,
 			overridesByQuestionId: overridesByQuestionId ?? new Map(),
 			activeQuestionNumber,
-			isEditing: !!onOverrideChange,
 			jobId,
 			onAnswerSaved,
 			onOverrideChange: onOverrideChange ?? (() => {}),
@@ -124,24 +123,29 @@ export function GradingResultsPanel({
 		],
 	)
 
+	// Hide the score bar until grading has produced real totals. Once
+	// grading completes, total_max becomes non-zero and the bar appears.
+	const showScoreBar = data.total_max > 0
+
 	return (
 		<div className="space-y-4">
-			{/* Compact score bar */}
-			<div className="flex items-center gap-3 px-1">
-				<Badge
-					variant={scoreBadgeVariant(effectiveTotalAwarded, data.total_max)}
-					className="text-xs px-2 py-0.5 shrink-0"
-				>
-					{effectiveTotalAwarded} / {data.total_max}
-				</Badge>
-				<Progress value={scorePercent} className="h-1.5 flex-1" />
-				<span className="text-xs text-muted-foreground tabular-nums shrink-0">
-					{scorePercent}%
-				</span>
-				{hasOverrides && (
-					<span className="text-[10px] text-blue-500 shrink-0">Adjusted</span>
-				)}
-			</div>
+			{showScoreBar && (
+				<div className="flex items-center gap-3 px-1">
+					<Badge
+						variant={scoreBadgeVariant(effectiveTotalAwarded, data.total_max)}
+						className="text-xs px-2 py-0.5 shrink-0"
+					>
+						{effectiveTotalAwarded} / {data.total_max}
+					</Badge>
+					<Progress value={scorePercent} className="h-1.5 flex-1" />
+					<span className="text-xs text-muted-foreground tabular-nums shrink-0">
+						{scorePercent}%
+					</span>
+					{hasOverrides && (
+						<span className="text-[10px] text-blue-500 shrink-0">Adjusted</span>
+					)}
+				</div>
+			)}
 
 			{/* Examiner summary — compact */}
 			{data.examiner_summary && (
@@ -150,20 +154,17 @@ export function GradingResultsPanel({
 				</p>
 			)}
 
-			{/* Answer sheet — the document */}
-			{data.grading_results.length === 0 ? (
-				<p className="text-sm text-muted-foreground px-1">
-					No questions were graded.
-				</p>
-			) : (
-				<GradingDataProvider value={ctxValue}>
-					<AnnotatedAnswerSheet
-						doc={doc}
-						onDerivedAnnotations={onDerivedAnnotations}
-						onTokenHighlight={onTokenHighlight}
-					/>
-				</GradingDataProvider>
-			)}
+			{/* Answer sheet — always rendered, even for empty grading_results.
+			    buildAnnotatedDoc produces a placeholder block in that case so
+			    the PM editor still mounts and persists across stage
+			    transitions. */}
+			<GradingDataProvider value={ctxValue}>
+				<AnnotatedAnswerSheet
+					doc={doc}
+					onDerivedAnnotations={onDerivedAnnotations}
+					onTokenHighlight={onTokenHighlight}
+				/>
+			</GradingDataProvider>
 		</div>
 	)
 }

@@ -73,4 +73,47 @@ describe("diffAnnotations", () => {
 		expect(updates.map((a) => a.id)).toEqual(["b"])
 		expect(deletes).toEqual(["c"])
 	})
+
+	describe("with seenIds", () => {
+		it("deletes only IDs the editor has seen", () => {
+			// DB has a,b,c. Editor only rendered a (others still hydrating).
+			// Without seenIds, a naive diff would delete b and c. With
+			// seenIds={a}, nothing is deleted because only `a` has been seen
+			// and `a` is present in the editor.
+			const db = [mk("a"), mk("b"), mk("c")]
+			const editor = [mk("a")]
+			const seen = new Set(["a"])
+			const { deletes } = diffAnnotations(db, editor, seen)
+			expect(deletes).toEqual([])
+		})
+
+		it("deletes an ID that was seen, then removed from the editor", () => {
+			// Teacher loaded `b`, then erased it. `b` is in seenIds and in db
+			// but not in editor → legitimate delete.
+			const db = [mk("a"), mk("b")]
+			const editor = [mk("a")]
+			const seen = new Set(["a", "b"])
+			const { deletes } = diffAnnotations(db, editor, seen)
+			expect(deletes).toEqual(["b"])
+		})
+
+		it("does not delete DB rows that were never seen", () => {
+			// Mixed: `b` was seen then removed (delete), `c` was never seen
+			// because alignment hasn't caught up (protected).
+			const db = [mk("a"), mk("b"), mk("c")]
+			const editor = [mk("a")]
+			const seen = new Set(["a", "b"])
+			const { deletes } = diffAnnotations(db, editor, seen)
+			expect(deletes).toEqual(["b"])
+		})
+
+		it("treats an empty seenIds set as 'nothing seen yet'", () => {
+			// Hydration hasn't produced any editor-side observation yet —
+			// no deletes should be proposed regardless of db contents.
+			const db = [mk("a"), mk("b")]
+			const editor: StudentPaperAnnotation[] = []
+			const { deletes } = diffAnnotations(db, editor, new Set())
+			expect(deletes).toEqual([])
+		})
+	})
 })

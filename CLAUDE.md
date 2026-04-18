@@ -570,6 +570,44 @@ All heavy lifting runs in Lambda functions triggered by SQS queues, defined in `
 
 ---
 
+## Attribution Eval Suite — Required for Extract Pipeline Changes
+
+The scan-extraction pipeline is guarded by an end-to-end eval suite in `packages/backend/tests/integration/attribution-evals.test.ts` that runs real LLM calls against frozen fixtures pulled from production scripts.
+
+**Fixtures** live under `packages/backend/tests/integration/fixtures/attribution/` (e.g. `aaron-brown/`, `kai-jassi/`). Each fixture bundles page images + Cloud Vision tokens + typed expectations.
+
+**Current evals** (see file for details):
+1. Continuation coverage across multi-page answers.
+2. Per-page tokens form a single contiguous spatial run per question (no interleaving).
+3. Cover/template pages attract zero attribution.
+4. Dense multi-answer pages distribute tokens across each answer.
+5. Every question with attributed tokens produces non-empty `answer_text`.
+6. `answer_text` preserves required punctuation/substrings (opt-in, per fixture).
+
+### Mandatory workflow
+
+Whenever you change **any** file in `packages/backend/src/processors/student-paper-extract.ts` or the `packages/backend/src/lib/scan-extraction/` directory (attribution, OCR, tokens, MCQ resolution, spatial sort — anything the extract processor consumes):
+
+1. **Run the suite before committing.**
+
+   ```bash
+   cd packages/backend
+   AWS_PROFILE=deepmark bunx sst shell --stage=stuartbourhill -- \
+     bunx vitest run tests/integration/attribution-evals.test.ts
+   ```
+
+   All 9 runnable evals must be green. Skipped evals are fine (they're guarded per-fixture).
+
+2. **Add a fixture when a real-world paper reveals a gap.** When testing through the web UI surfaces an anomaly (missing punctuation, misattributed continuation, collapsed dense answers, mis-assigned cover page, etc.), capture that submission's pages + tokens as a new fixture and add the specific assertion that would have caught it. Use existing fixtures as the template — seed metadata in `fixture.ts`, put page JPEGs and `tokens.json` alongside.
+
+3. **Pull fixture data from Neon via MCP** — use `mcp__Neon__run_sql` with the snake_case table names (`student_submissions`, `student_paper_page_tokens`). Strip `question_id` from tokens before writing `tokens.json` — that's what the pipeline is being tested on.
+
+4. **Tighten thresholds, don't loosen them.** If the model improves, ratchet `minTokens`/`minCoverage` upward so we don't silently regress. If it regresses, fix the prompt/pipeline — don't relax the eval.
+
+5. **No mocking.** These are intentionally real LLM calls. Flakiness is signal, not noise.
+
+---
+
 ## Infrastructure (SST v4)
 
 - **`sst.config.ts`** — app entry, imports `infra/` modules.

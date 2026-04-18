@@ -1,6 +1,5 @@
 "use client"
 
-import { LiveMarkingExamPaperPanel } from "@/components/ExamPaperPanel"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import type { MarkingPhase } from "@/lib/marking/stages/phase"
 import type {
@@ -10,35 +9,20 @@ import type {
 	TeacherOverride,
 	UpsertTeacherOverrideInput,
 } from "@/lib/marking/types"
-import { Loader2 } from "lucide-react"
 import { CancelledPanel } from "./cancelled"
 import { FailedPanel } from "./failed"
 import { MarkingResults } from "./results/index"
 import { LlmSnapshotPanel } from "./results/llm-snapshot-panel"
 
-const STATUS_LABELS: Record<string, string> = {
-	pending: "Queued — waiting to start",
-	processing: "Reading pages…",
-	extracting: "Extracting text from scan…",
-	extracted: "Text extracted",
-	grading: "Marking answers against the mark scheme…",
-}
-
-function ScanProcessingDisplay({ status }: { status: string }) {
-	const label = STATUS_LABELS[status] ?? `Processing (${status})`
-	return (
-		<div className="flex items-center gap-3 rounded-xl border bg-card px-4 py-3">
-			<Loader2 className="h-5 w-5 text-primary animate-spin shrink-0" />
-			<div>
-				<p className="text-sm font-medium">{label}</p>
-				<p className="text-xs text-muted-foreground mt-0.5">
-					Updating automatically…
-				</p>
-			</div>
-		</div>
-	)
-}
-
+/**
+ * Results panel — always renders the editor (MarkingResults), regardless of
+ * pipeline phase. In-progress stage status is surfaced by the StagePips in
+ * the submission toolbar, not by replacing the editor with a spinner.
+ *
+ * Failed and cancelled phases show a banner *above* the editor so the
+ * teacher still sees whatever partial data was captured (extracted answers,
+ * partial grading) before the failure.
+ */
 type SharedPanelProps = {
 	jobId: string
 	data: StudentPaperJobPayload
@@ -53,54 +37,6 @@ type SharedPanelProps = {
 	) => void
 	onDerivedAnnotations?: (annotations: StudentPaperAnnotation[]) => void
 	onTokenHighlight?: (tokenIds: string[] | null) => void
-}
-
-function DigitalPanelContent({
-	jobId,
-	data,
-	phase,
-	activeQuestionNumber,
-	annotations = [],
-	pageTokens,
-	overridesByQuestionId,
-	onOverrideChange,
-	onDerivedAnnotations,
-	onTokenHighlight,
-}: SharedPanelProps) {
-	switch (phase) {
-		case "scan_processing":
-			return <ScanProcessingDisplay status={data.status} />
-
-		case "marking_in_progress":
-			return (
-				<LiveMarkingExamPaperPanel
-					gradingResults={data.grading_results}
-					extractedAnswers={data.extracted_answers ?? undefined}
-					activeQuestionNumber={activeQuestionNumber}
-				/>
-			)
-
-		case "completed":
-			return (
-				<MarkingResults
-					jobId={jobId}
-					data={data}
-					activeQuestionNumber={activeQuestionNumber}
-					annotations={annotations}
-					pageTokens={pageTokens}
-					overridesByQuestionId={overridesByQuestionId}
-					onOverrideChange={onOverrideChange}
-					onDerivedAnnotations={onDerivedAnnotations}
-					onTokenHighlight={onTokenHighlight}
-				/>
-			)
-
-		case "failed":
-			return <FailedPanel data={data} jobId={jobId} />
-
-		case "cancelled":
-			return <CancelledPanel />
-	}
 }
 
 export function ResultsPanel({
@@ -121,10 +57,12 @@ export function ResultsPanel({
 			className="h-full w-full bg-zinc-100 dark:bg-zinc-900"
 		>
 			<div className="p-4 space-y-5 w-full">
-				<DigitalPanelContent
+				{phase === "failed" && <FailedPanel data={data} jobId={jobId} />}
+				{phase === "cancelled" && <CancelledPanel />}
+
+				<MarkingResults
 					jobId={jobId}
 					data={data}
-					phase={phase}
 					activeQuestionNumber={activeQuestionNumber}
 					annotations={annotations}
 					pageTokens={pageTokens}
@@ -133,6 +71,7 @@ export function ResultsPanel({
 					onDerivedAnnotations={onDerivedAnnotations}
 					onTokenHighlight={onTokenHighlight}
 				/>
+
 				<LlmSnapshotPanel
 					ocrSnapshot={data.ocr_llm_snapshot}
 					gradingSnapshot={data.grading_llm_snapshot}

@@ -29,11 +29,20 @@ function contentFingerprint(a: StudentPaperAnnotation): string {
  *
  * - In editor but not in DB → insert (new teacher mark)
  * - In both, content changed → update
- * - In DB but not in editor → delete (teacher removed it)
+ * - In DB, in `seenIds`, not in editor → delete (teacher removed it)
+ *
+ * `seenIds` is the set of annotation IDs the editor has ever observed in
+ * this session. An annotation absent from `editorState` is only deleted if
+ * the editor has seen it at least once — otherwise the absence reflects a
+ * hydration gap (pageTokens not loaded yet, alignment failed for a
+ * question, etc.), not teacher intent. Omitting `seenIds` falls back to
+ * the naive "absence = delete" semantics; callers that need safety must
+ * pass it.
  */
 export function diffAnnotations(
 	dbState: StudentPaperAnnotation[],
 	editorState: StudentPaperAnnotation[],
+	seenIds?: ReadonlySet<string>,
 ): AnnotationDiff {
 	const dbById = new Map(dbState.map((a) => [a.id, a]))
 	const editorIds = new Set(editorState.map((a) => a.id))
@@ -54,7 +63,9 @@ export function diffAnnotations(
 
 	const deletes: string[] = []
 	for (const a of dbState) {
-		if (!editorIds.has(a.id)) deletes.push(a.id)
+		if (editorIds.has(a.id)) continue
+		if (seenIds && !seenIds.has(a.id)) continue
+		deletes.push(a.id)
 	}
 
 	return { inserts, updates, deletes }

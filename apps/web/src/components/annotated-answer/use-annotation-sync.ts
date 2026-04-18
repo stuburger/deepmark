@@ -9,6 +9,11 @@ import { toast } from "sonner"
 
 const DEBOUNCE_MS = 500
 
+type SavePayload = {
+	derived: StudentPaperAnnotation[]
+	seenIds: string[]
+}
+
 /**
  * Unified sync of editor-derived annotations with the React Query cache and
  * the server.
@@ -25,6 +30,11 @@ const DEBOUNCE_MS = 500
  *     preserved across cache writes via the merge callback
  *
  * Race-prevention:
+ *   - `seenIdsRef` accumulates every annotation ID the editor has observed
+ *     in this session. Sent with each save so the server only deletes IDs
+ *     the editor has actually seen — a hydration gap (pageTokens missing,
+ *     alignment failing for a question) can no longer be interpreted as
+ *     teacher intent to delete.
  *   - `onMutate` cancels any in-flight `jobAnnotations` refetch so a stale
  *     server snapshot can't overwrite the teacher's optimistic cache state
  *   - `onSettled` invalidates to reconcile with authoritative server state
@@ -38,10 +48,15 @@ export function useAnnotationSync(jobId: string) {
 	const queryClient = useQueryClient()
 	const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 	const pendingRef = useRef<StudentPaperAnnotation[] | null>(null)
+	const seenIdsRef = useRef<Set<string>>(new Set())
+
+	useEffect(() => {
+		seenIdsRef.current = new Set()
+	}, [jobId])
 
 	const { mutate } = useMutation({
-		mutationFn: async (derived: StudentPaperAnnotation[]) => {
-			const result = await saveAnnotationEdits(jobId, derived)
+		mutationFn: async ({ derived, seenIds }: SavePayload) => {
+			const result = await saveAnnotationEdits(jobId, derived, seenIds)
 			if (!result.ok) throw new Error(result.error)
 			return result
 		},
@@ -76,6 +91,11 @@ export function useAnnotationSync(jobId: string) {
 
 	return useCallback(
 		(derived: StudentPaperAnnotation[]) => {
+			// Record every ID the editor has observed this session. The save
+			// path uses this to avoid deleting DB rows that simply haven't
+			// hydrated into the editor yet.
+			for (const a of derived) seenIdsRef.current.add(a.id)
+
 			// Instant UI update: write the teacher's state to the cache,
 			// merging with spatial-only marks (MCQ/deterministic) that live
 			// outside the PM document and aren't captured in `derived`.
@@ -94,7 +114,9 @@ export function useAnnotationSync(jobId: string) {
 			if (timerRef.current) clearTimeout(timerRef.current)
 			timerRef.current = setTimeout(() => {
 				const toSave = pendingRef.current
-				if (toSave) mutate(toSave)
+				if (toSave) {
+					mutate({ derived: toSave, seenIds: Array.from(seenIdsRef.current) })
+				}
 			}, DEBOUNCE_MS)
 		},
 		[jobId, queryClient, mutate],

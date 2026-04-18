@@ -25,7 +25,7 @@ type McqRow = {
 
 /** Shared grid template so header, data rows, and footer columns align. */
 const ROW_GRID =
-	"grid grid-cols-[2.5rem_4rem_4rem_1.25rem_3rem] gap-x-2 items-center"
+	"grid grid-cols-[2.5rem_4rem_4rem_1.25rem_4.5rem] gap-x-2 items-center"
 
 export function McqTableView({
 	node,
@@ -33,7 +33,8 @@ export function McqTableView({
 	node: { attrs: Record<string, unknown> }
 }) {
 	const results = node.attrs.results as McqRow[]
-	const { overridesByQuestionId, activeQuestionNumber } = useGradingData()
+	const { overridesByQuestionId, activeQuestionNumber, onOverrideChange } =
+		useGradingData()
 
 	const totalAwarded = results.reduce((sum, r) => {
 		const override = overridesByQuestionId.get(r.questionId)
@@ -74,43 +75,91 @@ export function McqTableView({
 					return (
 						<Popover key={r.questionId}>
 							<PopoverTrigger
-								id={`question-${r.questionNumber}`}
-								className={cn(
-									ROW_GRID,
-									"w-full text-left text-xs py-1.5 cursor-pointer rounded-sm transition-colors hover:bg-muted/50",
-									isActive && "bg-blue-500/20",
-								)}
-							>
-								<span className="font-mono text-muted-foreground">
-									Q{r.questionNumber}
-								</span>
-								<span>{r.correctLabels[0] ?? "–"}</span>
-								<span className="font-medium">
-									{r.studentAnswer?.trim() || "–"}
-								</span>
-								<span>
-									{isCorrect ? (
-										<Check
-											className="h-3.5 w-3.5 text-emerald-500"
-											strokeWidth={3}
-										/>
-									) : (
-										<X className="h-3.5 w-3.5 text-red-500" strokeWidth={3} />
-									)}
-								</span>
-								<span
-									className={cn(
-										"text-right font-semibold tabular-nums",
-										override
-											? "text-blue-500"
-											: isCorrect
-												? "text-emerald-600"
-												: "text-red-500",
-									)}
-								>
-									{effectiveScore}/{r.maxScore}
-								</span>
-							</PopoverTrigger>
+								render={
+									<div
+										id={`question-${r.questionNumber}`}
+										role="button"
+										tabIndex={0}
+										className={cn(
+											ROW_GRID,
+											"w-full text-left text-xs py-1.5 cursor-pointer rounded-sm transition-colors hover:bg-muted/50",
+											isActive && "bg-blue-500/20",
+										)}
+									>
+										<span className="font-mono text-muted-foreground">
+											Q{r.questionNumber}
+										</span>
+										<span>{r.correctLabels[0] ?? "–"}</span>
+										<span className="font-medium">
+											{r.studentAnswer?.trim() || "–"}
+										</span>
+										<span>
+											{isCorrect ? (
+												<Check
+													className="h-3.5 w-3.5 text-emerald-500"
+													strokeWidth={3}
+												/>
+											) : (
+												<X
+													className="h-3.5 w-3.5 text-red-500"
+													strokeWidth={3}
+												/>
+											)}
+										</span>
+										<span
+											role="button"
+											tabIndex={0}
+											title={
+												override ? "Click to revert to AI mark" : "Click to toggle mark"
+											}
+											className="text-right cursor-pointer"
+											onMouseDown={(e) => e.stopPropagation()}
+											onClick={(e) => {
+												e.stopPropagation()
+												if (override) {
+													onOverrideChange(r.questionId, null)
+												} else {
+													onOverrideChange(r.questionId, {
+														score_override:
+															r.awardedScore >= r.maxScore ? 0 : r.maxScore,
+														reason: null,
+														feedback_override: undefined,
+													})
+												}
+											}}
+											onKeyDown={(e) => {
+												if (e.key === "Enter" || e.key === " ") {
+													e.preventDefault()
+													e.stopPropagation()
+													if (override) {
+														onOverrideChange(r.questionId, null)
+													} else {
+														onOverrideChange(r.questionId, {
+															score_override:
+																r.awardedScore >= r.maxScore ? 0 : r.maxScore,
+															reason: null,
+															feedback_override: undefined,
+														})
+													}
+												}
+											}}
+										>
+											<span
+												className={cn(
+													"font-semibold tabular-nums",
+													override
+														? "text-blue-500"
+														: isCorrect
+															? "text-emerald-600"
+															: "text-red-500",
+												)}
+											>
+												{effectiveScore}/{r.maxScore}
+											</span>
+										</span>
+									</div>
+								}
+							/>
 							<PopoverContent side="right" align="start" className="w-64">
 								{r.questionText && (
 									<p className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-2 leading-snug">

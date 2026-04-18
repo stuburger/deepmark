@@ -4,6 +4,7 @@ import { queryKeys } from "@/lib/query-keys"
 import { useQueryClient } from "@tanstack/react-query"
 import { useCallback, useEffect, useRef } from "react"
 import { jobStagesSchema } from "./schema"
+import { invalidateOnStageTransitions } from "./transitions"
 import type { JobStages } from "./types"
 
 /**
@@ -21,6 +22,7 @@ import type { JobStages } from "./types"
 export function useJobStream(jobId: string): void {
 	const queryClient = useQueryClient()
 	const esRef = useRef<EventSource | null>(null)
+	const prevStagesRef = useRef<JobStages | null>(null)
 
 	const connect = useCallback(() => {
 		if (esRef.current) return
@@ -36,24 +38,46 @@ export function useJobStream(jobId: string): void {
 			try {
 				raw = JSON.parse(e.data)
 			} catch {
-				console.warn("Malformed JSON in SSE frame")
+				console.warn("[SSE] Malformed JSON in frame")
 				return
 			}
 			const result = jobStagesSchema.safeParse(raw)
 			if (!result.success) {
-				console.warn("Malformed SSE frame for jobStages", result.error)
+				console.warn("[SSE] Zod rejected frame", result.error.format())
 				return
 			}
+
+			const next = result.data
+			const prev = prevStagesRef.current
+
+			console.log("[SSE]", e.type, {
+				ocr: next.ocr.status,
+				grading: next.grading.status,
+				enrichment: next.enrichment.status,
+				prevOcr: prev?.ocr.status ?? null,
+				prevGrading: prev?.grading.status ?? null,
+				prevEnrichment: prev?.enrichment.status ?? null,
+			})
+
 			queryClient.setQueryData<JobStages>(
 				queryKeys.jobStages(jobId),
-				result.data,
+				next,
 			)
+
+			// Fan out: when a stage flips to `done`, dependent queries
+			// (studentJob, jobScanUrls, jobPageTokens, jobAnnotations) hold
+			// stale data until they refetch. Trigger that refetch here
+			// rather than leaving each consumer to poll defensively.
+			invalidateOnStageTransitions(queryClient, jobId, prev, next)
+
+			prevStagesRef.current = next
 		}
 
+		es.addEventListener("open", () => console.log("[SSE] open"))
+		es.addEventListener("error", (err) => console.warn("[SSE] error", err))
 		es.addEventListener("snapshot", apply)
 		es.addEventListener("update", apply)
-		// Ignore `ping` and `error` events for now — EventSource surfaces
-		// connection errors via `onerror` and auto-reconnects.
+		// Ignore `ping` event — just a keep-alive.
 	}, [jobId, queryClient])
 
 	const disconnect = useCallback(() => {

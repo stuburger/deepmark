@@ -76,7 +76,6 @@ export function SubmissionView({
 	const [showRegions, setShowRegions] = useState(true)
 	const [showMarks, setShowMarks] = useState(false)
 	const [showChains, setShowChains] = useState(false)
-	const [isEditing, setIsEditing] = useState(false)
 
 	// Hover word linking — bidirectional between scan and PM editor
 	const [highlightedTokenIds, setHighlightedTokenIds] =
@@ -177,8 +176,6 @@ export function SubmissionView({
 				annotationCount={annotations.length}
 				onNavigateToJob={onNavigateToJob}
 				onVersionChange={onVersionChange}
-				isEditing={isEditing}
-				onToggleEditing={() => setIsEditing((v) => !v)}
 				annotations={annotations}
 				pageTokens={pageTokens}
 			/>
@@ -230,7 +227,7 @@ export function SubmissionView({
 							annotations={annotations}
 							pageTokens={pageTokens}
 							overridesByQuestionId={overridesByQuestionId}
-							onOverrideChange={isEditing ? handleOverrideChange : undefined}
+							onOverrideChange={handleOverrideChange}
 							onDerivedAnnotations={handleDerivedAnnotations}
 							onTokenHighlight={handleTokenHighlight}
 						/>
@@ -270,7 +267,7 @@ export function SubmissionView({
 						annotations={annotations}
 						pageTokens={pageTokens}
 						overridesByQuestionId={overridesByQuestionId}
-						onOverrideChange={isEditing ? handleOverrideChange : undefined}
+						onOverrideChange={handleOverrideChange}
 						onDerivedAnnotations={handleDerivedAnnotations}
 						onTokenHighlight={handleTokenHighlight}
 					/>

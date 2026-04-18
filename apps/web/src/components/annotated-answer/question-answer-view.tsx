@@ -23,7 +23,6 @@ export function QuestionAnswerView({
 		gradingResults,
 		overridesByQuestionId,
 		activeQuestionNumber,
-		isEditing,
 		onOverrideChange,
 	} = useGradingData()
 
@@ -35,7 +34,7 @@ export function QuestionAnswerView({
 	const www = result?.what_went_well ?? []
 	const ebi = result?.even_better_if ?? []
 	const feedback = override?.feedback_override ?? result?.feedback_summary
-	const hasFeedback = !!feedback || isEditing
+	const hasFeedback = !!feedback
 
 	const [showWww, setShowWww] = useState(false)
 	const [showEbi, setShowEbi] = useState(false)
@@ -79,7 +78,6 @@ export function QuestionAnswerView({
 									}
 								: null
 						}
-						isEditing={isEditing}
 						onSave={(score, reason) =>
 							qId &&
 							onOverrideChange(qId, {
@@ -135,7 +133,7 @@ export function QuestionAnswerView({
 							<button
 								type="button"
 								onClick={() => setShowFeedback((v) => !v)}
-								title={isEditing ? "Edit feedback" : "Feedback"}
+								title="Feedback"
 								className={cn(
 									"inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium transition-colors",
 									showFeedback
@@ -144,7 +142,7 @@ export function QuestionAnswerView({
 								)}
 							>
 								<MessageSquareText className="h-2.5 w-2.5" />
-								{isEditing ? "Edit" : "FB"}
+								FB
 							</button>
 						)}
 					</div>
@@ -184,34 +182,26 @@ export function QuestionAnswerView({
 					{/* Feedback panel */}
 					{showFeedback && (
 						<div className="text-xs space-y-2">
-							{feedback && !isEditing && (
-								<p className="text-muted-foreground leading-relaxed">
-									{feedback}
-								</p>
-							)}
-							{isEditing && (
-								<FeedbackOverrideEditor
-									aiFeedback={result?.feedback_summary ?? null}
-									overrideFeedback={override?.feedback_override ?? null}
-									isEditing={isEditing}
-									onSave={(text) =>
-										qId &&
-										onOverrideChange(qId, {
-											score_override: override?.score_override ?? aiScore,
-											reason: override?.reason,
-											feedback_override: text,
-										})
-									}
-									onReset={() =>
-										qId &&
-										onOverrideChange(qId, {
-											score_override: override?.score_override ?? aiScore,
-											reason: override?.reason,
-											feedback_override: undefined,
-										})
-									}
-								/>
-							)}
+							<FeedbackOverrideEditor
+								aiFeedback={result?.feedback_summary ?? null}
+								overrideFeedback={override?.feedback_override ?? null}
+								onSave={(text) =>
+									qId &&
+									onOverrideChange(qId, {
+										score_override: override?.score_override ?? aiScore,
+										reason: override?.reason,
+										feedback_override: text,
+									})
+								}
+								onReset={() =>
+									qId &&
+									onOverrideChange(qId, {
+										score_override: override?.score_override ?? aiScore,
+										reason: override?.reason,
+										feedback_override: undefined,
+									})
+								}
+							/>
 						</div>
 					)}
 				</div>

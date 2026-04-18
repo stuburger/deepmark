@@ -4,11 +4,30 @@ import type { LlmRunner } from "@mcp-gcse/shared"
 import { generateText } from "ai"
 import { z } from "zod/v4"
 
+export type OcrMcqSelection = {
+	question_number: string
+	selected_labels: string[]
+	mark_description: string
+}
+
+/**
+ * Per-page classification of which questions have answer content visible.
+ * Used by the attribution step as a candidate shortlist per page — greatly
+ * reducing ambiguity on continuation pages (no visible question number, but
+ * OCR can infer the question from context).
+ */
+export type OcrQuestionOnPage = {
+	question_number: string
+	content_type: "fresh_start" | "continuation"
+}
+
 export type HandwritingAnalysis = {
 	transcript: string
 	observations: string[]
 	studentName?: string | null
 	detectedSubject?: string | null
+	mcqSelections: OcrMcqSelection[]
+	questionsOnPage: OcrQuestionOnPage[]
 }
 
 export type RunOcrOptions = {
@@ -37,6 +56,47 @@ const TranscriptSchema = z.object({
 		.optional()
 		.describe(
 			"Exam subject as a lowercase single word (e.g. biology, business, mathematics), null if unclear",
+		),
+	mcq_selections: z
+		.array(
+			z.object({
+				question_number: z
+					.string()
+					.describe("The MCQ question number as printed, e.g. '01.1'"),
+				selected_labels: z
+					.array(z.string())
+					.describe(
+						"Option letter(s) the student selected, e.g. ['C']. Empty array if the selection cannot be determined.",
+					),
+				mark_description: z
+					.string()
+					.describe(
+						"Brief description of how the choice was marked, e.g. 'cross in checkbox C', 'circled letter A', 'handwritten B'.",
+					),
+			}),
+		)
+		.optional()
+		.describe(
+			"MCQ selections identified on this page. One entry per MCQ the student answered on this page, however they indicated their choice (tick, cross, circle, fill, or handwritten letter). Omit MCQs not answered on this page.",
+		),
+	questions_on_page: z
+		.array(
+			z.object({
+				question_number: z
+					.string()
+					.describe(
+						"The question number whose answer content is visible on this page, e.g. '01.1', '02', '2b'.",
+					),
+				content_type: z
+					.enum(["fresh_start", "continuation"])
+					.describe(
+						"'fresh_start' = the question number label is visible on this page (e.g. '02)' at the top of the answer, or the page begins a new answer). 'continuation' = this page continues an answer from the previous page with NO visible question number label — the text simply flows on from before.",
+					),
+			}),
+		)
+		.optional()
+		.describe(
+			"Which exam questions have answer content visible on this page. Include every question whose answer (even partial) appears on the page. For each, set content_type honestly: 'fresh_start' when the question number is printed/written on this page, 'continuation' when the page begins mid-answer. Omit MCQ questions here — they're captured in mcq_selections. If the page has no answer content (e.g. cover page, blank page), return an empty array.",
 		),
 })
 
@@ -86,7 +146,7 @@ export async function runOcr(
 							},
 							{
 								type: "text",
-								text: `Transcribe all handwritten text in reading order and provide observations about the handwriting quality and style. ${focusInstruction}${metadataInstruction}`,
+								text: `Transcribe all handwritten text in reading order and provide observations about the handwriting quality and style. ${focusInstruction}${metadataInstruction} If this page contains any multiple-choice questions, identify each one's question number and the option letter(s) the student selected, however the choice is indicated (tick or cross in a checkbox, circled letter or option text, filled-in box, or handwritten letter on blank space). Also classify which non-MCQ questions have answer content on this page: include those whose question number label is visible (content_type='fresh_start') AND those where the page continues an answer from the previous page with no visible question label (content_type='continuation').`,
 							},
 						],
 					},
@@ -104,5 +164,14 @@ export async function runOcr(
 		observations: output.observations,
 		studentName: output.student_name ?? null,
 		detectedSubject: output.detected_subject ?? null,
+		mcqSelections: (output.mcq_selections ?? []).map((s) => ({
+			question_number: s.question_number,
+			selected_labels: s.selected_labels,
+			mark_description: s.mark_description,
+		})),
+		questionsOnPage: (output.questions_on_page ?? []).map((q) => ({
+			question_number: q.question_number,
+			content_type: q.content_type,
+		})),
 	}
 }

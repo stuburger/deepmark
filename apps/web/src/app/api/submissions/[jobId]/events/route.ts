@@ -72,10 +72,17 @@ export async function GET(
 				return
 			}
 			write("snapshot", initial)
+			console.log(
+				`[SSE:${jobId.slice(-6)}] open`,
+				initial.ocr.status,
+				initial.grading.status,
+				initial.enrichment.status,
+			)
 
 			let lastFp = fingerprint(initial)
 			let lastStages = initial
 			let lastHeartbeatAt = Date.now()
+			let tickCount = 0
 
 			while (!signal.aborted) {
 				const interval = allTerminal(lastStages)
@@ -88,10 +95,17 @@ export async function GET(
 				const stages = await readStages()
 				if (!stages) continue
 				lastStages = stages
+				tickCount++
 
 				const fp = fingerprint(stages)
 				if (fp !== lastFp) {
 					write("update", stages)
+					console.log(
+						`[SSE:${jobId.slice(-6)}] update tick=${tickCount}`,
+						stages.ocr.status,
+						stages.grading.status,
+						stages.enrichment.status,
+					)
 					lastFp = fp
 				}
 
@@ -101,6 +115,7 @@ export async function GET(
 				}
 			}
 
+			console.log(`[SSE:${jobId.slice(-6)}] closed after ${tickCount} ticks`)
 			controller.close()
 		},
 	})

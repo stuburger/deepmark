@@ -24,6 +24,7 @@ export type SaveAnnotationEditsResult =
 export async function saveAnnotationEdits(
 	jobId: string,
 	editorState: StudentPaperAnnotation[],
+	seenIds: string[],
 ): Promise<SaveAnnotationEditsResult> {
 	const session = await auth()
 	if (!session) return { ok: false, error: "Not authenticated" }
@@ -60,7 +61,11 @@ export async function saveAnnotationEdits(
 			}) as StudentPaperAnnotation,
 	)
 
-	const { inserts, updates, deletes } = diffAnnotations(dbState, editorState)
+	const { inserts, updates, deletes } = diffAnnotations(
+		dbState,
+		editorState,
+		new Set(seenIds),
+	)
 
 	await db.$transaction([
 		...inserts.map((a) =>

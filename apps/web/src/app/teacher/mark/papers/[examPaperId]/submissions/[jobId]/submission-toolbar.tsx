@@ -1,8 +1,6 @@
 "use client"
 
 import { AnnotationLegend } from "@/components/BoundingBoxViewer/annotation-legend"
-import { Button } from "@/components/ui/button"
-import { buttonVariants } from "@/components/ui/button-variants"
 import {
 	DropdownMenu,
 	DropdownMenuCheckboxItem,
@@ -29,7 +27,6 @@ import {
 	ChevronRight,
 	FileText,
 	Layers,
-	Pencil,
 	StickyNote,
 } from "lucide-react"
 import Link from "next/link"
@@ -63,8 +60,6 @@ export function SubmissionToolbar({
 	annotationCount,
 	onNavigateToJob,
 	onVersionChange,
-	isEditing = false,
-	onToggleEditing,
 	annotations,
 	pageTokens,
 }: {
@@ -85,8 +80,6 @@ export function SubmissionToolbar({
 	annotationCount?: number
 	onNavigateToJob?: (newJobId: string) => void
 	onVersionChange?: (newJobId: string) => void
-	isEditing?: boolean
-	onToggleEditing?: () => void
 	annotations?: StudentPaperAnnotation[]
 	pageTokens?: PageToken[]
 }) {
@@ -321,16 +314,6 @@ export function SubmissionToolbar({
 					<div className="flex items-center gap-2">
 						{data.submission_id && (
 							<SubmissionFeedbackButton submissionId={data.submission_id} />
-						)}
-						{onToggleEditing && (
-							<Button
-								size="sm"
-								variant={isEditing ? "default" : "outline"}
-								onClick={onToggleEditing}
-							>
-								<Pencil className="h-3.5 w-3.5 mr-1.5" />
-								{isEditing ? "Done editing" : "Edit marking"}
-							</Button>
 						)}
 						<DownloadPdfButton
 							data={data}

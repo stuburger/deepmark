@@ -35,7 +35,7 @@ import { MARK_ACTIONS } from "./mark-actions"
 import { McqTableNode } from "./mcq-table-node"
 import { OcrTokenMark } from "./ocr-token-mark"
 import { QuestionAnswerNode } from "./question-answer-node"
-import { ReadOnlyText } from "./read-only-text"
+import { BYPASS_READ_ONLY, ReadOnlyText } from "./read-only-text"
 import { useDerivedAnnotations } from "./use-derived-annotations"
 
 // ─── Bubble menu icons ─────────────────────────────────────────────────────
@@ -246,10 +246,18 @@ export function AnnotatedAnswerSheet({
 		const { from, to } = editor.state.selection
 		const wasFocused = editor.isFocused
 
-		// `emitUpdate: false` keeps the transaction out of the user's undo
-		// history — stage-driven updates are never something the teacher
-		// should be able to undo.
-		editor.commands.setContent(doc, { emitUpdate: false })
+		// Dispatch the content replacement as a raw transaction so we can
+		// tag it with BYPASS_READ_ONLY — ReadOnlyText's filterTransaction
+		// would otherwise reject it (setContent uses ReplaceStep, which is
+		// how we block user typing). addToHistory:false keeps stage-driven
+		// updates out of the teacher's undo stack.
+		const newDoc = editor.schema.nodeFromJSON(doc)
+		const replaceTr = editor.state.tr
+			.replaceWith(0, editor.state.doc.content.size, newDoc.content)
+			.setMeta(BYPASS_READ_ONLY, true)
+			.setMeta("addToHistory", false)
+			.setMeta("preventUpdate", true)
+		editor.view.dispatch(replaceTr)
 
 		const docSize = editor.state.doc.content.size
 		const clampedFrom = Math.min(Math.max(from, 0), docSize)

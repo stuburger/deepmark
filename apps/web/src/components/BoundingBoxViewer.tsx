@@ -94,7 +94,9 @@ export function BoundingBoxViewer({
 		})
 	}
 
-	// Pan to the single highlighted token (cursor position or 1-word annotation hover).
+	// Scroll the scan vertically to keep the highlighted token in view.
+	// Horizontal position is preserved — panning sideways on every click is
+	// distracting when the user is just moving their cursor through the text.
 	// Only fires for exactly one token — multi-word selections are not auto-panned.
 	useEffect(() => {
 		if (!highlightedTokenIds || highlightedTokenIds.size !== 1) return
@@ -104,18 +106,16 @@ export function BoundingBoxViewer({
 		const token = tokens.find((t) => t.id === focusId)
 		if (!token) return
 
-		const [yMin, xMin, yMax, xMax] = token.bbox
-		const tokenCx = ((xMin + xMax) / 2 / 1000) * imageRef.current.offsetWidth
+		const [yMin, , yMax] = token.bbox
 		const tokenCy = ((yMin + yMax) / 2 / 1000) * imageRef.current.offsetHeight
 
-		const wrapper = transformRef.current.wrapperComponent
+		const wrapper = transformRef.current.instance.wrapperComponent
 		if (!wrapper) return
 
-		const { scale } = transformRef.current.transformState
-		const newX = wrapper.offsetWidth / 2 - tokenCx * scale
+		const { scale, positionX } = transformRef.current.instance.transformState
 		const newY = wrapper.offsetHeight / 2 - tokenCy * scale
 
-		transformRef.current.setTransform(newX, newY, scale, 350, "easeOut")
+		transformRef.current.setTransform(positionX, newY, scale, 350, "easeOut")
 	}, [highlightedTokenIds, tokens, imageDims])
 
 	const viewBox = imageDims

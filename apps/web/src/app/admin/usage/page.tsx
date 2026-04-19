@@ -36,7 +36,7 @@ export default async function UsagePage() {
 					<CardHeader>
 						<CardTitle>Tokens by Pipeline Stage</CardTitle>
 						<CardDescription>
-							Prompt vs completion tokens across OCR, grading, and enrichment
+							Prompt vs completion tokens across OCR, grading, and annotation
 						</CardDescription>
 					</CardHeader>
 					<CardContent>

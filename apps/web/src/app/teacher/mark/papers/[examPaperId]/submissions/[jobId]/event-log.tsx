@@ -42,6 +42,8 @@ function eventIcon(type: JobEvent["type"]) {
 			return <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />
 		case "token_reconciliation_complete":
 			return <CheckCircle2 className="h-3.5 w-3.5 text-teal-500" />
+		// Historical only (pre–April 2026): the enrichment step was folded into
+		// the grade Lambda, so no new submissions emit these event types.
 		case "enrich_started":
 		case "enrich_complete":
 			return <Zap className="h-3.5 w-3.5 text-purple-500" />
@@ -76,6 +78,8 @@ function eventLabel(event: JobEvent): string {
 			return `Marking complete · ${event.total_awarded}/${event.total_max}`
 		case "token_reconciliation_complete":
 			return `${event.tokens_corrected} token${event.tokens_corrected !== 1 ? "s" : ""} reconciled`
+		// Historical only (pre–April 2026): retained so old submission logs
+		// still render with human-readable labels.
 		case "enrich_started":
 			return "Enrichment started"
 		case "enrich_complete":

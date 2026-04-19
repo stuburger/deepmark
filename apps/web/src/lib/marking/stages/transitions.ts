@@ -11,10 +11,7 @@ import type { JobStages } from "./types"
  * stage completes, we invalidate the queries that carry the now-fresh data so
  * they refetch via their existing queryFn paths.
  */
-type TransitionInvalidator = (
-	queryClient: QueryClient,
-	jobId: string,
-) => void
+type TransitionInvalidator = (queryClient: QueryClient, jobId: string) => void
 
 const onOcrComplete: TransitionInvalidator = (queryClient, jobId) => {
 	// extracted_answers, page_analyses on the payload
@@ -30,7 +27,7 @@ const onGradingComplete: TransitionInvalidator = (queryClient, jobId) => {
 	queryClient.invalidateQueries({ queryKey: queryKeys.studentJob(jobId) })
 }
 
-const onEnrichmentComplete: TransitionInvalidator = (queryClient, jobId) => {
+const onAnnotationComplete: TransitionInvalidator = (queryClient, jobId) => {
 	queryClient.invalidateQueries({ queryKey: queryKeys.jobAnnotations(jobId) })
 }
 
@@ -56,10 +53,7 @@ export function invalidateOnStageTransitions(
 	if (prev.grading.status !== "done" && next.grading.status === "done") {
 		onGradingComplete(queryClient, jobId)
 	}
-	if (
-		prev.enrichment.status !== "done" &&
-		next.enrichment.status === "done"
-	) {
-		onEnrichmentComplete(queryClient, jobId)
+	if (prev.annotation.status !== "done" && next.annotation.status === "done") {
+		onAnnotationComplete(queryClient, jobId)
 	}
 }

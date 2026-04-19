@@ -18,7 +18,7 @@ const chartConfig = {
 const STAGE_LABELS: Record<string, string> = {
 	ocr: "OCR",
 	grading: "Grading",
-	enrichment: "Enrichment",
+	annotation: "Annotation",
 }
 
 export function TokensByStageChart({ data }: { data: UsageByStage[] }) {

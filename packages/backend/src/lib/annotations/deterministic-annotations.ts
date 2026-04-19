@@ -1,5 +1,5 @@
 import type { GradingResult } from "@/lib/grading/grade-questions"
-import type { NormalisedBox } from "@mcp-gcse/shared"
+import type { AnnotationPayload, NormalisedBox } from "@mcp-gcse/shared"
 import type { AnswerRegionRow, PendingAnnotation } from "./types"
 
 /**
@@ -32,18 +32,20 @@ export function pointBasedAnnotations(
 			mp.expectedCriteria ?? mp.studentCovered ?? `Point ${mp.pointNumber}`,
 	}))
 
+	const payload: AnnotationPayload = {
+		_v: 1,
+		signal: awarded > 0 ? "tick" : "cross",
+		reason: `${awarded}/${max}`,
+		markPoints,
+	}
+
 	return [
 		{
 			questionId: gradingResult.question_id,
 			pageOrder: answerRegion.page_order,
 			overlayType: "annotation",
 			sentiment: awarded > 0 ? "positive" : "negative",
-			payload: {
-				_v: 1,
-				signal: awarded > 0 ? "tick" : "cross",
-				reason: `${awarded}/${max}`,
-				markPoints,
-			},
+			payload,
 			anchorTokenStartId: null,
 			anchorTokenEndId: null,
 			bbox: tickBox,
@@ -68,17 +70,19 @@ export function deterministicMcqAnnotation(
 		? `✓ correct — ${gradingResult.awarded_score}/${gradingResult.max_score}`
 		: `✗ incorrect — ${gradingResult.awarded_score}/${gradingResult.max_score}`
 
+	const payload: AnnotationPayload = {
+		_v: 1,
+		signal: correct ? "tick" : "cross",
+		reason,
+	}
+
 	return [
 		{
 			questionId: gradingResult.question_id,
 			pageOrder: answerRegion.page_order,
 			overlayType: "annotation",
 			sentiment: correct ? "positive" : "negative",
-			payload: {
-				_v: 1,
-				signal: correct ? "tick" : "cross",
-				reason,
-			},
+			payload,
 			anchorTokenStartId: null,
 			anchorTokenEndId: null,
 			bbox,

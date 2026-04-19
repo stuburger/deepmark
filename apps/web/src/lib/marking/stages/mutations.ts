@@ -8,7 +8,6 @@ import { log } from "../../logger"
 import type {
 	RetriggerGradingResult,
 	RetriggerOcrResult,
-	TriggerEnrichmentResult,
 	TriggerGradingResult,
 } from "../types"
 
@@ -143,7 +142,7 @@ export async function retriggerGrading(
 			},
 		})
 
-		// Copy word tokens — enrichment needs these for annotation placement
+		// Copy word tokens — annotation needs these for placement
 		const oldTokens = await tx.studentPaperPageToken.findMany({
 			where: { submission_id: jobId },
 		})
@@ -263,51 +262,4 @@ export async function retriggerOcr(jobId: string): Promise<RetriggerOcrResult> {
 		newJobId: newSub.id,
 	})
 	return { ok: true, newJobId: newSub.id }
-}
-
-export async function triggerEnrichment(
-	jobId: string,
-): Promise<TriggerEnrichmentResult> {
-	const session = await auth()
-	if (!session) return { ok: false, error: "Not authenticated" }
-
-	const sub = await db.studentSubmission.findFirst({
-		where: { id: jobId },
-		select: {
-			id: true,
-			grading_runs: {
-				orderBy: { created_at: "desc" },
-				take: 1,
-				select: {
-					id: true,
-					status: true,
-					enrichment_runs: {
-						orderBy: { created_at: "desc" },
-						take: 1,
-						select: { status: true },
-					},
-				},
-			},
-		},
-	})
-	if (!sub) return { ok: false, error: "Job not found" }
-
-	const latestGrading = sub.grading_runs[0]
-	if (!latestGrading || latestGrading.status !== "complete") {
-		return { ok: false, error: "Job must be fully graded before annotating" }
-	}
-	const latestEnrichment = latestGrading.enrichment_runs[0]
-	if (latestEnrichment?.status === "processing") {
-		return { ok: false, error: "Annotations are already being generated" }
-	}
-
-	await sqs.send(
-		new SendMessageCommand({
-			QueueUrl: Resource.StudentPaperEnrichQueue.url,
-			MessageBody: JSON.stringify({ job_id: jobId }),
-		}),
-	)
-
-	log.info(TAG, "Enrichment triggered", { userId: session.userId, jobId })
-	return { ok: true }
 }

@@ -1,14 +1,10 @@
 "use server"
 
 import { db } from "@/lib/db"
-import type {
-	EnrichmentStatus,
-	GradingStatus,
-	JobEvent,
-	OcrStatus,
-} from "@mcp-gcse/db"
+import type { GradingStatus, JobEvent, OcrStatus } from "@mcp-gcse/db"
 import { auth } from "../../auth"
-import { deriveScanStatus } from "../status"
+import { ANNOTATION_BOOKKEEPING_SELECT } from "../selects"
+import { deriveAnnotationStatus, deriveScanStatus } from "../status"
 import type {
 	AnswerRegion,
 	ExtractedAnswer,
@@ -114,11 +110,8 @@ const submissionDetailInclude = {
 			examiner_summary: true,
 			job_events: true,
 			llm_snapshot: true,
-			enrichment_runs: {
-				orderBy: { created_at: "desc" as const },
-				take: 1,
-				select: { id: true, status: true, llm_snapshot: true },
-			},
+			annotation_llm_snapshot: true,
+			...ANNOTATION_BOOKKEEPING_SELECT,
 		},
 	},
 } as const
@@ -174,16 +167,13 @@ function toJobPayload(sub: {
 		examiner_summary: string | null
 		job_events: unknown
 		llm_snapshot: unknown
-		enrichment_runs: Array<{
-			id: string
-			status: EnrichmentStatus
-			llm_snapshot: unknown
-		}>
+		annotation_llm_snapshot: unknown
+		annotation_error: string | null
+		annotations_completed_at: Date | null
 	}>
 }) {
 	const latestOcr = sub.ocr_runs[0] ?? null
 	const latestGrading = sub.grading_runs[0] ?? null
-	const latestEnrichment = latestGrading?.enrichment_runs[0] ?? null
 
 	const status = deriveScanStatus(
 		latestOcr?.status ?? null,
@@ -252,15 +242,14 @@ function toJobPayload(sub: {
 		extracted_answers: extractedAnswers,
 		job_events: allEvents.length > 0 ? allEvents : null,
 		examiner_summary: latestGrading?.examiner_summary ?? null,
-		enrichment_status: latestEnrichment?.status ?? null,
+		annotation_status: deriveAnnotationStatus(latestGrading),
 		level_descriptors: sub.exam_paper?.level_descriptors ?? null,
 		submission_id: sub.id,
 		ocr_run_id: latestOcr?.id,
 		grading_run_id: latestGrading?.id,
-		enrichment_run_id: latestEnrichment?.id,
 		ocr_llm_snapshot: latestOcr?.llm_snapshot ?? null,
 		grading_llm_snapshot: latestGrading?.llm_snapshot ?? null,
-		enrichment_llm_snapshot: latestEnrichment?.llm_snapshot ?? null,
+		annotation_llm_snapshot: latestGrading?.annotation_llm_snapshot ?? null,
 	}
 }
 

@@ -12,7 +12,7 @@ import { RefreshCw } from "lucide-react"
 const LABELS: Record<StageKey, string> = {
 	ocr: "Extraction",
 	grading: "Grading",
-	enrichment: "Annotation",
+	annotation: "Annotation",
 }
 
 const DOT_CLASS: Record<StageStatus, string> = {

@@ -34,7 +34,7 @@ const HEARTBEAT_INTERVAL_MS = 30_000
  *
  * The connection is never closed proactively — even after every stage reaches
  * a terminal state we keep polling slowly so teacher-triggered re-runs
- * (OCR / grading / enrichment) surface without requiring a reconnect.
+ * (OCR / grading / annotation) surface without requiring a reconnect.
  */
 export async function GET(
 	request: NextRequest,
@@ -76,7 +76,7 @@ export async function GET(
 				`[SSE:${jobId.slice(-6)}] open`,
 				initial.ocr.status,
 				initial.grading.status,
-				initial.enrichment.status,
+				initial.annotation.status,
 			)
 
 			let lastFp = fingerprint(initial)
@@ -104,7 +104,7 @@ export async function GET(
 						`[SSE:${jobId.slice(-6)}] update tick=${tickCount}`,
 						stages.ocr.status,
 						stages.grading.status,
-						stages.enrichment.status,
+						stages.annotation.status,
 					)
 					lastFp = fp
 				}

@@ -201,14 +201,14 @@ function PhaseSection({ label, snapshot }: PhaseSnapshot) {
 type LlmSpendButtonProps = {
 	ocrSnapshot?: unknown
 	gradingSnapshot?: unknown
-	enrichmentSnapshot?: unknown
+	annotationSnapshot?: unknown
 	className?: string
 }
 
 export function LlmSpendButton({
 	ocrSnapshot,
 	gradingSnapshot,
-	enrichmentSnapshot,
+	annotationSnapshot,
 	className,
 }: LlmSpendButtonProps) {
 	const [open, setOpen] = useState(false)
@@ -220,8 +220,8 @@ export function LlmSpendButton({
 	if (isSnapshot(gradingSnapshot)) {
 		phases.push({ label: "Grading", snapshot: gradingSnapshot })
 	}
-	if (isSnapshot(enrichmentSnapshot)) {
-		phases.push({ label: "Annotations", snapshot: enrichmentSnapshot })
+	if (isSnapshot(annotationSnapshot)) {
+		phases.push({ label: "Annotations", snapshot: annotationSnapshot })
 	}
 
 	if (phases.length === 0) return null

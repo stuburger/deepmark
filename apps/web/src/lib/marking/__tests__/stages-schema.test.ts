@@ -18,7 +18,7 @@ describe("jobStagesSchema", () => {
 			completedAt: null,
 			error: null,
 		},
-		enrichment: {
+		annotation: {
 			status: "not_started",
 			runId: null,
 			startedAt: null,
@@ -41,8 +41,8 @@ describe("jobStagesSchema", () => {
 
 	it("preserves null dates as null", () => {
 		const result = jobStagesSchema.parse(validWireFrame)
-		expect(result.enrichment.startedAt).toBe(null)
-		expect(result.enrichment.completedAt).toBe(null)
+		expect(result.annotation.startedAt).toBe(null)
+		expect(result.annotation.completedAt).toBe(null)
 	})
 
 	it("accepts Date instances in addition to strings", () => {

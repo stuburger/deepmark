@@ -7,7 +7,6 @@ import {
 	ResizablePanelGroup,
 } from "@/components/ui/resizable"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { triggerEnrichment } from "@/lib/marking/stages/mutations"
 import type { JobStages } from "@/lib/marking/stages/types"
 import type {
 	PageToken,
@@ -15,11 +14,8 @@ import type {
 	StudentPaperJobPayload,
 	UpsertTeacherOverrideInput,
 } from "@/lib/marking/types"
-import { queryKeys } from "@/lib/query-keys"
-import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { parseAsString, useQueryState } from "nuqs"
 import { useCallback, useEffect, useRef, useState } from "react"
-import { toast } from "sonner"
 import { EventLog } from "./event-log"
 import { useScrollToQuestion } from "./hooks/use-scroll-to-question"
 import { useSubmissionData } from "./hooks/use-submission-data"
@@ -54,8 +50,6 @@ export function SubmissionView({
 	onVersionChange?: (newJobId: string) => void
 	onClose?: () => void
 }) {
-	const queryClient = useQueryClient()
-
 	const {
 		data,
 		stages,
@@ -96,9 +90,9 @@ export function SubmissionView({
 			: "scan",
 	)
 
-	// When an annotation is clicked, switch the mobile tab to "results" so the
+	// When a graded region is clicked, switch the mobile tab to "results" so the
 	// question is in the DOM and visible before scrollToQuestion runs its rAF.
-	const handleAnnotationClick = useCallback(
+	const handleGradedRegionClick = useCallback(
 		(questionNumber: string) => {
 			setMobileTab("results")
 			scrollToQuestion(questionNumber)
@@ -126,7 +120,7 @@ export function SubmissionView({
 	)
 
 	const hasAnnotations =
-		data.enrichment_status === "complete" && annotations.length > 0
+		data.annotation_status === "complete" && annotations.length > 0
 
 	// Auto-enable marks overlay when annotations first load
 	const annotationsLoadedRef = useRef(false)
@@ -141,23 +135,8 @@ export function SubmissionView({
 	// The `jobAnnotations` cache is the single source of truth for
 	// annotations (AI + teacher). The callback writes derived state into the
 	// cache and schedules a debounced save mutation that races safely against
-	// enrichment refetches via `cancelQueries` in `onMutate`.
+	// annotation refetches via `cancelQueries` in `onMutate`.
 	const handleDerivedAnnotations = useAnnotationSync(jobId)
-
-	const enrichMutation = useMutation({
-		mutationFn: () => triggerEnrichment(jobId),
-		onSuccess: (result) => {
-			if (!result.ok) {
-				toast.error(result.error)
-				return
-			}
-			toast.success("Annotation generation started")
-			void queryClient.invalidateQueries({
-				queryKey: queryKeys.studentJob(jobId),
-			})
-		},
-		onError: () => toast.error("Failed to start annotation generation"),
-	})
 
 	return (
 		<div className="flex flex-col overflow-hidden h-full">
@@ -166,7 +145,6 @@ export function SubmissionView({
 				jobId={jobId}
 				data={data}
 				phase={phase}
-				onGenerateAnnotations={() => enrichMutation.mutate()}
 				onNavigateToJob={onNavigateToJob}
 				onVersionChange={onVersionChange}
 				onClose={onClose}
@@ -202,7 +180,7 @@ export function SubmissionView({
 							showRegions={showRegions}
 							onToggleOcr={() => setShowOcr((v) => !v)}
 							onToggleRegions={() => setShowRegions((v) => !v)}
-							onAnnotationClick={handleAnnotationClick}
+							onGradedRegionClick={handleGradedRegionClick}
 							debugMode={debugMode}
 							annotations={annotations}
 							showMarks={showMarks}
@@ -248,7 +226,7 @@ export function SubmissionView({
 						showRegions={showRegions}
 						onToggleOcr={() => setShowOcr((v) => !v)}
 						onToggleRegions={() => setShowRegions((v) => !v)}
-						onAnnotationClick={handleAnnotationClick}
+						onGradedRegionClick={handleGradedRegionClick}
 						debugMode={debugMode}
 						annotations={annotations}
 						showMarks={showMarks}

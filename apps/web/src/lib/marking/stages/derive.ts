@@ -1,7 +1,8 @@
-import type { EnrichmentStatus, GradingStatus, OcrStatus } from "@mcp-gcse/db"
+import type { GradingStatus, OcrStatus } from "@mcp-gcse/db"
+import type { AnnotationStatus } from "../types"
 import type { StageStatus } from "./types"
 
-type RunLikeStatus = OcrStatus | GradingStatus | EnrichmentStatus
+type RunLikeStatus = OcrStatus | GradingStatus | AnnotationStatus
 
 /**
  * Maps a DB run status (or null when no row exists) to a UI StageStatus.

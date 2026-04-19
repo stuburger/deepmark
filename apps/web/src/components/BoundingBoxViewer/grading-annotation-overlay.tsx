@@ -8,10 +8,10 @@ import {
 
 export function GradingAnnotationOverlay({
 	annotation,
-	onAnnotationClick,
+	onGradedRegionClick,
 }: {
 	annotation: GradingAnnotation
-	onAnnotationClick?: (questionNumber: string) => void
+	onGradedRegionClick?: (questionNumber: string) => void
 }) {
 	const [yMin, xMin, yMax, xMax] = annotation.box
 	if (yMax === 0 && xMax === 0) return null
@@ -22,7 +22,7 @@ export function GradingAnnotationOverlay({
 		<button
 			type="button"
 			aria-label={`Q${annotation.questionNumber}: jump to answer`}
-			onClick={() => onAnnotationClick?.(annotation.questionNumber)}
+			onClick={() => onGradedRegionClick?.(annotation.questionNumber)}
 			className="rounded-sm transition-opacity hover:opacity-70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
 			style={{
 				...bboxToPercentStyle(annotation.box),

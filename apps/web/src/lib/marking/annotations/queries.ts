@@ -12,10 +12,10 @@ import type {
 } from "../types"
 
 /**
- * Loads AI annotations from the latest enrichment run plus any
- * teacher-authored rows for a submission. Returns an empty list while
- * enrichment has not yet produced any rows so callers can render the
- * text first and layer marks in progressively.
+ * Loads AI annotations for the latest grading run plus any teacher-authored
+ * rows for a submission. Returns an empty list while grading has not yet
+ * produced any rows so callers can render the text first and layer marks in
+ * progressively.
  */
 export async function getJobAnnotations(
 	jobId: string,
@@ -23,7 +23,7 @@ export async function getJobAnnotations(
 	const session = await auth()
 	if (!session) return { ok: false, error: "Not authenticated" }
 
-	// Resolve: jobId → latest grading_run → latest enrichment_run
+	// Resolve: jobId → latest grading_run
 	const sub = await db.studentSubmission.findFirst({
 		where: { id: jobId },
 		select: {
@@ -38,21 +38,14 @@ export async function getJobAnnotations(
 	if (!sub) return { ok: false, error: "Job not found" }
 
 	const latestGradingId = sub.grading_runs[0]?.id ?? null
-	const latestEnrichmentRun = latestGradingId
-		? await db.enrichmentRun.findFirst({
-				where: { grading_run_id: latestGradingId },
-				orderBy: { created_at: "desc" },
-				select: { id: true },
-			})
-		: null
 
-	// Load AI marks (current enrichment run) plus teacher-authored marks for
+	// Load AI marks (current grading run) plus teacher-authored marks for
 	// this submission. Filter out soft-deleted rows in both branches.
 	const or: Prisma.StudentPaperAnnotationWhereInput[] = [
 		{ submission_id: sub.id, source: "teacher" },
 	]
-	if (latestEnrichmentRun) {
-		or.push({ enrichment_run_id: latestEnrichmentRun.id })
+	if (latestGradingId) {
+		or.push({ grading_run_id: latestGradingId })
 	}
 
 	const rows = await db.studentPaperAnnotation.findMany({
@@ -76,7 +69,7 @@ export async function getJobAnnotations(
 
 		return {
 			id: row.id,
-			enrichment_run_id: row.enrichment_run_id,
+			grading_run_id: row.grading_run_id,
 			question_id: row.question_id,
 			page_order: row.page_order,
 			overlay_type: row.overlay_type as OverlayType,

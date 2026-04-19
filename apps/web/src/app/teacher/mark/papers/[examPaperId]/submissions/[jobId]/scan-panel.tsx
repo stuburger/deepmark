@@ -42,7 +42,7 @@ export function ScanPanel({
 	showRegions,
 	onToggleOcr,
 	onToggleRegions,
-	onAnnotationClick,
+	onGradedRegionClick,
 	debugMode,
 	annotations = [],
 	showMarks = false,
@@ -60,7 +60,7 @@ export function ScanPanel({
 	showRegions: boolean
 	onToggleOcr: () => void
 	onToggleRegions: () => void
-	onAnnotationClick?: (questionNumber: string) => void
+	onGradedRegionClick?: (questionNumber: string) => void
 	debugMode?: boolean
 	annotations?: StudentPaperAnnotation[]
 	showMarks?: boolean
@@ -224,7 +224,7 @@ export function ScanPanel({
 						showHighlights={showOcr}
 						showRegions={showRegions}
 						gradingResults={gradingResults}
-						onAnnotationClick={onAnnotationClick}
+						onGradedRegionClick={onGradedRegionClick}
 						debugMode={debugMode}
 						annotations={annotations}
 						showMarks={showMarks}

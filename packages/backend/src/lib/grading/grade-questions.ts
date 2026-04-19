@@ -1,4 +1,7 @@
 import { db } from "@/db"
+import { annotateOneResult } from "@/lib/annotations/annotate-result"
+import type { AnnotationContext } from "@/lib/annotations/data-loading"
+import type { PendingAnnotation } from "@/lib/annotations/types"
 import type {
 	ExamPaperWithSections,
 	MarkScheme,
@@ -8,6 +11,7 @@ import type { CancellationToken } from "@/lib/infra/cancellation"
 import { logger } from "@/lib/infra/logger"
 import { logGradingRunEvent } from "@mcp-gcse/db"
 import {
+	type LlmRunner,
 	type MarkerContext,
 	type MarkerOrchestrator,
 	type QuestionWithMarkScheme,
@@ -44,7 +48,7 @@ export type GradingResult = {
 	mark_scheme_id: string | null
 }
 
-export type GradeAllQuestionsArgs = {
+export type GradeAndAnnotateAllArgs = {
 	questionList: QuestionListItem[]
 	/** Keyed by canonical question_id. */
 	answerMap: Map<string, string>
@@ -52,20 +56,29 @@ export type GradeAllQuestionsArgs = {
 	orchestrator: MarkerOrchestrator
 	jobId: string
 	cancellation: CancellationToken
+	annotationContext: AnnotationContext
+	annotationLlm: LlmRunner
+}
+
+export type GradeAndAnnotateAllOutput = {
+	results: GradingResult[]
+	annotationsByQuestion: Map<string, PendingAnnotation[]>
 }
 
 /**
- * Grades all questions in parallel, writing incremental results to the DB as
- * each one completes so the frontend can stream live feedback.
+ * Grades and annotates all questions in parallel, writing incremental grading
+ * results to the DB as each one completes so the frontend can stream live
+ * feedback. Annotation runs immediately after grading within the same per-
+ * question task so the two stay close in flight time.
  *
  * Results are committed into pre-allocated index slots so the array always
  * reflects exam question order regardless of which LLM call finishes first.
  * Incremental DB writes are fire-and-forget; the final authoritative write
  * happens in completeGradingJob.
  */
-export async function gradeAllQuestions(
-	args: GradeAllQuestionsArgs,
-): Promise<GradingResult[]> {
+export async function gradeAndAnnotateAll(
+	args: GradeAndAnnotateAllArgs,
+): Promise<GradeAndAnnotateAllOutput> {
 	const {
 		questionList,
 		answerMap,
@@ -73,12 +86,15 @@ export async function gradeAllQuestions(
 		orchestrator,
 		jobId,
 		cancellation,
+		annotationContext,
+		annotationLlm,
 	} = args
 
 	// Pre-allocate slots to maintain question order during streaming updates.
 	const resultSlots: (GradingResult | undefined)[] = new Array(
 		questionList.length,
 	).fill(undefined)
+	const annotationsByQuestion = new Map<string, PendingAnnotation[]>()
 
 	const writeIncremental = () => {
 		const completed = resultSlots.filter(
@@ -120,10 +136,24 @@ export async function gradeAllQuestions(
 
 			resultSlots[index] = result
 			writeIncremental()
+
+			if (cancellation.isCancelled()) return
+
+			const annotations = await annotateOneResult({
+				result,
+				markScheme: qItem.mark_scheme,
+				annotationContext,
+				annotationLlm,
+				jobId,
+			})
+			annotationsByQuestion.set(result.question_id, annotations)
 		}),
 	)
 
-	return resultSlots.filter((r): r is GradingResult => r !== undefined)
+	return {
+		results: resultSlots.filter((r): r is GradingResult => r !== undefined),
+		annotationsByQuestion,
+	}
 }
 
 // ─── Per-question grading ──────────────────────────────────────────────────────

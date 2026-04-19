@@ -99,7 +99,7 @@ export function useSubmissionData({
 		staleTime: Number.POSITIVE_INFINITY,
 	})
 
-	// Annotations — fetched once on mount and re-fetched when enrichment
+	// Annotations — fetched once on mount and re-fetched when annotation
 	// completes (see the effect below). Teacher edits update the cache
 	// directly via useAnnotationSync, so no polling is needed.
 	const { data: annotations = [] } = useQuery<StudentPaperAnnotation[]>({
@@ -114,19 +114,19 @@ export function useSubmissionData({
 	const phase = derivePhase(stages, data.exam_paper_id !== null)
 	const isTerminal = TERMINAL_SUBMISSION_STATUSES.has(data.status)
 
-	// Enrichment done → invalidate annotations so AI marks stream in.
-	const prevEnrichStatusRef = useRef(stages.enrichment.status)
+	// Annotation done → invalidate annotations so AI marks stream in.
+	const prevAnnotationStatusRef = useRef(stages.annotation.status)
 	useEffect(() => {
 		if (
-			prevEnrichStatusRef.current !== "done" &&
-			stages.enrichment.status === "done"
+			prevAnnotationStatusRef.current !== "done" &&
+			stages.annotation.status === "done"
 		) {
 			void queryClient.invalidateQueries({
 				queryKey: queryKeys.jobAnnotations(jobId),
 			})
 		}
-		prevEnrichStatusRef.current = stages.enrichment.status
-	}, [stages.enrichment.status, jobId, queryClient])
+		prevAnnotationStatusRef.current = stages.annotation.status
+	}, [stages.annotation.status, jobId, queryClient])
 
 	// OCR done → invalidate scan URLs so page.analysis data is fetched.
 	const prevPhaseRef = useRef(phase)

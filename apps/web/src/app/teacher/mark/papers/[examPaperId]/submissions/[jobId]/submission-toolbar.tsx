@@ -31,7 +31,6 @@ export function SubmissionToolbar({
 	jobId,
 	data,
 	phase,
-	onGenerateAnnotations,
 	onNavigateToJob,
 	onVersionChange,
 	onClose,
@@ -42,16 +41,12 @@ export function SubmissionToolbar({
 	jobId: string
 	data: StudentPaperJobPayload
 	phase: MarkingPhase
-	onGenerateAnnotations?: () => void
 	onNavigateToJob?: (newJobId: string) => void
 	onVersionChange?: (newJobId: string) => void
 	onClose?: () => void
 	annotations?: StudentPaperAnnotation[]
 	pageTokens?: PageToken[]
 }) {
-	const hasAnnotatableResults = data.grading_results.length > 0
-	const canGenerate = phase === "completed" && hasAnnotatableResults
-
 	return (
 		<TooltipProvider>
 			{/* ── Row 1: Context / breadcrumb ─────────────────────────────────── */}
@@ -125,14 +120,13 @@ export function SubmissionToolbar({
 				<LlmSpendButton
 					ocrSnapshot={data.ocr_llm_snapshot}
 					gradingSnapshot={data.grading_llm_snapshot}
-					enrichmentSnapshot={data.enrichment_llm_snapshot}
+					annotationSnapshot={data.annotation_llm_snapshot}
 				/>
 
 				{/* Pipeline stage pips */}
 				<StagePips
 					jobId={jobId}
 					onNavigateToJob={onNavigateToJob ?? (() => {})}
-					onReAnnotate={canGenerate ? onGenerateAnnotations : undefined}
 				/>
 
 				{/* Completed-phase output actions */}
@@ -149,7 +143,6 @@ export function SubmissionToolbar({
 						<ReRunMenu
 							jobId={jobId}
 							onNavigateToJob={onNavigateToJob ?? (() => {})}
-							onReAnnotate={canGenerate ? onGenerateAnnotations : undefined}
 						/>
 					</div>
 				)}

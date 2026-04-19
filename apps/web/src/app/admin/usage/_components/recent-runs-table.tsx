@@ -17,7 +17,7 @@ import { useState } from "react"
 const STAGE_VARIANT: Record<string, "default" | "secondary" | "outline"> = {
 	ocr: "default",
 	grading: "secondary",
-	enrichment: "outline",
+	annotation: "outline",
 }
 
 const CALL_SITE_LABELS: Record<string, string> = {

@@ -11,7 +11,7 @@ import type { JobStages } from "./types"
 export type MarkingPhase =
 	| "scan_processing" // no exam paper linked yet, or pipeline hasn't started
 	| "marking_in_progress" // pipeline is running and an exam paper is linked
-	| "completed" // ocr + grading both done (enrichment may still be running)
+	| "completed" // ocr + grading both done (annotation may still be running)
 	| "failed"
 	| "cancelled"
 

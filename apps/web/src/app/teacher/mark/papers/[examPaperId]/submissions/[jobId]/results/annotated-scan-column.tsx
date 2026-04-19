@@ -18,10 +18,10 @@ import { useEffect, useRef } from "react"
  */
 function SimpleRegionButton({
 	annotation,
-	onAnnotationClick,
+	onGradedRegionClick,
 }: {
 	annotation: GradingAnnotation
-	onAnnotationClick?: (questionNumber: string) => void
+	onGradedRegionClick?: (questionNumber: string) => void
 }) {
 	const [yMin, xMin, yMax, xMax] = annotation.box
 	if (yMax === 0 && xMax === 0) return null
@@ -43,7 +43,7 @@ function SimpleRegionButton({
 		<button
 			type="button"
 			aria-label={`Q${annotation.questionNumber}: jump to answer`}
-			onClick={() => onAnnotationClick?.(annotation.questionNumber)}
+			onClick={() => onGradedRegionClick?.(annotation.questionNumber)}
 			className="rounded-sm transition-opacity hover:opacity-70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
 			style={{
 				position: "absolute",
@@ -92,7 +92,7 @@ export function AnnotatedScanColumn({
 	showHighlights,
 	showRegions = true,
 	gradingResults,
-	onAnnotationClick,
+	onGradedRegionClick,
 	debugMode = false,
 	annotations = [],
 	showMarks = false,
@@ -106,11 +106,11 @@ export function AnnotatedScanColumn({
 	/** When false, grading annotation boxes are hidden even if data is present. */
 	showRegions?: boolean
 	gradingResults: GradingResult[]
-	/** Called when a grading annotation region is clicked, with the question number. */
-	onAnnotationClick?: (questionNumber: string) => void
+	/** Called when a graded answer region is clicked, with the question number. */
+	onGradedRegionClick?: (questionNumber: string) => void
 	/** When true, shows debug labels on Gemini-fallback regions. */
 	debugMode?: boolean
-	/** Enrichment annotations — filtered per page internally. */
+	/** Mark overlays — filtered per page internally. */
 	annotations?: StudentPaperAnnotation[]
 	/** Controls mark + tag overlay visibility. */
 	showMarks?: boolean
@@ -120,13 +120,14 @@ export function AnnotatedScanColumn({
 	highlightedTokenIds?: Set<string> | null
 	/** Called when a token is hovered on the scan. */
 }) {
-	// Map question_id → question_number for enrichment annotation clicks
+	// Map question_id → question_number so a mark click can route to the
+	// matching graded region's question navigation.
 	const questionIdToNumber = new Map(
 		gradingResults.map((r) => [r.question_id, r.question_number]),
 	)
-	const handleEnrichmentClick = (questionId: string) => {
+	const handleMarkClick = (questionId: string) => {
 		const questionNumber = questionIdToNumber.get(questionId)
-		if (questionNumber) onAnnotationClick?.(questionNumber)
+		if (questionNumber) onGradedRegionClick?.(questionNumber)
 	}
 
 	// Outer scroll: when a single token is highlighted, scroll the containing
@@ -196,12 +197,12 @@ export function AnnotatedScanColumn({
 										? gradingAnns
 										: undefined
 								}
-								onAnnotationClick={onAnnotationClick}
+								onGradedRegionClick={onGradedRegionClick}
 								debugMode={debugMode}
 								annotations={pageAnnotations}
 								showMarks={showMarks}
 								showChains={showChains}
-								onEnrichmentAnnotationClick={handleEnrichmentClick}
+								onMarkClick={handleMarkClick}
 								highlightedTokenIds={highlightedTokenIds}
 							/>
 						) : (
@@ -218,7 +219,7 @@ export function AnnotatedScanColumn({
 										<div key={idx}>
 											<SimpleRegionButton
 												annotation={ann}
-												onAnnotationClick={onAnnotationClick}
+												onGradedRegionClick={onGradedRegionClick}
 											/>
 											{debugMode && ann.source === "gemini_fallback" && (
 												<span

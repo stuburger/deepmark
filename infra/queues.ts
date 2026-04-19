@@ -35,9 +35,6 @@ const studentPaperOcrDlq = new sst.aws.Queue("StudentPaperOcrDLQ", {
 const studentPaperGradingDlq = new sst.aws.Queue("StudentPaperGradingDLQ", {
 	visibilityTimeout: "1 minute",
 })
-const studentPaperEnrichDlq = new sst.aws.Queue("StudentPaperEnrichDLQ", {
-	visibilityTimeout: "1 minute",
-})
 
 // OCR queue: manually triggered by server action after teacher finalises upload
 export const studentPaperOcrQueue = new sst.aws.Queue("StudentPaperOcrQueue", {
@@ -45,21 +42,12 @@ export const studentPaperOcrQueue = new sst.aws.Queue("StudentPaperOcrQueue", {
 	dlq: { queue: studentPaperOcrDlq.arn, retry: 2 },
 })
 
-// Grading queue: manually triggered by server action after teacher selects exam paper
+// Grading queue: manually triggered by server action after teacher selects exam paper.
+// Grading + inline annotation run in the same Lambda — no downstream enrichment queue.
 export const studentPaperQueue = new sst.aws.Queue("StudentPaperQueue", {
 	visibilityTimeout: "10 minutes",
 	dlq: { queue: studentPaperGradingDlq.arn, retry: 2 },
 })
-
-// Enrich queue: automatically triggered by student-paper-grade once grading completes.
-// Generates inline annotations on scanned scripts using mark scheme + grading results.
-export const studentPaperEnrichQueue = new sst.aws.Queue(
-	"StudentPaperEnrichQueue",
-	{
-		visibilityTimeout: "10 minutes",
-		dlq: { queue: studentPaperEnrichDlq.arn, retry: 2 },
-	},
-)
 
 scansBucket.notify({
 	notifications: [
@@ -192,10 +180,12 @@ studentPaperOcrQueue.subscribe({
 })
 
 // Triggered automatically by student-paper-extract once OCR + reconciliation + attribution completes.
-// Handler: pure assessment — loads questions and mark schemes, grades each answer via the
-// MarkerOrchestrator (Deterministic → LevelOfResponse → LLM), streams incremental results to
-// the DB, and stores the full grading_results JSON on the job. If a Student record is linked,
-// also writes normalised Answer + MarkingResult rows. On completion enqueues studentPaperEnrichQueue.
+// Handler: loads questions + mark schemes, grades each answer via the MarkerOrchestrator
+// (Deterministic → LevelOfResponse → LLM), and for each graded question also produces inline
+// annotations (deterministic tick/cross for MCQ and point-based; Gemini-authored for LoR).
+// Streams incremental grading results to the DB; writes annotations and LLM snapshots on the
+// GradingRun when complete. If a Student record is linked, also writes normalised Answer +
+// MarkingResult rows.
 studentPaperQueue.subscribe({
 	handler: "packages/backend/src/processors/student-paper-grade.handler",
 	link: [
@@ -206,23 +196,6 @@ studentPaperQueue.subscribe({
 		scansBucket,
 		vapidPublicKey,
 		vapidPrivateKey,
-		studentPaperEnrichQueue,
-	],
-	timeout: "8 minutes",
-	memory: "1 GB",
-})
-
-// Triggered automatically by student-paper-grade once grading completes.
-// Generates inline annotations for each graded question using mark scheme context,
-// grading results, and OCR tokens. Annotations are anchored to specific token spans.
-studentPaperEnrichQueue.subscribe({
-	handler: "packages/backend/src/processors/student-paper-enrich.handler",
-	link: [
-		neonPostgres,
-		geminiApiKey,
-		openAiApiKey,
-		anthropicApiKey,
-		scansBucket,
 	],
 	timeout: "10 minutes",
 	memory: "1 GB",
@@ -238,12 +211,6 @@ studentPaperOcrDlq.subscribe({
 
 studentPaperGradingDlq.subscribe({
 	handler: "packages/backend/src/processors/student-paper-grading-dlq.handler",
-	link: [neonPostgres],
-	timeout: "30 seconds",
-})
-
-studentPaperEnrichDlq.subscribe({
-	handler: "packages/backend/src/processors/student-paper-enrich-dlq.handler",
 	link: [neonPostgres],
 	timeout: "30 seconds",
 })

@@ -149,9 +149,9 @@ export function deriveAnnotationsFromDoc(
 
 				annotations.push({
 					id: dedupeKey,
-					// Derived annotations don't carry the server-side enrichment_run_id.
+					// Derived annotations don't carry the server-side grading_run_id.
 					// Source + linkage is decided by the server on save via the diff.
-					enrichment_run_id: null,
+					grading_run_id: null,
 					question_id: questionId,
 					page_order: pageOrder,
 					overlay_type: entry.overlayType,

@@ -44,7 +44,7 @@ function makeAnnotation(
 ): StudentPaperAnnotation {
 	return {
 		id,
-		enrichment_run_id: "run1",
+		grading_run_id: "run1",
 		question_id: "q1",
 		page_order: 1,
 		overlay_type: overlayType,

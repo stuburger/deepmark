@@ -1,6 +1,6 @@
+import { queryKeys } from "@/lib/query-keys"
 import { QueryClient } from "@tanstack/react-query"
 import { describe, expect, it, vi } from "vitest"
-import { queryKeys } from "@/lib/query-keys"
 import { invalidateOnStageTransitions } from "../stages/transitions"
 import type { JobStages, StageStatus } from "../stages/types"
 
@@ -17,13 +17,13 @@ function stage(status: StageStatus) {
 function build(
 	ocr: StageStatus,
 	grading: StageStatus,
-	enrichment: StageStatus,
+	annotation: StageStatus,
 ): JobStages {
 	return {
 		jobId: "job_1",
 		ocr: stage(ocr),
 		grading: stage(grading),
-		enrichment: stage(enrichment),
+		annotation: stage(annotation),
 	}
 }
 
@@ -31,7 +31,12 @@ describe("invalidateOnStageTransitions", () => {
 	it("is a no-op when prev is null (initial snapshot)", () => {
 		const qc = new QueryClient()
 		const spy = vi.spyOn(qc, "invalidateQueries")
-		invalidateOnStageTransitions(qc, "job_1", null, build("done", "done", "done"))
+		invalidateOnStageTransitions(
+			qc,
+			"job_1",
+			null,
+			build("done", "done", "done"),
+		)
 		expect(spy).not.toHaveBeenCalled()
 	})
 
@@ -69,7 +74,7 @@ describe("invalidateOnStageTransitions", () => {
 		})
 	})
 
-	it("invalidates jobAnnotations when enrichment flips to done", () => {
+	it("invalidates jobAnnotations when annotation flips to done", () => {
 		const qc = new QueryClient()
 		const spy = vi.spyOn(qc, "invalidateQueries")
 		invalidateOnStageTransitions(

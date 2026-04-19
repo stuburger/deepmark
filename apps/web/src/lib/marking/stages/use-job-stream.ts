@@ -53,16 +53,13 @@ export function useJobStream(jobId: string): void {
 			console.log("[SSE]", e.type, {
 				ocr: next.ocr.status,
 				grading: next.grading.status,
-				enrichment: next.enrichment.status,
+				annotation: next.annotation.status,
 				prevOcr: prev?.ocr.status ?? null,
 				prevGrading: prev?.grading.status ?? null,
-				prevEnrichment: prev?.enrichment.status ?? null,
+				prevAnnotation: prev?.annotation.status ?? null,
 			})
 
-			queryClient.setQueryData<JobStages>(
-				queryKeys.jobStages(jobId),
-				next,
-			)
+			queryClient.setQueryData<JobStages>(queryKeys.jobStages(jobId), next)
 
 			// Fan out: when a stage flips to `done`, dependent queries
 			// (studentJob, jobScanUrls, jobPageTokens, jobAnnotations) hold

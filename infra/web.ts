@@ -12,7 +12,6 @@ import {
 	exemplarQueue,
 	markSchemePdfQueue,
 	questionPaperQueue,
-	studentPaperEnrichQueue,
 	studentPaperOcrQueue,
 	studentPaperQueue,
 	vapidPrivateKey,
@@ -38,7 +37,6 @@ export const web = new sst.aws.Nextjs("Web", {
 		anthropicApiKey,
 		vapidPublicKey,
 		vapidPrivateKey,
-		studentPaperEnrichQueue,
 	],
 	dev: {
 		url: "http://localhost:3000",

@@ -69,13 +69,6 @@ enum ScanStatus {
   cancelled
 }
 
-enum EnrichmentStatus {
-  pending
-  processing
-  complete
-  failed
-}
-
 enum AnnotationSource {
   ai
   teacher
@@ -485,8 +478,8 @@ model StudentPaperPageToken {
 
 model StudentPaperAnnotation {
   id              String   @id @default(cuid())
-  /// Null for teacher-authored annotations (source=teacher).
-  enrichment_run_id String?
+  /// Null for teacher-authored annotations (source=teacher). Set to the owning GradingRun for AI annotations.
+  grading_run_id  String?
   /// Owning submission. Always set — required for every annotation.
   submission_id     String
   /// Origin of the annotation — AI pipeline or teacher edit.
@@ -512,13 +505,13 @@ model StudentPaperAnnotation {
 
   sort_order      Int      @default(0)
   created_at      DateTime @default(now())
-  updated_at      DateTime? @updatedAt 
+  updated_at      DateTime? @updatedAt
 
-  enrichment_run  EnrichmentRun?    @relation("EnrichmentRunAnnotations", fields: [enrichment_run_id], references: [id], onDelete: Cascade)
+  grading_run     GradingRun?       @relation("GradingRunAnnotations", fields: [grading_run_id], references: [id], onDelete: Cascade)
   submission      StudentSubmission @relation("SubmissionAnnotations", fields: [submission_id], references: [id])
 
-  @@index([enrichment_run_id, page_order])
-  @@index([enrichment_run_id, question_id])
+  @@index([grading_run_id, page_order])
+  @@index([grading_run_id, question_id])
   @@index([submission_id, deleted_at])
   @@map("student_paper_annotations")
 }
@@ -600,35 +593,24 @@ model GradingRun {
   examiner_summary String?
   // LlmRunSnapshot — which models were configured and which executed
   llm_snapshot  Json?
+  /// LlmRunSnapshot for the annotation step (runs inside the grade Lambda).
+  annotation_llm_snapshot  Json?
+  /// Error message if the annotation step failed. Grading can succeed even if this is set.
+  annotation_error         String?
+  /// Timestamp when the annotation step finished. Null while annotation has not completed.
+  annotations_completed_at DateTime?
   started_at    DateTime?
   completed_at  DateTime?
   created_at    DateTime      @default(now())
 
-  submission      StudentSubmission    @relation(fields: [submission_id], references: [id])
-  ocr_run         OcrRun               @relation(fields: [ocr_run_id], references: [id])
-  enrichment_runs EnrichmentRun[]
-  feedback        SubmissionFeedback[] @relation("GradingRunFeedback")
+  submission StudentSubmission        @relation(fields: [submission_id], references: [id])
+  ocr_run    OcrRun                   @relation(fields: [ocr_run_id], references: [id])
+  annotations StudentPaperAnnotation[] @relation("GradingRunAnnotations")
+  feedback   SubmissionFeedback[]     @relation("GradingRunFeedback")
 
   @@index([submission_id])
   @@index([ocr_run_id])
   @@map("grading_runs")
-}
-
-model EnrichmentRun {
-  id             String           @id @default(cuid())
-  grading_run_id String
-  status         EnrichmentStatus @default(pending)
-  error          String?
-  // LlmRunSnapshot — which models were configured and which executed
-  llm_snapshot   Json?
-  completed_at   DateTime?
-  created_at     DateTime         @default(now())
-
-  grading_run GradingRun               @relation(fields: [grading_run_id], references: [id])
-  annotations StudentPaperAnnotation[] @relation("EnrichmentRunAnnotations")
-
-  @@index([grading_run_id])
-  @@map("enrichment_runs")
 }
 
 model ExemplarAnswer {

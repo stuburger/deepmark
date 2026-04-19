@@ -1,14 +1,13 @@
 import { logger } from "@/lib/infra/logger"
 import { outputSchema } from "@/lib/infra/output-schema"
-import { parseMarkPointsFromPrisma } from "@mcp-gcse/shared"
 import { generateText } from "ai"
 import { buildAnnotationPrompt } from "./annotation-prompt"
 import { AnnotationPlanSchema } from "./annotation-schema"
-import { buildPayload, inferOverlayType } from "./payload-builder"
+import { buildOverlay } from "./payload-builder"
 import { resolveTokenSpan } from "./token-spans"
 import type { AnnotateOneQuestionArgs, PendingAnnotation } from "./types"
 
-const TAG = "student-paper-enrich"
+const TAG = "annotations"
 
 export async function annotateOneQuestion(
 	args: AnnotateOneQuestionArgs,
@@ -43,18 +42,15 @@ export async function annotateOneQuestion(
 		pageOrder: t.page_order,
 	}))
 
-	// Parse mark scheme mark points for the prompt
 	const markSchemeContext = markScheme
 		? {
 				description: markScheme.description,
 				guidance: markScheme.guidance,
-				markPoints: parseMarkPointsFromPrisma(markScheme.mark_points).map(
-					(mp) => ({
-						pointNumber: mp.pointNumber,
-						description: mp.description,
-						criteria: mp.criteria,
-					}),
-				),
+				markPoints: markScheme.mark_points.map((mp) => ({
+					pointNumber: mp.pointNumber,
+					description: mp.description,
+					criteria: mp.criteria,
+				})),
 				markingMethod: markScheme.marking_method,
 				content: markScheme.content,
 			}
@@ -109,14 +105,13 @@ export async function annotateOneQuestion(
 			continue
 		}
 
-		const payload = buildPayload(item)
+		const overlay = buildOverlay(item)
 
 		pending.push({
 			questionId: gradingResult.question_id,
 			pageOrder: span.pageOrder,
-			overlayType: inferOverlayType(item),
+			...overlay,
 			sentiment: item.sentiment,
-			payload,
 			anchorTokenStartId: span.startTokenId,
 			anchorTokenEndId: span.endTokenId,
 			bbox: span.bbox,

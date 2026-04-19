@@ -110,7 +110,9 @@ export function McqTableView({
 											role="button"
 											tabIndex={0}
 											title={
-												override ? "Click to revert to AI mark" : "Click to toggle mark"
+												override
+													? "Click to revert to AI mark"
+													: "Click to toggle mark"
 											}
 											className="text-right cursor-pointer"
 											onMouseDown={(e) => e.stopPropagation()}

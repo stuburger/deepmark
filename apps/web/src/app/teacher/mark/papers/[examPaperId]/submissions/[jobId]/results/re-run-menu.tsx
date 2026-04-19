@@ -10,13 +10,7 @@ import {
 import { retriggerGrading, retriggerOcr } from "@/lib/marking/stages/mutations"
 import { cn } from "@/lib/utils"
 import { useMutation } from "@tanstack/react-query"
-import {
-	ChevronDown,
-	Loader2,
-	RefreshCw,
-	ScanText,
-	Sparkles,
-} from "lucide-react"
+import { ChevronDown, Loader2, RefreshCw, ScanText } from "lucide-react"
 import { toast } from "sonner"
 
 /**
@@ -25,15 +19,16 @@ import { toast } from "sonner"
  * The per-pip popovers in `StagePips` also expose stage-specific re-runs, but
  * this dropdown is the discoverable starting point teachers reach for when
  * they know something went wrong but haven't yet looked at individual stages.
+ *
+ * Both Re-scan and Re-grade create a new superseded submission so the original
+ * result is preserved as history — no in-place re-run path exists.
  */
 export function ReRunMenu({
 	jobId,
 	onNavigateToJob,
-	onReAnnotate,
 }: {
 	jobId: string
 	onNavigateToJob: (newJobId: string) => void
-	onReAnnotate?: () => void
 }) {
 	const gradingMutation = useMutation({
 		mutationFn: () => retriggerGrading(jobId),
@@ -93,15 +88,6 @@ export function ReRunMenu({
 					<RefreshCw className="h-3.5 w-3.5 mr-2 shrink-0" />
 					Re-grade
 				</DropdownMenuItem>
-				{onReAnnotate && (
-					<DropdownMenuItem
-						className="whitespace-nowrap"
-						onClick={onReAnnotate}
-					>
-						<Sparkles className="h-3.5 w-3.5 mr-2 shrink-0" />
-						Re-annotate
-					</DropdownMenuItem>
-				)}
 			</DropdownMenuContent>
 		</DropdownMenu>
 	)

@@ -87,8 +87,8 @@ export async function deleteSubmission(
 	if (!sub) return { ok: false, error: "Submission not found" }
 
 	await db.$transaction(async (tx) => {
-		// Delete child runs then submission
-		await tx.enrichmentRun.deleteMany({ where: { grading_run_id: jobId } })
+		// Delete child runs then submission. AI annotations cascade-delete with
+		// their grading run (FK onDelete: Cascade on grading_run_id).
 		await tx.gradingRun.deleteMany({ where: { submission_id: jobId } })
 		await tx.ocrRun.deleteMany({ where: { submission_id: jobId } })
 		await tx.studentSubmission.delete({ where: { id: jobId } })

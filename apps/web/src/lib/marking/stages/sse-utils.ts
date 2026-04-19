@@ -14,7 +14,7 @@ function stageFp(s: Stage): string {
 }
 
 export function fingerprint(stages: JobStages): string {
-	return `${stageFp(stages.ocr)}#${stageFp(stages.grading)}#${stageFp(stages.enrichment)}`
+	return `${stageFp(stages.ocr)}#${stageFp(stages.grading)}#${stageFp(stages.annotation)}`
 }
 
 /**

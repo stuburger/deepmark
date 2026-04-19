@@ -119,7 +119,7 @@ describe("SSE route /api/submissions/[jobId]/events", () => {
 			expect(snapshotData.jobId).toBe(jobId)
 			expect(snapshotData.ocr.status).toBe("done")
 			expect(snapshotData.grading.status).toBe("generating")
-			expect(snapshotData.enrichment.status).toBe("not_started")
+			expect(snapshotData.annotation.status).toBe("not_started")
 
 			// 2. Flip grading → complete; next 2s poll should emit an update
 			await db.gradingRun.update({

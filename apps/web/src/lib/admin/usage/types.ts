@@ -25,7 +25,7 @@ export type UsageByDate = {
 	date: string
 	ocr_tokens: number
 	grading_tokens: number
-	enrichment_tokens: number
+	annotation_tokens: number
 }
 
 export type UsageByUser = {

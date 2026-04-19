@@ -13,7 +13,7 @@ import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts"
 const chartConfig = {
 	ocr_tokens: { label: "OCR", color: "hsl(var(--chart-1))" },
 	grading_tokens: { label: "Grading", color: "hsl(var(--chart-2))" },
-	enrichment_tokens: { label: "Enrichment", color: "hsl(var(--chart-3))" },
+	annotation_tokens: { label: "Annotation", color: "hsl(var(--chart-3))" },
 } satisfies ChartConfig
 
 export function UsageOverTimeChart({ data }: { data: UsageByDate[] }) {
@@ -66,10 +66,10 @@ export function UsageOverTimeChart({ data }: { data: UsageByDate[] }) {
 				/>
 				<Area
 					type="monotone"
-					dataKey="enrichment_tokens"
+					dataKey="annotation_tokens"
 					stackId="1"
-					fill="var(--color-enrichment_tokens)"
-					stroke="var(--color-enrichment_tokens)"
+					fill="var(--color-annotation_tokens)"
+					stroke="var(--color-annotation_tokens)"
 					fillOpacity={0.4}
 				/>
 			</AreaChart>

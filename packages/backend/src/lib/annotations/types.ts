@@ -1,17 +1,37 @@
 import type { GradingResult } from "@/lib/grading/grade-questions"
-import type { LlmRunner, NormalisedBox } from "@mcp-gcse/shared"
+import type { MarkingMethod } from "@mcp-gcse/db"
+import type {
+	AnnotationPayload,
+	ChainPayload,
+	GcseMarkPoint,
+	LlmRunner,
+	NormalisedBox,
+} from "@mcp-gcse/shared"
 
-export type PendingAnnotation = {
+type BasePendingAnnotation = {
 	questionId: string
 	pageOrder: number
-	overlayType: string
 	sentiment: string
-	payload: Record<string, unknown>
 	anchorTokenStartId: string | null
 	anchorTokenEndId: string | null
 	bbox: NormalisedBox
 	sortOrder: number
 }
+
+/**
+ * Discriminated by overlayType: "annotation" pairs with AnnotationPayload,
+ * "chain" pairs with ChainPayload. Keeps construction sites honest and
+ * removes the need for a wildcard `Record<string, unknown>` payload.
+ */
+export type PendingAnnotation =
+	| (BasePendingAnnotation & {
+			overlayType: "annotation"
+			payload: AnnotationPayload
+	  })
+	| (BasePendingAnnotation & {
+			overlayType: "chain"
+			payload: ChainPayload
+	  })
 
 export type AnswerRegionRow = {
 	question_id: string
@@ -22,8 +42,8 @@ export type AnswerRegionRow = {
 export type MarkSchemeForAnnotation = {
 	description: string
 	guidance: string | null
-	mark_points: unknown
-	marking_method: string
+	mark_points: GcseMarkPoint[]
+	marking_method: MarkingMethod
 	content: string
 }
 

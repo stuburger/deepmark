@@ -95,7 +95,7 @@ Checking `a.overlay_type === "mark"` narrows `a.payload` to `MarkPayload` automa
 
 1. **Persistence (Phase 8)** — Teacher marks exist only in PM state. Switching away from sheet view loses them. Need: `source: "ai" | "teacher"` field, save button, server action to diff + persist.
 
-2. **`enrichment_run_id: "teacher"` is overloaded** — Used as a stringly-typed source indicator. Should become a proper `source` field on the type.
+2. **(Resolved, April 2026)** The FK is now `grading_run_id` (the enrichment_runs row was removed when annotation was folded into the grade Lambda), and the AI-vs-teacher distinction lives on the `source` column.
 
 3. **Real data tests** — All test fixtures are synthetic. Should pull a real submission from Neon and build fixtures from it.
 

@@ -1,4 +1,11 @@
-import type { EnrichmentStatus, JobEvent } from "@mcp-gcse/db"
+import type { JobEvent } from "@mcp-gcse/db"
+
+/**
+ * Status of the inline annotation step that now runs inside the grade Lambda.
+ * Derived from GradingRun fields: `annotations_completed_at` and
+ * `annotation_error`. No separate enrichment_runs row exists anymore.
+ */
+export type AnnotationStatus = "pending" | "processing" | "complete" | "failed"
 import type {
 	AnnotationPayload as SharedAnnotationPayload,
 	AnyAnnotationPayload as SharedAnyAnnotationPayload,
@@ -88,7 +95,7 @@ export type AnyAnnotationPayload = SharedAnyAnnotationPayload
 type AnnotationBase = {
 	id: string
 	/** Null for teacher-authored annotations (source=teacher) and for marks derived from the PM editor that never touched the server. */
-	enrichment_run_id: string | null
+	grading_run_id: string | null
 	question_id: string
 	page_order: number
 	sentiment: string | null
@@ -112,10 +119,6 @@ export type StudentPaperAnnotation =
 
 export type GetJobAnnotationsResult =
 	| { ok: true; annotations: StudentPaperAnnotation[] }
-	| { ok: false; error: string }
-
-export type TriggerEnrichmentResult =
-	| { ok: true }
 	| { ok: false; error: string }
 
 // ─── Grading types ───────────────────────────────────────────────────────────
@@ -170,19 +173,19 @@ export type StudentPaperJobPayload = {
 	created_at: Date
 	extracted_answers: ExtractedAnswer[] | null
 	job_events: JobEvent[] | null
-	enrichment_status: EnrichmentStatus | null
+	/** Derived annotation status — annotations now run inside the grade Lambda. */
+	annotation_status: AnnotationStatus | null
 	level_descriptors: string | null
 	/** IDs of the current domain model run records. */
 	submission_id?: string
 	ocr_run_id?: string
 	grading_run_id?: string
-	enrichment_run_id?: string
 	/** 3-line LLM-generated student summary (strength / weakness / improvement). */
 	examiner_summary?: string | null
 	/** LLM run snapshots — which models were configured and which executed. */
 	ocr_llm_snapshot?: unknown
 	grading_llm_snapshot?: unknown
-	enrichment_llm_snapshot?: unknown
+	annotation_llm_snapshot?: unknown
 }
 
 export type GetStudentPaperJobResult =

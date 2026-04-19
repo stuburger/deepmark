@@ -44,12 +44,12 @@ export async function saveAnnotationEdits(
 	// The cast on the whole array is needed because TS can't prove that
 	// the (overlay_type, payload) pair forms one of the discriminated-union
 	// variants from the generic DB row — that invariant is enforced upstream
-	// by the enrichment pipeline persisting parseable payloads.
+	// by the annotation pipeline persisting parseable payloads.
 	const dbState = dbRows.map(
 		(r) =>
 			({
 				id: r.id,
-				enrichment_run_id: r.enrichment_run_id,
+				grading_run_id: r.grading_run_id,
 				question_id: r.question_id,
 				page_order: r.page_order,
 				overlay_type: r.overlay_type as "annotation" | "chain",
@@ -73,7 +73,7 @@ export async function saveAnnotationEdits(
 				data: {
 					id: a.id,
 					submission_id: submission.id,
-					enrichment_run_id: null,
+					grading_run_id: null,
 					source: "teacher",
 					question_id: a.question_id,
 					page_order: a.page_order,

@@ -44,7 +44,7 @@ export const jobStagesSchema = z.object({
 	jobId: z.string(),
 	ocr: stageSchema,
 	grading: stageSchema,
-	enrichment: stageSchema,
+	annotation: stageSchema,
 })
 
 // Compile-time assertion: the inferred schema type must equal the canonical

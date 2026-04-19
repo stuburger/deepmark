@@ -8,7 +8,7 @@ function mk(
 ): StudentPaperAnnotation {
 	return {
 		id,
-		enrichment_run_id: "run-1",
+		grading_run_id: "run-1",
 		question_id: "q1",
 		page_order: 1,
 		overlay_type: "annotation",

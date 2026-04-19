@@ -26,7 +26,7 @@ describe("deriveStageStatus", () => {
 
 	it("maps cancelled to cancelled", () => {
 		// cancelled only exists on OcrStatus and GradingStatus, not
-		// EnrichmentStatus; we surface it distinctly so the submission-level
+		// AnnotationStatus; we surface it distinctly so the submission-level
 		// cancelled phase renders its own panel.
 		expect(deriveStageStatus("cancelled")).toBe("cancelled")
 	})
@@ -56,12 +56,12 @@ describe("allTerminal", () => {
 	const build = (
 		ocr: StageStatus,
 		grading: StageStatus,
-		enrichment: StageStatus,
+		annotation: StageStatus,
 	): JobStages => ({
 		jobId: "job-1",
 		ocr: stage(ocr),
 		grading: stage(grading),
-		enrichment: stage(enrichment),
+		annotation: stage(annotation),
 	})
 
 	it("is true when every stage is done", () => {

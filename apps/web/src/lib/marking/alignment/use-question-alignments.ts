@@ -68,7 +68,6 @@ export function useQuestionAlignments(
 			const qAnnotations = annotations.filter(
 				(a) => a.question_id === r.question_id,
 			)
-
 			;(diag.perQuestion as Record<string, unknown>)[r.question_number] = {
 				tokens: qTokens.length,
 				annotations: qAnnotations.length,
@@ -92,17 +91,12 @@ export function useQuestionAlignments(
 			if (derived.length > 0) {
 				marks.set(r.question_id, derived)
 			}
-
-			;(
-				(diag.perQuestion as Record<string, Record<string, unknown>>)[
-					r.question_number
-				]
-			).derivedMarks = derived.length
-			;(
-				(diag.perQuestion as Record<string, Record<string, unknown>>)[
-					r.question_number
-				]
-			).alignmentSize = Object.keys(alignment.tokenMap).length
+			;(diag.perQuestion as Record<string, Record<string, unknown>>)[
+				r.question_number
+			].derivedMarks = derived.length
+			;(diag.perQuestion as Record<string, Record<string, unknown>>)[
+				r.question_number
+			].alignmentSize = Object.keys(alignment.tokenMap).length
 		}
 
 		console.log("[alignments]", diag)

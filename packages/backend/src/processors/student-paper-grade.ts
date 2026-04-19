@@ -1,16 +1,16 @@
 import { db } from "@/db"
+import { loadAnnotationContext } from "@/lib/annotations/data-loading"
+import { persistAnnotations } from "@/lib/annotations/persist-annotations"
+import type { PendingAnnotation } from "@/lib/annotations/types"
 import { generateExaminerSummary } from "@/lib/grading/examiner-summary"
 import { loadExamPaperForGrading } from "@/lib/grading/grade-queries"
 import {
 	type GradingResult,
-	gradeAllQuestions,
+	gradeAndAnnotateAll,
 } from "@/lib/grading/grade-questions"
 import { createMarkerOrchestrator } from "@/lib/grading/grader-config"
 import { persistAnswerRows } from "@/lib/grading/persist-answers"
-import {
-	type QuestionListItem,
-	loadQuestionList,
-} from "@/lib/grading/question-list"
+import { loadQuestionList } from "@/lib/grading/question-list"
 import {
 	type CancellationToken,
 	createCancellationToken,
@@ -23,14 +23,10 @@ import {
 	markJobFailed,
 	parseSqsJobId,
 } from "@/lib/infra/sqs-job-runner"
-import { SQSClient, SendMessageCommand } from "@aws-sdk/client-sqs"
 import { type GradingStatus, logGradingRunEvent } from "@mcp-gcse/db"
 import type { LlmRunner, MarkerOrchestrator } from "@mcp-gcse/shared"
-import { Resource } from "sst"
 
 const TAG = "student-paper-grade"
-
-const sqs = new SQSClient({})
 
 type ExtractedAnswersRaw = {
 	student_name?: string | null
@@ -55,8 +51,9 @@ export async function handler(
 		const cancellation = createCancellationToken(jobId)
 		try {
 			const llm = createLlmRunner()
+			const annotationLlm = createLlmRunner()
 			const orchestrator = createMarkerOrchestrator(llm)
-			await gradeJob({ jobId, orchestrator, llm, cancellation })
+			await gradeJob({ jobId, orchestrator, llm, annotationLlm, cancellation })
 		} catch (err) {
 			await markJobFailed(jobId, TAG, "grading", err)
 			failures.push({ itemIdentifier: record.messageId })
@@ -74,6 +71,7 @@ type GradeJobArgs = {
 	jobId: string
 	orchestrator: MarkerOrchestrator
 	llm: LlmRunner
+	annotationLlm: LlmRunner
 	cancellation: CancellationToken
 }
 
@@ -81,6 +79,7 @@ async function gradeJob({
 	jobId,
 	orchestrator,
 	llm,
+	annotationLlm,
 	cancellation,
 }: GradeJobArgs): Promise<void> {
 	logger.info(TAG, "Grading job received", { jobId })
@@ -122,14 +121,21 @@ async function gradeJob({
 
 	logger.info(TAG, "Answer map built", { jobId, answer_count: answerMap.size })
 
-	const gradingResults = await gradeAllQuestions({
-		questionList,
-		answerMap,
-		examPaper,
-		orchestrator,
-		jobId,
-		cancellation,
-	})
+	// Annotation context must be loaded before grading so each question can
+	// grade → annotate in the same Promise.all pass.
+	const annotationContext = await loadAnnotationContext(jobId)
+
+	const { results: gradingResults, annotationsByQuestion } =
+		await gradeAndAnnotateAll({
+			questionList,
+			answerMap,
+			examPaper,
+			orchestrator,
+			jobId,
+			cancellation,
+			annotationContext,
+			annotationLlm,
+		})
 
 	if (cancellation.isCancelled()) {
 		logger.info(TAG, "Job was cancelled — skipping completion", { jobId })
@@ -148,15 +154,19 @@ async function gradeJob({
 		// biome-ignore lint/style/noNonNullAssertion: latestOcr verified non-null above
 		ocrRun: latestOcr!,
 		gradingResults,
+		annotationsByQuestion,
 		jobId,
 		examinerSummary,
 	})
 
-	// Write LLM snapshot — informational, not critical
+	// Write LLM snapshots — informational, not critical
 	await db.gradingRun
 		.update({
 			where: { id: jobId },
-			data: { llm_snapshot: llm.toSnapshot() },
+			data: {
+				llm_snapshot: llm.toSnapshot(),
+				annotation_llm_snapshot: annotationLlm.toSnapshot(),
+			},
 		})
 		.catch((err) =>
 			logger.warn(TAG, "Failed to write LLM snapshot", {
@@ -218,41 +228,109 @@ function extractRawAnswers(source: { extracted_answers_raw: unknown }): Array<{
 	return (raw as ExtractedAnswersRaw).answers
 }
 
-async function completeGradingJob({
-	sub,
-	ocrRun,
-	gradingResults,
-	jobId,
-	examinerSummary,
-}: {
+type CompleteGradingJobArgs = {
 	sub: SubmissionWithOcr
 	ocrRun: { extracted_answers_raw: unknown }
 	gradingResults: GradingResult[]
+	annotationsByQuestion: Map<string, PendingAnnotation[]>
 	jobId: string
 	examinerSummary: string | null
-}): Promise<void> {
-	const totalAwarded = gradingResults.reduce((s, r) => s + r.awarded_score, 0)
-	const totalMax = gradingResults.reduce((s, r) => s + r.max_score, 0)
+}
+
+async function completeGradingJob(args: CompleteGradingJobArgs): Promise<void> {
+	const totals = computeTotals(args.gradingResults)
 
 	logger.info(TAG, "Grading job complete", {
-		jobId,
-		total_awarded: totalAwarded,
-		total_max: totalMax,
-		questions_graded: gradingResults.length,
+		jobId: args.jobId,
+		total_awarded: totals.totalAwarded,
+		total_max: totals.totalMax,
+		questions_graded: args.gradingResults.length,
 	})
 
-	// Update student_name on submission if OCR extracted one
+	await updateStudentNameIfExtracted(args.jobId, args.sub, args.ocrRun)
+	const annotationError = await persistAnnotationsBestEffort(
+		args.jobId,
+		args.annotationsByQuestion,
+	)
+	await markGradingRunComplete({
+		jobId: args.jobId,
+		gradingResults: args.gradingResults,
+		examinerSummary: args.examinerSummary,
+		annotationError,
+	})
+	logGradingCompleteEvent(args.jobId, totals)
+	await persistAnswerRowsIfLinked(args)
+	await notifyBatchIfComplete(args.sub.batch_job_id)
+}
+
+function computeTotals(gradingResults: GradingResult[]): {
+	totalAwarded: number
+	totalMax: number
+} {
+	return {
+		totalAwarded: gradingResults.reduce((s, r) => s + r.awarded_score, 0),
+		totalMax: gradingResults.reduce((s, r) => s + r.max_score, 0),
+	}
+}
+
+async function updateStudentNameIfExtracted(
+	jobId: string,
+	sub: SubmissionWithOcr,
+	ocrRun: { extracted_answers_raw: unknown },
+): Promise<void> {
 	const extractedName = (
 		ocrRun.extracted_answers_raw as ExtractedAnswersRaw
 	).student_name?.trim()
-	if (extractedName && extractedName !== sub.student_name) {
-		await db.studentSubmission.update({
-			where: { id: jobId },
-			data: { student_name: extractedName },
-		})
-	}
+	if (!extractedName || extractedName === sub.student_name) return
+	await db.studentSubmission.update({
+		where: { id: jobId },
+		data: { student_name: extractedName },
+	})
+}
 
-	// Mark GradingRun complete
+/**
+ * Persist annotations alongside grading (replaces the old enrichment queue hop).
+ * Each question already has a best-effort result — failed per-question annotate
+ * calls return []. Surface any insert failure as annotation_error without
+ * blocking grading completion.
+ */
+async function persistAnnotationsBestEffort(
+	jobId: string,
+	annotationsByQuestion: Map<string, PendingAnnotation[]>,
+): Promise<string | null> {
+	const perQuestionGroups: PendingAnnotation[][] = Array.from(
+		annotationsByQuestion.values(),
+	)
+	const totalAnnotations = perQuestionGroups.reduce((s, g) => s + g.length, 0)
+
+	try {
+		await persistAnnotations(jobId, perQuestionGroups)
+		logger.info(TAG, "Annotations persisted", {
+			jobId,
+			total: totalAnnotations,
+		})
+		return null
+	} catch (err) {
+		const annotationError = err instanceof Error ? err.message : String(err)
+		logger.error(TAG, "Failed to persist annotations", {
+			jobId,
+			error: annotationError,
+		})
+		return annotationError
+	}
+}
+
+async function markGradingRunComplete({
+	jobId,
+	gradingResults,
+	examinerSummary,
+	annotationError,
+}: {
+	jobId: string
+	gradingResults: GradingResult[]
+	examinerSummary: string | null
+	annotationError: string | null
+}): Promise<void> {
 	await db.gradingRun.update({
 		where: { id: jobId },
 		data: {
@@ -260,37 +338,39 @@ async function completeGradingJob({
 			grading_results: gradingResults,
 			examiner_summary: examinerSummary,
 			completed_at: new Date(),
+			annotations_completed_at: annotationError ? null : new Date(),
+			annotation_error: annotationError,
 			error: null,
 		},
 	})
+}
 
+function logGradingCompleteEvent(
+	jobId: string,
+	totals: { totalAwarded: number; totalMax: number },
+): void {
 	void logGradingRunEvent(db, jobId, {
 		type: "grading_complete",
 		at: new Date().toISOString(),
-		total_awarded: totalAwarded,
-		total_max: totalMax,
+		total_awarded: totals.totalAwarded,
+		total_max: totals.totalMax,
 	})
+}
 
-	if (sub.student_id) {
-		await persistAnswerRows({
-			gradingResults,
-			studentId: sub.student_id,
-			jobId,
-		})
-	}
+async function persistAnswerRowsIfLinked(
+	args: CompleteGradingJobArgs,
+): Promise<void> {
+	if (!args.sub.student_id) return
+	await persistAnswerRows({
+		gradingResults: args.gradingResults,
+		studentId: args.sub.student_id,
+		jobId: args.jobId,
+	})
+}
 
-	if (sub.batch_job_id) {
-		await checkAndNotifyBatchCompletion(sub.batch_job_id)
-	}
-
-	// Pass grading_run_id as job_id so the enrich processor can look up EnrichmentRun directly
-	// (grading_run_id === jobId by the migration convention)
-	await sqs.send(
-		new SendMessageCommand({
-			QueueUrl: Resource.StudentPaperEnrichQueue.url,
-			MessageBody: JSON.stringify({ job_id: jobId }),
-		}),
-	)
+async function notifyBatchIfComplete(batchJobId: string | null): Promise<void> {
+	if (!batchJobId) return
+	await checkAndNotifyBatchCompletion(batchJobId)
 }
 
 // ─── Batch completion check ───────────────────────────────────────────────────

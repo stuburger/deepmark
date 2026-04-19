@@ -2,6 +2,8 @@
 
 import { db } from "@/lib/db"
 import { auth } from "../../auth"
+import { ANNOTATION_BOOKKEEPING_SELECT } from "../selects"
+import { deriveAnnotationStatus } from "../status"
 import { deriveStageStatus } from "./derive"
 import type { GetJobStagesResult, JobStages, Stage } from "./types"
 
@@ -40,6 +42,7 @@ export async function getJobStages(jobId: string): Promise<GetJobStagesResult> {
 					error: true,
 					started_at: true,
 					completed_at: true,
+					...ANNOTATION_BOOKKEEPING_SELECT,
 				},
 			},
 		},
@@ -49,21 +52,6 @@ export async function getJobStages(jobId: string): Promise<GetJobStagesResult> {
 
 	const latestOcr = submission.ocr_runs[0] ?? null
 	const latestGrading = submission.grading_runs[0] ?? null
-
-	// Enrichment runs are keyed off the latest grading run, not the submission.
-	// No grading run yet → enrichment hasn't started.
-	const latestEnrichment = latestGrading
-		? await db.enrichmentRun.findFirst({
-				where: { grading_run_id: latestGrading.id },
-				orderBy: { created_at: "desc" },
-				select: {
-					id: true,
-					status: true,
-					error: true,
-					completed_at: true,
-				},
-			})
-		: null
 
 	const ocr: Stage = {
 		status: deriveStageStatus(latestOcr?.status ?? null),
@@ -81,20 +69,19 @@ export async function getJobStages(jobId: string): Promise<GetJobStagesResult> {
 		error: latestGrading?.error ?? null,
 	}
 
-	const enrichment: Stage = {
-		status: deriveStageStatus(latestEnrichment?.status ?? null),
-		runId: latestEnrichment?.id ?? null,
-		// EnrichmentRun schema has no started_at; use created_at as a proxy if needed later.
+	const annotation: Stage = {
+		status: deriveStageStatus(deriveAnnotationStatus(latestGrading)),
+		runId: latestGrading?.id ?? null,
 		startedAt: null,
-		completedAt: latestEnrichment?.completed_at ?? null,
-		error: latestEnrichment?.error ?? null,
+		completedAt: latestGrading?.annotations_completed_at ?? null,
+		error: latestGrading?.annotation_error ?? null,
 	}
 
 	const stages: JobStages = {
 		jobId: submission.id,
 		ocr,
 		grading,
-		enrichment,
+		annotation,
 	}
 
 	return { ok: true, stages }

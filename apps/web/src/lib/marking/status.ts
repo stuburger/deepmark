@@ -1,4 +1,5 @@
 import type { GradingStatus, OcrStatus, ScanStatus } from "@mcp-gcse/db"
+import type { AnnotationStatus } from "./types"
 
 /**
  * Derives the legacy ScanStatus from the current OcrRun and GradingRun statuses.
@@ -40,5 +41,25 @@ export function deriveScanStatus(
 		}
 	}
 
+	return "pending"
+}
+
+/**
+ * Derives annotation status from the grading run's annotation bookkeeping
+ * fields. The annotation step runs inside the grade Lambda now — there is no
+ * separate enrichment row to look up. Returns `null` when the submission has
+ * never been graded.
+ */
+export function deriveAnnotationStatus(
+	grading: {
+		status: GradingStatus
+		annotations_completed_at: Date | null
+		annotation_error: string | null
+	} | null,
+): AnnotationStatus | null {
+	if (!grading) return null
+	if (grading.annotation_error) return "failed"
+	if (grading.annotations_completed_at) return "complete"
+	if (grading.status === "processing") return "processing"
 	return "pending"
 }

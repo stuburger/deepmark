@@ -47,7 +47,7 @@ function parseSnapshot(raw: unknown): LlmSnapshot | null {
 
 type RawRunRow = {
 	id: string
-	stage: "ocr" | "grading" | "enrichment"
+	stage: "ocr" | "grading" | "annotation"
 	completed_at: Date | null
 	llm_snapshot: unknown
 	user_id: string | null
@@ -61,8 +61,10 @@ type RawRunRow = {
 // ─── Main query ──────────────────────────────────────────────────────────────
 
 export async function getUsageAnalytics(): Promise<UsageAnalyticsData> {
-	// Fetch all three run types with their snapshots in parallel
-	const [ocrRows, gradingRows, enrichmentRows] = await Promise.all([
+	// Fetch OCR and grading runs with snapshots in parallel. Annotation
+	// snapshots are folded into GradingRun.annotation_llm_snapshot — the same
+	// row now carries both the grading and annotation traces.
+	const [ocrRows, gradingRows] = await Promise.all([
 		db.ocrRun.findMany({
 			where: { status: "complete", llm_snapshot: NOT_NULL },
 			include: {
@@ -81,21 +83,6 @@ export async function getUsageAnalytics(): Promise<UsageAnalyticsData> {
 					include: {
 						exam_paper: { select: { title: true } },
 						uploader: { select: { id: true, name: true, email: true } },
-					},
-				},
-			},
-		}),
-		db.enrichmentRun.findMany({
-			where: { status: "complete", llm_snapshot: NOT_NULL },
-			include: {
-				grading_run: {
-					include: {
-						submission: {
-							include: {
-								exam_paper: { select: { title: true } },
-								uploader: { select: { id: true, name: true, email: true } },
-							},
-						},
 					},
 				},
 			},
@@ -128,18 +115,20 @@ export async function getUsageAnalytics(): Promise<UsageAnalyticsData> {
 			paper_title: r.submission.exam_paper?.title ?? null,
 			submission_id: r.submission_id,
 		})),
-		...enrichmentRows.map((r) => ({
-			id: r.id,
-			stage: "enrichment" as const,
-			completed_at: r.completed_at,
-			llm_snapshot: r.llm_snapshot,
-			user_id: r.grading_run.submission.uploader?.id ?? null,
-			user_name: r.grading_run.submission.uploader?.name ?? null,
-			user_email: r.grading_run.submission.uploader?.email ?? null,
-			student_name: r.grading_run.submission.student_name,
-			paper_title: r.grading_run.submission.exam_paper?.title ?? null,
-			submission_id: r.grading_run.submission_id,
-		})),
+		...gradingRows
+			.filter((r) => r.annotation_llm_snapshot !== null)
+			.map((r) => ({
+				id: r.id,
+				stage: "annotation" as const,
+				completed_at: r.annotations_completed_at ?? r.completed_at,
+				llm_snapshot: r.annotation_llm_snapshot,
+				user_id: r.submission.uploader?.id ?? null,
+				user_name: r.submission.uploader?.name ?? null,
+				user_email: r.submission.uploader?.email ?? null,
+				student_name: r.submission.student_name,
+				paper_title: r.submission.exam_paper?.title ?? null,
+				submission_id: r.submission_id,
+			})),
 	]
 
 	// Parse snapshots and aggregate
@@ -242,12 +231,12 @@ export async function getUsageAnalytics(): Promise<UsageAnalyticsData> {
 				date: dateKey,
 				ocr_tokens: 0,
 				grading_tokens: 0,
-				enrichment_tokens: 0,
+				annotation_tokens: 0,
 			}
 			const runTotal = runPrompt + runCompletion
 			if (row.stage === "ocr") dExisting.ocr_tokens += runTotal
 			else if (row.stage === "grading") dExisting.grading_tokens += runTotal
-			else dExisting.enrichment_tokens += runTotal
+			else dExisting.annotation_tokens += runTotal
 			dateMap.set(dateKey, dExisting)
 		}
 

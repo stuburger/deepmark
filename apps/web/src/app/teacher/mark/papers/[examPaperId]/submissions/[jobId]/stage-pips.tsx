@@ -9,22 +9,20 @@ import {
 } from "./stage-pips-hooks"
 
 /**
- * Three-pip cluster showing OCR / grading / enrichment status independently.
+ * Three-pip cluster showing OCR / grading / annotation status independently.
  * Each pip's popover exposes the corresponding re-run action.
  *
  * Thin wrapper that binds the data + mutation hooks to the presentation
- * component below — callers pass only a jobId and navigation/annotate
- * callbacks. Use `StagePipsView` directly when you already hold the stages
- * and mutations (e.g. for tests or reuse in other toolbars).
+ * component below — callers pass only a jobId and a navigation callback. Use
+ * `StagePipsView` directly when you already hold the stages and mutations
+ * (e.g. for tests or reuse in other toolbars).
  */
 export function StagePips({
 	jobId,
 	onNavigateToJob,
-	onReAnnotate,
 }: {
 	jobId: string
 	onNavigateToJob: (newJobId: string) => void
-	onReAnnotate?: () => void
 }) {
 	const stages = useStageData(jobId)
 	const { ocrMutation, gradingMutation } = useStageMutations(
@@ -39,7 +37,6 @@ export function StagePips({
 			stages={stages}
 			ocrMutation={ocrMutation}
 			gradingMutation={gradingMutation}
-			onReAnnotate={onReAnnotate}
 		/>
 	)
 }
@@ -47,17 +44,20 @@ export function StagePips({
 /**
  * Pure presentation — renders three pips and wires their popover re-run
  * actions to the supplied mutations. No data fetching or side effects.
+ *
+ * The annotation pip's re-run triggers the grading mutation: annotations live
+ * inside the grade Lambda, so regenerating them means re-grading (which
+ * creates a new superseded submission — we intentionally have no in-place
+ * re-run path).
  */
 export function StagePipsView({
 	stages,
 	ocrMutation,
 	gradingMutation,
-	onReAnnotate,
 }: {
 	stages: JobStages
 	ocrMutation: StageRetriggerMutation
 	gradingMutation: StageRetriggerMutation
-	onReAnnotate?: () => void
 }) {
 	return (
 		<div className="flex items-center gap-1.5">
@@ -80,12 +80,12 @@ export function StagePipsView({
 				}
 			/>
 			<StagePip
-				stageKey="enrichment"
-				stage={stages.enrichment}
-				onRerun={onReAnnotate}
+				stageKey="annotation"
+				stage={stages.annotation}
+				onRerun={() => gradingMutation.mutate()}
 				rerunDisabled={
-					!onReAnnotate ||
-					stages.enrichment.status === "generating" ||
+					gradingMutation.isPending ||
+					stages.annotation.status === "generating" ||
 					stages.grading.status !== "done"
 				}
 			/>

@@ -143,9 +143,9 @@ describe("deriveAnnotationsFromDoc", () => {
 		expect(result).toHaveLength(1)
 		// Teacher marks get a deterministic key-based ID
 		expect(result[0].id).toBe("q1-cross-0-3")
-		// enrichment_run_id is always null for editor-derived annotations;
+		// grading_run_id is always null for editor-derived annotations;
 		// server decides source + linkage on save via the diff.
-		expect(result[0].enrichment_run_id).toBe(null)
+		expect(result[0].grading_run_id).toBe(null)
 		expect(result[0].overlay_type).toBe("annotation")
 		expect(result[0].sentiment).toBe("negative")
 		expect((result[0].payload as { signal: string }).signal).toBe("cross")

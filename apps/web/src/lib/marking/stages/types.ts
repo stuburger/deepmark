@@ -12,7 +12,7 @@ export type StageStatus =
 	| "failed"
 	| "cancelled"
 
-export type StageKey = "ocr" | "grading" | "enrichment"
+export type StageKey = "ocr" | "grading" | "annotation"
 
 export type Stage = {
 	status: StageStatus
@@ -26,7 +26,7 @@ export type JobStages = {
 	jobId: string
 	ocr: Stage
 	grading: Stage
-	enrichment: Stage
+	annotation: Stage
 }
 
 export type GetJobStagesResult =
@@ -43,6 +43,6 @@ export function allTerminal(stages: JobStages): boolean {
 	return (
 		isTerminal(stages.ocr.status) &&
 		isTerminal(stages.grading.status) &&
-		isTerminal(stages.enrichment.status)
+		isTerminal(stages.annotation.status)
 	)
 }

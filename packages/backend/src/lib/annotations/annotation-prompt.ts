@@ -2,6 +2,7 @@ import type {
 	GradingResult,
 	MarkPointResultEntry,
 } from "@/lib/grading/grade-questions"
+import type { MarkingMethod } from "@mcp-gcse/db"
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -18,7 +19,7 @@ type MarkSchemeContext = {
 		description: string
 		criteria: string
 	}>
-	markingMethod: string
+	markingMethod: MarkingMethod
 	content: string
 }
 

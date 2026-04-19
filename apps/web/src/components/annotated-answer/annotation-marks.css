@@ -1,3 +1,10 @@
+/* Keep selection highlight visible even when the editor loses focus
+   (e.g. when the annotation card's textarea steals focus) */
+.ProseMirror::selection,
+.ProseMirror *::selection {
+	background: rgb(59 130 246 / 0.25);
+}
+
 /* Tick/cross trailing symbols via ::after pseudo-elements */
 span[data-mark-type="tick"]::after {
 	content: "✓";

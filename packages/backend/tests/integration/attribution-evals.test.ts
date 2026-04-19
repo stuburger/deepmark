@@ -7,7 +7,7 @@ import {
 	type AttributeScriptQuestion,
 	attributeScript,
 } from "../../src/lib/scan-extraction/attribute-script"
-import { sortTokensSpatially } from "../../src/lib/scan-extraction/spatial-sort"
+import { sortTokensSpatially } from "@mcp-gcse/shared"
 import { AARON_BROWN_FIXTURE } from "./fixtures/attribution/aaron-brown/fixture"
 import { KAI_JASSI_FIXTURE } from "./fixtures/attribution/kai-jassi/fixture"
 import {

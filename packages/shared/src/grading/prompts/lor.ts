@@ -39,7 +39,7 @@ ${learningSection}<Topic>\n${question.topic}\n</Topic>
 
 <MarkSchemeContent>
 ${question.content}
-</MarkSchemeContent>${levelDescriptors ? `\n\n<ExamLevelDescriptors>\nGeneral level descriptors provided by the teacher for this exam.\nUse alongside the question-specific mark scheme to inform your marking.\n${levelDescriptors}\n</ExamLevelDescriptors>` : ""}
+</MarkSchemeContent>${levelDescriptors ? `\n\n<TeacherMarkingGuidance>\nTeacher-authored marking guidance for this exam. May include level descriptors, feedback style instructions, and/or few-shot examples.\nUse alongside the question-specific mark scheme to inform your marking and feedback style.\n${levelDescriptors}\n</TeacherMarkingGuidance>` : ""}
 
 <StudentAnswer>\n${answer || "[No answer provided]"}\n</StudentAnswer>${parsingNote}
 

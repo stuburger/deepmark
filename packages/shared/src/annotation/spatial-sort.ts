@@ -12,6 +12,16 @@
  * 4. Within each line, sort by xMin ascending (left → right).
  *
  * Bbox format: [yMin, xMin, yMax, xMax] normalised 0–1000.
+ *
+ * This function is used in two places and MUST produce the same ordering
+ * at both call sites:
+ *  - attribution (backend) — the LLM prompt and `answer_text` are authored
+ *    in this order.
+ *  - alignment (web) — `alignTokensToAnswer` walks tokens in this order to
+ *    match them against `answer_text`.
+ *
+ * Any divergence causes the greedy alignment to miss matches, which then
+ * fall through to Pass 2 positional fill and produce off-by-N bbox anchors.
  */
 
 /**
@@ -45,10 +55,8 @@ export function sortTokensSpatially<T extends WithBbox>(tokens: T[]): T[] {
 		return { token: t, midY: (yMin + yMax) / 2, xMin }
 	})
 
-	// Sort by vertical centre, ascending.
 	items.sort((a, b) => a.midY - b.midY)
 
-	// Group into lines using the first token's midY as the line anchor.
 	const lines: Item[][] = [[items[0]]]
 	for (let i = 1; i < items.length; i++) {
 		const item = items[i]
@@ -61,7 +69,6 @@ export function sortTokensSpatially<T extends WithBbox>(tokens: T[]): T[] {
 		}
 	}
 
-	// Sort each line left → right.
 	for (const line of lines) {
 		line.sort((a, b) => a.xMin - b.xMin)
 	}

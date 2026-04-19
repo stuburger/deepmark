@@ -1,5 +1,5 @@
 import { logger } from "@/lib/infra/logger"
-import { sortTokensSpatially } from "./spatial-sort"
+import { sortTokensSpatially } from "@mcp-gcse/shared"
 
 const TAG = "fix-ocr"
 

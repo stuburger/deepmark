@@ -322,7 +322,9 @@ model ExamPaper {
   is_public        Boolean  @default(false)
   // { difficulty_level?, tier?, season? }
   metadata         Json?
-  /// Teacher-provided exam-wide level descriptors (appended to LoR grading prompts)
+  /// Marking Guidance — teacher-authored freetext injected into LoR grading prompts.
+  /// Supports level descriptors, feedback style instructions, and few-shot examples.
+  /// Displayed in the UI as "Marking Guidance". Future: rename column to marking_guidance.
   level_descriptors String?
 
   created_by           User                @relation(fields: [created_by_id], references: [id])

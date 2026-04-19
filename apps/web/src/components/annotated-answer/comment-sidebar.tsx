@@ -304,7 +304,17 @@ export function CommentSidebar({
 						offsetY={offsetY}
 						isActive={isActive}
 						editor={editor}
-						onActivate={() => onHoverAnnotation?.(isActive ? null : card.id)}
+						onActivate={() => {
+							if (isActive) {
+								onHoverAnnotation?.(null)
+							} else {
+								editor.commands.setTextSelection({
+									from: card.from,
+									to: card.to,
+								})
+								editor.commands.focus(undefined, { scrollIntoView: false })
+							}
+						}}
 						onDeactivate={() => onHoverAnnotation?.(null)}
 					/>
 				)
@@ -333,12 +343,24 @@ function CommentCardView({
 	onDeactivate: () => void
 }) {
 	const [reasonDraft, setReasonDraft] = useState(card.reason ?? "")
+	const cardRef = useRef<HTMLDivElement>(null)
 	const inputRef = useRef<HTMLTextAreaElement>(null)
+	const wasActiveRef = useRef(false)
 
 	// Sync draft when card data changes (e.g. after saving)
 	useEffect(() => {
 		setReasonDraft(card.reason ?? "")
 	}, [card.reason])
+
+	// Scroll card into view when it becomes active — driven by PM selection state,
+	// not by click. Only fires on the false → true transition to avoid re-scrolling
+	// on every render while already active.
+	useEffect(() => {
+		if (isActive && !wasActiveRef.current) {
+			cardRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" })
+		}
+		wasActiveRef.current = isActive
+	}, [isActive])
 
 	// Auto-focus the textarea when the card becomes active
 	useEffect(() => {
@@ -373,6 +395,7 @@ function CommentCardView({
 	return (
 		// biome-ignore lint/a11y/useKeyWithClickEvents: card activation is click-only by design
 		<div
+			ref={cardRef}
 			className={cn(
 				"absolute left-0 right-0 mx-1 rounded-md border bg-background px-2 py-1.5 text-[11px] leading-tight shadow-sm cursor-pointer",
 				"transition-[transform,box-shadow,background-color,ring-color] duration-200 ease-out",

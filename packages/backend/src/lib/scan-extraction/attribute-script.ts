@@ -3,9 +3,12 @@ import { callLlmWithFallback } from "@/lib/infra/llm-runtime"
 import { logger } from "@/lib/infra/logger"
 import { outputSchema } from "@/lib/infra/output-schema"
 import { getFileBase64 } from "@/lib/infra/s3"
-import { sortTokensSpatially } from "@/lib/scan-extraction/spatial-sort"
 import { logOcrRunEvent } from "@mcp-gcse/db"
-import { type LlmRunner, computeBboxHull } from "@mcp-gcse/shared"
+import {
+	type LlmRunner,
+	computeBboxHull,
+	sortTokensSpatially,
+} from "@mcp-gcse/shared"
 import { generateText } from "ai"
 import {
 	type PagePromptBlock,
@@ -406,7 +409,7 @@ export async function attributeScript({
 
 	// OCR corrections.
 	let correctionsApplied = 0
-	for (const c of parsed.corrections ?? []) {
+	for (const c of parsed.corrections) {
 		const pagePts = orderedTokensByPage.get(c.page)
 		if (!pagePts) continue
 		const token = pagePts[c.token_index]

@@ -3,6 +3,7 @@
 import { db } from "@/lib/db"
 import { GetObjectCommand, S3Client } from "@aws-sdk/client-s3"
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner"
+import { sortTokensSpatially } from "@mcp-gcse/shared"
 import { Resource } from "sst"
 import { auth } from "../../auth"
 import type {
@@ -87,9 +88,15 @@ export async function getJobScanPageUrls(
 // ─── getJobPageTokens ───────────────────────────────────────────────────────
 
 /**
- * Returns all Cloud Vision word-level tokens for a job as a flat array,
- * ordered by page_order → para_index → line_index → word_index.
- * Callers filter by page_order as needed.
+ * Returns all Cloud Vision word-level tokens for a job, grouped by page and
+ * sorted within each page into spatial reading order (top→bottom, left→right).
+ *
+ * Reading order matters: `answer_text` was authored by the attribution LLM
+ * in this same spatial order. Downstream alignment (`alignTokensToAnswer`)
+ * walks tokens sequentially against `answer_text`, so any divergence between
+ * the two orderings produces off-by-N bbox anchors on extended answers.
+ * Vision's native `(para_index, line_index, word_index)` ordering breaks on
+ * fragmented handwriting and is not safe to rely on for alignment.
  */
 export async function getJobPageTokens(
 	jobId: string,
@@ -105,12 +112,6 @@ export async function getJobPageTokens(
 
 	const rows = await db.studentPaperPageToken.findMany({
 		where: { submission_id: jobId },
-		orderBy: [
-			{ page_order: "asc" },
-			{ para_index: "asc" },
-			{ line_index: "asc" },
-			{ word_index: "asc" },
-		],
 		select: {
 			id: true,
 			page_order: true,
@@ -127,7 +128,7 @@ export async function getJobPageTokens(
 		},
 	})
 
-	const tokens: PageToken[] = rows.map((row) => ({
+	const rawTokens: PageToken[] = rows.map((row) => ({
 		id: row.id,
 		page_order: row.page_order,
 		para_index: row.para_index,
@@ -141,6 +142,17 @@ export async function getJobPageTokens(
 		answer_char_start: row.answer_char_start,
 		answer_char_end: row.answer_char_end,
 	}))
+
+	const byPage = new Map<number, PageToken[]>()
+	for (const t of rawTokens) {
+		const list = byPage.get(t.page_order) ?? []
+		list.push(t)
+		byPage.set(t.page_order, list)
+	}
+
+	const tokens: PageToken[] = Array.from(byPage.keys())
+		.sort((a, b) => a - b)
+		.flatMap((page) => sortTokensSpatially(byPage.get(page) ?? []))
 
 	return { ok: true, tokens }
 }

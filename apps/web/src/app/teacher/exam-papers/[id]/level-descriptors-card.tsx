@@ -40,9 +40,9 @@ export function LevelDescriptorsCard({
 						<AlignLeft className="h-5 w-5 text-muted-foreground shrink-0 mt-0.5" />
 					)}
 					<div className="min-w-0">
-						<p className="text-sm font-medium">Level Descriptors</p>
+						<p className="text-sm font-medium">Marking Guidance</p>
 						<p className="text-xs text-muted-foreground leading-snug">
-							Guides marking for level-of-response questions
+							Level descriptors and feedback style for LoR questions
 						</p>
 					</div>
 				</div>

@@ -65,9 +65,8 @@ export const ScriptAttributionSchema = z.object({
 			}),
 		)
 		.describe(
-			"Tokens where Cloud Vision misread the handwriting. Compare each token against the transcript; include a correction only where Vision clearly got a word wrong. Do NOT correct genuine student spelling mistakes — only Vision OCR failures.",
-		)
-		.optional(),
+			"Tokens where Cloud Vision misread the handwriting. Compare each token against the transcript; include a correction only where Vision clearly got a word wrong. Do NOT correct genuine student spelling mistakes — only Vision OCR failures. Return an empty array if there are no corrections.",
+		),
 })
 
 export type ScriptAttributionOutput = z.infer<typeof ScriptAttributionSchema>

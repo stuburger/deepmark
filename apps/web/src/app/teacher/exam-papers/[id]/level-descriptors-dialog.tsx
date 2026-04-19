@@ -50,7 +50,7 @@ export function LevelDescriptorsDialog({
 		const trimmed = value.trim()
 		setValue(trimmed)
 		onSaved(trimmed)
-		toast.success("Level descriptors saved")
+		toast.success("Marking guidance saved")
 		void queryClient.invalidateQueries({
 			queryKey: queryKeys.examPaper(examPaperId),
 		})
@@ -66,19 +66,21 @@ export function LevelDescriptorsDialog({
 
 	return (
 		<Dialog open={open} onOpenChange={handleOpenChange}>
-			<DialogContent className="max-w-2xl">
+			<DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
 				<DialogHeader>
-					<DialogTitle>Level Descriptors</DialogTitle>
+					<DialogTitle>Marking Guidance</DialogTitle>
 					<DialogDescription>
-						Paste your exam board&apos;s level descriptors here. These guide
-						marking for all level-of-response questions on this paper.
+						Provide guidance for marking level-of-response questions on this
+						paper. Paste your exam board&apos;s level descriptors, describe how
+						feedback should be phrased, or include few-shot examples in your own
+						voice.
 					</DialogDescription>
 				</DialogHeader>
 				<Textarea
 					value={value}
 					onChange={(e) => setValue(e.target.value)}
-					placeholder="e.g. Level 1 (1-3 marks): Simple statements, generic points…"
-					rows={12}
+					placeholder="e.g. Level 1 (1–3 marks): Simple statements with no development…&#10;&#10;Feedback style: phrase EBI as 'Next time, try to…' and keep WWW to 2 specific points."
+					rows={18}
 					className="text-xs font-mono resize-none"
 				/>
 				<DialogFooter>

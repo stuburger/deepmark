@@ -52,9 +52,9 @@ export const HoverHighlightPlugin = Extension.create<HoverHighlightOptions>({
 					},
 				},
 
-				// PM → Sidebar: activate comment card based on cursor position.
-				// Only fires for collapsed cursors (not during range selection / drag)
-				// or when the doc changes (mark just applied).
+				// PM → Sidebar: activate comment card when selection lands inside a mark.
+				// Fires for both collapsed cursors and range selections (e.g. card click
+				// sets a range selection), as well as doc changes (mark just applied).
 				view() {
 					return {
 						update(view, prevState) {
@@ -66,8 +66,7 @@ export const HoverHighlightPlugin = Extension.create<HoverHighlightOptions>({
 								!prevState || !view.state.selection.eq(prevState.selection)
 							if (!docChanged && !selChanged) return
 
-							const { from, to } = view.state.selection
-							if (from !== to && !docChanged) return
+							const { from } = view.state.selection
 
 							const $pos = view.state.doc.resolve(from)
 							const marks = $pos.marks()

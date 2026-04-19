@@ -5,9 +5,9 @@ import { deleteSubmission } from "@/lib/marking/submissions/mutations"
 import type { SubmissionHistoryItem } from "@/lib/marking/types"
 import { useState } from "react"
 import { toast } from "sonner"
-import { ScriptCard } from "./script-card"
+import { ScriptListItem } from "./script-list-item"
 
-export function SubmissionGrid({
+export function SubmissionList({
 	submissions,
 	onView,
 	onDelete,
@@ -38,16 +38,16 @@ export function SubmissionGrid({
 
 	return (
 		<div className="space-y-4">
-			<div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+			<ul className="flex flex-col gap-2">
 				{submissions.map((sub) => (
-					<ScriptCard
+					<ScriptListItem
 						key={sub.id}
 						sub={sub}
 						onView={() => onView(sub.id)}
 						onDeleteRequest={() => setPendingDeleteId(sub.id)}
 					/>
 				))}
-			</div>
+			</ul>
 
 			<ConfirmDialog
 				open={pendingDeleteId !== null}

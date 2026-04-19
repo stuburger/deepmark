@@ -12,15 +12,23 @@ import { FileText, StickyNote } from "lucide-react"
 import type { ReactElement, ReactNode } from "react"
 
 type SheetButtonProps = {
-	trigger: ReactElement
+	trigger?: ReactElement
 	title: string
 	children: ReactNode
+	open?: boolean
+	onOpenChange?: (open: boolean) => void
 }
 
-function OcrSheet({ trigger, title, children }: SheetButtonProps) {
+function OcrSheet({
+	trigger,
+	title,
+	children,
+	open,
+	onOpenChange,
+}: SheetButtonProps) {
 	return (
-		<Sheet>
-			<SheetTrigger render={trigger} />
+		<Sheet open={open} onOpenChange={onOpenChange}>
+			{trigger && <SheetTrigger render={trigger} />}
 			<SheetContent side="right" className="w-full sm:max-w-md flex flex-col">
 				<SheetHeader>
 					<SheetTitle>{title}</SheetTitle>
@@ -36,14 +44,23 @@ function OcrSheet({ trigger, title, children }: SheetButtonProps) {
 export function TranscriptSheet({
 	trigger,
 	scanPages,
+	open,
+	onOpenChange,
 }: {
-	trigger: ReactElement
+	trigger?: ReactElement
 	scanPages: ScanPageUrl[]
+	open?: boolean
+	onOpenChange?: (open: boolean) => void
 }) {
 	const pagesWithAnalysis = scanPages.filter((p) => p.analysis)
 
 	return (
-		<OcrSheet trigger={trigger} title="OCR Transcript">
+		<OcrSheet
+			trigger={trigger}
+			title="OCR Transcript"
+			open={open}
+			onOpenChange={onOpenChange}
+		>
 			{pagesWithAnalysis.length === 0 ? (
 				<p className="text-sm text-muted-foreground italic">
 					No transcript available yet.
@@ -75,14 +92,23 @@ export function TranscriptSheet({
 export function ObservationsSheet({
 	trigger,
 	scanPages,
+	open,
+	onOpenChange,
 }: {
-	trigger: ReactElement
+	trigger?: ReactElement
 	scanPages: ScanPageUrl[]
+	open?: boolean
+	onOpenChange?: (open: boolean) => void
 }) {
 	const pagesWithAnalysis = scanPages.filter((p) => p.analysis)
 
 	return (
-		<OcrSheet trigger={trigger} title="OCR Observations">
+		<OcrSheet
+			trigger={trigger}
+			title="OCR Observations"
+			open={open}
+			onOpenChange={onOpenChange}
+		>
 			{pagesWithAnalysis.length === 0 ? (
 				<p className="text-sm text-muted-foreground italic">
 					No observations available yet.

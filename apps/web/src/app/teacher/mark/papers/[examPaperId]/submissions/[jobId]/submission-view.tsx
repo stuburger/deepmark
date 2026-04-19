@@ -6,7 +6,6 @@ import {
 	ResizablePanel,
 	ResizablePanelGroup,
 } from "@/components/ui/resizable"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { triggerEnrichment } from "@/lib/marking/stages/mutations"
 import type { JobStages } from "@/lib/marking/stages/types"
@@ -29,7 +28,6 @@ import {
 	useTeacherOverrides,
 } from "./hooks/use-teacher-overrides"
 import { ResultsPanel } from "./results-panel"
-import { AnnotatedScanColumn } from "./results/annotated-scan-column"
 import { ScanPanel } from "./scan-panel"
 import { SubmissionToolbar } from "./submission-toolbar"
 
@@ -43,6 +41,7 @@ export function SubmissionView({
 	debugMode = false,
 	onNavigateToJob,
 	onVersionChange,
+	onClose,
 }: {
 	examPaperId: string
 	jobId: string
@@ -53,6 +52,7 @@ export function SubmissionView({
 	debugMode?: boolean
 	onNavigateToJob?: (newJobId: string) => void
 	onVersionChange?: (newJobId: string) => void
+	onClose?: () => void
 }) {
 	const queryClient = useQueryClient()
 
@@ -125,6 +125,9 @@ export function SubmissionView({
 		[upsertOverride, deleteOverride],
 	)
 
+	const hasAnnotations =
+		data.enrichment_status === "complete" && annotations.length > 0
+
 	// Auto-enable marks overlay when annotations first load
 	const annotationsLoadedRef = useRef(false)
 	useEffect(() => {
@@ -163,19 +166,10 @@ export function SubmissionView({
 				jobId={jobId}
 				data={data}
 				phase={phase}
-				scanPages={scanPages}
-				showOcr={showOcr}
-				showRegions={showRegions}
-				onToggleOcr={() => setShowOcr((v) => !v)}
-				onToggleRegions={() => setShowRegions((v) => !v)}
-				showMarks={showMarks}
-				showChains={showChains}
-				onToggleMarks={() => setShowMarks((v) => !v)}
-				onToggleChains={() => setShowChains((v) => !v)}
 				onGenerateAnnotations={() => enrichMutation.mutate()}
-				annotationCount={annotations.length}
 				onNavigateToJob={onNavigateToJob}
 				onVersionChange={onVersionChange}
+				onClose={onClose}
 				annotations={annotations}
 				pageTokens={pageTokens}
 			/>
@@ -197,22 +191,26 @@ export function SubmissionView({
 
 					<TabsContent
 						value="scan"
-						className="flex-1 min-h-0 overflow-hidden bg-muted/20 m-0 p-0"
+						className="flex-1 min-h-0 overflow-hidden m-0 p-0"
 					>
-						<ScrollArea className="h-full w-full">
-							<AnnotatedScanColumn
-								pages={scanPages}
-								pageTokens={pageTokens}
-								showHighlights={showOcr}
-								showRegions={showRegions}
-								gradingResults={data.grading_results}
-								onAnnotationClick={handleAnnotationClick}
-								debugMode={debugMode}
-								annotations={annotations}
-								showMarks={showMarks}
-								showChains={showChains}
-							/>
-						</ScrollArea>
+						<ScanPanel
+							scanPages={scanPages}
+							pageTokens={pageTokens}
+							gradingResults={data.grading_results}
+							levelDescriptors={data.level_descriptors}
+							showOcr={showOcr}
+							showRegions={showRegions}
+							onToggleOcr={() => setShowOcr((v) => !v)}
+							onToggleRegions={() => setShowRegions((v) => !v)}
+							onAnnotationClick={handleAnnotationClick}
+							debugMode={debugMode}
+							annotations={annotations}
+							showMarks={showMarks}
+							showChains={showChains}
+							onToggleMarks={() => setShowMarks((v) => !v)}
+							onToggleChains={() => setShowChains((v) => !v)}
+							hasAnnotations={hasAnnotations}
+						/>
 					</TabsContent>
 
 					<TabsContent
@@ -245,13 +243,19 @@ export function SubmissionView({
 						scanPages={scanPages}
 						pageTokens={pageTokens}
 						gradingResults={data.grading_results}
+						levelDescriptors={data.level_descriptors}
 						showOcr={showOcr}
 						showRegions={showRegions}
+						onToggleOcr={() => setShowOcr((v) => !v)}
+						onToggleRegions={() => setShowRegions((v) => !v)}
 						onAnnotationClick={handleAnnotationClick}
 						debugMode={debugMode}
 						annotations={annotations}
 						showMarks={showMarks}
 						showChains={showChains}
+						onToggleMarks={() => setShowMarks((v) => !v)}
+						onToggleChains={() => setShowChains((v) => !v)}
+						hasAnnotations={hasAnnotations}
 						highlightedTokenIds={highlightedTokenIds}
 					/>
 				</ResizablePanel>

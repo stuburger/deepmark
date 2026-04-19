@@ -1,7 +1,7 @@
 import type { BatchIngestionState } from "@/lib/batch/types"
 import type { SubmissionHistoryItem } from "@/lib/marking/types"
 import { BatchStatusBanner } from "./batch-status-banner"
-import { SubmissionGrid } from "./submission-grid"
+import { SubmissionList } from "./submission-list"
 import { SubmissionTable } from "./submission-table"
 import { SubmissionsHeader } from "./submissions-header"
 
@@ -22,8 +22,8 @@ export function SubmissionsTabContent({
 	submissions: SubmissionHistoryItem[]
 	markedCount: number
 	inProgressCount: number
-	view: "grid" | "table"
-	onViewChange: (v: "grid" | "table") => void
+	view: "list" | "table"
+	onViewChange: (v: "list" | "table") => void
 	onOpenStaging: () => void
 	onViewJob: (id: string) => void
 	onDeleteSubmission: (id: string) => void
@@ -49,8 +49,8 @@ export function SubmissionsTabContent({
 						onRefresh={onRefresh}
 						isRefreshing={isRefreshing}
 					/>
-					{view === "grid" ? (
-						<SubmissionGrid
+					{view === "list" ? (
+						<SubmissionList
 							submissions={submissions}
 							onView={onViewJob}
 							onDelete={onDeleteSubmission}

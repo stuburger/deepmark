@@ -71,10 +71,10 @@ export function ExamPaperPageShell({
 		),
 	)
 
-	// Grid vs table view for submissions
+	// List vs table view for submissions
 	const [subView, setSubView] = useQueryState(
 		"submissions_view",
-		parseAsStringEnum(["grid", "table"]).withDefault("grid"),
+		parseAsStringEnum(["list", "table"]).withDefault("table"),
 	)
 
 	// List vs grid view for staged script review
@@ -191,7 +191,7 @@ export function ExamPaperPageShell({
 				className="gap-0"
 			>
 				{/* Sticky frosted-glass header: title + tabs bar */}
-				<div className="sticky top-0 z-10 -mx-6 -mt-6 px-6 pt-6 pb-2 backdrop-blur-xl bg-background/60 border-b">
+				<div className="sticky top-0 z-0 -mx-6 -mt-6 px-6 pt-6 pb-2 backdrop-blur-xl bg-background/60 border-b">
 					<div className="pb-4">
 						<Link
 							href="/teacher/exam-papers"

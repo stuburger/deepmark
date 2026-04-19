@@ -1,6 +1,6 @@
 "use client"
 
-import { LayoutGrid, List, Rows3 } from "lucide-react"
+import { LayoutGrid, Rows3, Table2 } from "lucide-react"
 import type { ReactNode } from "react"
 
 type ViewOption = {
@@ -11,7 +11,7 @@ type ViewOption = {
 
 const ICONS: Record<string, ReactNode> = {
 	grid: <LayoutGrid className="h-4 w-4" />,
-	table: <List className="h-4 w-4" />,
+	table: <Table2 className="h-4 w-4" />,
 	list: <Rows3 className="h-4 w-4" />,
 }
 
@@ -25,7 +25,7 @@ export function ViewToggle<T extends string>({
 	options?: ViewOption[]
 }) {
 	const items: ViewOption[] = options ?? [
-		{ value: "grid", icon: ICONS.grid, label: "Grid view" },
+		{ value: "list", icon: ICONS.list, label: "List view" },
 		{ value: "table", icon: ICONS.table, label: "Table view" },
 	]
 

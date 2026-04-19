@@ -80,7 +80,10 @@ export function MarkingJobDialog({
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent className="!top-0 !left-0 !translate-x-0 !translate-y-0 !max-w-none !w-screen !h-screen !rounded-none p-0 overflow-hidden ring-0">
+			<DialogContent
+				showCloseButton={false}
+				className="inset-4! w-auto! translate-x-0! translate-y-0! max-w-none! rounded-2xl p-0 overflow-hidden ring-0 shadow-2xl"
+			>
 				{isLoading || !jobData || !stages || !jobId ? (
 					<div className="flex h-full items-center justify-center">
 						<Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -95,6 +98,7 @@ export function MarkingJobDialog({
 						initialStages={stages}
 						onNavigateToJob={onJobChange}
 						onVersionChange={onJobChange}
+						onClose={() => onOpenChange(false)}
 					/>
 				)}
 			</DialogContent>

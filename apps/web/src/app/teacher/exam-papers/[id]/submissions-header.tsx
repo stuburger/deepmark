@@ -12,8 +12,8 @@ export function SubmissionsHeader({
 }: {
 	markedCount: number
 	inProgressCount: number
-	view: "grid" | "table"
-	onViewChange: (v: "grid" | "table") => void
+	view: "list" | "table"
+	onViewChange: (v: "list" | "table") => void
 	onRefresh: () => void
 	isRefreshing: boolean
 }) {

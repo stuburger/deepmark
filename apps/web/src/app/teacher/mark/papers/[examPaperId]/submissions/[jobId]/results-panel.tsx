@@ -12,8 +12,6 @@ import type {
 import { CancelledPanel } from "./cancelled"
 import { FailedPanel } from "./failed"
 import { MarkingResults } from "./results/index"
-import { LlmSnapshotPanel } from "./results/llm-snapshot-panel"
-
 /**
  * Results panel — always renders the editor (MarkingResults), regardless of
  * pipeline phase. In-progress stage status is surfaced by the StagePips in
@@ -70,12 +68,6 @@ export function ResultsPanel({
 					onOverrideChange={onOverrideChange}
 					onDerivedAnnotations={onDerivedAnnotations}
 					onTokenHighlight={onTokenHighlight}
-				/>
-
-				<LlmSnapshotPanel
-					ocrSnapshot={data.ocr_llm_snapshot}
-					gradingSnapshot={data.grading_llm_snapshot}
-					enrichmentSnapshot={data.enrichment_llm_snapshot}
 				/>
 			</div>
 		</ScrollArea>

@@ -2,10 +2,12 @@
 
 import { Badge } from "@/components/ui/badge"
 import {
-	Collapsible,
-	CollapsibleContent,
-	CollapsibleTrigger,
-} from "@/components/ui/collapsible"
+	Dialog,
+	DialogContent,
+	DialogHeader,
+	DialogTitle,
+} from "@/components/ui/dialog"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import {
 	Table,
 	TableBody,
@@ -15,11 +17,18 @@ import {
 	TableRow,
 } from "@/components/ui/table"
 import {
+	Tooltip,
+	TooltipContent,
+	TooltipProvider,
+	TooltipTrigger,
+} from "@/components/ui/tooltip"
+import { cn } from "@/lib/utils"
+import {
 	CALL_MULTIPLIER_LABELS,
 	LLM_CALL_SITE_DEFAULTS,
 	MODEL_PRICING,
 } from "@mcp-gcse/shared"
-import { ChevronRight, Cpu } from "lucide-react"
+import { CircleDollarSign } from "lucide-react"
 import { useState } from "react"
 
 // ── Types ───────────────────────────────────────────────────────────────────
@@ -157,12 +166,12 @@ function SnapshotTable({ snapshot }: { snapshot: LlmRunSnapshot }) {
 			<Table>
 				<TableHeader>
 					<TableRow>
-						<TableHead className="w-[180px]">Call Site</TableHead>
+						<TableHead className="w-45">Call Site</TableHead>
 						<TableHead>Model</TableHead>
-						<TableHead className="text-right w-[120px]">Calls</TableHead>
-						<TableHead className="text-right w-[80px]">Tokens</TableHead>
-						<TableHead className="text-right w-[70px]">Cost</TableHead>
-						<TableHead className="text-right w-[60px]" />
+						<TableHead className="text-right w-30">Calls</TableHead>
+						<TableHead className="text-right w-20">Tokens</TableHead>
+						<TableHead className="text-right w-17.5">Cost</TableHead>
+						<TableHead className="text-right w-15" />
 					</TableRow>
 				</TableHeader>
 				<TableBody>{rows}</TableBody>
@@ -189,15 +198,19 @@ function PhaseSection({ label, snapshot }: PhaseSnapshot) {
 
 // ── Public ───────────────────────────────────────────────────────────────────
 
-export function LlmSnapshotPanel({
-	ocrSnapshot,
-	gradingSnapshot,
-	enrichmentSnapshot,
-}: {
+type LlmSpendButtonProps = {
 	ocrSnapshot?: unknown
 	gradingSnapshot?: unknown
 	enrichmentSnapshot?: unknown
-}) {
+	className?: string
+}
+
+export function LlmSpendButton({
+	ocrSnapshot,
+	gradingSnapshot,
+	enrichmentSnapshot,
+	className,
+}: LlmSpendButtonProps) {
 	const [open, setOpen] = useState(false)
 
 	const phases: PhaseSnapshot[] = []
@@ -213,7 +226,6 @@ export function LlmSnapshotPanel({
 
 	if (phases.length === 0) return null
 
-	// Compute total cost across all phases
 	let totalCost = 0
 	let hasCost = false
 	for (const phase of phases) {
@@ -233,28 +245,55 @@ export function LlmSnapshotPanel({
 	}
 
 	return (
-		<Collapsible open={open} onOpenChange={setOpen}>
-			<CollapsibleTrigger className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors w-full py-2">
-				<ChevronRight
-					className={`h-3.5 w-3.5 transition-transform ${open ? "rotate-90" : ""}`}
-				/>
-				<Cpu className="h-3.5 w-3.5" />
-				<span>
-					LLM Config
-					{hasCost && (
-						<span className="ml-1.5 text-muted-foreground/70">
-							~{formatCost(totalCost)}
-						</span>
-					)}
-				</span>
-			</CollapsibleTrigger>
-			<CollapsibleContent>
-				<div className="space-y-4 pt-1 pb-2">
-					{phases.map((phase) => (
-						<PhaseSection key={phase.label} {...phase} />
-					))}
-				</div>
-			</CollapsibleContent>
-		</Collapsible>
+		<>
+			<TooltipProvider>
+				<Tooltip>
+					<TooltipTrigger
+						render={
+							<button
+								type="button"
+								onClick={() => setOpen(true)}
+								className={cn(
+									"inline-flex items-center justify-center h-7 w-7 rounded-md border bg-background text-muted-foreground border-border transition-colors",
+									"hover:bg-muted hover:text-foreground",
+									className,
+								)}
+								aria-label="LLM spend"
+							>
+								<CircleDollarSign className="h-3.5 w-3.5" />
+							</button>
+						}
+					/>
+					<TooltipContent side="bottom" sideOffset={6}>
+						{hasCost ? `LLM spend ~${formatCost(totalCost)}` : "LLM config"}
+					</TooltipContent>
+				</Tooltip>
+			</TooltipProvider>
+
+			<Dialog open={open} onOpenChange={setOpen}>
+				<DialogContent
+					className="max-w-3xl! p-0 overflow-hidden"
+					onKeyDown={(e) => e.stopPropagation()}
+				>
+					<DialogHeader className="px-6 pt-5 pb-0">
+						<DialogTitle>
+							LLM Config
+							{hasCost && (
+								<span className="ml-2 text-sm font-normal text-muted-foreground">
+									~{formatCost(totalCost)} total
+								</span>
+							)}
+						</DialogTitle>
+					</DialogHeader>
+					<ScrollArea className="max-h-[70vh]">
+						<div className="px-6 pb-6 pt-4 space-y-6">
+							{phases.map((phase) => (
+								<PhaseSection key={phase.label} {...phase} />
+							))}
+						</div>
+					</ScrollArea>
+				</DialogContent>
+			</Dialog>
+		</>
 	)
 }

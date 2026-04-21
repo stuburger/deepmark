@@ -180,6 +180,7 @@ export async function handler(
 				duration_minutes?: number
 				year?: number | null
 				paper_number?: number | null
+				tier?: string | null
 			}
 			let detectedMetadata: DetectedMetadata | null = null
 			try {
@@ -257,6 +258,18 @@ export async function handler(
 			// to that paper's first section (creating the section if it doesn't exist yet).
 			if (job.exam_paper_id) {
 				await linkJobQuestionsToExamPaper(jobId, job.exam_paper_id, uploadedBy)
+
+				// Defensive tier backfill: the pre-ingestion metadata extraction is the
+				// primary source, but when it misses (older flow, MCP creation) the
+				// processor's own extraction can fill the gap. Never overwrite an
+				// existing tier — the teacher may have set it manually.
+				const detectedTier = detectedMetadata?.tier
+				if (detectedTier === "foundation" || detectedTier === "higher") {
+					await db.examPaper.updateMany({
+						where: { id: job.exam_paper_id, tier: null },
+						data: { tier: detectedTier },
+					})
+				}
 			}
 
 			logger.info(TAG, "Job completed successfully", {

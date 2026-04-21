@@ -1,7 +1,8 @@
 "use server"
 
 import { db } from "@/lib/db"
-import type { Subject } from "@mcp-gcse/db"
+import { Prisma, type Subject, type TierLevel } from "@mcp-gcse/db"
+import { type GradeBoundary, gradeBoundariesSchema } from "@mcp-gcse/shared"
 import { auth } from "../../auth"
 import { log } from "../../logger"
 
@@ -108,6 +109,66 @@ export async function toggleExamPaperPublic(
 	} catch (err) {
 		log.error(TAG, "toggleExamPaperPublic failed", { id, error: String(err) })
 		return { ok: false, error: "Failed to update exam paper" }
+	}
+}
+
+// ─── Paper settings (tier, grade boundaries) ─────────────────────────────────
+
+type UpdatePaperSettingsInput = {
+	/**
+	 * Sentinel: `undefined` means "leave unchanged", `null` means "clear".
+	 * Same for `grade_boundaries`.
+	 */
+	tier?: TierLevel | null
+	grade_boundaries?: GradeBoundary[] | null
+}
+
+export type UpdatePaperSettingsResult =
+	| { ok: true }
+	| { ok: false; error: string }
+
+export async function updatePaperSettings(
+	examPaperId: string,
+	input: UpdatePaperSettingsInput,
+): Promise<UpdatePaperSettingsResult> {
+	const session = await auth()
+	if (!session) return { ok: false, error: "Not authenticated" }
+
+	const data: Prisma.ExamPaperUpdateInput = {}
+
+	if (input.tier !== undefined) {
+		data.tier = input.tier
+	}
+
+	if (input.grade_boundaries !== undefined) {
+		if (input.grade_boundaries === null) {
+			data.grade_boundaries = Prisma.DbNull
+		} else {
+			const parsed = gradeBoundariesSchema.safeParse(input.grade_boundaries)
+			if (!parsed.success) {
+				return { ok: false, error: "Invalid grade boundaries" }
+			}
+			data.grade_boundaries = parsed.data
+		}
+	}
+
+	if (Object.keys(data).length === 0) return { ok: true }
+
+	log.info(TAG, "updatePaperSettings called", {
+		userId: session.userId,
+		examPaperId,
+		fields: Object.keys(data),
+	})
+
+	try {
+		await db.examPaper.update({ where: { id: examPaperId }, data })
+		return { ok: true }
+	} catch (err) {
+		log.error(TAG, "updatePaperSettings failed", {
+			examPaperId,
+			error: String(err),
+		})
+		return { ok: false, error: "Failed to update paper settings" }
 	}
 }
 

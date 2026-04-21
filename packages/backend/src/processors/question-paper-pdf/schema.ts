@@ -38,4 +38,11 @@ export const QuestionPaperMetadataSchema = z.object({
 	duration_minutes: z.number().int(),
 	year: z.number().int().nullable().optional(),
 	paper_number: z.number().int().nullable().optional(),
+	tier: z
+		.string()
+		.nullable()
+		.optional()
+		.describe(
+			"'foundation' or 'higher' if printed on the cover; null if untiered or not visible.",
+		),
 })

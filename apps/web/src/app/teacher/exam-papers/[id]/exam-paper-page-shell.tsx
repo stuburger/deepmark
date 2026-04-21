@@ -29,6 +29,7 @@ import { EditableTitle } from "./editable-title"
 import { ExamPaperAnalyticsTab } from "./exam-paper-analytics-tab"
 import { capitalize } from "./exam-paper-helpers"
 import { ExamPaperQuestionsCard } from "./exam-paper-questions-card"
+import { GradeBoundariesCard } from "./grade-boundaries-card"
 import { useBatchIngestion } from "./hooks/use-batch-ingestion"
 import { useExamPaperLiveQueries } from "./hooks/use-exam-paper-live-queries"
 import { useLinkMarkScheme } from "./hooks/use-exam-paper-mutations"
@@ -291,6 +292,13 @@ export function ExamPaperPageShell({
 							</DocumentUploadCards>
 						</CardContent>
 					</Card>
+
+					<GradeBoundariesCard
+						paperId={paper.id}
+						subject={paper.subject}
+						tier={paper.tier}
+						boundaries={paper.grade_boundaries}
+					/>
 
 					{/* Missing mark scheme banner */}
 					{totalQuestions > 0 && !allQuestionsHaveMarkSchemes && (

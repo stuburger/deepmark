@@ -8,7 +8,7 @@ import {
 	S3Client,
 } from "@aws-sdk/client-s3"
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner"
-import type { Subject } from "@mcp-gcse/db"
+import type { Subject, TierLevel } from "@mcp-gcse/db"
 import { Output, generateText } from "ai"
 import { Resource } from "sst"
 import { z } from "zod"
@@ -60,6 +60,13 @@ const MetadataSchema = z.object({
 		.string()
 		.describe(
 			"Type of document: 'mark_scheme' if this is a mark scheme or marking guide, 'question_paper' if this is a question paper or exam paper for students, 'exemplar' if this contains exemplar or sample student answers",
+		),
+	tier: z
+		.string()
+		.nullable()
+		.optional()
+		.describe(
+			"Tier if printed on the cover: 'foundation' or 'higher'. Null if the paper is untiered (e.g. English, History) or the tier is not visible.",
 		),
 })
 
@@ -152,7 +159,7 @@ export async function extractPdfMetadata(
 								},
 								{
 									type: "text",
-									text: "Look at the header, cover page, and overall structure of this document. Extract the exam paper metadata. For subject, use the lowercase slug that best matches: biology, chemistry, physics, english, english_literature, mathematics, history, geography, computer_science, french, spanish, religious_studies, or business. For document_type: use 'mark_scheme' if this is a mark scheme or marking guide, 'question_paper' if this is a question paper for students to answer, or 'exemplar' if it contains sample student answers.",
+									text: "Look at the header, cover page, and overall structure of this document. Extract the exam paper metadata. For subject, use the lowercase slug that best matches: biology, chemistry, physics, english, english_literature, mathematics, history, geography, computer_science, french, spanish, religious_studies, or business. For document_type: use 'mark_scheme' if this is a mark scheme or marking guide, 'question_paper' if this is a question paper for students to answer, or 'exemplar' if it contains sample student answers. For tier: return 'foundation' or 'higher' only if the cover explicitly states the tier; null otherwise (untiered subjects or tier not printed).",
 								},
 							],
 						},
@@ -171,6 +178,9 @@ export async function extractPdfMetadata(
 				? raw.document_type
 				: "question_paper"
 
+		const tier: "foundation" | "higher" | null =
+			raw.tier === "foundation" || raw.tier === "higher" ? raw.tier : null
+
 		const metadata: DetectedPdfMetadata = {
 			title: raw.title,
 			subject: raw.subject,
@@ -180,6 +190,7 @@ export async function extractPdfMetadata(
 			total_marks: raw.total_marks,
 			duration_minutes: raw.duration_minutes,
 			document_type: documentType,
+			tier,
 		}
 
 		log.info(TAG, "Metadata extracted", {
@@ -213,6 +224,8 @@ export type CreateExamPaperWithIngestionInput = {
 	duration_minutes: number
 	document_type: PdfDocumentType
 	is_public?: boolean
+	/** Foundation/Higher if known; null for untiered subjects or unknown. */
+	tier?: TierLevel | null
 	/** Defaults to false — can be very expensive. Only enable for mark schemes. */
 	run_adversarial_loop?: boolean
 }
@@ -232,6 +245,8 @@ export type CreateExamPaperWithMultipleIngestionsInput = {
 	total_marks: number
 	duration_minutes: number
 	is_public?: boolean
+	/** Foundation/Higher if known; null for untiered subjects or unknown. */
+	tier?: TierLevel | null
 }
 
 export type CreateExamPaperWithMultipleIngestionsResult =
@@ -283,6 +298,7 @@ export async function createExamPaperWithIngestion(
 				duration_minutes: input.duration_minutes,
 				is_public: input.is_public ?? false,
 				created_by_id: session.userId,
+				tier: input.tier ?? null,
 			},
 		})
 
@@ -383,6 +399,7 @@ export async function createExamPaperWithMultipleIngestions(
 				duration_minutes: input.duration_minutes,
 				is_public: input.is_public ?? false,
 				created_by_id: session.userId,
+				tier: input.tier ?? null,
 			},
 		})
 

@@ -72,6 +72,9 @@ export default function NewExamPaperPage() {
 	const [totalMarks, setTotalMarks] = useState("")
 	const [durationMinutes, setDurationMinutes] = useState("")
 	const [isPublic, setIsPublic] = useState(true)
+	const [detectedTier, setDetectedTier] = useState<
+		"foundation" | "higher" | null
+	>(null)
 	const [submitting, setSubmitting] = useState(false)
 	const [submitError, setSubmitError] = useState<string | null>(null)
 
@@ -92,6 +95,7 @@ export default function NewExamPaperPage() {
 		setPaperNumber(metadata.paper_number ? String(metadata.paper_number) : "")
 		setTotalMarks(String(metadata.total_marks))
 		setDurationMinutes(String(metadata.duration_minutes))
+		setDetectedTier(metadata.tier)
 	}
 
 	function resetForm() {
@@ -103,6 +107,7 @@ export default function NewExamPaperPage() {
 		setTotalMarks("")
 		setDurationMinutes("")
 		setIsPublic(true)
+		setDetectedTier(null)
 		setSubmitError(null)
 	}
 
@@ -234,6 +239,7 @@ export default function NewExamPaperPage() {
 				total_marks: parsedMarks,
 				duration_minutes: parsedDuration,
 				is_public: isPublic,
+				tier: detectedTier,
 			})
 			setSubmitting(false)
 			if (!result.ok) {

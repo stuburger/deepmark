@@ -1,11 +1,18 @@
 "use server"
 
 import { db } from "@/lib/db"
+import { type GradeBoundary, gradeBoundariesSchema } from "@mcp-gcse/shared"
 import type {
 	CatalogExamPaper,
 	ExamPaperDetail,
 	ExamPaperListItem,
 } from "../types"
+
+function parseStoredBoundaries(raw: unknown): GradeBoundary[] | null {
+	if (raw === null || raw === undefined) return null
+	const result = gradeBoundariesSchema.safeParse(raw)
+	return result.success ? result.data : null
+}
 
 // ─── Exam paper list ──────────────────────────────────────────────────────────
 
@@ -144,6 +151,8 @@ export async function getExamPaperDetail(
 				})),
 				section_count: paper.sections.length,
 				level_descriptors: paper.level_descriptors ?? null,
+				tier: paper.tier ?? null,
+				grade_boundaries: parseStoredBoundaries(paper.grade_boundaries),
 			},
 		}
 	} catch {

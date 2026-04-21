@@ -13,4 +13,4 @@ GENERAL RULES:
 - For written questions provide: question_text (full text including sub-parts), question_type ("written"), total_marks, question_number if visible.`
 
 export const EXTRACT_METADATA_PROMPT =
-	"From the document header or cover, extract: title (exam paper title), subject, exam_board, total_marks, duration_minutes, year if visible, and paper_number if visible. Return only these fields."
+	"From the document header or cover, extract: title (exam paper title), subject, exam_board, total_marks, duration_minutes, year if visible, paper_number if visible, and tier ('foundation' or 'higher' only if the cover explicitly states it; null otherwise). Return only these fields."

@@ -43,6 +43,8 @@ export type ExamPaperSection = {
 	questions: ExamPaperQuestion[]
 }
 
+import type { GradeBoundary } from "@mcp-gcse/shared"
+
 export type ExamPaperDetail = {
 	id: string
 	title: string
@@ -58,6 +60,8 @@ export type ExamPaperDetail = {
 	sections: ExamPaperSection[]
 	section_count: number
 	level_descriptors: string | null
+	tier: "foundation" | "higher" | null
+	grade_boundaries: GradeBoundary[] | null
 }
 
 // ── Catalog ─────────────────────────────────────────────────────────────────

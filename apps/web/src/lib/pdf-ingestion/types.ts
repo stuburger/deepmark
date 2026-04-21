@@ -13,6 +13,8 @@ export type DetectedPdfMetadata = {
 	total_marks: number
 	duration_minutes: number
 	document_type: PdfDocumentType
+	/** "foundation" | "higher" when printed on the cover; null for untiered or unknown. */
+	tier: "foundation" | "higher" | null
 }
 
 export type IngestionSlot = {

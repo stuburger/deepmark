@@ -28,7 +28,8 @@ export const handler = tool(CreateExamPaperSchema, async (args, extra) => {
 
 	console.log("[create-exam-paper] Creating exam paper")
 
-	// Insert the exam paper into the database
+	// Tier was promoted to a first-class column; keep metadata.tier in sync for
+	// any legacy readers, but the tier column is the source of truth.
 	const paper = await db.examPaper.create({
 		data: {
 			title,
@@ -40,6 +41,7 @@ export const handler = tool(CreateExamPaperSchema, async (args, extra) => {
 			duration_minutes,
 			created_at: new Date(),
 			is_active: true,
+			tier: metadata?.tier ?? null,
 			metadata: metadata || {
 				difficulty_level: "higher",
 				tier: "higher",

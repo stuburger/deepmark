@@ -73,12 +73,11 @@ export const handler = tool(GetExamPaperByIdSchema, async (args, extra) => {
 	markdown += `- **Created by**: ${examPaper.created_by.name || examPaper.created_by.email || "Unknown"}\n`
 	markdown += `- **Created**: ${examPaper.created_at.toLocaleDateString()}\n`
 
-	if (examPaper.metadata) {
-		const meta = examPaper.metadata as Record<string, unknown>
-		markdown += `- **Difficulty Level**: ${meta.difficulty_level || "Not specified"}\n`
-		markdown += `- **Tier**: ${meta.tier || "Not specified"}\n`
-		markdown += `- **Season**: ${meta.season || "Not specified"}\n`
-	}
+	const meta = (examPaper.metadata ?? {}) as Record<string, unknown>
+	const tier = examPaper.tier ?? meta.tier ?? "Not specified"
+	markdown += `- **Difficulty Level**: ${meta.difficulty_level || "Not specified"}\n`
+	markdown += `- **Tier**: ${tier}\n`
+	markdown += `- **Season**: ${meta.season || "Not specified"}\n`
 
 	markdown += "\n"
 

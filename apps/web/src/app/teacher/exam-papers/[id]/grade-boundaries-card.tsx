@@ -7,9 +7,11 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { updatePaperSettings } from "@/lib/exam-paper/paper/mutations"
 import { queryKeys } from "@/lib/query-keys"
 import {
+	type BoundaryMode,
 	GRADES,
 	type GradeBoundary,
 	boundariesEqual,
+	convertBoundaries,
 	getTypicalBoundaries,
 	isTieredSubject,
 } from "@mcp-gcse/shared"
@@ -23,34 +25,43 @@ type Tier = "foundation" | "higher"
 type Props = {
 	paperId: string
 	subject: string
+	paperTotal: number
 	tier: Tier | null
 	boundaries: GradeBoundary[] | null
+	mode: BoundaryMode | null
 }
 
 function toDraft(boundaries: GradeBoundary[] | null): Record<string, string> {
 	const map: Record<string, string> = {}
 	for (const g of GRADES) map[g] = ""
-	for (const b of boundaries ?? []) map[b.grade] = String(b.min_percent)
+	for (const b of boundaries ?? []) map[b.grade] = String(b.min_mark)
 	return map
 }
 
 function parseDraft(
 	draft: Record<string, string>,
+	mode: BoundaryMode,
+	paperTotal: number,
 ): GradeBoundary[] | { error: string } {
 	const rows: GradeBoundary[] = []
+	const upperBound = mode === "percent" ? 100 : Math.max(paperTotal, 1)
+	const unitLabel = mode === "percent" ? "%" : "marks"
 	for (const g of GRADES) {
 		const raw = draft[g] ?? ""
-		if (raw === "") return { error: "All 9 grades require a percentage" }
+		if (raw === "") return { error: "All 9 grades require a value" }
 		const n = Number(raw)
 		if (!Number.isFinite(n) || !Number.isInteger(n))
 			return { error: `Grade ${g} must be an integer` }
-		if (n < 0 || n > 100)
-			return { error: `Grade ${g} must be between 0 and 100` }
-		rows.push({ grade: g, min_percent: n })
+		if (n < 0) return { error: `Grade ${g} must be at least 0 ${unitLabel}` }
+		if (n > upperBound)
+			return {
+				error: `Grade ${g} must be at most ${upperBound} ${unitLabel}`,
+			}
+		rows.push({ grade: g, min_mark: n })
 	}
 	for (let i = 0; i < rows.length - 1; i++) {
-		if (rows[i].min_percent <= rows[i + 1].min_percent) {
-			return { error: "Percentages must strictly descend from 9 to 1" }
+		if (rows[i].min_mark <= rows[i + 1].min_mark) {
+			return { error: "Values must strictly descend from 9 to 1" }
 		}
 	}
 	return rows
@@ -59,18 +70,25 @@ function parseDraft(
 export function GradeBoundariesCard({
 	paperId,
 	subject,
+	paperTotal,
 	tier,
 	boundaries,
+	mode,
 }: Props) {
 	const queryClient = useQueryClient()
 	const tiered = isTieredSubject(subject)
+	const effectiveMode: BoundaryMode = mode ?? "percent"
 	const [draft, setDraft] = useState<Record<string, string>>(() =>
 		toDraft(boundaries),
 	)
 	const [validationError, setValidationError] = useState<string | null>(null)
-	const [undoTarget, setUndoTarget] = useState<GradeBoundary[] | null>(null)
+	const [undoTarget, setUndoTarget] = useState<{
+		boundaries: GradeBoundary[] | null
+		mode: BoundaryMode | null
+	} | null>(null)
 
-	// Resync draft when the server-side boundaries change (e.g. Generate, Reset, Clear).
+	// Resync draft when the server-side boundaries change (Generate, Reset, Clear,
+	// or a mode toggle that converted values).
 	useEffect(() => {
 		setDraft(toDraft(boundaries))
 		setValidationError(null)
@@ -80,6 +98,7 @@ export function GradeBoundariesCard({
 		mutationFn: (input: {
 			tier?: Tier | null
 			grade_boundaries?: GradeBoundary[] | null
+			grade_boundary_mode?: BoundaryMode | null
 		}) => updatePaperSettings(paperId, input),
 		onSuccess: (result) => {
 			if (!result.ok) {
@@ -97,12 +116,17 @@ export function GradeBoundariesCard({
 	const isCustomised =
 		boundaries !== null &&
 		typicals !== null &&
+		effectiveMode === "percent" &&
 		!boundariesEqual(boundaries, typicals)
-	const isTypical = boundaries !== null && typicals !== null && !isCustomised
+	const isTypical =
+		boundaries !== null &&
+		typicals !== null &&
+		effectiveMode === "percent" &&
+		!isCustomised
 
 	function handleCellBlur() {
-		if (!boundaries) return // empty state, nothing to auto-save
-		const parsed = parseDraft(draft)
+		if (!boundaries) return
+		const parsed = parseDraft(draft, effectiveMode, paperTotal)
 		if ("error" in parsed) {
 			setValidationError(parsed.error)
 			return
@@ -121,31 +145,63 @@ export function GradeBoundariesCard({
 		save.mutate({ tier: next })
 	}
 
+	function handleModeChange(next: BoundaryMode) {
+		if (next === effectiveMode) return
+		if (!boundaries) {
+			save.mutate({ grade_boundary_mode: next })
+			return
+		}
+		if (next === "raw" && paperTotal <= 0) {
+			toast.error("Set the paper's total marks before switching to raw")
+			return
+		}
+		const converted = convertBoundaries(
+			boundaries,
+			effectiveMode,
+			next,
+			paperTotal,
+		)
+		save.mutate({
+			grade_boundary_mode: next,
+			grade_boundaries: converted,
+		})
+	}
+
 	function generate() {
 		const template = getTypicalBoundaries(subject, tier)
 		if (!template) {
 			toast.error("No typical boundaries available for this subject")
 			return
 		}
-		setUndoTarget(boundaries)
-		save.mutate({ grade_boundaries: template })
+		setUndoTarget({ boundaries, mode })
+		// Typical templates are percent-based — align mode accordingly.
+		save.mutate({
+			grade_boundary_mode: "percent",
+			grade_boundaries: template,
+		})
 	}
 
 	function resetToTypical() {
 		if (!typicals) return
-		save.mutate({ grade_boundaries: typicals })
+		save.mutate({
+			grade_boundary_mode: "percent",
+			grade_boundaries: typicals,
+		})
 	}
 
 	function clearBoundaries() {
-		save.mutate({ grade_boundaries: null })
+		save.mutate({ grade_boundaries: null, grade_boundary_mode: null })
 	}
 
 	function undoGenerate() {
-		save.mutate({ grade_boundaries: undoTarget })
+		if (undoTarget === null) return
+		save.mutate({
+			grade_boundaries: undoTarget.boundaries,
+			grade_boundary_mode: undoTarget.mode,
+		})
 		setUndoTarget(null)
 	}
 
-	// Clear undo affordance 5s after Generate.
 	useEffect(() => {
 		if (undoTarget === null) return
 		const t = setTimeout(() => setUndoTarget(null), 5000)
@@ -153,6 +209,8 @@ export function GradeBoundariesCard({
 	}, [undoTarget])
 
 	const saving = save.isPending
+	const rawModeDisabled = paperTotal <= 0
+
 	const statusBadge = (() => {
 		if (saving)
 			return (
@@ -175,8 +233,17 @@ export function GradeBoundariesCard({
 					customised
 				</span>
 			)
+		if (boundaries !== null)
+			return (
+				<span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+					<CheckCircle2 className="h-3 w-3 text-green-600 dark:text-green-400" />
+					{effectiveMode === "raw" ? "raw marks" : "custom"}
+				</span>
+			)
 		return <span className="text-xs text-muted-foreground italic">not set</span>
 	})()
+
+	const unitLabel = effectiveMode === "percent" ? "%" : `/ ${paperTotal}`
 
 	return (
 		<Card>
@@ -188,29 +255,50 @@ export function GradeBoundariesCard({
 						{statusBadge}
 					</div>
 
-					{tiered && (
+					<div className="flex items-center gap-2 shrink-0">
+						{tiered && (
+							<ToggleGroup
+								value={tier ? [tier] : []}
+								onValueChange={(values) => {
+									const next = values[0]
+									handleTierChange(
+										next === "foundation" || next === "higher" ? next : null,
+									)
+								}}
+								variant="outline"
+								size="sm"
+							>
+								<ToggleGroupItem value="foundation">Foundation</ToggleGroupItem>
+								<ToggleGroupItem value="higher">Higher</ToggleGroupItem>
+							</ToggleGroup>
+						)}
 						<ToggleGroup
-							value={tier ? [tier] : []}
+							value={[effectiveMode]}
 							onValueChange={(values) => {
 								const next = values[0]
-								handleTierChange(
-									next === "foundation" || next === "higher" ? next : null,
-								)
+								if (next === "percent" || next === "raw") handleModeChange(next)
 							}}
 							variant="outline"
 							size="sm"
-							className="shrink-0"
+							title={
+								rawModeDisabled
+									? "Set the paper's total marks to enable raw mode"
+									: undefined
+							}
 						>
-							<ToggleGroupItem value="foundation">Foundation</ToggleGroupItem>
-							<ToggleGroupItem value="higher">Higher</ToggleGroupItem>
+							<ToggleGroupItem value="percent">%</ToggleGroupItem>
+							<ToggleGroupItem value="raw" disabled={rawModeDisabled}>
+								Raw
+							</ToggleGroupItem>
 						</ToggleGroup>
-					)}
+					</div>
 				</div>
 
 				{boundaries ? (
 					<PopulatedRow
 						draft={draft}
 						validationError={validationError}
+						unitLabel={unitLabel}
 						onCellChange={handleCellChange}
 						onCellBlur={handleCellBlur}
 						disabled={saving}
@@ -222,11 +310,14 @@ export function GradeBoundariesCard({
 						hasTemplate={typicals !== null}
 						onGenerate={generate}
 						onEnterManually={() => {
-							const zeros: GradeBoundary[] = GRADES.map((g, i) => ({
+							// Seed a sensible descending placeholder based on current mode.
+							const upper = effectiveMode === "percent" ? 90 : paperTotal
+							const step = upper / 9
+							const seeded: GradeBoundary[] = GRADES.map((g, i) => ({
 								grade: g,
-								min_percent: 90 - i * 10,
+								min_mark: Math.max(0, Math.round(upper - i * step)),
 							}))
-							save.mutate({ grade_boundaries: zeros })
+							save.mutate({ grade_boundaries: seeded })
 						}}
 						disabled={saving}
 					/>
@@ -239,7 +330,9 @@ export function GradeBoundariesCard({
 								? "Typical values — edit any cell to customise."
 								: isCustomised
 									? "Verify against your board's published boundaries."
-									: "Enter each grade's minimum percentage."}
+									: effectiveMode === "raw"
+										? `Raw marks out of ${paperTotal}. Higher grade wins at exact thresholds.`
+										: "Enter each grade's minimum percentage."}
 						</span>
 						<div className="flex items-center gap-1">
 							{undoTarget !== null && (
@@ -271,12 +364,14 @@ export function GradeBoundariesCard({
 function PopulatedRow({
 	draft,
 	validationError,
+	unitLabel,
 	onCellChange,
 	onCellBlur,
 	disabled,
 }: {
 	draft: Record<string, string>
 	validationError: string | null
+	unitLabel: string
 	onCellChange: (grade: string, value: string) => void
 	onCellBlur: () => void
 	disabled: boolean
@@ -299,11 +394,14 @@ function PopulatedRow({
 							}}
 							disabled={disabled}
 							className="h-8 text-center tabular-nums px-1"
-							aria-label={`Grade ${g} minimum percentage`}
+							aria-label={`Grade ${g} minimum ${unitLabel}`}
 						/>
 					</div>
 				))}
 			</div>
+			<p className="text-[11px] text-muted-foreground text-right tabular-nums">
+				{unitLabel}
+			</p>
 			{validationError ? (
 				<p className="text-xs text-destructive">{validationError}</p>
 			) : null}
@@ -333,7 +431,7 @@ function EmptyState({
 			<p className="text-xs text-muted-foreground">
 				{needsTier
 					? "Pick a tier above, then generate typical boundaries — or enter your own."
-					: "Generate typical GCSE boundaries as a starting point — you can edit any value after."}
+					: "Generate typical GCSE boundaries as a starting point — you can edit any value or switch to raw marks after."}
 			</p>
 			<div className="flex items-center gap-2 flex-wrap">
 				<Button

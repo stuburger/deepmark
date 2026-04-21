@@ -1,7 +1,12 @@
 "use server"
 
 import { db } from "@/lib/db"
-import { Prisma, type Subject, type TierLevel } from "@mcp-gcse/db"
+import {
+	type BoundaryMode,
+	Prisma,
+	type Subject,
+	type TierLevel,
+} from "@mcp-gcse/db"
 import { type GradeBoundary, gradeBoundariesSchema } from "@mcp-gcse/shared"
 import { auth } from "../../auth"
 import { log } from "../../logger"
@@ -116,11 +121,12 @@ export async function toggleExamPaperPublic(
 
 type UpdatePaperSettingsInput = {
 	/**
-	 * Sentinel: `undefined` means "leave unchanged", `null` means "clear".
-	 * Same for `grade_boundaries`.
+	 * Sentinel convention: `undefined` means "leave unchanged", `null` means
+	 * "clear". Applies to every field on this input.
 	 */
 	tier?: TierLevel | null
 	grade_boundaries?: GradeBoundary[] | null
+	grade_boundary_mode?: BoundaryMode | null
 }
 
 export type UpdatePaperSettingsResult =
@@ -150,6 +156,10 @@ export async function updatePaperSettings(
 			}
 			data.grade_boundaries = parsed.data
 		}
+	}
+
+	if (input.grade_boundary_mode !== undefined) {
+		data.grade_boundary_mode = input.grade_boundary_mode
 	}
 
 	if (Object.keys(data).length === 0) return { ok: true }

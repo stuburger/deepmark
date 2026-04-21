@@ -47,6 +47,7 @@ function buildCsv(data: SubmissionExportPayload): string {
 				row.total_awarded,
 				row.total_max,
 				data.grade_boundaries,
+				data.grade_boundary_mode ?? "percent",
 			)
 			cells.push(grade ?? "")
 		}

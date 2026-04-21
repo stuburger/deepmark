@@ -296,8 +296,10 @@ export function ExamPaperPageShell({
 					<GradeBoundariesCard
 						paperId={paper.id}
 						subject={paper.subject}
+						paperTotal={paper.total_marks}
 						tier={paper.tier}
 						boundaries={paper.grade_boundaries}
+						mode={paper.grade_boundary_mode}
 					/>
 
 					{/* Missing mark scheme banner */}

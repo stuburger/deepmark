@@ -5,15 +5,22 @@ export type Grade = (typeof GRADES)[number]
 
 export type Tier = "foundation" | "higher"
 
+/**
+ * How min_mark on each boundary row is interpreted:
+ *  - "percent": integer 0–100, threshold is a percentage of the paper total
+ *  - "raw":     integer threshold in raw marks (bounded by paper total in UI)
+ */
+export type BoundaryMode = "percent" | "raw"
+
 export type GradeBoundary = {
 	grade: Grade
-	/** Minimum percentage (integer 0–100) to achieve this grade. */
-	min_percent: number
+	/** Minimum mark to achieve this grade. Interpretation depends on mode. */
+	min_mark: number
 }
 
 export const gradeBoundarySchema: z.ZodType<GradeBoundary> = z.object({
 	grade: z.enum(GRADES),
-	min_percent: z.number().int().min(0).max(100),
+	min_mark: z.number().int().min(0).max(10000),
 })
 
 export const gradeBoundariesSchema = z
@@ -24,7 +31,7 @@ export const gradeBoundariesSchema = z
 	})
 	.refine(
 		(rows) => {
-			const byGrade = new Map(rows.map((r) => [r.grade, r.min_percent]))
+			const byGrade = new Map(rows.map((r) => [r.grade, r.min_mark]))
 			for (let i = 0; i < GRADES.length - 1; i++) {
 				const higher = byGrade.get(GRADES[i] as Grade)
 				const lower = byGrade.get(GRADES[i + 1] as Grade)
@@ -33,7 +40,7 @@ export const gradeBoundariesSchema = z
 			}
 			return true
 		},
-		{ message: "Percentages must strictly descend from grade 9 to grade 1" },
+		{ message: "Values must strictly descend from grade 9 to grade 1" },
 	)
 
 /**
@@ -41,25 +48,58 @@ export const gradeBoundariesSchema = z
  *
  * Returns `null` when boundaries are unset — callers decide whether to show
  * the grade column. Returns `"U"` when the student scored below grade 1.
+ *
+ * Edge case: a student whose score exactly equals a boundary lands on the
+ * higher grade (threshold is inclusive).
  */
 export function computeGrade(
 	awarded: number,
 	max: number,
 	boundaries: GradeBoundary[] | null | undefined,
+	mode: BoundaryMode = "percent",
 ): Grade | "U" | null {
 	if (!boundaries || boundaries.length === 0) return null
 	if (max <= 0) return "U"
-	const pct = (awarded / max) * 100
+
+	const comparand = mode === "raw" ? awarded : (awarded / max) * 100
 	const sorted = [...boundaries].sort(
 		(a, b) => Number(b.grade) - Number(a.grade),
 	)
 	for (const b of sorted) {
-		if (pct >= b.min_percent) return b.grade
+		if (comparand >= b.min_mark) return b.grade
 	}
 	return "U"
 }
 
-// ─── Default "typical" templates ─────────────────────────────────────────────
+/**
+ * Converts boundary values between percent and raw given a paper total.
+ * Preserves strict descent when percentages are distinct enough not to
+ * collapse under rounding; callers should validate after conversion.
+ */
+export function convertBoundaries(
+	boundaries: GradeBoundary[],
+	fromMode: BoundaryMode,
+	toMode: BoundaryMode,
+	paperTotal: number,
+): GradeBoundary[] {
+	if (fromMode === toMode) return boundaries
+	if (paperTotal <= 0) return boundaries
+	return boundaries.map((b) => {
+		if (fromMode === "percent" && toMode === "raw") {
+			return {
+				grade: b.grade,
+				min_mark: Math.round((b.min_mark * paperTotal) / 100),
+			}
+		}
+		// raw → percent
+		return {
+			grade: b.grade,
+			min_mark: Math.round((b.min_mark / paperTotal) * 100),
+		}
+	})
+}
+
+// ─── Default "typical" templates (percent mode) ──────────────────────────────
 // Approximations drawn from recent AQA/Edexcel/OCR GCSE boundary averages.
 // These are advisory starting points — teachers should verify against their
 // board's published values for the actual paper.
@@ -78,15 +118,15 @@ function boundaries(
 	one: number,
 ): GradeBoundary[] {
 	return [
-		{ grade: "9", min_percent: nine },
-		{ grade: "8", min_percent: eight },
-		{ grade: "7", min_percent: seven },
-		{ grade: "6", min_percent: six },
-		{ grade: "5", min_percent: five },
-		{ grade: "4", min_percent: four },
-		{ grade: "3", min_percent: three },
-		{ grade: "2", min_percent: two },
-		{ grade: "1", min_percent: one },
+		{ grade: "9", min_mark: nine },
+		{ grade: "8", min_mark: eight },
+		{ grade: "7", min_mark: seven },
+		{ grade: "6", min_mark: six },
+		{ grade: "5", min_mark: five },
+		{ grade: "4", min_mark: four },
+		{ grade: "3", min_mark: three },
+		{ grade: "2", min_mark: two },
+		{ grade: "1", min_mark: one },
 	]
 }
 
@@ -130,9 +170,8 @@ export function isTieredSubject(subject: string): boolean {
 }
 
 /**
- * Returns typical boundaries for the given subject/tier combo, or null when
- * no template is configured. Tiered subjects require a tier; untiered subjects
- * must pass `null` for tier.
+ * Returns typical boundaries for the given subject/tier combo in percent mode,
+ * or null when no template is configured.
  */
 export function getTypicalBoundaries(
 	subject: string,
@@ -152,9 +191,9 @@ export function boundariesEqual(
 ): boolean {
 	if (!a || !b) return a === b
 	if (a.length !== b.length) return false
-	const aByGrade = new Map(a.map((r) => [r.grade, r.min_percent]))
+	const aByGrade = new Map(a.map((r) => [r.grade, r.min_mark]))
 	for (const r of b) {
-		if (aByGrade.get(r.grade) !== r.min_percent) return false
+		if (aByGrade.get(r.grade) !== r.min_mark) return false
 	}
 	return true
 }

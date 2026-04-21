@@ -43,7 +43,7 @@ export type ExamPaperSection = {
 	questions: ExamPaperQuestion[]
 }
 
-import type { GradeBoundary } from "@mcp-gcse/shared"
+import type { BoundaryMode, GradeBoundary } from "@mcp-gcse/shared"
 
 export type ExamPaperDetail = {
 	id: string
@@ -62,6 +62,7 @@ export type ExamPaperDetail = {
 	level_descriptors: string | null
 	tier: "foundation" | "higher" | null
 	grade_boundaries: GradeBoundary[] | null
+	grade_boundary_mode: BoundaryMode | null
 }
 
 // ── Catalog ─────────────────────────────────────────────────────────────────

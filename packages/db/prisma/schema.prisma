@@ -41,6 +41,11 @@ enum TierLevel {
   higher
 }
 
+enum BoundaryMode {
+  percent
+  raw
+}
+
 enum Season {
   summer
   autumn
@@ -324,9 +329,11 @@ model ExamPaper {
   // in April 2026; legacy rows may still carry `metadata.tier`.
   metadata         Json?
   tier             TierLevel?
-  /// Optional GCSE grade boundaries as percentages, shape GradeBoundary[] from
-  /// @mcp-gcse/shared. Null when unset. Validated at the server-action boundary.
-  grade_boundaries Json?
+  /// Optional GCSE grade boundaries, shape GradeBoundary[] from @mcp-gcse/shared.
+  /// Interpretation (percent of total vs raw marks) is given by grade_boundary_mode.
+  /// Null when unset. Validated at the server-action boundary.
+  grade_boundaries      Json?
+  grade_boundary_mode   BoundaryMode?
   /// Marking Guidance — teacher-authored freetext injected into LoR grading prompts.
   /// Supports level descriptors, feedback style instructions, and few-shot examples.
   /// Displayed in the UI as "Marking Guidance". Future: rename column to marking_guidance.

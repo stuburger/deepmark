@@ -1,7 +1,11 @@
 "use server"
 
 import { db } from "@/lib/db"
-import { type GradeBoundary, gradeBoundariesSchema } from "@mcp-gcse/shared"
+import {
+	type BoundaryMode,
+	type GradeBoundary,
+	gradeBoundariesSchema,
+} from "@mcp-gcse/shared"
 import { auth } from "../../auth"
 import { sumSectionPoints } from "../paper-totals"
 import type { GradingResult } from "../types"
@@ -29,6 +33,7 @@ export type SubmissionExportPayload = {
 	subject: string
 	tier: "foundation" | "higher" | null
 	grade_boundaries: GradeBoundary[] | null
+	grade_boundary_mode: BoundaryMode | null
 	questions: SubmissionExportQuestion[]
 	rows: SubmissionExportRow[]
 }
@@ -55,6 +60,7 @@ export async function exportSubmissionsForPaper(
 			subject: true,
 			tier: true,
 			grade_boundaries: true,
+			grade_boundary_mode: true,
 			sections: {
 				orderBy: { order: "asc" },
 				select: {
@@ -168,6 +174,7 @@ export async function exportSubmissionsForPaper(
 			subject: paper.subject,
 			tier: paper.tier ?? null,
 			grade_boundaries: boundaries,
+			grade_boundary_mode: paper.grade_boundary_mode ?? null,
 			questions,
 			rows,
 		},

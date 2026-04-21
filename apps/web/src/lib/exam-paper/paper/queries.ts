@@ -153,6 +153,7 @@ export async function getExamPaperDetail(
 				level_descriptors: paper.level_descriptors ?? null,
 				tier: paper.tier ?? null,
 				grade_boundaries: parseStoredBoundaries(paper.grade_boundaries),
+				grade_boundary_mode: paper.grade_boundary_mode ?? null,
 			},
 		}
 	} catch {

@@ -128,11 +128,82 @@ function spatiallySortFixture(tokens: Q02FixtureToken[]): Q02FixtureToken[] {
 }
 
 // ── Client heuristic (mirror of apps/web/src/lib/marking/alignment/align.ts) ─
+//
 // Duplicated here because tests can't cross package boundaries. Kept minimal
 // and in sync with the production implementation — only needed to produce a
 // comparable `char_start/char_end` per token for the head-to-head metric.
+//
+// ─── How the heuristic works ─────────────────────────────────────────────
+//
+// Inputs: a student `answer` string (LLM-authored, clean) and an ordered
+// list of OCR `tokens` from the scan. Output: a map `token.id → { start,
+// end }` pointing each token at a character range in `answer`.
+//
+// The algorithm is greedy two-pass:
+//
+// Pass 1 — fuzzy match with an advancing cursor:
+//   Split `answer` into whitespace-separated words (each carries its char
+//   offsets). Maintain `wordCursor` pointing into that word list.
+//   For each token in input order, fuzzy-match the token's effective text
+//   (`text_corrected ?? text_raw`) against the next LOOK_AHEAD=8 answer
+//   words starting at `wordCursor`. A match requires normalised Levenshtein
+//   distance ≤ MAX_DISTANCE=0.4. If found:
+//     • Record the best-matching answer word's char range for this token.
+//     • Mark that word index as assigned.
+//     • Advance `wordCursor` past that word (so subsequent tokens match
+//       forward-only, never backward).
+//   Tokens that fail to match are left for Pass 2.
+//
+// Pass 2 — positional fill:
+//   Any token not matched in Pass 1 gets assigned to the next unassigned
+//   answer word, in input order. This is unconditional: junk tokens (page
+//   artifacts, stray marks), garbled OCR fragments, and everything else
+//   gets mapped to *some* leftover answer word.
+//
+// ─── Why the heuristic works ─────────────────────────────────────────────
+//
+// It rides on three coincidences that hold most of the time:
+//
+// 1. Reading-order preservation. With spatial sort applied (Option A), the
+//    token sequence matches the order the attribution LLM walked when it
+//    authored `answer_text`. So tokens should line up 1:1 with answer
+//    words, minus some OCR noise and Vision-split fragments.
+//
+// 2. OCR noise is local. Common Vision misreads are single-character
+//    substitutions or truncations ("maintai" → "maintain", "mill" → "will",
+//    "Mut" → "that"). Normalised Levenshtein with a 0.4 threshold tolerates
+//    those. LOOK_AHEAD=8 provides slack for small insertions/deletions
+//    (e.g. the LLM added a word the tokens don't cover, or Vision missed a
+//    word the answer has).
+//
+// 3. Answer words rarely recur within an 8-word window. When they do
+//    (multiple "the", "as", "business"), the greedy forward cursor picks
+//    whichever comes first — usually the correct occurrence given reading
+//    order.
+//
+// ─── Where the heuristic fails ───────────────────────────────────────────
+//
+// • Pass 2 is blind. It positionally fills every unmatched token — so a
+//   stray "·" or a "5 | Page" artifact gets mapped to some leftover answer
+//   word. The bbox of that junk then lights up when the user highlights the
+//   answer word in the UI. The LLM mapper's advantage over the heuristic
+//   is precisely this: it can return null for junk tokens. The heuristic
+//   cannot.
+// • LOOK_AHEAD is small. If reading order and answer order drift apart by
+//   more than 8 words (the pre-spatial-sort production bug), Pass 1 skips
+//   tokens and Pass 2 randomises them across the answer.
+// • Vision-split words. When the student wrote "Wallpaper" and Vision
+//   produced tokens ["wall", "puper"], each fragment fuzzy-matches the
+//   full answer word "Wallpaper" loosely. Fine semantically — both
+//   fragments highlight the same answer word — but my violation check
+//   flags it as a false positive (see the [10] "wall" entry in the
+//   findings at the top of this file).
 
-type HeuristicToken = { id: string; text_raw: string; text_corrected: string | null }
+type HeuristicToken = {
+	id: string
+	text_raw: string
+	text_corrected: string | null
+}
 
 function splitWithOffsets(
 	text: string,
@@ -227,7 +298,9 @@ function metrics(
 		const m = entries[i]
 		if (m.char_start === null || m.char_end === null) continue
 		mappedAll++
-		const expected = (tokens[i].text_corrected ?? tokens[i].text_raw).toLowerCase()
+		const expected = (
+			tokens[i].text_corrected ?? tokens[i].text_raw
+		).toLowerCase()
 		if (expected.length <= 1) continue
 		const mapped = Q02_ANSWER_TEXT.slice(m.char_start, m.char_end).toLowerCase()
 		const d = normalizedDistance(mapped, expected)

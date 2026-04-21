@@ -39,7 +39,8 @@ const writtenFormSchema = z.object({
 	markPoints: z
 		.array(
 			z.object({
-				description: z.string().min(1, "Mark point description is required"),
+				criteria: z.string().min(1, "Mark point criteria is required"),
+				description: z.string(),
 				points: z.number().int().min(0, "Must be non-negative"),
 			}),
 		)
@@ -86,7 +87,11 @@ type WrittenProps = {
 			questionId: string
 			initialDescription?: string
 			initialGuidance?: string
-			initialMarkPoints?: Array<{ description: string; points: number }>
+			initialMarkPoints?: Array<{
+				criteria: string
+				description?: string
+				points: number
+			}>
 	  }
 	| {
 			questionId?: never
@@ -94,7 +99,11 @@ type WrittenProps = {
 			markingMethod: string
 			initialDescription: string
 			initialGuidance: string
-			initialMarkPoints: Array<{ description: string; points: number }>
+			initialMarkPoints: Array<{
+				criteria: string
+				description?: string
+				points: number
+			}>
 	  }
 )
 
@@ -107,7 +116,11 @@ type WrittenEdit = WrittenProps & { questionId?: never; markSchemeId: string }
 export type Props = (McqCreate | McqEdit | WrittenCreate | WrittenEdit) & {
 	multipleChoiceOptions?: McqOption[]
 	initialCorrectOptionLabels?: string[]
-	initialMarkPoints?: Array<{ description: string; points: number }>
+	initialMarkPoints?: Array<{
+		criteria: string
+		description?: string
+		points: number
+	}>
 }
 
 // ── Shared submit logic ─────────────────────────────────────────────────────
@@ -319,8 +332,14 @@ function WrittenForm(props: Props) {
 			guidance: props.initialGuidance ?? "",
 			markPoints: (() => {
 				const init = props.initialMarkPoints
-				if (init && init.length > 0) return init
-				return [{ description: "", points: 1 }]
+				if (init && init.length > 0) {
+					return init.map((mp) => ({
+						criteria: mp.criteria,
+						description: mp.description ?? "",
+						points: mp.points,
+					}))
+				}
+				return [{ criteria: "", description: "", points: 1 }]
 			})(),
 		},
 	})
@@ -343,6 +362,7 @@ function WrittenForm(props: Props) {
 			guidance: values.guidance.trim() || null,
 			mark_points: showMarkPoints
 				? values.markPoints.map((mp) => ({
+						criteria: mp.criteria.trim(),
 						description: mp.description.trim(),
 						points: mp.points,
 					}))
@@ -379,6 +399,7 @@ function WrittenForm(props: Props) {
 							{markPointFields.fields.map((field, i) => (
 								<MarkPointRow
 									key={field.id}
+									criteria={watchedPoints[i]?.criteria ?? ""}
 									description={watchedPoints[i]?.description ?? ""}
 									points={String(watchedPoints[i]?.points ?? 1)}
 									index={i}
@@ -390,8 +411,10 @@ function WrittenForm(props: Props) {
 												`markPoints.${i}.points`,
 												Number.parseInt(value, 10) || 0,
 											)
-										} else {
+										} else if (f === "description") {
 											form.setValue(`markPoints.${i}.description`, value)
+										} else {
+											form.setValue(`markPoints.${i}.criteria`, value)
 										}
 										setSaved(false)
 									}}
@@ -407,7 +430,11 @@ function WrittenForm(props: Props) {
 							variant="outline"
 							size="sm"
 							onClick={() => {
-								markPointFields.append({ description: "", points: 1 })
+								markPointFields.append({
+									criteria: "",
+									description: "",
+									points: 1,
+								})
 								setSaved(false)
 							}}
 							disabled={effectivelyPending}

@@ -11,10 +11,12 @@ export function buildPointBasedPrompt(
 	totalQuestions?: number,
 	learningContent?: LearningContentItem[],
 ): string {
+	// `description` was legacy category metadata; the domain-primary field is
+	// `criteria`, which carries what the student must write to earn the mark.
 	const markPointsList = question.markPoints
 		.map(
 			(mp) =>
-				`[pointNumber: ${mp.pointNumber}] ${mp.description} (${mp.points} mark${mp.points > 1 ? "s" : ""}${mp.isRequired ? ", REQUIRED" : ""})\n   Criteria: ${mp.criteria}`,
+				`[pointNumber: ${mp.pointNumber}] ${mp.criteria} (${mp.points} mark${mp.points > 1 ? "s" : ""}${mp.isRequired ? ", REQUIRED" : ""})`,
 		)
 		.join("\n\n")
 

@@ -49,10 +49,14 @@ export async function createMarkScheme(
 	} else {
 		return { ok: false, error: "Cannot determine total marks" }
 	}
+	// `criteria` is the grading-meaningful field; `description` is optional
+	// teacher-authored metadata (category, AO, marker note). Both persist on
+	// every row; description is "" when not supplied.
 	const markPoints = isPointBased
 		? input.mark_points.map((mp, i) => ({
 				point_number: i + 1,
-				description: mp.description,
+				criteria: mp.criteria,
+				description: mp.description ?? "",
 				points: mp.points,
 			}))
 		: []
@@ -110,7 +114,7 @@ export async function updateMarkScheme(
 	try {
 		const existing = await db.markScheme.findUnique({
 			where: { id: markSchemeId },
-			select: { marking_method: true },
+			select: { marking_method: true, mark_points: true },
 		})
 		if (!existing) return { ok: false, error: "Mark scheme not found" }
 
@@ -155,11 +159,33 @@ export async function updateMarkScheme(
 				return { ok: false, error: "Cannot determine total marks" }
 			}
 		}
+		// Preserve existing `description` by position when the form doesn't
+		// carry one (older callers, autofill). Mark points have no stable ID
+		// today — `point_number` is assigned from array position on every
+		// save — so this is positional, not identity-based. Reordering mark
+		// points in the UI will therefore shuffle descriptions along with
+		// them, which matches how the criteria field behaves. If we ever
+		// want reorder-safe description preservation, each mark point needs
+		// a real ID on the row.
+		//
+		// Three cases covered:
+		//   1. Form explicitly sets a description → use it.
+		//   2. Form leaves description undefined → preserve DB value at
+		//      that position.
+		//   3. Form clears description to "" → save the empty (intentional
+		//      wipe).
+		const existingMarkPoints = Array.isArray(existing.mark_points)
+			? (existing.mark_points as Array<{ description?: string }>)
+			: []
 		const markPoints =
 			isPointBased && input.marking_method === "point_based"
 				? input.mark_points.map((mp, i) => ({
 						point_number: i + 1,
-						description: mp.description,
+						criteria: mp.criteria,
+						description:
+							mp.description !== undefined
+								? mp.description
+								: (existingMarkPoints[i]?.description ?? ""),
 						points: mp.points,
 					}))
 				: null

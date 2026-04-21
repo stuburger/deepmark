@@ -25,7 +25,12 @@ export const MarkSchemeSchema = z.object({
 				),
 			mark_points: z.array(
 				z.object({
-					description: z.string(),
+					// `criteria` is the only grading-meaningful field — the grader
+					// prompt reads it exclusively. Required; an empty value would
+					// silently produce unguided marking. If the LLM ever omits it,
+					// we want extraction to hard-fail to the DLQ. Per-mark-point
+					// `description` is deliberately NOT emitted by the LLM any more
+					// — it's an optional teacher-authored field in the UI only.
 					criteria: z.string(),
 					points: z.number().int(),
 				}),

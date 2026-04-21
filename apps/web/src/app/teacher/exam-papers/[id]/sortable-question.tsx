@@ -375,7 +375,22 @@ function buildEditProps(
 		initialDescription: ms.description ?? "",
 		initialGuidance: ms.guidance ?? "",
 		initialMarkPoints: Array.isArray(ms.mark_points)
-			? (ms.mark_points as Array<{ description: string; points: number }>)
+			? (
+					ms.mark_points as Array<{
+						criteria?: string
+						description?: string
+						points: number
+					}>
+				).map((mp) => ({
+					// Fall back to legacy `description` for rows written before the UI
+					// swapped to `criteria`. After the backfill every DB row carries at
+					// least one of the two. If we fell back (no criteria), we don't
+					// want to ALSO surface the same text in the description field, so
+					// we only carry description through when criteria was genuinely set.
+					criteria: mp.criteria ?? mp.description ?? "",
+					description: mp.criteria ? (mp.description ?? "") : "",
+					points: mp.points,
+				}))
 			: [],
 	}
 }

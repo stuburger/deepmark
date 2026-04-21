@@ -136,9 +136,13 @@ export function resolveMarkSchemeFields(
 				? "level_of_response"
 				: "point_based"
 
+	// `description` is no longer an LLM output — the extraction schema does not
+	// include it. We persist an empty string so the row shape stays uniform with
+	// UI-authored schemes where a teacher may later fill in an optional
+	// description via the mark scheme dialog.
 	const markPoints = (q.mark_points ?? []).map((mp, idx) => ({
 		point_number: idx + 1,
-		description: mp.description,
+		description: "",
 		points: mp.points ?? 1,
 		criteria: mp.criteria,
 	}))

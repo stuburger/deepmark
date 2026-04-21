@@ -2,7 +2,11 @@
 
 **Goal:** Replace the client-side Levenshtein+positional-fill heuristic in `apps/web/src/lib/marking/alignment/align.ts` with an LLM-emitted mapping produced at attribution time and persisted on each token row. This removes the remaining heuristic from the bbox → ProseMirror alignment path.
 
-**Status (2026-04-19):** Prompt, schema, and eval are merged. The eval passes on production Q02 fixture data with `gemini-2.5-flash` — 100% coverage of LLM-corrected tokens, 1.6% wrong-word rate, 99% monotonic ordering. Wiring into the live pipeline is the next step; not done yet because Option A (spatial sort) already solves the production failure for the common case.
+**Status (2026-04-19):** Prompt, schema, and eval are merged. **Do not wire yet** — head-to-head comparison on the Q02 fixture shows the LLM mapper loses to the existing heuristic (spatial sort + fuzzy align). The isolated eval passes its own thresholds, but the head-to-head comparison shows ~13 real LLM mismappings vs 5 heuristic mismappings on the same input. See the findings block at the top of `packages/backend/tests/integration/map-tokens-to-chars-eval.test.ts` for the numbers and the concrete TODO list to revisit later (drop the OCR-read gloss, try a stronger model, add a second fixture, consider hybrid null-only use).
+
+Both eval tests are currently `it.skip` until the prompt is iterated. Flip them to `it` after a pass at the TODOs.
+
+Option A (spatial sort in `apps/web/src/lib/marking/scan/queries.ts`) already solves the production failure that kicked this work off, so shipping the current heuristic with spatial sort is fine.
 
 ## Current shape — what's in place
 

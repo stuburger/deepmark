@@ -41,18 +41,18 @@ Mark schemes for MCQ sections often show a table or list like "1 C  2 A  3 D ...
 
 GENERAL RULES:
 - Clean up all extracted text: ensure proper spacing between words, correct punctuation, and proper line breaks. Fix any OCR artefacts such as run-together words or missing spaces.
-- For each written question provide: question_text, question_type ("written"), total_marks, ao_allocations if present, mark_points (array of { description, criteria, points }), acceptable_answers if listed, guidance, question_number.
+- For each written question provide: question_text, question_type ("written"), total_marks, ao_allocations if present, mark_points (array of { criteria, points }), acceptable_answers if listed, guidance, question_number.
 - Detect marking_method: "multiple_choice" for MCQ, "level_of_response" if the mark scheme uses level descriptors with mark ranges (e.g. Level 1: 1–3 marks), or "point_based" for individual mark point criteria.
 - If level_of_response: extract command_word if given, items_required if given, levels (array of { level, mark_range [min, max], descriptor, ao_requirements? }), and caps if any (array of { condition, max_level or max_mark, reason }).
 
 MARK POINTS, GUIDANCE AND TOTAL MARKS — CRITICAL RULES:
 - total_marks MUST match the mark allocation explicitly stated in the document (e.g. "(2 marks)" in the question or the sum of AO marks in the header). Never default to 1 when the document says otherwise.
 - guidance MUST be populated whenever the mark scheme provides a list of acceptable answers or example responses. Copy the FULL "Answers may include" / "Possible answers" list verbatim into guidance, including any worked examples or developed answer examples.
-- mark_points MUST be genuinely descriptive — never use vague placeholders like "Identification of a correct way" or "Correct answer". The criteria field must contain the actual acceptable content from the mark scheme:
-  * For "1 mark for each correct [item] up to N marks" patterns: create N mark points each worth 1 mark. Set criteria to the specific list of acceptable answers from the document (e.g. "Acceptable: Mystery shoppers / Customer service surveys / Number of repeat sales / Amount of returned products / Volume of complaints / Quality control checks / Quality assurance / TQM").
-  * For "1 mark identify + 1 mark develop/explain" patterns: create 2 separate mark points. First point: description="Identify [the concept]", criteria=the full list of valid identifications from the document. Second point: description="Development / explanation", criteria="Award 1 mark for a linked explanation or consequence that develops the identified point (e.g. 'which means the exact requirements of customers can be met')".
-  * For calculation questions: description="Correct calculation method", criteria="Show the exact working required (e.g. step-by-step calculation shown in the mark scheme)".
-  * Always copy the specific example answers, bullet-point lists, and any worked examples from the document into the criteria or guidance fields — never summarise or omit them.
+- Each mark point has exactly two fields: \`criteria\` and \`points\`. \`criteria\` is the ONLY field the downstream grader reads to decide whether a student earned the mark — it must be the actual acceptable content, never a vague placeholder like "Identification of a correct way" or "Correct answer". Be specific, be verbatim, copy directly from the document:
+  * For "1 mark for each correct [item] up to N marks" patterns: create N mark points each worth 1 mark. Each mark point's \`criteria\` is the same list of acceptable answers from the document (e.g. "Acceptable: Mystery shoppers / Customer service surveys / Number of repeat sales / Amount of returned products / Volume of complaints / Quality control checks / Quality assurance / TQM"). The grader will award one mark per distinct acceptable answer the student provides.
+  * For "1 mark identify + 1 mark develop/explain" patterns: create 2 separate mark points. First point's \`criteria\`: the full list of valid identifications from the document. Second point's \`criteria\`: "Award 1 mark for a linked explanation or consequence that develops the identified point (e.g. 'which means the exact requirements of customers can be met')".
+  * For calculation questions: \`criteria\` = "Show the exact working required (e.g. step-by-step calculation shown in the mark scheme)".
+  * Always copy the specific example answers, bullet-point lists, and any worked examples from the document into \`criteria\` or \`guidance\` — never summarise or omit them.
 
 CONTENT FIELD — LEVEL OF RESPONSE QUESTIONS:
 - For every level_of_response question, populate the \`content\` field with the COMPLETE mark scheme as clean markdown.

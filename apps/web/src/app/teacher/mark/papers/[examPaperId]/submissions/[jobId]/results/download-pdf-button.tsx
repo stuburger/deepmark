@@ -523,6 +523,12 @@ export function DownloadPdfButton({
 				gap(4)
 				hRule([200, 200, 200])
 
+				// MCQ-section-specific totals for this PDF panel — NOT the whole
+				// paper's total_max. Summing max_score across grading results to
+				// derive paper-level totals is a known footgun (see
+				// apps/web/src/lib/marking/listing/queries.ts and
+				// submissions/queries.ts, which both use sumPaperPoints). Here
+				// we intentionally want just the MCQ slice.
 				const mcqTotalAwarded = mcqResults.reduce(
 					(s, r) => s + r.awarded_score,
 					0,

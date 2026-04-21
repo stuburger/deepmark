@@ -20,7 +20,7 @@ import { MarkSchemeFormWithAutofill } from "./mark-scheme-form-with-autofill"
 
 type McqOption = { option_label: string; option_text: string }
 
-type MarkPoint = { description: string; points: number }
+type MarkPoint = { criteria: string; description?: string; points: number }
 
 // ─── Shared autofill-aware state ──────────────────────────────────────────────
 

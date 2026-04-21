@@ -27,7 +27,7 @@ export function buildBatchPrompt(
 			const markPointsList = q.markPoints
 				.map(
 					(mp) =>
-						`   [pointNumber: ${mp.pointNumber}] ${mp.description} (${mp.points} mark${mp.points > 1 ? "s" : ""}${mp.isRequired ? ", REQUIRED" : ""})\n   Criteria: ${mp.criteria}`,
+						`   [pointNumber: ${mp.pointNumber}] ${mp.criteria} (${mp.points} mark${mp.points > 1 ? "s" : ""}${mp.isRequired ? ", REQUIRED" : ""})`,
 				)
 				.join("\n\n")
 			return `### Question ${index + 1} [ID: ${q.id}]

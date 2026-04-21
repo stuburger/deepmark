@@ -145,7 +145,8 @@ export async function evaluateStudentAnswer(
 			awarded_points: grade.markPointsResults.map((mpr) => {
 				const mp = markPoints.find((p) => p.pointNumber === mpr.pointNumber)
 				return {
-					description: mp?.description ?? `Mark point ${mpr.pointNumber}`,
+					description:
+						mp?.criteria || mp?.description || `Mark point ${mpr.pointNumber}`,
 					awarded: mpr.awarded,
 					reason: mpr.reasoning,
 				}

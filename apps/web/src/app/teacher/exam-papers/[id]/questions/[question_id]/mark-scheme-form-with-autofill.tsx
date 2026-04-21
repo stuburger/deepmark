@@ -4,7 +4,7 @@ import { MarkSchemeEditForm } from "./mark-scheme-edit-form"
 
 type McqOption = { option_label: string; option_text: string }
 
-type MarkPoint = { description: string; points: number }
+type MarkPoint = { criteria: string; description?: string; points: number }
 
 type AutofillValues =
 	| {

@@ -10,7 +10,7 @@ import { log } from "../logger"
 const TAG = "autofill-mark-scheme-actions"
 
 export type AutofillMarkPointSuggestion = {
-	description: string
+	criteria: string
 	points: number
 }
 
@@ -46,7 +46,7 @@ const WrittenSchema = z.object({
 	guidance: z.string(),
 	mark_points: z.array(
 		z.object({
-			description: z.string(),
+			criteria: z.string(),
 			points: z.number().describe("Points as an integer"),
 		}),
 	),
@@ -249,7 +249,7 @@ Marks available: ${marksAvailable}
 
 Rules:
 - Create mark points that together add up to exactly ${marksAvailable} mark${marksAvailable !== 1 ? "s" : ""}.
-- Each mark point should be a clear, concise criterion a student must meet to earn that mark.
+- Each mark point's \`criteria\` should be a clear, concise statement of what a student must write to earn that mark.
 - Use GCSE-style language (specific, knowledge-based criteria).
 - The description field should be a brief overall summary of what a correct answer should include.
 - The guidance field should provide any useful notes for the marker (or empty string if none).
@@ -257,7 +257,7 @@ Rules:
 Return JSON with:
 - description: overall summary of what the answer should cover (1-2 sentences)
 - guidance: marker guidance notes (or "" if none)
-- mark_points: array of { description: string, points: number } — must sum to ${marksAvailable}`
+- mark_points: array of { criteria: string, points: number } — must sum to ${marksAvailable}`
 
 		const { output } = await callLlmWithFallback(
 			"mark-scheme-autofill",
@@ -290,7 +290,7 @@ Return JSON with:
 				description: output.description.trim(),
 				guidance: output.guidance.trim(),
 				mark_points: output.mark_points.map((mp) => ({
-					description: mp.description.trim(),
+					criteria: mp.criteria.trim(),
 					points: Math.max(1, Math.round(mp.points)),
 				})),
 			},

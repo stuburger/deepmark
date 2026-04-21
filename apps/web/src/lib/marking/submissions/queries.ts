@@ -3,6 +3,7 @@
 import { db } from "@/lib/db"
 import type { GradingStatus, JobEvent, OcrStatus } from "@mcp-gcse/db"
 import { auth } from "../../auth"
+import { sumPaperPoints } from "../paper-totals"
 import { ANNOTATION_BOOKKEEPING_SELECT } from "../selects"
 import { deriveAnnotationStatus, deriveScanStatus } from "../status"
 import type {
@@ -65,6 +66,11 @@ const submissionDetailInclude = {
 								select: {
 									id: true,
 									question_type: true,
+									// Used for total_max — the paper's invariant, not
+									// derived from grading_results (which shrinks under
+									// partial/failed grading and produces bogus
+									// percentages like "3/3 · 100%").
+									points: true,
 									multiple_choice_options: true,
 									mark_schemes: {
 										select: { correct_option_labels: true },
@@ -143,6 +149,7 @@ function toJobPayload(sub: {
 				question: {
 					id: string
 					question_type: string
+					points: number | null
 					multiple_choice_options: unknown
 					mark_schemes: Array<{ correct_option_labels: string[] }>
 				}
@@ -215,7 +222,7 @@ function toJobPayload(sub: {
 		}
 	})
 	const totalAwarded = gradingResults.reduce((s, r) => s + r.awarded_score, 0)
-	const totalMax = gradingResults.reduce((s, r) => s + r.max_score, 0)
+	const totalMax = sumPaperPoints(sub.exam_paper?.sections ?? [])
 	const rawExtracted = latestOcr?.extracted_answers_raw as RawExtracted | null
 	const extractedAnswers = rawExtracted?.answers ?? null
 

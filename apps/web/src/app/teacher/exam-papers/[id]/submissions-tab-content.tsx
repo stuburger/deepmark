@@ -6,6 +6,7 @@ import { SubmissionTable } from "./submission-table"
 import { SubmissionsHeader } from "./submissions-header"
 
 export function SubmissionsTabContent({
+	paperId,
 	ingestion,
 	submissions,
 	markedCount,
@@ -18,6 +19,7 @@ export function SubmissionsTabContent({
 	onRefresh,
 	isRefreshing,
 }: {
+	paperId: string
 	ingestion: BatchIngestionState | null
 	submissions: SubmissionHistoryItem[]
 	markedCount: number
@@ -42,6 +44,7 @@ export function SubmissionsTabContent({
 			{submissions.length > 0 && (
 				<>
 					<SubmissionsHeader
+						paperId={paperId}
 						markedCount={markedCount}
 						inProgressCount={inProgressCount}
 						view={view}

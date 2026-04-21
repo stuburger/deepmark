@@ -1,8 +1,10 @@
 import { Button } from "@/components/ui/button"
 import { RefreshCw } from "lucide-react"
+import { ExportSubmissionsButton } from "./export-submissions-button"
 import { ViewToggle } from "./view-toggle"
 
 export function SubmissionsHeader({
+	paperId,
 	markedCount,
 	inProgressCount,
 	view,
@@ -10,6 +12,7 @@ export function SubmissionsHeader({
 	onRefresh,
 	isRefreshing,
 }: {
+	paperId: string
 	markedCount: number
 	inProgressCount: number
 	view: "list" | "table"
@@ -26,6 +29,7 @@ export function SubmissionsHeader({
 		<div className="flex items-center justify-between gap-4">
 			<p className="text-sm font-medium text-muted-foreground">{label}</p>
 			<div className="flex items-center gap-2">
+				{markedCount > 0 && <ExportSubmissionsButton paperId={paperId} />}
 				<Button
 					variant="ghost"
 					size="icon-xs"

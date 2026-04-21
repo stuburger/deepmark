@@ -352,6 +352,7 @@ export function ExamPaperPageShell({
 				{/* ── Submissions tab ── */}
 				<TabsContent value="submissions" className="space-y-6 mt-10">
 					<SubmissionsTabContent
+						paperId={paper.id}
 						ingestion={ingestion}
 						submissions={submissions}
 						markedCount={markedCount}

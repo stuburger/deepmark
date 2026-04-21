@@ -1,7 +1,14 @@
 "use server"
 
 import { db } from "@/lib/db"
-import type { GradingStatus, JobEvent, OcrStatus } from "@mcp-gcse/db"
+import type {
+	BoundaryMode,
+	GradingStatus,
+	JobEvent,
+	OcrStatus,
+	TierLevel,
+} from "@mcp-gcse/db"
+import { type GradeBoundary, gradeBoundariesSchema } from "@mcp-gcse/shared"
 import { auth } from "../../auth"
 import { sumPaperPoints } from "../paper-totals"
 import { ANNOTATION_BOOKKEEPING_SELECT } from "../selects"
@@ -15,6 +22,12 @@ import type {
 	TeacherOverride,
 } from "../types"
 import { toSubmissionFeedback } from "./feedback-mapper"
+
+function parseStoredBoundaries(raw: unknown): GradeBoundary[] | null {
+	if (raw === null || raw === undefined) return null
+	const result = gradeBoundariesSchema.safeParse(raw)
+	return result.success ? result.data : null
+}
 
 // ─── Region helpers ───────────────────────────────────────────────────────────
 
@@ -58,6 +71,9 @@ const submissionDetailInclude = {
 			id: true,
 			title: true,
 			level_descriptors: true,
+			tier: true,
+			grade_boundaries: true,
+			grade_boundary_mode: true,
 			sections: {
 				select: {
 					exam_section_questions: {
@@ -144,6 +160,9 @@ function toJobPayload(sub: {
 		id: string
 		title: string
 		level_descriptors: string | null
+		tier: TierLevel | null
+		grade_boundaries: unknown
+		grade_boundary_mode: BoundaryMode | null
 		sections: Array<{
 			exam_section_questions: Array<{
 				question: {
@@ -251,6 +270,9 @@ function toJobPayload(sub: {
 		examiner_summary: latestGrading?.examiner_summary ?? null,
 		annotation_status: deriveAnnotationStatus(latestGrading),
 		level_descriptors: sub.exam_paper?.level_descriptors ?? null,
+		tier: sub.exam_paper?.tier ?? null,
+		grade_boundaries: parseStoredBoundaries(sub.exam_paper?.grade_boundaries),
+		grade_boundary_mode: sub.exam_paper?.grade_boundary_mode ?? null,
 		submission_id: sub.id,
 		ocr_run_id: latestOcr?.id,
 		grading_run_id: latestGrading?.id,

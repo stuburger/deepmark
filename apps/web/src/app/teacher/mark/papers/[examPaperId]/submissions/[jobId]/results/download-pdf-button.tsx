@@ -17,6 +17,7 @@ import type {
 	StudentPaperAnnotation,
 	StudentPaperResultPayload,
 } from "@/lib/marking/types"
+import { computeGrade } from "@mcp-gcse/shared"
 import { ChevronDown, Download, FileText, Loader2 } from "lucide-react"
 import { useState } from "react"
 
@@ -182,6 +183,12 @@ export function DownloadPdfButton({
 				data.total_max > 0
 					? Math.round((data.total_awarded / data.total_max) * 100)
 					: 0
+			const computedGrade = computeGrade(
+				data.total_awarded,
+				data.total_max,
+				data.grade_boundaries,
+				data.grade_boundary_mode ?? "percent",
+			)
 
 			// ── Helpers ─────────────────────────────────────────────────────
 
@@ -479,10 +486,13 @@ export function DownloadPdfButton({
 			gap(1)
 			if (paperTitle) addText(paperTitle, { size: 11, colour: [107, 114, 128] })
 			gap(3)
-			addText(
-				`Total: ${data.total_awarded} / ${data.total_max}  (${scorePercent}%)`,
-				{ size: 13, style: "bold" },
-			)
+			{
+				const gradeSuffix = computedGrade ? `  ·  Grade ${computedGrade}` : ""
+				addText(
+					`Total: ${data.total_awarded} / ${data.total_max}  (${scorePercent}%)${gradeSuffix}`,
+					{ size: 13, style: "bold" },
+				)
+			}
 			gap(4)
 			hRule([17, 24, 39])
 

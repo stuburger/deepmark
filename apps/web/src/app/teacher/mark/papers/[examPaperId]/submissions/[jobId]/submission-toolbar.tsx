@@ -12,6 +12,7 @@ import type {
 	StudentPaperAnnotation,
 	StudentPaperJobPayload,
 } from "@/lib/marking/types"
+import { computeGrade } from "@mcp-gcse/shared"
 import { ChevronRight, X } from "lucide-react"
 import Link from "next/link"
 import { ReScanButton } from "./re-scan-button"
@@ -21,7 +22,7 @@ import { ReRunMenu } from "./results/re-run-menu"
 import { StudentNameEditor } from "./results/student-name-editor"
 import { SubmissionFeedbackButton } from "./results/submission-feedback"
 import { StagePips } from "./stage-pips"
-import { ScoreBadge } from "./submission-toolbar-controls"
+import { GradeBadge, ScoreBadge } from "./submission-toolbar-controls"
 import { VersionSwitcher } from "./version-switcher"
 
 // ─── Main toolbar ─────────────────────────────────────────────────────────────
@@ -83,8 +84,17 @@ export function SubmissionToolbar({
 				)}
 
 				{phase === "completed" && data.total_max > 0 && (
-					<span className="ml-2">
+					<span className="ml-2 inline-flex items-center gap-1.5">
 						<ScoreBadge awarded={data.total_awarded} max={data.total_max} />
+						{(() => {
+							const grade = computeGrade(
+								data.total_awarded,
+								data.total_max,
+								data.grade_boundaries,
+								data.grade_boundary_mode ?? "percent",
+							)
+							return grade ? <GradeBadge grade={grade} /> : null
+						})()}
 					</span>
 				)}
 

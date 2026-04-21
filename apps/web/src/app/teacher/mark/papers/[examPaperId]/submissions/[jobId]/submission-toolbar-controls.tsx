@@ -85,3 +85,26 @@ export function ScoreBadge({ awarded, max }: { awarded: number; max: number }) {
 		</span>
 	)
 }
+
+export function GradeBadge({ grade }: { grade: string }) {
+	const numeric = Number(grade)
+	const colour = Number.isNaN(numeric)
+		? "bg-muted text-muted-foreground"
+		: numeric >= 7
+			? "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300"
+			: numeric >= 4
+				? "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
+				: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300"
+
+	return (
+		<span
+			className={cn(
+				"inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold",
+				colour,
+			)}
+			title="Computed from grade boundaries"
+		>
+			Grade {grade}
+		</span>
+	)
+}

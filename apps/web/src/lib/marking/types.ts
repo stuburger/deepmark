@@ -7,6 +7,8 @@ import type { JobEvent } from "@mcp-gcse/db"
  */
 export type AnnotationStatus = "pending" | "processing" | "complete" | "failed"
 import type {
+	BoundaryMode,
+	GradeBoundary,
 	AnnotationPayload as SharedAnnotationPayload,
 	AnyAnnotationPayload as SharedAnyAnnotationPayload,
 	ChainPayload as SharedChainPayload,
@@ -176,6 +178,10 @@ export type StudentPaperJobPayload = {
 	/** Derived annotation status — annotations now run inside the grade Lambda. */
 	annotation_status: AnnotationStatus | null
 	level_descriptors: string | null
+	/** Paper-level grade boundaries (computed grade is derived on the fly). */
+	tier: "foundation" | "higher" | null
+	grade_boundaries: GradeBoundary[] | null
+	grade_boundary_mode: BoundaryMode | null
 	/** IDs of the current domain model run records. */
 	submission_id?: string
 	ocr_run_id?: string

@@ -41,7 +41,7 @@ export function ListViewScriptSection({
 	return (
 		<div className="space-y-3">
 			{/* Section header */}
-			<div className="flex items-center gap-3 sticky top-0 z-10 bg-background/95 backdrop-blur py-2 -my-2 border-b pb-3 mb-1">
+			<div className="flex items-center gap-3 sticky top-0 z-10 bg-background/95 backdrop-blur -mx-6 px-6 py-3 border-b mb-4">
 				<div className="flex-1 min-w-0">
 					<Input
 						value={localName}

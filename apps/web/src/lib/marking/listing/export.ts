@@ -49,9 +49,14 @@ export type ExportSubmissionsResult =
  */
 export async function exportSubmissionsForPaper(
 	examPaperId: string,
+	submissionIds?: string[],
 ): Promise<ExportSubmissionsResult> {
 	const session = await auth()
 	if (!session) return { ok: false, error: "Not authenticated" }
+
+	if (submissionIds && submissionIds.length === 0) {
+		return { ok: false, error: "No submissions selected" }
+	}
 
 	const paper = await db.examPaper.findUnique({
 		where: { id: examPaperId },
@@ -106,6 +111,7 @@ export async function exportSubmissionsForPaper(
 		where: {
 			exam_paper_id: examPaperId,
 			superseded_at: null,
+			...(submissionIds ? { id: { in: submissionIds } } : {}),
 		},
 		orderBy: { created_at: "desc" },
 		select: {

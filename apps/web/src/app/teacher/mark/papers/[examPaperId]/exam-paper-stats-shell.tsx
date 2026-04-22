@@ -1,5 +1,6 @@
 "use client"
 
+import { ExportMenu } from "@/components/marking/export-menu"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -101,6 +102,8 @@ export function ExamPaperStatsShell({
 		(s) => !TERMINAL_STATUSES.has(s.status),
 	)
 	const failedSubmissions = submissions.filter((s) => s.status === "failed")
+
+	const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
 	const gradeBandData = GRADE_BANDS.map((band, i) => ({
 		label: band.label,
@@ -231,11 +234,25 @@ export function ExamPaperStatsShell({
 				</Card>
 			)}
 
+			{completedSubmissions.length > 0 && (
+				<div className="flex items-center justify-between gap-4">
+					<p className="text-sm font-medium text-muted-foreground">
+						{completedSubmissions.length} Marked
+						{selectedIds.size > 0 ? `, ${selectedIds.size} Selected` : ""}
+					</p>
+					<ExportMenu
+						paperId={examPaperId}
+						submissions={submissions}
+						selectedIds={selectedIds}
+					/>
+				</div>
+			)}
+
 			<SubmissionTables
-				completedSubmissions={completedSubmissions}
-				activeSubmissions={activeSubmissions}
-				failedSubmissions={failedSubmissions}
+				submissions={submissions}
 				examPaperId={examPaperId}
+				selectedIds={selectedIds}
+				onSelectionChange={setSelectedIds}
 			/>
 
 			<UploadScriptsDialog

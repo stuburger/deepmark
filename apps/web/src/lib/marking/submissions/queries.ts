@@ -8,17 +8,27 @@ import type {
 	OcrStatus,
 	TierLevel,
 } from "@mcp-gcse/db"
-import { type GradeBoundary, gradeBoundariesSchema } from "@mcp-gcse/shared"
+import {
+	type GradeBoundary,
+	gradeBoundariesSchema,
+	parseAnnotationPayload,
+	sortTokensSpatially,
+} from "@mcp-gcse/shared"
 import { auth } from "../../auth"
 import { sumPaperPoints } from "../paper-totals"
 import { ANNOTATION_BOOKKEEPING_SELECT } from "../selects"
 import { deriveAnnotationStatus, deriveScanStatus } from "../status"
 import type {
 	AnswerRegion,
+	AnyAnnotationPayload,
 	ExtractedAnswer,
 	GetStudentPaperJobResult,
 	GetSubmissionFeedbackResult,
 	GradingResult,
+	OverlayType,
+	PageToken,
+	StudentPaperAnnotation,
+	StudentPaperResultPayload,
 	TeacherOverride,
 } from "../types"
 import { toSubmissionFeedback } from "./feedback-mapper"
@@ -324,6 +334,177 @@ export async function getStudentPaperJobForPaper(
 	if (!sub) return { ok: false, error: "Job not found" }
 
 	return { ok: true, data: toJobPayload(sub) }
+}
+
+// ─── getStudentPapersForClass ───────────────────────────────────────────────
+
+export type GetStudentPapersForClassResult =
+	| {
+			ok: true
+			payloads: StudentPaperResultPayload[]
+			/** Only populated when options.includeAnnotations is true. */
+			annotationsBySubmission: Record<string, StudentPaperAnnotation[]>
+			/** Only populated when options.includeAnnotations is true. */
+			tokensBySubmission: Record<string, PageToken[]>
+	  }
+	| { ok: false; error: string }
+
+async function loadClassAnnotations(
+	submissionIds: string[],
+	latestGradingRunIdBySubmission: Record<string, string | null>,
+): Promise<Record<string, StudentPaperAnnotation[]>> {
+	const latestRunIds = Object.values(latestGradingRunIdBySubmission).filter(
+		(id): id is string => id !== null,
+	)
+
+	const rows = await db.studentPaperAnnotation.findMany({
+		where: {
+			deleted_at: null,
+			OR: [
+				{ submission_id: { in: submissionIds }, source: "teacher" },
+				...(latestRunIds.length > 0
+					? [{ grading_run_id: { in: latestRunIds } }]
+					: []),
+			],
+		},
+		orderBy: [{ page_order: "asc" }, { sort_order: "asc" }],
+	})
+
+	const out: Record<string, StudentPaperAnnotation[]> = {}
+	for (const id of submissionIds) out[id] = []
+
+	for (const row of rows) {
+		let payload: AnyAnnotationPayload
+		try {
+			payload = parseAnnotationPayload(
+				row.overlay_type as OverlayType,
+				row.payload,
+			)
+		} catch {
+			payload = { _v: 1, signal: "tick", reason: "" } as AnyAnnotationPayload
+		}
+
+		const annotation = {
+			id: row.id,
+			grading_run_id: row.grading_run_id,
+			question_id: row.question_id,
+			page_order: row.page_order,
+			overlay_type: row.overlay_type as OverlayType,
+			sentiment: row.sentiment,
+			payload,
+			bbox: row.bbox as [number, number, number, number],
+			anchor_token_start_id: row.anchor_token_start_id,
+			anchor_token_end_id: row.anchor_token_end_id,
+		} as StudentPaperAnnotation
+
+		const list = out[row.submission_id]
+		if (list) list.push(annotation)
+	}
+
+	return out
+}
+
+async function loadClassTokens(
+	submissionIds: string[],
+): Promise<Record<string, PageToken[]>> {
+	const rows = await db.studentPaperPageToken.findMany({
+		where: { submission_id: { in: submissionIds } },
+		select: {
+			id: true,
+			submission_id: true,
+			page_order: true,
+			para_index: true,
+			line_index: true,
+			word_index: true,
+			text_raw: true,
+			text_corrected: true,
+			bbox: true,
+			confidence: true,
+			question_id: true,
+			answer_char_start: true,
+			answer_char_end: true,
+		},
+	})
+
+	// Group by submission, then within a submission by page, then spatially sort each page.
+	const bySubmission = new Map<string, Map<number, PageToken[]>>()
+	for (const row of rows) {
+		const token: PageToken = {
+			id: row.id,
+			page_order: row.page_order,
+			para_index: row.para_index,
+			line_index: row.line_index,
+			word_index: row.word_index,
+			text_raw: row.text_raw,
+			text_corrected: row.text_corrected,
+			bbox: row.bbox as [number, number, number, number],
+			confidence: row.confidence,
+			question_id: row.question_id,
+			answer_char_start: row.answer_char_start,
+			answer_char_end: row.answer_char_end,
+		}
+		const subMap = bySubmission.get(row.submission_id) ?? new Map()
+		const pageList = subMap.get(row.page_order) ?? []
+		pageList.push(token)
+		subMap.set(row.page_order, pageList)
+		bySubmission.set(row.submission_id, subMap)
+	}
+
+	const out: Record<string, PageToken[]> = {}
+	for (const id of submissionIds) out[id] = []
+	for (const [subId, pageMap] of bySubmission) {
+		out[subId] = Array.from(pageMap.keys())
+			.sort((a, b) => a - b)
+			.flatMap((p) => sortTokensSpatially(pageMap.get(p) ?? []))
+	}
+	return out
+}
+
+export async function getStudentPapersForClass(
+	examPaperId: string,
+	submissionIds: string[],
+	options?: { includeAnnotations?: boolean },
+): Promise<GetStudentPapersForClassResult> {
+	const session = await auth()
+	if (!session) return { ok: false, error: "Not authenticated" }
+	if (submissionIds.length === 0) {
+		return { ok: false, error: "No submissions selected" }
+	}
+
+	const subs = await db.studentSubmission.findMany({
+		where: {
+			id: { in: submissionIds },
+			exam_paper_id: examPaperId,
+			superseded_at: null,
+		},
+		orderBy: { created_at: "asc" },
+		include: submissionDetailInclude,
+	})
+
+	const payloads = subs.map(toJobPayload)
+
+	let annotationsBySubmission: Record<string, StudentPaperAnnotation[]> = {}
+	let tokensBySubmission: Record<string, PageToken[]> = {}
+
+	if (options?.includeAnnotations) {
+		const fetchedIds = subs.map((s) => s.id)
+		const latestGradingRunIdBySubmission: Record<string, string | null> =
+			Object.fromEntries(subs.map((s) => [s.id, s.grading_runs[0]?.id ?? null]))
+
+		const [annotations, tokens] = await Promise.all([
+			loadClassAnnotations(fetchedIds, latestGradingRunIdBySubmission),
+			loadClassTokens(fetchedIds),
+		])
+		annotationsBySubmission = annotations
+		tokensBySubmission = tokens
+	}
+
+	return {
+		ok: true,
+		payloads,
+		annotationsBySubmission,
+		tokensBySubmission,
+	}
 }
 
 // ─── getSubmissionVersions ──────────────────────────────────────────────────

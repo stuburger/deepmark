@@ -1,7 +1,7 @@
 import type { BatchIngestionState } from "@/lib/batch/types"
 import type { SubmissionHistoryItem } from "@/lib/marking/types"
+import { useState } from "react"
 import { BatchStatusBanner } from "./batch-status-banner"
-import { SubmissionList } from "./submission-list"
 import { SubmissionTable } from "./submission-table"
 import { SubmissionsHeader } from "./submissions-header"
 
@@ -11,8 +11,6 @@ export function SubmissionsTabContent({
 	submissions,
 	markedCount,
 	inProgressCount,
-	view,
-	onViewChange,
 	onOpenStaging,
 	onViewJob,
 	onDeleteSubmission,
@@ -24,14 +22,14 @@ export function SubmissionsTabContent({
 	submissions: SubmissionHistoryItem[]
 	markedCount: number
 	inProgressCount: number
-	view: "list" | "table"
-	onViewChange: (v: "list" | "table") => void
 	onOpenStaging: () => void
 	onViewJob: (id: string) => void
 	onDeleteSubmission: (id: string) => void
 	onRefresh: () => void
 	isRefreshing: boolean
 }) {
+	const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+
 	return (
 		<>
 			{ingestion && (
@@ -45,26 +43,20 @@ export function SubmissionsTabContent({
 				<>
 					<SubmissionsHeader
 						paperId={paperId}
+						submissions={submissions}
+						selectedIds={selectedIds}
 						markedCount={markedCount}
 						inProgressCount={inProgressCount}
-						view={view}
-						onViewChange={onViewChange}
 						onRefresh={onRefresh}
 						isRefreshing={isRefreshing}
 					/>
-					{view === "list" ? (
-						<SubmissionList
-							submissions={submissions}
-							onView={onViewJob}
-							onDelete={onDeleteSubmission}
-						/>
-					) : (
-						<SubmissionTable
-							submissions={submissions}
-							onView={onViewJob}
-							onDeleteRequest={onDeleteSubmission}
-						/>
-					)}
+					<SubmissionTable
+						submissions={submissions}
+						onView={onViewJob}
+						onDeleteRequest={onDeleteSubmission}
+						selectedIds={selectedIds}
+						onSelectionChange={setSelectedIds}
+					/>
 				</>
 			)}
 

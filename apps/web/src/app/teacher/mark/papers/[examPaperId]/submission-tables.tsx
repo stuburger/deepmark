@@ -8,6 +8,7 @@ import {
 	CardHeader,
 	CardTitle,
 } from "@/components/ui/card"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Progress } from "@/components/ui/progress"
 import {
 	Table,
@@ -20,165 +21,167 @@ import {
 import type { SubmissionHistoryItem } from "@/lib/marking/types"
 import { AlertCircle, Loader2 } from "lucide-react"
 import Link from "next/link"
-import { scoreBadgeVariant, statusLabel } from "./stats-config"
+import {
+	TERMINAL_STATUSES,
+	scoreBadgeVariant,
+	statusLabel,
+} from "./stats-config"
+
+type StatusKind = "marked" | "processing" | "failed" | "cancelled"
+
+function statusKind(status: string): StatusKind {
+	if (status === "ocr_complete") return "marked"
+	if (status === "failed") return "failed"
+	if (status === "cancelled") return "cancelled"
+	return "processing"
+}
+
+function StatusCell({ status }: { status: string }) {
+	const kind = statusKind(status)
+	if (kind === "marked") {
+		return <Badge variant="outline">Marked</Badge>
+	}
+	if (kind === "failed") {
+		return (
+			<Badge variant="destructive" className="gap-1">
+				<AlertCircle className="h-3 w-3" />
+				Failed
+			</Badge>
+		)
+	}
+	if (kind === "cancelled") {
+		return <Badge variant="outline">Cancelled</Badge>
+	}
+	return (
+		<span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+			<Loader2 className="h-3 w-3 animate-spin shrink-0" />
+			{statusLabel(status) ?? "Processing…"}
+		</span>
+	)
+}
 
 export function SubmissionTables({
-	completedSubmissions,
-	activeSubmissions,
-	failedSubmissions,
+	submissions,
 	examPaperId,
+	selectedIds,
+	onSelectionChange,
 }: {
-	completedSubmissions: SubmissionHistoryItem[]
-	activeSubmissions: SubmissionHistoryItem[]
-	failedSubmissions: SubmissionHistoryItem[]
+	submissions: SubmissionHistoryItem[]
 	examPaperId: string
+	selectedIds: Set<string>
+	onSelectionChange: (ids: Set<string>) => void
 }) {
+	if (submissions.length === 0) return null
+
+	const selectableIds = submissions
+		.filter((s) => s.status === "ocr_complete")
+		.map((s) => s.id)
+	const allSelected =
+		selectableIds.length > 0 && selectableIds.every((id) => selectedIds.has(id))
+	const someSelected =
+		selectableIds.some((id) => selectedIds.has(id)) && !allSelected
+
+	function toggleAll(checked: boolean) {
+		const next = new Set(selectedIds)
+		if (checked) {
+			for (const id of selectableIds) next.add(id)
+		} else {
+			for (const id of selectableIds) next.delete(id)
+		}
+		onSelectionChange(next)
+	}
+
+	function toggleOne(id: string, checked: boolean) {
+		const next = new Set(selectedIds)
+		if (checked) next.add(id)
+		else next.delete(id)
+		onSelectionChange(next)
+	}
+
 	return (
-		<>
-			{activeSubmissions.length > 0 && (
-				<Card>
-					<CardHeader>
-						<CardTitle className="flex items-center gap-2">
-							<Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-							Processing
-						</CardTitle>
-						<CardDescription>
-							{activeSubmissions.length} submission
-							{activeSubmissions.length !== 1 ? "s" : ""} currently being marked
-							— updating automatically.
-						</CardDescription>
-					</CardHeader>
-					<CardContent>
-						<Table>
-							<TableHeader>
-								<TableRow>
-									<TableHead>Student</TableHead>
-									<TableHead>Status</TableHead>
-								</TableRow>
-							</TableHeader>
-							<TableBody>
-								{activeSubmissions.map((sub) => (
-									<TableRow key={sub.id}>
-										<TableCell>
-											{sub.student_name ?? (
-												<span className="italic text-muted-foreground">
-													Unknown student
-												</span>
-											)}
-										</TableCell>
-										<TableCell>
-											<span className="flex items-center gap-1.5 text-sm text-muted-foreground">
-												<Loader2 className="h-3 w-3 animate-spin shrink-0" />
-												{statusLabel(sub.status) ?? sub.status}
+		<Card>
+			<CardHeader>
+				<CardTitle>Submissions</CardTitle>
+				<CardDescription>All submissions for this paper.</CardDescription>
+			</CardHeader>
+			<CardContent>
+				<Table>
+					<TableHeader>
+						<TableRow>
+							<TableHead className="w-8">
+								<Checkbox
+									checked={allSelected}
+									indeterminate={someSelected}
+									onCheckedChange={toggleAll}
+									disabled={selectableIds.length === 0}
+									aria-label="Select all marked submissions"
+								/>
+							</TableHead>
+							<TableHead>Student</TableHead>
+							<TableHead className="w-32">Status</TableHead>
+							<TableHead className="w-48">Score</TableHead>
+							<TableHead className="text-right w-20" />
+						</TableRow>
+					</TableHeader>
+					<TableBody>
+						{submissions.map((sub) => {
+							const kind = statusKind(sub.status)
+							const pct =
+								kind === "marked" && sub.total_max > 0
+									? Math.round((sub.total_awarded / sub.total_max) * 100)
+									: null
+							const isMarked = kind === "marked"
+							return (
+								<TableRow key={sub.id}>
+									<TableCell>
+										<Checkbox
+											checked={selectedIds.has(sub.id)}
+											onCheckedChange={(checked) => toggleOne(sub.id, checked)}
+											disabled={!isMarked}
+											aria-label={`Select ${sub.student_name ?? "submission"}`}
+										/>
+									</TableCell>
+									<TableCell>
+										{sub.student_name ?? (
+											<span className="italic text-muted-foreground">
+												Unknown student
 											</span>
-										</TableCell>
-									</TableRow>
-								))}
-							</TableBody>
-						</Table>
-					</CardContent>
-				</Card>
-			)}
-
-			{completedSubmissions.length > 0 && (
-				<Card>
-					<CardHeader>
-						<CardTitle>Individual results</CardTitle>
-						<CardDescription>All submissions for this paper.</CardDescription>
-					</CardHeader>
-					<CardContent>
-						<Table>
-							<TableHeader>
-								<TableRow>
-									<TableHead>Student</TableHead>
-									<TableHead className="w-40">Score</TableHead>
-									<TableHead className="text-right w-20" />
-								</TableRow>
-							</TableHeader>
-							<TableBody>
-								{completedSubmissions.map((sub) => {
-									const pct =
-										sub.total_max > 0
-											? Math.round((sub.total_awarded / sub.total_max) * 100)
-											: 0
-									return (
-										<TableRow key={sub.id}>
-											<TableCell>
-												{sub.student_name ?? (
-													<span className="italic text-muted-foreground">
-														Unknown student
-													</span>
-												)}
-											</TableCell>
-											<TableCell>
-												<div className="space-y-1">
-													<div className="flex items-center justify-between text-xs">
-														<Badge
-															variant={scoreBadgeVariant(pct)}
-															className="tabular-nums"
-														>
-															{sub.total_awarded}/{sub.total_max} ({pct}%)
-														</Badge>
-													</div>
-													<Progress value={pct} className="h-1.5" />
-												</div>
-											</TableCell>
-											<TableCell className="text-right">
-												<Link
-													href={`/teacher/exam-papers/${examPaperId}?job=${sub.id}`}
-													className="text-sm text-primary underline underline-offset-4 hover:no-underline"
+										)}
+									</TableCell>
+									<TableCell>
+										<StatusCell status={sub.status} />
+									</TableCell>
+									<TableCell>
+										{pct !== null ? (
+											<div className="space-y-1">
+												<Badge
+													variant={scoreBadgeVariant(pct)}
+													className="tabular-nums"
 												>
-													View →
-												</Link>
-											</TableCell>
-										</TableRow>
-									)
-								})}
-							</TableBody>
-						</Table>
-					</CardContent>
-				</Card>
-			)}
-
-			{failedSubmissions.length > 0 && (
-				<Card className="border-destructive/50">
-					<CardHeader>
-						<CardTitle className="flex items-center gap-2 text-destructive">
-							<AlertCircle className="h-4 w-4" />
-							Failed submissions
-						</CardTitle>
-						<CardDescription>
-							These scripts failed to process and may need re-uploading.
-						</CardDescription>
-					</CardHeader>
-					<CardContent>
-						<Table>
-							<TableHeader>
-								<TableRow>
-									<TableHead>Student</TableHead>
-									<TableHead>Error</TableHead>
+													{sub.total_awarded}/{sub.total_max} ({pct}%)
+												</Badge>
+												<Progress value={pct} className="h-1.5" />
+											</div>
+										) : (
+											<span className="text-xs text-muted-foreground">—</span>
+										)}
+									</TableCell>
+									<TableCell className="text-right">
+										{isMarked || !TERMINAL_STATUSES.has(sub.status) ? (
+											<Link
+												href={`/teacher/exam-papers/${examPaperId}?job=${sub.id}`}
+												className="text-sm text-primary underline underline-offset-4 hover:no-underline"
+											>
+												View →
+											</Link>
+										) : null}
+									</TableCell>
 								</TableRow>
-							</TableHeader>
-							<TableBody>
-								{failedSubmissions.map((sub) => (
-									<TableRow key={sub.id}>
-										<TableCell>
-											{sub.student_name ?? (
-												<span className="italic text-muted-foreground">
-													Unknown student
-												</span>
-											)}
-										</TableCell>
-										<TableCell className="text-xs text-muted-foreground">
-											Failed
-										</TableCell>
-									</TableRow>
-								))}
-							</TableBody>
-						</Table>
-					</CardContent>
-				</Card>
-			)}
-		</>
+							)
+						})}
+					</TableBody>
+				</Table>
+			</CardContent>
+		</Card>
 	)
 }

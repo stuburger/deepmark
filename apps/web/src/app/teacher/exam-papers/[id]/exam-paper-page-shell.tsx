@@ -72,18 +72,6 @@ export function ExamPaperPageShell({
 		),
 	)
 
-	// List vs table view for submissions
-	const [subView, setSubView] = useQueryState(
-		"submissions_view",
-		parseAsStringEnum(["list", "table"]).withDefault("table"),
-	)
-
-	// List vs grid view for staged script review
-	const [stagingView, setStagingView] = useQueryState(
-		"staging_view",
-		parseAsStringEnum(["list", "grid"]).withDefault("list"),
-	)
-
 	// Live exam paper data, ingestion state, and analytics
 	const { paper, jobs, completedDocs, analyticsStats, analyticsLoading } =
 		useExamPaperLiveQueries({
@@ -359,8 +347,6 @@ export function ExamPaperPageShell({
 						submissions={submissions}
 						markedCount={markedCount}
 						inProgressCount={inProgressCount}
-						view={subView}
-						onViewChange={setSubView}
 						onOpenStaging={() => setStagingOpen(true)}
 						onViewJob={(id) => setMarkingJobId(id)}
 						onDeleteSubmission={(id) =>

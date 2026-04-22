@@ -1,13 +1,12 @@
 /**
  * Single source of truth for AO (Assessment Objective) category colours.
  *
- * Each AO has a colour expressed in three formats for different rendering
- * contexts: hex (SVG overlays), rgb (jsPDF), className (Tailwind).
+ * Each AO has a colour expressed in two formats for different rendering
+ * contexts: hex (SVG overlays + @react-pdf) and className (Tailwind).
  */
 
 type AoPaletteEntry = {
 	hex: string
-	rgb: [number, number, number]
 	/** Tailwind classes for bordered pill badges (e.g. annotation answer view) */
 	pillClass: string
 	/** Tailwind classes for filled pill badges (e.g. legend, popover) */
@@ -17,7 +16,6 @@ type AoPaletteEntry = {
 const AO_PALETTE: Record<string, AoPaletteEntry> = {
 	AO1: {
 		hex: "#3b82f6",
-		rgb: [37, 99, 235],
 		pillClass:
 			"border-blue-400 text-blue-600 bg-blue-50 dark:border-blue-500 dark:text-blue-400 dark:bg-blue-950/40",
 		legendClass:
@@ -25,7 +23,6 @@ const AO_PALETTE: Record<string, AoPaletteEntry> = {
 	},
 	AO2: {
 		hex: "#ec4899",
-		rgb: [219, 39, 119],
 		pillClass:
 			"border-pink-400 text-pink-600 bg-pink-50 dark:border-pink-500 dark:text-pink-400 dark:bg-pink-950/40",
 		legendClass:
@@ -33,7 +30,6 @@ const AO_PALETTE: Record<string, AoPaletteEntry> = {
 	},
 	AO3: {
 		hex: "#22c55e",
-		rgb: [22, 163, 74],
 		pillClass:
 			"border-green-400 text-green-600 bg-green-50 dark:border-green-500 dark:text-green-400 dark:bg-green-950/40",
 		legendClass:
@@ -43,7 +39,6 @@ const AO_PALETTE: Record<string, AoPaletteEntry> = {
 
 const FALLBACK: AoPaletteEntry = {
 	hex: "#6b7280",
-	rgb: [107, 114, 128],
 	pillClass:
 		"border-zinc-300 text-zinc-600 bg-zinc-50 dark:border-zinc-500 dark:text-zinc-400 dark:bg-zinc-800/40",
 	legendClass: "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",
@@ -54,14 +49,9 @@ export function aoPalette(category: string): AoPaletteEntry {
 	return AO_PALETTE[category] ?? FALLBACK
 }
 
-/** Get the hex colour for an AO category (SVG rendering). */
+/** Get the hex colour for an AO category (SVG + @react-pdf rendering). */
 export function aoHex(category: string): string {
 	return (AO_PALETTE[category] ?? FALLBACK).hex
-}
-
-/** Get the RGB tuple for an AO category (jsPDF rendering). */
-export function aoRgb(category: string): [number, number, number] {
-	return (AO_PALETTE[category] ?? FALLBACK).rgb
 }
 
 /** Get the Tailwind pill class for an AO category. */

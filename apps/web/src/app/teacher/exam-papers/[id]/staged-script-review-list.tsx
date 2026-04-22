@@ -1,16 +1,43 @@
 "use client"
 
-import { Button } from "@/components/ui/button"
-import type { StagedScript } from "@/lib/batch/types"
+import type { PageKey, StagedScript } from "@/lib/batch/types"
 import { DndContext, DragOverlay, closestCenter } from "@dnd-kit/core"
 import type { DragEndEvent, DragOverEvent, DragStartEvent } from "@dnd-kit/core"
 import { arrayMove } from "@dnd-kit/sortable"
 import { AnimatePresence, motion } from "framer-motion"
-import { FileText, Plus } from "lucide-react"
-import { useCallback, useRef, useState } from "react"
+import { FileText } from "lucide-react"
+import {
+	forwardRef,
+	useCallback,
+	useImperativeHandle,
+	useRef,
+	useState,
+} from "react"
 import { useStagedScriptsState } from "./hooks/use-staged-scripts-state"
 import { ListViewScriptSection } from "./list-view-script-section"
 import { PageCarousel } from "./page-carousel"
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+export type DeletedPage = {
+	/** s3_key — used as stable identifier */
+	pageKey: string
+	/** Full page key data needed to restore the page */
+	pageKeyData: PageKey
+	/** Presigned URL for the thumbnail preview */
+	url: string
+	/** Script this page belonged to */
+	scriptId: string
+	scriptName: string
+	/** Original page number shown in the restore list */
+	originalOrder: number
+}
+
+export type StagedScriptReviewListHandle = {
+	restorePage: (page: DeletedPage) => void
+}
+
+// ─── Props ────────────────────────────────────────────────────────────────────
 
 type StagedScriptListProps = {
 	paperId: string
@@ -23,22 +50,33 @@ type StagedScriptListProps = {
 		currentStatus: StagedScript["status"],
 	) => Promise<void>
 	onDeleteScript?: (scriptId: string) => void
-	onAddScript?: () => Promise<void>
+	/** Called after a page is removed from a script. Parent tracks for restore. */
+	onPageDeleted?: (page: DeletedPage) => void
 }
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function findScriptByPageKey(key: string, pool: StagedScript[]) {
 	return pool.find((s) => s.page_keys.some((pk) => pk.s3_key === key))
 }
 
-export function StagedScriptReviewList({
-	paperId,
-	urls,
-	scripts,
-	onUpdateName,
-	onToggleExclude,
-	onDeleteScript,
-	onAddScript,
-}: StagedScriptListProps) {
+// ─── Component ────────────────────────────────────────────────────────────────
+
+export const StagedScriptReviewList = forwardRef<
+	StagedScriptReviewListHandle,
+	StagedScriptListProps
+>(function StagedScriptReviewList(
+	{
+		paperId,
+		urls,
+		scripts,
+		onUpdateName,
+		onToggleExclude,
+		onDeleteScript,
+		onPageDeleted,
+	},
+	ref,
+) {
 	const {
 		localScripts,
 		setLocalScripts,
@@ -62,11 +100,18 @@ export function StagedScriptReviewList({
 
 	const dragSnapshotRef = useRef<StagedScript[] | null>(null)
 
+	// ── Page deletion + restoration ───────────────────────────────────────────
+
 	function handleDeletePage(pageKey: string) {
 		const sourceScript = localScripts.find((s) =>
 			s.page_keys.some((pk) => pk.s3_key === pageKey),
 		)
 		if (!sourceScript) return
+
+		const pageKeyData = sourceScript.page_keys.find(
+			(pk) => pk.s3_key === pageKey,
+		)
+		if (!pageKeyData) return
 
 		const rollbackSnapshot = [...localScripts]
 		const newPages = sourceScript.page_keys
@@ -78,22 +123,59 @@ export function StagedScriptReviewList({
 			prev.map((s) => (s.id === sourceScript.id ? updated : s)),
 		)
 		void persistPageKeys(updated, rollbackSnapshot)
+
+		onPageDeleted?.({
+			pageKey,
+			pageKeyData,
+			url: urls[pageKey] ?? "",
+			scriptId: sourceScript.id,
+			scriptName:
+				localNames[sourceScript.id] ??
+				sourceScript.proposed_name ??
+				"Unnamed script",
+			originalOrder: pageKeyData.order,
+		})
 	}
+
+	// Use a ref for localScripts so the imperative handle never goes stale
+	const localScriptsRef = useRef(localScripts)
+	localScriptsRef.current = localScripts
+
+	function handleRestorePage(page: DeletedPage) {
+		const targetScript = localScriptsRef.current.find(
+			(s) => s.id === page.scriptId,
+		)
+		if (!targetScript) return
+
+		const restoredKey: PageKey = {
+			...page.pageKeyData,
+			order: targetScript.page_keys.length + 1,
+		}
+		const updated = {
+			...targetScript,
+			page_keys: [...targetScript.page_keys, restoredKey],
+		}
+		setLocalScripts((prev) =>
+			prev.map((s) => (s.id === targetScript.id ? updated : s)),
+		)
+		void persistPageKeys(updated)
+	}
+
+	useImperativeHandle(ref, () => ({ restorePage: handleRestorePage }), [])
+
+	// ── Toggle include/exclude ────────────────────────────────────────────────
 
 	async function handleToggleInclude(
 		scriptId: string,
 		currentStatus: StagedScript["status"],
 	) {
 		const wasConfirmed = currentStatus === "confirmed"
-		// Optimistically hide/show the script so the exit animation fires
-		// immediately before the server round-trip + refetch completes
 		if (!wasConfirmed) {
 			setOptimisticConfirmedIds((prev) => new Set([...prev, scriptId]))
 		}
 		try {
 			await onToggleExclude(scriptId, currentStatus)
 		} catch {
-			// Server call failed — roll back the optimistic hide
 			if (!wasConfirmed) {
 				setOptimisticConfirmedIds((prev) => {
 					const next = new Set(prev)
@@ -133,7 +215,6 @@ export function StagedScriptReviewList({
 				const sourceScript = findScriptByPageKey(dragKey, prev)
 				if (!sourceScript) return prev
 
-				// Only reorder within the same script
 				const overIsPageInSource = sourceScript.page_keys.some(
 					(pk) => pk.s3_key === overId,
 				)
@@ -174,7 +255,6 @@ export function StagedScriptReviewList({
 		const sourceScript = findScriptByPageKey(dragKey, localScripts)
 		if (!sourceScript) return
 
-		// Determine if this is a cross-script move
 		const overIsPage = localScripts.some((s) =>
 			s.page_keys.some((pk) => pk.s3_key === overId),
 		)
@@ -188,8 +268,6 @@ export function StagedScriptReviewList({
 			targetScript.status !== "confirmed"
 
 		if (isCrossScript && targetScript) {
-			// Apply the cross-script move now and persist both scripts.
-			// Pass the pre-drag snapshot so a server failure can revert to it.
 			const draggedPage = sourceScript.page_keys.find(
 				(pk) => pk.s3_key === dragKey,
 			)
@@ -230,7 +308,6 @@ export function StagedScriptReviewList({
 			return
 		}
 
-		// Within-script: persist any reorder changes vs the snapshot
 		if (snapshot) {
 			for (const current of localScripts) {
 				const original = snapshot.find((s) => s.id === current.id)
@@ -249,18 +326,6 @@ export function StagedScriptReviewList({
 	const visibleScripts = localScripts.filter(
 		(s) => !optimisticConfirmedIds.has(s.id),
 	)
-
-	const [addingScript, setAddingScript] = useState(false)
-
-	async function handleAddScript() {
-		if (!onAddScript) return
-		setAddingScript(true)
-		try {
-			await onAddScript()
-		} finally {
-			setAddingScript(false)
-		}
-	}
 
 	return (
 		<>
@@ -330,21 +395,6 @@ export function StagedScriptReviewList({
 				</DragOverlay>
 			</DndContext>
 
-			{onAddScript && (
-				<div className="pt-4">
-					<Button
-						variant="outline"
-						size="sm"
-						className="w-full gap-1.5 border-dashed text-muted-foreground hover:text-foreground"
-						onClick={handleAddScript}
-						disabled={addingScript}
-					>
-						<Plus className="h-3.5 w-3.5" />
-						Add script
-					</Button>
-				</div>
-			)}
-
 			{carousel && (
 				<PageCarousel
 					pages={carousel.pages}
@@ -358,4 +408,4 @@ export function StagedScriptReviewList({
 			)}
 		</>
 	)
-}
+})

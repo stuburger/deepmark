@@ -7,8 +7,14 @@ import {
 } from "@/components/ui/resizable"
 import type { BatchIngestionState, StagedScript } from "@/lib/batch/types"
 import type { ClassificationMode } from "@mcp-gcse/db"
+import { useRef, useState } from "react"
 import { PaperTrayPanel } from "./paper-tray-panel"
-import { StagedScriptReviewList } from "./staged-script-review-list"
+import {
+	type DeletedPage,
+	StagedScriptReviewList,
+	type StagedScriptReviewListHandle,
+} from "./staged-script-review-list"
+import { StagingReviewToolbar } from "./staging-review-toolbar"
 
 type BatchStagingPanelProps = {
 	ingestion: BatchIngestionState
@@ -99,28 +105,15 @@ function ScriptReviewLayout({
 		<ResizablePanelGroup orientation="horizontal" className="h-full">
 			{/* LEFT — scripts awaiting review */}
 			<ResizablePanel defaultSize={58} minSize={30}>
-				<div className="h-full overflow-y-auto px-6 py-6">
-					{pendingScripts.length === 0 ? (
-						<div className="flex h-full items-center justify-center">
-							<div className="flex flex-col items-center gap-2 rounded-lg border border-dashed px-12 py-12 text-center">
-								<p className="text-sm font-medium">All scripts confirmed</p>
-								<p className="text-xs text-muted-foreground">
-									Click &ldquo;Start marking&rdquo; on the right to begin
-								</p>
-							</div>
-						</div>
-					) : (
-						<StagedScriptReviewList
-							paperId={paperId}
-							urls={urls}
-							scripts={pendingScripts}
-							onUpdateName={onUpdateScriptName}
-							onToggleExclude={onToggleExclude}
-							onDeleteScript={() => onDeleteScript()}
-							onAddScript={onAddScript}
-						/>
-					)}
-				</div>
+				<ScriptReviewLeftPanel
+					paperId={paperId}
+					scripts={pendingScripts}
+					urls={urls}
+					onUpdateScriptName={onUpdateScriptName}
+					onToggleExclude={onToggleExclude}
+					onDeleteScript={onDeleteScript}
+					onAddScript={onAddScript}
+				/>
 			</ResizablePanel>
 
 			<ResizableHandle withHandle />
@@ -138,5 +131,86 @@ function ScriptReviewLayout({
 				</div>
 			</ResizablePanel>
 		</ResizablePanelGroup>
+	)
+}
+
+// ── Left panel: toolbar (fixed) + scrollable script list ─────────────────────
+
+function ScriptReviewLeftPanel({
+	paperId,
+	scripts,
+	urls,
+	onUpdateScriptName,
+	onToggleExclude,
+	onDeleteScript,
+	onAddScript,
+}: {
+	paperId: string
+	scripts: StagedScript[]
+	urls: Record<string, string>
+	onUpdateScriptName: (id: string, name: string) => Promise<void>
+	onToggleExclude: (id: string, status: StagedScript["status"]) => Promise<void>
+	onDeleteScript: () => void
+	onAddScript: () => Promise<void>
+}) {
+	const listRef = useRef<StagedScriptReviewListHandle>(null)
+	const [deletedPages, setDeletedPages] = useState<DeletedPage[]>([])
+	const [addingScript, setAddingScript] = useState(false)
+
+	function handlePageDeleted(page: DeletedPage) {
+		setDeletedPages((prev) => [...prev, page])
+	}
+
+	function handleRestore(pageKey: string) {
+		const page = deletedPages.find((p) => p.pageKey === pageKey)
+		if (!page) return
+		listRef.current?.restorePage(page)
+		setDeletedPages((prev) => prev.filter((p) => p.pageKey !== pageKey))
+	}
+
+	async function handleAddScript() {
+		setAddingScript(true)
+		try {
+			await onAddScript()
+		} finally {
+			setAddingScript(false)
+		}
+	}
+
+	return (
+		<div className="h-full flex flex-col min-h-0">
+			{/* Toolbar — sits above the scroll area, always visible */}
+			<StagingReviewToolbar
+				deletedPages={deletedPages}
+				onRestore={handleRestore}
+				onAddScript={handleAddScript}
+				addingScript={addingScript}
+			/>
+
+			{/* Scrollable content */}
+			<div className="flex-1 min-h-0 overflow-y-auto px-6 py-6">
+				{scripts.length === 0 ? (
+					<div className="flex h-full items-center justify-center">
+						<div className="flex flex-col items-center gap-2 rounded-lg border border-dashed px-12 py-12 text-center">
+							<p className="text-sm font-medium">All scripts confirmed</p>
+							<p className="text-xs text-muted-foreground">
+								Click &ldquo;Start marking&rdquo; on the right to begin
+							</p>
+						</div>
+					</div>
+				) : (
+					<StagedScriptReviewList
+						ref={listRef}
+						paperId={paperId}
+						urls={urls}
+						scripts={scripts}
+						onUpdateName={onUpdateScriptName}
+						onToggleExclude={onToggleExclude}
+						onDeleteScript={() => onDeleteScript()}
+						onPageDeleted={handlePageDeleted}
+					/>
+				)}
+			</div>
+		</div>
 	)
 }

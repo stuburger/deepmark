@@ -4,6 +4,9 @@ import { useSortable } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 import { motion } from "framer-motion"
 import { FileText, GripVertical, X } from "lucide-react"
+import { useState } from "react"
+import { createPortal } from "react-dom"
+import { type MagnifierAnchor, PageMagnifier } from "./page-magnifier"
 
 type ListViewPageItemProps = {
 	pageKey: string
@@ -34,6 +37,22 @@ export function ListViewPageItem({
 		transition,
 	}
 
+	const [magnifier, setMagnifier] = useState<MagnifierAnchor | null>(null)
+
+	function handleMouseMove(e: React.MouseEvent<HTMLButtonElement>) {
+		if (isDragging || !url) return
+		const rect = e.currentTarget.getBoundingClientRect()
+		setMagnifier({
+			xPct: ((e.clientX - rect.left) / rect.width) * 100,
+			yPct: ((e.clientY - rect.top) / rect.height) * 100,
+			rect,
+		})
+	}
+
+	function handleMouseLeave() {
+		setMagnifier(null)
+	}
+
 	return (
 		<motion.div
 			ref={setNodeRef}
@@ -44,11 +63,13 @@ export function ListViewPageItem({
 				isDragging ? "opacity-40" : ""
 			}`}
 		>
-			{/* Thumbnail — drag handle + lightbox in one target */}
+			{/* Thumbnail — drag handle + lightbox + magnifier trigger */}
 			<button
 				type="button"
 				{...listeners}
 				onClick={url ? onLightbox : undefined}
+				onMouseMove={handleMouseMove}
+				onMouseLeave={handleMouseLeave}
 				className="block cursor-grab active:cursor-grabbing touch-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-md"
 				aria-label={`Page ${index + 1} — drag to reorder`}
 			>
@@ -59,10 +80,10 @@ export function ListViewPageItem({
 						alt={`Page ${index + 1}`}
 						draggable={false}
 						loading="lazy"
-						className="w-[200px] h-[283px] object-cover rounded-md border-2 border-foreground/20 dark:border-border"
+						className="w-50 h-70.75 object-cover rounded-md border-2 border-foreground/20 dark:border-border"
 					/>
 				) : (
-					<div className="w-[200px] h-[283px] flex items-center justify-center bg-muted/40 rounded-md border-2 border-foreground/20 dark:border-border">
+					<div className="w-50 h-70.75 flex items-center justify-center bg-muted/40 rounded-md border-2 border-foreground/20 dark:border-border">
 						<FileText className="h-8 w-8 text-muted-foreground/30" />
 					</div>
 				)}
@@ -87,6 +108,14 @@ export function ListViewPageItem({
 			>
 				<X className="h-3 w-3" />
 			</button>
+
+			{/* Magnifier — rendered in a portal so it's never clipped by overflow:hidden parents */}
+			{magnifier &&
+				url &&
+				createPortal(
+					<PageMagnifier url={url} anchor={magnifier} />,
+					document.body,
+				)}
 		</motion.div>
 	)
 }

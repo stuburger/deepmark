@@ -19,4 +19,7 @@ export const queryKeys = {
 	llmCallSites: () => ["llmCallSites"] as const,
 	submissionFeedback: (submissionId: string) =>
 		["submissionFeedback", submissionId] as const,
+	// ─── Batch ingestion ───────────────────────────────────────────────────────
+	activeBatch: (paperId: string) => ["activeBatch", paperId] as const,
+	batchPageUrls: (batchId: string) => ["batchPageUrls", batchId] as const,
 }

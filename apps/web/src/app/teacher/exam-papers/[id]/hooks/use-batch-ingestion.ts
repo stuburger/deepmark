@@ -8,6 +8,7 @@ import {
 	getStagedScriptPageUrls,
 } from "@/lib/batch/queries"
 import type { ActiveBatchInfo, BatchIngestionState } from "@/lib/batch/types"
+import { queryKeys } from "@/lib/query-keys"
 import { useQuery } from "@tanstack/react-query"
 import { useMemo, useState } from "react"
 import { toast } from "sonner"
@@ -47,7 +48,7 @@ export function useBatchIngestion(paperId: string) {
 	// Active batch — polls every 3s while classifying or staging (short-lived phases)
 	const { data: activeBatch, refetch: refetchActiveBatch } =
 		useQuery<ActiveBatchInfo>({
-			queryKey: ["activeBatch", paperId],
+			queryKey: queryKeys.activeBatch(paperId),
 			queryFn: async () => {
 				const r = await getActiveBatchForPaper(paperId)
 				return r.ok ? r.batch : null
@@ -63,7 +64,7 @@ export function useBatchIngestion(paperId: string) {
 	// Presigned URLs for page images — fetched once per batch
 	const batchId = activeBatch?.id ?? null
 	const { data: urls = {} } = useQuery({
-		queryKey: ["batchPageUrls", batchId],
+		queryKey: queryKeys.batchPageUrls(batchId ?? ""),
 		queryFn: async () => {
 			if (!batchId) return {}
 			const r = await getStagedScriptPageUrls(batchId)

@@ -4,7 +4,12 @@ import { db } from "@/lib/db"
 import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3"
 import { SQSClient, SendMessageCommand } from "@aws-sdk/client-sqs"
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner"
-import type { BatchStatus, ClassificationMode, ReviewMode } from "@mcp-gcse/db"
+import type {
+	BatchStatus,
+	ClassificationMode,
+	ReviewMode,
+	StagedScriptStatus,
+} from "@mcp-gcse/db"
 import { Resource } from "sst"
 import { auth } from "../auth"
 import { log } from "../logger"
@@ -357,7 +362,7 @@ export type CreateEmptyStagedScriptResult =
 				proposed_name: null
 				confirmed_name: null
 				confidence: null
-				status: string
+				status: StagedScriptStatus
 			}
 	  }
 	| { ok: false; error: string }

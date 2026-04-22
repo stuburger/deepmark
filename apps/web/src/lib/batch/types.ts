@@ -1,4 +1,9 @@
-import type { BatchStatus, ClassificationMode, ReviewMode } from "@mcp-gcse/db"
+import type {
+	BatchStatus,
+	ClassificationMode,
+	ReviewMode,
+	StagedScriptStatus,
+} from "@mcp-gcse/db"
 import { z } from "zod"
 
 export const pageKeySchema = z.object({
@@ -29,7 +34,7 @@ export type BatchIngestJobData = {
 		proposed_name: string | null
 		confirmed_name: string | null
 		confidence: number | null
-		status: string
+		status: StagedScriptStatus
 	}>
 	student_jobs: Array<{
 		id: string
@@ -58,7 +63,7 @@ export type StagedScript = {
 	proposed_name: string | null
 	confirmed_name: string | null
 	confidence: number | null
-	status: string
+	status: StagedScriptStatus
 }
 
 export type BatchIngestionState = {
@@ -78,5 +83,5 @@ export type BatchIngestionState = {
 	urls: Record<string, string>
 
 	pagesPerScript: number
-	classificationMode: string
+	classificationMode: ClassificationMode
 }

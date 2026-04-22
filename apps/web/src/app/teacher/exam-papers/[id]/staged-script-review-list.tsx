@@ -167,7 +167,7 @@ export function StagedScriptReviewList({
 			: (localScripts.find((s) => s.id === overId) ?? null)
 
 		const isCrossScript =
-			targetScript !== null &&
+			targetScript != null &&
 			targetScript.id !== sourceScript.id &&
 			targetScript.status !== "confirmed"
 

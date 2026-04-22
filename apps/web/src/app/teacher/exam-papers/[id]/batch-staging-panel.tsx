@@ -6,6 +6,7 @@ import {
 	ResizablePanelGroup,
 } from "@/components/ui/resizable"
 import type { BatchIngestionState, StagedScript } from "@/lib/batch/types"
+import type { ClassificationMode } from "@mcp-gcse/db"
 import { PaperTrayPanel } from "./paper-tray-panel"
 import { StagedScriptReviewList } from "./staged-script-review-list"
 
@@ -86,13 +87,13 @@ function ScriptReviewLayout({
 	onDeleteScript: () => void
 	onAddScript: () => Promise<void>
 	pagesPerScript: number
-	classificationMode: string
+	classificationMode: ClassificationMode
 }) {
 	const pendingScripts = scripts.filter((s) => s.status !== "confirmed")
 	const confirmedScripts = scripts.filter((s) => s.status === "confirmed")
 
 	return (
-		<ResizablePanelGroup direction="horizontal" className="h-full">
+		<ResizablePanelGroup orientation="horizontal" className="h-full">
 			{/* LEFT — scripts awaiting review */}
 			<ResizablePanel defaultSize={58} minSize={30}>
 				<div className="h-full overflow-y-auto px-6 py-6">

@@ -47,6 +47,7 @@ export function ListViewPageItem({
 			{...attributes}
 			className={cn(
 				"relative group/page rounded-md overflow-hidden w-fit select-none",
+				"border-2 border-black shadow-lg shadow-black/50",
 				isDragging && "opacity-40",
 			)}
 		>
@@ -73,7 +74,7 @@ export function ListViewPageItem({
 						alt={`Page ${index + 1}`}
 						draggable={false}
 						loading="lazy"
-						className="w-50 h-70.75 object-cover rounded-md border-2 border-black shadow-lg shadow-black/40 scale-[3]"
+						className="w-50 h-70.75 object-cover scale-[3]"
 					/>
 				) : (
 					<div className="w-50 h-70.75 flex items-center justify-center bg-muted/40 rounded-md border-2 border-foreground/20 dark:border-border">

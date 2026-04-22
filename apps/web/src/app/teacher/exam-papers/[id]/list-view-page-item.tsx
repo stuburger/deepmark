@@ -59,7 +59,6 @@ export function ListViewPageItem({
 				0,
 				Math.min(100, ((e.clientY - rect.top) / rect.height) * 100),
 			),
-			rect,
 		})
 	}
 
@@ -80,13 +79,21 @@ export function ListViewPageItem({
 				isDragging && "opacity-40",
 			)}
 		>
-			{/* Thumbnail — drag handle + lightbox */}
+			{/* Thumbnail — drag handle + lightbox (shift+click selects instead) */}
 			<button
 				type="button"
 				{...listeners}
-				onClick={url ? onLightbox : undefined}
+				onClick={(e) => {
+					if (!url) return
+					if (e.shiftKey) {
+						e.preventDefault()
+						onToggleSelect()
+					} else {
+						onLightbox()
+					}
+				}}
 				className="block cursor-grab active:cursor-grabbing touch-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-md"
-				aria-label={`Page ${index + 1} — drag to reorder`}
+				aria-label={`Page ${index + 1} — shift+click to select, click to enlarge`}
 			>
 				{url ? (
 					// eslint-disable-next-line @next/next/no-img-element

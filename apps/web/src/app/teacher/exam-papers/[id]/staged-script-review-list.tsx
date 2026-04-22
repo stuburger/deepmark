@@ -1,11 +1,12 @@
 "use client"
 
+import { Button } from "@/components/ui/button"
 import type { StagedScript } from "@/lib/batch/types"
 import { DndContext, DragOverlay, closestCenter } from "@dnd-kit/core"
 import type { DragEndEvent, DragOverEvent, DragStartEvent } from "@dnd-kit/core"
 import { arrayMove } from "@dnd-kit/sortable"
 import { AnimatePresence, motion } from "framer-motion"
-import { FileText } from "lucide-react"
+import { FileText, Plus } from "lucide-react"
 import { useCallback, useRef, useState } from "react"
 import { useStagedScriptsState } from "./hooks/use-staged-scripts-state"
 import { ListViewScriptSection } from "./list-view-script-section"
@@ -17,6 +18,7 @@ type StagedScriptListProps = {
 	onUpdateName: (scriptId: string, name: string) => void
 	onToggleExclude: (scriptId: string, currentStatus: string) => void
 	onDeleteScript?: (scriptId: string) => void
+	onAddScript?: () => Promise<void>
 }
 
 function findScriptByPageKey(key: string, pool: StagedScript[]) {
@@ -29,6 +31,7 @@ export function StagedScriptReviewList({
 	onUpdateName,
 	onToggleExclude,
 	onDeleteScript,
+	onAddScript,
 }: StagedScriptListProps) {
 	const {
 		localScripts,
@@ -97,6 +100,10 @@ export function StagedScriptReviewList({
 		setActiveDrag({ key, url: urls[key] ?? "" })
 	}
 
+	// Only handle within-script reordering during drag-over.
+	// Cross-script moves are deferred to handleDragEnd to avoid the active
+	// draggable being removed from its SortableContext mid-drag, which causes
+	// dnd-kit to throw a client-side exception.
 	const handleDragOver = useCallback(
 		(event: DragOverEvent) => {
 			const { active, over } = event
@@ -110,49 +117,24 @@ export function StagedScriptReviewList({
 				const sourceScript = findScriptByPageKey(dragKey, prev)
 				if (!sourceScript) return prev
 
-				const overIsPage = prev.some((s) =>
-					s.page_keys.some((pk) => pk.s3_key === overId),
+				// Only reorder within the same script
+				const overIsPageInSource = sourceScript.page_keys.some(
+					(pk) => pk.s3_key === overId,
 				)
-				const targetScript = overIsPage
-					? findScriptByPageKey(overId, prev)
-					: (prev.find((s) => s.id === overId) ?? null)
+				if (!overIsPageInSource) return prev
 
-				if (!targetScript) return prev
-				if (targetScript.status === "confirmed") return prev
-				if (sourceScript.id === targetScript.id) return prev
+				const pages = sourceScript.page_keys
+				const oldIdx = pages.findIndex((pk) => pk.s3_key === dragKey)
+				const newIdx = pages.findIndex((pk) => pk.s3_key === overId)
+				if (oldIdx === -1 || newIdx === -1 || oldIdx === newIdx) return prev
 
-				const draggedPage = sourceScript.page_keys.find(
-					(pk) => pk.s3_key === dragKey,
-				)
-				if (!draggedPage) return prev
-
-				const newSourcePages = sourceScript.page_keys
-					.filter((pk) => pk.s3_key !== dragKey)
-					.map((pk, i) => ({ ...pk, order: i + 1 }))
-
-				const targetPages = [...targetScript.page_keys]
-				if (overIsPage) {
-					const insertAt = targetPages.findIndex((pk) => pk.s3_key === overId)
-					targetPages.splice(
-						insertAt === -1 ? targetPages.length : insertAt,
-						0,
-						draggedPage,
-					)
-				} else {
-					targetPages.push(draggedPage)
-				}
-				const newTargetPages = targetPages.map((pk, i) => ({
+				const reordered = arrayMove(pages, oldIdx, newIdx).map((pk, i) => ({
 					...pk,
 					order: i + 1,
 				}))
-
-				return prev.map((s) => {
-					if (s.id === sourceScript.id)
-						return { ...s, page_keys: newSourcePages }
-					if (s.id === targetScript.id)
-						return { ...s, page_keys: newTargetPages }
-					return s
-				})
+				return prev.map((s) =>
+					s.id === sourceScript.id ? { ...s, page_keys: reordered } : s,
+				)
 			})
 		},
 		[setLocalScripts],
@@ -162,12 +144,11 @@ export function StagedScriptReviewList({
 		isDraggingRef.current = false
 		const { over, active } = event
 		setActiveDrag(null)
+		const snapshot = dragSnapshotRef.current
+		dragSnapshotRef.current = null
 
 		if (!over) {
-			if (dragSnapshotRef.current) {
-				setLocalScripts(dragSnapshotRef.current)
-			}
-			dragSnapshotRef.current = null
+			if (snapshot) setLocalScripts(snapshot)
 			return
 		}
 
@@ -175,34 +156,64 @@ export function StagedScriptReviewList({
 		const overId = over.id as string
 
 		const sourceScript = findScriptByPageKey(dragKey, localScripts)
-		if (!sourceScript) {
-			dragSnapshotRef.current = null
+		if (!sourceScript) return
+
+		// Determine if this is a cross-script move
+		const overIsPage = localScripts.some((s) =>
+			s.page_keys.some((pk) => pk.s3_key === overId),
+		)
+		const targetScript = overIsPage
+			? findScriptByPageKey(overId, localScripts)
+			: (localScripts.find((s) => s.id === overId) ?? null)
+
+		const isCrossScript =
+			targetScript !== null &&
+			targetScript.id !== sourceScript.id &&
+			targetScript.status !== "confirmed"
+
+		if (isCrossScript && targetScript) {
+			// Apply the cross-script move now and persist both scripts
+			const draggedPage = sourceScript.page_keys.find(
+				(pk) => pk.s3_key === dragKey,
+			)
+			if (!draggedPage) return
+
+			const newSourcePages = sourceScript.page_keys
+				.filter((pk) => pk.s3_key !== dragKey)
+				.map((pk, i) => ({ ...pk, order: i + 1 }))
+
+			const targetPages = [...targetScript.page_keys]
+			if (overIsPage) {
+				const insertAt = targetPages.findIndex((pk) => pk.s3_key === overId)
+				targetPages.splice(
+					insertAt === -1 ? targetPages.length : insertAt,
+					0,
+					draggedPage,
+				)
+			} else {
+				targetPages.push(draggedPage)
+			}
+			const newTargetPages = targetPages.map((pk, i) => ({
+				...pk,
+				order: i + 1,
+			}))
+
+			const updatedSource = { ...sourceScript, page_keys: newSourcePages }
+			const updatedTarget = { ...targetScript, page_keys: newTargetPages }
+
+			setLocalScripts((prev) =>
+				prev.map((s) => {
+					if (s.id === sourceScript.id) return updatedSource
+					if (s.id === targetScript.id) return updatedTarget
+					return s
+				}),
+			)
+			void persistPageKeys(updatedSource)
+			void persistPageKeys(updatedTarget)
 			return
 		}
 
-		const overIsPageInSame = sourceScript.page_keys.some(
-			(pk) => pk.s3_key === overId,
-		)
-		if (overIsPageInSame && dragKey !== overId) {
-			const pages = sourceScript.page_keys
-			const oldIdx = pages.findIndex((pk) => pk.s3_key === dragKey)
-			const newIdx = pages.findIndex((pk) => pk.s3_key === overId)
-			if (oldIdx !== -1 && newIdx !== -1 && oldIdx !== newIdx) {
-				const reordered = arrayMove(pages, oldIdx, newIdx).map((pk, i) => ({
-					...pk,
-					order: i + 1,
-				}))
-				const updated = { ...sourceScript, page_keys: reordered }
-				setLocalScripts((prev) =>
-					prev.map((s) => (s.id === sourceScript.id ? updated : s)),
-				)
-				void persistPageKeys(updated)
-				dragSnapshotRef.current = null
-				return
-			}
-		}
-
-		const snapshot = dragSnapshotRef.current
+		// Within-script: persist any reorder changes vs the snapshot
 		if (snapshot) {
 			for (const current of localScripts) {
 				const original = snapshot.find((s) => s.id === current.id)
@@ -214,7 +225,6 @@ export function StagedScriptReviewList({
 				}
 			}
 		}
-		dragSnapshotRef.current = null
 	}
 
 	// ── Render ────────────────────────────────────────────────────────────────
@@ -222,6 +232,18 @@ export function StagedScriptReviewList({
 	const visibleScripts = localScripts.filter(
 		(s) => !optimisticConfirmedIds.has(s.id),
 	)
+
+	const [addingScript, setAddingScript] = useState(false)
+
+	async function handleAddScript() {
+		if (!onAddScript) return
+		setAddingScript(true)
+		try {
+			await onAddScript()
+		} finally {
+			setAddingScript(false)
+		}
+	}
 
 	return (
 		<>
@@ -290,6 +312,21 @@ export function StagedScriptReviewList({
 					) : null}
 				</DragOverlay>
 			</DndContext>
+
+			{onAddScript && (
+				<div className="pt-4">
+					<Button
+						variant="outline"
+						size="sm"
+						className="w-full gap-1.5 border-dashed text-muted-foreground hover:text-foreground"
+						onClick={handleAddScript}
+						disabled={addingScript}
+					>
+						<Plus className="h-3.5 w-3.5" />
+						Add script
+					</Button>
+				</div>
+			)}
 
 			{carousel && (
 				<PageCarousel

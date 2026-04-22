@@ -21,11 +21,7 @@ import {
 import type { SubmissionHistoryItem } from "@/lib/marking/types"
 import { AlertCircle, Loader2 } from "lucide-react"
 import Link from "next/link"
-import {
-	TERMINAL_STATUSES,
-	scoreBadgeVariant,
-	statusLabel,
-} from "./stats-config"
+import { scoreBadgeVariant, statusLabel } from "./stats-config"
 
 type StatusKind = "marked" | "processing" | "failed" | "cancelled"
 
@@ -36,11 +32,16 @@ function statusKind(status: string): StatusKind {
 	return "processing"
 }
 
-function StatusCell({ status }: { status: string }) {
+function gradeLabel(pct: number): string {
+	if (pct >= 70) return "A"
+	if (pct >= 55) return "B"
+	if (pct >= 40) return "C"
+	if (pct >= 25) return "D"
+	return "U"
+}
+
+function PendingScoreCell({ status }: { status: string }) {
 	const kind = statusKind(status)
-	if (kind === "marked") {
-		return <Badge variant="outline">Marked</Badge>
-	}
 	if (kind === "failed") {
 		return (
 			<Badge variant="destructive" className="gap-1">
@@ -118,21 +119,26 @@ export function SubmissionTables({
 								/>
 							</TableHead>
 							<TableHead>Student</TableHead>
-							<TableHead className="w-32">Status</TableHead>
-							<TableHead className="w-48">Score</TableHead>
-							<TableHead className="text-right w-20" />
+							<TableHead className="w-24">Score</TableHead>
+							<TableHead className="w-40">Percentage</TableHead>
+							<TableHead className="w-16">Grade</TableHead>
+							<TableHead className="w-28">Date</TableHead>
 						</TableRow>
 					</TableHeader>
 					<TableBody>
 						{submissions.map((sub) => {
 							const kind = statusKind(sub.status)
+							const isMarked = kind === "marked"
 							const pct =
-								kind === "marked" && sub.total_max > 0
+								isMarked && sub.total_max > 0
 									? Math.round((sub.total_awarded / sub.total_max) * 100)
 									: null
-							const isMarked = kind === "marked"
+							const href = `/teacher/mark/papers/${examPaperId}/submissions/${sub.id}`
+							const dash = (
+								<span className="text-xs text-muted-foreground">—</span>
+							)
 							return (
-								<TableRow key={sub.id}>
+								<TableRow key={sub.id} className="cursor-pointer">
 									<TableCell>
 										<Checkbox
 											checked={selectedIds.has(sub.id)}
@@ -142,39 +148,62 @@ export function SubmissionTables({
 										/>
 									</TableCell>
 									<TableCell>
-										{sub.student_name ?? (
-											<span className="italic text-muted-foreground">
-												Unknown student
-											</span>
-										)}
+										<Link href={href} className="block">
+											{sub.student_name ?? (
+												<span className="italic text-muted-foreground">
+													Unknown student
+												</span>
+											)}
+										</Link>
 									</TableCell>
 									<TableCell>
-										<StatusCell status={sub.status} />
+										<Link href={href} className="block tabular-nums">
+											{isMarked ? (
+												`${sub.total_awarded}/${sub.total_max}`
+											) : (
+												<PendingScoreCell status={sub.status} />
+											)}
+										</Link>
 									</TableCell>
 									<TableCell>
-										{pct !== null ? (
-											<div className="space-y-1">
-												<Badge
-													variant={scoreBadgeVariant(pct)}
-													className="tabular-nums"
-												>
-													{sub.total_awarded}/{sub.total_max} ({pct}%)
+										<Link href={href} className="block">
+											{pct !== null ? (
+												<div className="space-y-1">
+													<Badge
+														variant={scoreBadgeVariant(pct)}
+														className="tabular-nums"
+													>
+														{pct}%
+													</Badge>
+													<Progress value={pct} className="h-1.5" />
+												</div>
+											) : (
+												dash
+											)}
+										</Link>
+									</TableCell>
+									<TableCell>
+										<Link href={href} className="block">
+											{pct !== null ? (
+												<Badge variant={scoreBadgeVariant(pct)}>
+													{gradeLabel(pct)}
 												</Badge>
-												<Progress value={pct} className="h-1.5" />
-											</div>
-										) : (
-											<span className="text-xs text-muted-foreground">—</span>
-										)}
+											) : (
+												dash
+											)}
+										</Link>
 									</TableCell>
-									<TableCell className="text-right">
-										{isMarked || !TERMINAL_STATUSES.has(sub.status) ? (
-											<Link
-												href={`/teacher/exam-papers/${examPaperId}?job=${sub.id}`}
-												className="text-sm text-primary underline underline-offset-4 hover:no-underline"
-											>
-												View →
-											</Link>
-										) : null}
+									<TableCell>
+										<Link
+											href={href}
+											className="block text-sm text-muted-foreground"
+										>
+											{sub.created_at.toLocaleDateString(undefined, {
+												day: "numeric",
+												month: "short",
+												year: "numeric",
+											})}
+										</Link>
 									</TableCell>
 								</TableRow>
 							)

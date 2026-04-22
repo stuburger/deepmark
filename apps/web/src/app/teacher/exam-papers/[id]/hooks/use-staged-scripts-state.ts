@@ -42,11 +42,27 @@ export function useStagedScriptsState(
 		useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
 	)
 
-	// Sync local scripts from updated props, skip mid-drag
+	// Sync local scripts from server data without disrupting local ordering.
+	// Instead of wholesale-replacing local state (which resets to server's
+	// created_at order every 3s poll), we merge: existing scripts stay in
+	// their local position with updated content, deleted scripts are removed,
+	// and brand-new scripts are appended to the end.
 	useEffect(() => {
-		if (!isDraggingRef.current) {
-			setLocalScripts(scripts)
-		}
+		if (isDraggingRef.current) return
+		setLocalScripts((prevLocal) => {
+			const serverById = new Map(scripts.map((s) => [s.id, s]))
+			const localById = new Map(prevLocal.map((s) => [s.id, s]))
+
+			// Keep existing scripts in their current local order, updating content
+			const merged = prevLocal
+				.filter((s) => serverById.has(s.id))
+				.map((s) => serverById.get(s.id) ?? s)
+
+			// Append scripts that are new on the server (e.g. added via "Add script")
+			const brandNew = scripts.filter((s) => !localById.has(s.id))
+
+			return [...merged, ...brandNew]
+		})
 	}, [scripts])
 
 	function openCarousel(script: StagedScript, startIndex: number) {

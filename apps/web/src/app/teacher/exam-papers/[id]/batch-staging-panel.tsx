@@ -1,5 +1,10 @@
 "use client"
 
+import {
+	ResizableHandle,
+	ResizablePanel,
+	ResizablePanelGroup,
+} from "@/components/ui/resizable"
 import type { BatchIngestionState, StagedScript } from "@/lib/batch/types"
 import { PaperTrayPanel } from "./paper-tray-panel"
 import { StagedScriptReviewList } from "./staged-script-review-list"
@@ -12,6 +17,7 @@ type BatchStagingPanelProps = {
 	onToggleExclude: (id: string, status: string) => Promise<void>
 	onSplitScript: (scriptId: string, splitAfterIndex: number) => void
 	onDeleteScript: () => void
+	onAddScript: () => Promise<void>
 }
 
 export function BatchStagingPanel({
@@ -22,23 +28,27 @@ export function BatchStagingPanel({
 	onToggleExclude,
 	onSplitScript,
 	onDeleteScript,
+	onAddScript,
 }: BatchStagingPanelProps) {
 	const scripts = ingestion.unsubmittedScripts
 
 	if (scripts.length === 0) {
 		return (
-			<div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed py-16 text-center">
-				<p className="text-sm font-medium">All scripts submitted for marking</p>
-				<p className="text-xs text-muted-foreground">
-					Check the submissions tab for progress
-				</p>
+			<div className="flex h-full items-center justify-center">
+				<div className="flex flex-col items-center gap-2 rounded-lg border border-dashed px-16 py-12 text-center">
+					<p className="text-sm font-medium">
+						All scripts submitted for marking
+					</p>
+					<p className="text-xs text-muted-foreground">
+						Check the submissions tab for progress
+					</p>
+				</div>
 			</div>
 		)
 	}
 
 	return (
 		<ScriptReviewLayout
-			label="Review each script, then include it in the marking run"
 			scripts={scripts}
 			urls={ingestion.urls}
 			committingBatch={committingBatch}
@@ -47,16 +57,16 @@ export function BatchStagingPanel({
 			onToggleExclude={onToggleExclude}
 			onSplitScript={onSplitScript}
 			onDeleteScript={onDeleteScript}
+			onAddScript={onAddScript}
 			pagesPerScript={ingestion.pagesPerScript}
 			classificationMode={ingestion.classificationMode}
 		/>
 	)
 }
 
-// ── Shared two-column review layout ──────────────────────────────────────────
+// ── Resizable two-panel review layout ────────────────────────────────────────
 
 function ScriptReviewLayout({
-	label,
 	scripts,
 	urls,
 	committingBatch,
@@ -64,8 +74,8 @@ function ScriptReviewLayout({
 	onUpdateScriptName,
 	onToggleExclude,
 	onDeleteScript,
+	onAddScript,
 }: {
-	label: string
 	scripts: StagedScript[]
 	urls: Record<string, string>
 	committingBatch: boolean
@@ -74,6 +84,7 @@ function ScriptReviewLayout({
 	onToggleExclude: (id: string, status: string) => Promise<void>
 	onSplitScript: (scriptId: string, splitAfterIndex: number) => void
 	onDeleteScript: () => void
+	onAddScript: () => Promise<void>
 	pagesPerScript: number
 	classificationMode: string
 }) {
@@ -81,20 +92,18 @@ function ScriptReviewLayout({
 	const confirmedScripts = scripts.filter((s) => s.status === "confirmed")
 
 	return (
-		<div className="space-y-4">
-			<div className="flex items-center gap-3">
-				<p className="text-sm font-medium text-muted-foreground">{label}</p>
-			</div>
-
-			<div className="grid grid-cols-2 gap-8 items-start">
-				{/* LEFT: scripts to review */}
-				<div>
+		<ResizablePanelGroup direction="horizontal" className="h-full">
+			{/* LEFT — scripts awaiting review */}
+			<ResizablePanel defaultSize={58} minSize={30}>
+				<div className="h-full overflow-y-auto px-6 py-6">
 					{pendingScripts.length === 0 ? (
-						<div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed py-16 text-center">
-							<p className="text-sm font-medium">All scripts confirmed</p>
-							<p className="text-xs text-muted-foreground">
-								Click &ldquo;Start marking&rdquo; on the right to begin
-							</p>
+						<div className="flex h-full items-center justify-center">
+							<div className="flex flex-col items-center gap-2 rounded-lg border border-dashed px-12 py-12 text-center">
+								<p className="text-sm font-medium">All scripts confirmed</p>
+								<p className="text-xs text-muted-foreground">
+									Click &ldquo;Start marking&rdquo; on the right to begin
+								</p>
+							</div>
 						</div>
 					) : (
 						<StagedScriptReviewList
@@ -103,12 +112,17 @@ function ScriptReviewLayout({
 							onUpdateName={onUpdateScriptName}
 							onToggleExclude={onToggleExclude}
 							onDeleteScript={() => onDeleteScript()}
+							onAddScript={onAddScript}
 						/>
 					)}
 				</div>
+			</ResizablePanel>
 
-				{/* RIGHT: confirmed scripts */}
-				<div>
+			<ResizableHandle withHandle />
+
+			{/* RIGHT — paper tray (confirmed scripts + commit button) */}
+			<ResizablePanel defaultSize={42} minSize={25}>
+				<div className="h-full overflow-y-auto px-6 py-6">
 					<PaperTrayPanel
 						urls={urls}
 						confirmedScripts={confirmedScripts}
@@ -117,7 +131,7 @@ function ScriptReviewLayout({
 						onToggleExclude={onToggleExclude}
 					/>
 				</div>
-			</div>
-		</div>
+			</ResizablePanel>
+		</ResizablePanelGroup>
 	)
 }

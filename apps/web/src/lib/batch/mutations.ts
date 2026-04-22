@@ -346,6 +346,55 @@ export async function updateStagedScriptPageKeys(
 	return { ok: true }
 }
 
+// ─── createEmptyStagedScript ────────────────────────────────────────────────
+
+export type CreateEmptyStagedScriptResult =
+	| {
+			ok: true
+			script: {
+				id: string
+				page_keys: []
+				proposed_name: null
+				confirmed_name: null
+				confidence: null
+				status: string
+			}
+	  }
+	| { ok: false; error: string }
+
+export async function createEmptyStagedScript(
+	batchJobId: string,
+): Promise<CreateEmptyStagedScriptResult> {
+	const session = await auth()
+	if (!session) return { ok: false, error: "Not authenticated" }
+
+	const batch = await db.batchIngestJob.findFirst({
+		where: { id: batchJobId },
+		select: { id: true },
+	})
+	if (!batch) return { ok: false, error: "Batch job not found" }
+
+	const script = await db.stagedScript.create({
+		data: {
+			batch_job_id: batchJobId,
+			page_keys: [] as never,
+			status: "proposed",
+		},
+	})
+
+	return {
+		ok: true,
+		script: {
+			id: script.id,
+			page_keys: [],
+			proposed_name: null,
+			confirmed_name: null,
+			confidence: null,
+			status: script.status,
+		},
+	}
+}
+
 // ─── deleteStagedScript ─────────────────────────────────────────────────────
 
 export type DeleteStagedScriptResult =

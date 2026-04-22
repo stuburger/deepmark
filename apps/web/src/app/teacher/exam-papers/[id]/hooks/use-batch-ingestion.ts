@@ -1,4 +1,8 @@
-import { commitBatch, splitStagedScript } from "@/lib/batch/mutations"
+import {
+	commitBatch,
+	createEmptyStagedScript,
+	splitStagedScript,
+} from "@/lib/batch/mutations"
 import {
 	getActiveBatchForPaper,
 	getStagedScriptPageUrls,
@@ -26,6 +30,7 @@ function mapBatchToIngestionState(
 		phase,
 		isProcessing: phase === "classifying",
 		isReadyForReview: phase === "staging",
+		batchId: batch.id,
 		allScripts: batch.staged_scripts,
 		unsubmittedScripts,
 		urls,
@@ -95,11 +100,22 @@ export function useBatchIngestion(paperId: string) {
 		void refetchActiveBatch()
 	}
 
+	async function handleAddScript() {
+		if (!activeBatch) return
+		const r = await createEmptyStagedScript(activeBatch.id)
+		if (!r.ok) {
+			toast.error(r.error)
+			return
+		}
+		void refetchActiveBatch()
+	}
+
 	return {
 		ingestion,
 		refetchIngestion: refetchActiveBatch,
 		committingBatch,
 		handleCommitAll,
 		handleSplitScript,
+		handleAddScript,
 	}
 }

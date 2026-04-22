@@ -106,6 +106,7 @@ export function ExamPaperPageShell({
 		committingBatch,
 		handleCommitAll,
 		handleSplitScript,
+		handleAddScript,
 	} = useBatchIngestion(paper.id)
 
 	// Submissions — flat list, 60s poll + SW-triggered refresh
@@ -423,6 +424,7 @@ export function ExamPaperPageShell({
 				}}
 				onSplitScript={handleSplitScript}
 				onDeleteScript={() => {}}
+				onAddScript={handleAddScript}
 			/>
 
 			<UploadScriptsDialog

@@ -33,15 +33,26 @@ export function PageCarousel({
 	const prev = index > 0 ? pages[index - 1] : null
 	const next = index < pages.length - 1 ? pages[index + 1] : null
 
-	// Keyboard navigation
+	// Keyboard navigation — capture phase ensures we intercept Escape before
+	// the parent Radix Dialog's bubble-phase handler closes both dialogs.
 	useEffect(() => {
 		function handleKey(e: KeyboardEvent) {
-			if (e.key === "Escape") onClose()
-			if (e.key === "ArrowLeft" && prev) onNavigate(index - 1)
-			if (e.key === "ArrowRight" && next) onNavigate(index + 1)
+			if (e.key === "Escape") {
+				e.stopPropagation()
+				onClose()
+				return
+			}
+			if ((e.key === "ArrowRight" || e.key === "ArrowUp") && next) {
+				onNavigate(index + 1)
+				return
+			}
+			if ((e.key === "ArrowLeft" || e.key === "ArrowDown") && prev) {
+				onNavigate(index - 1)
+			}
 		}
-		window.addEventListener("keydown", handleKey)
-		return () => window.removeEventListener("keydown", handleKey)
+		window.addEventListener("keydown", handleKey, { capture: true })
+		return () =>
+			window.removeEventListener("keydown", handleKey, { capture: true })
 	}, [index, prev, next, onClose, onNavigate])
 
 	if (!current) return null
@@ -156,7 +167,7 @@ export function PageCarousel({
 					</div>
 				)}
 				<p className="text-xs text-white/25 select-none">
-					← → to navigate · Esc to close
+					← ↓ prev · → ↑ next · Esc to close
 				</p>
 			</div>
 		</div>,

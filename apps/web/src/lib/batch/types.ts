@@ -67,6 +67,8 @@ export type BatchIngestionState = {
 	isProcessing: boolean
 	isReadyForReview: boolean
 
+	batchId: string
+
 	/** All staged scripts for the current upload */
 	allScripts: StagedScript[]
 	/** Scripts not yet committed as submissions (status !== "submitted") */

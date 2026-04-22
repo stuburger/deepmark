@@ -16,6 +16,7 @@ type StagingReviewDialogProps = {
 	onToggleExclude: (id: string, status: string) => Promise<void>
 	onSplitScript: (scriptId: string, splitAfterIndex: number) => void
 	onDeleteScript: () => void
+	onAddScript: () => Promise<void>
 }
 
 export function StagingReviewDialog({
@@ -28,11 +29,12 @@ export function StagingReviewDialog({
 	onToggleExclude,
 	onSplitScript,
 	onDeleteScript,
+	onAddScript,
 }: StagingReviewDialogProps) {
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent
-				className="top-0! left-0! translate-x-0! translate-y-0! max-w-none! w-screen! h-screen! rounded-none! p-0 overflow-hidden ring-0 flex flex-col"
+				className="inset-4! w-auto! translate-x-0! translate-y-0! max-w-none! rounded-2xl p-0 overflow-hidden ring-0 shadow-2xl flex flex-col"
 				showCloseButton={false}
 			>
 				{/* Header */}
@@ -54,9 +56,9 @@ export function StagingReviewDialog({
 					</Button>
 				</div>
 
-				{/* Content */}
-				<div className="flex-1 overflow-y-auto px-6 py-6">
-					{ingestion && (
+				{/* Body — panels scroll individually */}
+				<div className="flex-1 min-h-0">
+					{ingestion ? (
 						<BatchStagingPanel
 							ingestion={ingestion}
 							committingBatch={committingBatch}
@@ -65,8 +67,9 @@ export function StagingReviewDialog({
 							onToggleExclude={onToggleExclude}
 							onSplitScript={onSplitScript}
 							onDeleteScript={onDeleteScript}
+							onAddScript={onAddScript}
 						/>
-					)}
+					) : null}
 				</div>
 			</DialogContent>
 		</Dialog>

@@ -5,6 +5,8 @@ import { autoCommitBatch } from "@/lib/script-ingestion/auto-commit"
 import {
 	listSourceFiles,
 	processSourceFile,
+	processSourceFileBlankSeparator,
+	processSourceFileFixedPages,
 	processSourceFilePerFile,
 } from "@/lib/script-ingestion/source-file-processing"
 import type { StagedScriptData } from "@/lib/script-ingestion/types"
@@ -107,7 +109,28 @@ async function classifyBatch(batchJobId: string): Promise<void> {
 	const allStagedScripts: StagedScriptData[] = []
 	let totalPages = 0
 
-	if (batch.classification_mode === ("per_file" as ClassificationMode)) {
+	if (batch.classification_mode === ("blank_separator" as ClassificationMode)) {
+		for (const sourceKey of sourceKeys) {
+			const { scripts, pageCount } = await processSourceFileBlankSeparator(
+				batchJobId,
+				sourceKey,
+			)
+			allStagedScripts.push(...scripts)
+			totalPages += pageCount
+		}
+	} else if (
+		batch.classification_mode === ("fixed_pages" as ClassificationMode)
+	) {
+		for (const sourceKey of sourceKeys) {
+			const { scripts, pageCount } = await processSourceFileFixedPages(
+				batchJobId,
+				sourceKey,
+				batch.pages_per_script,
+			)
+			allStagedScripts.push(...scripts)
+			totalPages += pageCount
+		}
+	} else if (batch.classification_mode === ("per_file" as ClassificationMode)) {
 		for (const sourceKey of sourceKeys) {
 			const { scripts, pageCount } = await processSourceFilePerFile(
 				batchJobId,
@@ -178,10 +201,16 @@ function evaluateAutoCommit(
 ): boolean {
 	if (batch.review_mode !== "auto" || scripts.length === 0) return false
 
-	if (batch.classification_mode === ("per_file" as ClassificationMode)) {
+	// Deterministic modes: only block on uncertainty flags — no AI confidence needed
+	if (
+		batch.classification_mode === ("per_file" as ClassificationMode) ||
+		batch.classification_mode === ("fixed_pages" as ClassificationMode) ||
+		batch.classification_mode === ("blank_separator" as ClassificationMode)
+	) {
 		return !scripts.some((s) => s.hasUncertainPage)
 	}
 
+	// AI mode (auto): require high confidence + plausible script count
 	return (
 		scripts.every((s) => s.confidence >= AUTO_COMMIT_THRESHOLD) &&
 		!scripts.some((s) => s.hasUncertainPage) &&

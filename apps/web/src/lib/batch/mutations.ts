@@ -25,9 +25,12 @@ export type CreateBatchIngestJobResult =
 export async function createBatchIngestJob(
 	examPaperId: string,
 	reviewMode: ReviewMode = "auto",
-	blankPageMode: "script_page" | "separator" = "script_page",
 	pagesPerScript = 4,
-	classificationMode: ClassificationMode = "auto",
+	classificationMode:
+		| "auto"
+		| "per_file"
+		| "fixed_pages"
+		| "blank_separator" = "auto",
 ): Promise<CreateBatchIngestJobResult> {
 	const session = await auth()
 	if (!session) return { ok: false, error: "Not authenticated" }
@@ -43,7 +46,6 @@ export async function createBatchIngestJob(
 			exam_paper_id: examPaperId,
 			uploaded_by: session.userId,
 			review_mode: reviewMode,
-			blank_page_mode: blankPageMode,
 			pages_per_script: pagesPerScript,
 			classification_mode: classificationMode,
 			status: "uploading",
@@ -99,9 +101,8 @@ export async function updateBatchJobSettings(
 	batchJobId: string,
 	settings: {
 		pagesPerScript?: number
-		blankPageMode?: "script_page" | "separator"
 		reviewMode?: "auto" | "required"
-		classificationMode?: "auto" | "per_file"
+		classificationMode?: "auto" | "per_file" | "fixed_pages" | "blank_separator"
 	},
 ): Promise<UpdateBatchJobSettingsResult> {
 	const session = await auth()
@@ -119,9 +120,6 @@ export async function updateBatchJobSettings(
 		data: {
 			...(settings.pagesPerScript !== undefined && {
 				pages_per_script: settings.pagesPerScript,
-			}),
-			...(settings.blankPageMode !== undefined && {
-				blank_page_mode: settings.blankPageMode,
 			}),
 			...(settings.reviewMode !== undefined && {
 				review_mode: settings.reviewMode,

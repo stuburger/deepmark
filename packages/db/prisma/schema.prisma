@@ -154,6 +154,8 @@ enum StagedScriptStatus {
 enum ClassificationMode {
   auto
   per_file
+  fixed_pages
+  blank_separator
 }
 
 model User {

@@ -34,12 +34,9 @@ export function useBatchUpload({
 	const [batchJobId, setBatchJobId] = useState<string | null>(null)
 	const [showAdvanced, setShowAdvanced] = useState(false)
 	const [autoCommit, setAutoCommit] = useState(false)
-	const [blankPageMode, setBlankPageMode] = useState<
-		"script_page" | "separator"
-	>("script_page")
 	const [pagesPerScript, setPagesPerScript] = useState(4)
 	const [classificationMode, setClassificationMode] = useState<
-		"auto" | "per_file"
+		"auto" | "per_file" | "fixed_pages" | "blank_separator"
 	>("auto")
 	const fileInputRef = useRef<HTMLInputElement>(null)
 	const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -89,7 +86,6 @@ export function useBatchUpload({
 			setBatchJobId(null)
 			setShowAdvanced(false)
 			setAutoCommit(false)
-			setBlankPageMode("script_page")
 			setPagesPerScript(4)
 			setClassificationMode("auto")
 		}
@@ -103,7 +99,6 @@ export function useBatchUpload({
 		const result = await createBatchIngestJob(
 			examPaperId,
 			autoCommit ? "auto" : "required",
-			blankPageMode,
 			pagesPerScript,
 			classificationMode,
 		)
@@ -231,8 +226,6 @@ export function useBatchUpload({
 		setShowAdvanced,
 		autoCommit,
 		setAutoCommit,
-		blankPageMode,
-		setBlankPageMode,
 		pagesPerScript,
 		setPagesPerScript,
 		classificationMode,

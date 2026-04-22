@@ -29,7 +29,7 @@ export function UploadScriptsDialog({
 
 	return (
 		<Dialog open={open} onOpenChange={batch.handleOpenChange}>
-			<DialogContent className="max-w-lg">
+			<DialogContent className="sm:max-w-2xl">
 				{/* ── Phase 1: Upload ── */}
 				{batch.phase === "upload" && (
 					<>
@@ -42,119 +42,152 @@ export function UploadScriptsDialog({
 						</DialogHeader>
 
 						<div className="space-y-4">
-							<button
-								type="button"
-								onClick={() => batch.fileInputRef.current?.click()}
-								className="w-full flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border px-6 py-8 text-center transition-colors hover:bg-muted/30 hover:border-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-							>
-								<Upload className="h-8 w-8 text-muted-foreground" />
-								<div>
-									<p className="text-sm font-medium">Click to upload</p>
-									<p className="text-xs text-muted-foreground mt-0.5">
-										PDFs and images — multiple files supported
-									</p>
-								</div>
-							</button>
+							{/* 1. Segmentation mode */}
+							<ClassificationModeSelector
+								value={batch.classificationMode}
+								disabled={batch.phase !== "upload"}
+								onChange={(next) => {
+									batch.setClassificationMode(next)
+									batch.handleUpdateSettings({
+										classificationMode: next,
+									})
+								}}
+							/>
 
-							{batch.files.length > 0 && (
-								<div className="space-y-1.5 max-h-52 overflow-y-auto">
-									{batch.files.map((file) => (
-										<div
-											key={file.name}
-											className="flex items-center gap-2.5 rounded-lg border bg-muted/20 px-3 py-2"
+							{/* Pages per script — shown inline when fixed_pages is selected */}
+							{batch.classificationMode === "fixed_pages" && (
+								<div className="flex items-center gap-4">
+									<div className="space-y-1">
+										<label
+											htmlFor="pages-per-script"
+											className="text-sm font-medium"
 										>
-											{file.uploading ? (
-												<Spinner className="h-4 w-4 shrink-0 text-muted-foreground" />
-											) : (
-												<FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
-											)}
-											<div className="flex-1 min-w-0">
-												<p className="text-sm truncate">{file.name}</p>
-												{file.error ? (
-													<p className="text-xs text-destructive">
-														{file.error}
-													</p>
-												) : file.uploading ? (
-													<p className="text-xs text-muted-foreground">
-														Uploading…
-													</p>
-												) : (
-													<p className="text-xs text-muted-foreground">Ready</p>
-												)}
-											</div>
-											{!file.uploading && (
-												<Button
-													variant="ghost"
-													size="icon-xs"
-													onClick={() =>
-														batch.setFiles((prev) =>
-															prev.filter((f) => f.name !== file.name),
-														)
-													}
-													className="shrink-0 text-muted-foreground hover:text-destructive"
-												>
-													<Trash2 className="h-3.5 w-3.5" />
-												</Button>
-											)}
-										</div>
-									))}
+											Pages per student script
+										</label>
+										<p className="text-xs text-muted-foreground">
+											A remainder at the end will be flagged for review.
+										</p>
+									</div>
+									<Input
+										id="pages-per-script"
+										type="number"
+										min={1}
+										max={50}
+										value={batch.pagesPerScript}
+										onChange={(e) => {
+											const next = Math.min(
+												50,
+												Math.max(1, Number(e.target.value)),
+											)
+											batch.setPagesPerScript(next)
+											batch.handleUpdateSettings({
+												pagesPerScript: next,
+											})
+										}}
+										className="h-8 w-20 text-sm shrink-0"
+										disabled={batch.phase !== "upload"}
+									/>
 								</div>
 							)}
-						</div>
 
-						{/* Advanced settings */}
-						<div>
-							<Button
-								variant="ghost"
-								size="xs"
-								onClick={() => batch.setShowAdvanced((v) => !v)}
-								className="text-muted-foreground hover:text-foreground"
-							>
-								<ChevronDown
-									className={`h-3.5 w-3.5 transition-transform ${
-										batch.showAdvanced ? "rotate-180" : ""
-									}`}
-								/>
-								Advanced
-							</Button>
-							{batch.showAdvanced && (
-								<div className="mt-3 space-y-4 rounded-lg border bg-muted/20 p-4">
-									{/* Classification mode */}
-									<ToggleSetting
-										label="Each file is one student's script"
-										description="Skip AI segmentation. Faster and cheaper, but you'll need to manually split any file containing multiple students."
-										checked={batch.classificationMode === "per_file"}
-										disabled={batch.phase !== "upload"}
-										onToggle={() => {
-											const next =
-												batch.classificationMode === "per_file"
-													? "auto"
-													: "per_file"
-											batch.setClassificationMode(next)
-											batch.handleUpdateSettings({
-												classificationMode: next,
-											})
-										}}
+							{/* 2. Drop / upload area */}
+							<div className="space-y-3">
+								<button
+									type="button"
+									onClick={() => batch.fileInputRef.current?.click()}
+									className="w-full flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border px-6 py-8 text-center transition-colors hover:bg-muted/30 hover:border-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+								>
+									<Upload className="h-8 w-8 text-muted-foreground" />
+									<div>
+										<p className="text-sm font-medium">Click to upload</p>
+										<p className="text-xs text-muted-foreground mt-0.5">
+											PDFs and images — multiple files supported
+										</p>
+									</div>
+								</button>
+
+								{batch.files.length > 0 && (
+									<div className="space-y-1.5 max-h-48 overflow-y-auto">
+										{batch.files.map((file) => (
+											<div
+												key={file.name}
+												className="flex items-center gap-2.5 rounded-lg border bg-muted/20 px-3 py-2"
+											>
+												{file.uploading ? (
+													<Spinner className="h-4 w-4 shrink-0 text-muted-foreground" />
+												) : (
+													<FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
+												)}
+												<div className="flex-1 min-w-0">
+													<p className="text-sm truncate">{file.name}</p>
+													{file.error ? (
+														<p className="text-xs text-destructive">
+															{file.error}
+														</p>
+													) : file.uploading ? (
+														<p className="text-xs text-muted-foreground">
+															Uploading…
+														</p>
+													) : (
+														<p className="text-xs text-muted-foreground">
+															Ready
+														</p>
+													)}
+												</div>
+												{!file.uploading && (
+													<Button
+														variant="ghost"
+														size="icon-xs"
+														onClick={() =>
+															batch.setFiles((prev) =>
+																prev.filter((f) => f.name !== file.name),
+															)
+														}
+														className="shrink-0 text-muted-foreground hover:text-destructive"
+													>
+														<Trash2 className="h-3.5 w-3.5" />
+													</Button>
+												)}
+											</div>
+										))}
+									</div>
+								)}
+							</div>
+
+							{/* 3. Advanced settings */}
+							<div>
+								<Button
+									variant="ghost"
+									size="xs"
+									onClick={() => batch.setShowAdvanced((v) => !v)}
+									className="text-muted-foreground hover:text-foreground"
+								>
+									<ChevronDown
+										className={`h-3.5 w-3.5 transition-transform ${
+											batch.showAdvanced ? "rotate-180" : ""
+										}`}
 									/>
+									Advanced
+								</Button>
+								{batch.showAdvanced && (
+									<div className="mt-3 space-y-4 rounded-lg border bg-muted/20 p-4">
+										{/* Auto-start marking */}
+										<ToggleSetting
+											label="Auto-start marking"
+											description="Skip review if all scripts are detected with high confidence. When off, always review before marking."
+											checked={batch.autoCommit}
+											disabled={batch.phase !== "upload"}
+											onToggle={() => {
+												const next = !batch.autoCommit
+												batch.setAutoCommit(next)
+												batch.handleUpdateSettings({
+													reviewMode: next ? "auto" : "required",
+												})
+											}}
+										/>
 
-									{/* Auto-start marking */}
-									<ToggleSetting
-										label="Auto-start marking"
-										description="Skip review if all scripts are detected with high confidence. When off, always review before marking."
-										checked={batch.autoCommit}
-										disabled={batch.phase !== "upload"}
-										onToggle={() => {
-											const next = !batch.autoCommit
-											batch.setAutoCommit(next)
-											batch.handleUpdateSettings({
-												reviewMode: next ? "auto" : "required",
-											})
-										}}
-									/>
-
-									{/* Pages per script — hidden in per_file mode */}
-									{batch.classificationMode === "auto" && (
-										<>
+										{/* Approx pages — auto mode only */}
+										{batch.classificationMode === "auto" && (
 											<div className="space-y-1.5">
 												<label
 													htmlFor="pages-per-script"
@@ -166,11 +199,11 @@ export function UploadScriptsDialog({
 													id="pages-per-script"
 													type="number"
 													min={1}
-													max={20}
+													max={50}
 													value={batch.pagesPerScript}
 													onChange={(e) => {
 														const next = Math.min(
-															20,
+															50,
 															Math.max(1, Number(e.target.value)),
 														)
 														batch.setPagesPerScript(next)
@@ -182,27 +215,10 @@ export function UploadScriptsDialog({
 													disabled={batch.phase !== "upload"}
 												/>
 											</div>
-
-											<ToggleSetting
-												label="Treat blank pages as script separators"
-												description="When on, blank pages split between students. When off, blank pages are classified by context."
-												checked={batch.blankPageMode === "separator"}
-												disabled={batch.phase !== "upload"}
-												onToggle={() => {
-													const next =
-														batch.blankPageMode === "separator"
-															? "script_page"
-															: "separator"
-													batch.setBlankPageMode(next)
-													batch.handleUpdateSettings({
-														blankPageMode: next,
-													})
-												}}
-											/>
-										</>
-									)}
-								</div>
-							)}
+										)}
+									</div>
+								)}
+							</div>
 						</div>
 
 						<DialogFooter>
@@ -238,9 +254,9 @@ export function UploadScriptsDialog({
 						<DialogHeader>
 							<DialogTitle>Analysing your upload</DialogTitle>
 							<DialogDescription>
-								{batch.classificationMode === "per_file"
-									? "Preparing your scripts for review."
-									: "DeepMark is reading and grouping the scripts by student. This usually takes under a minute."}
+								{batch.classificationMode === "auto"
+									? "DeepMark is reading and grouping the scripts by student. This usually takes under a minute."
+									: "Preparing your scripts for review."}
 							</DialogDescription>
 						</DialogHeader>
 						<div className="flex flex-col items-center gap-4 py-8">
@@ -275,6 +291,79 @@ export function UploadScriptsDialog({
 				/>
 			</DialogContent>
 		</Dialog>
+	)
+}
+
+// ── 4-way segmentation mode picker ──────────────────────────────────────────
+
+type ClassificationModeValue =
+	| "auto"
+	| "per_file"
+	| "fixed_pages"
+	| "blank_separator"
+
+const CLASSIFICATION_MODE_OPTIONS: {
+	value: ClassificationModeValue
+	label: string
+	description: string
+}[] = [
+	{
+		value: "auto",
+		label: "Smart AI",
+		description: "AI reads context to detect boundaries",
+	},
+	{
+		value: "blank_separator",
+		label: "Blank separator",
+		description: "Blank pages mark script boundaries",
+	},
+	{
+		value: "fixed_pages",
+		label: "Fixed pages",
+		description: "Split every N pages exactly",
+	},
+	{
+		value: "per_file",
+		label: "Per file",
+		description: "One student per uploaded file",
+	},
+]
+
+function ClassificationModeSelector({
+	value,
+	disabled,
+	onChange,
+}: {
+	value: ClassificationModeValue
+	disabled: boolean
+	onChange: (mode: ClassificationModeValue) => void
+}) {
+	return (
+		<div className="space-y-1.5">
+			<p className="text-sm font-medium">Segmentation mode</p>
+			<div className="grid grid-cols-2 gap-1.5">
+				{CLASSIFICATION_MODE_OPTIONS.map((opt) => (
+					<button
+						key={opt.value}
+						type="button"
+						disabled={disabled}
+						onClick={() => onChange(opt.value)}
+						className={`flex flex-col items-start gap-0.5 rounded-md border px-3 py-2.5 text-left text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+							value === opt.value
+								? "border-primary bg-primary/5 text-primary"
+								: "border-border hover:border-muted-foreground/40 hover:bg-muted/30 text-foreground"
+						}`}
+					>
+						<span className="font-medium">{opt.label}</span>
+						<span
+							className={`leading-tight ${value === opt.value ? "text-primary/70" : "text-muted-foreground"}`}
+						>
+							{opt.description}
+						</span>
+					</button>
+				))}
+			</div>
+		</div>
 	)
 }
 

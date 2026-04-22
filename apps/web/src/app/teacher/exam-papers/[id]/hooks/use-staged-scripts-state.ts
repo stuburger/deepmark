@@ -3,7 +3,7 @@
 import {
 	deleteStagedScript,
 	updateStagedScriptPageKeys,
-} from "@/lib/batch/mutations"
+} from "@/lib/batch/scripts/mutations"
 import type { StagedScript } from "@/lib/batch/types"
 import { queryKeys } from "@/lib/query-keys"
 import { PointerSensor, useSensor, useSensors } from "@dnd-kit/core"

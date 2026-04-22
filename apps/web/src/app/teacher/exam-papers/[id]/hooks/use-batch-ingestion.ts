@@ -1,13 +1,11 @@
+import { commitBatch } from "@/lib/batch/lifecycle/mutations"
+import { getActiveBatchForPaper } from "@/lib/batch/lifecycle/queries"
 import {
-	commitBatch,
 	createEmptyStagedScript,
 	splitStagedScript,
 	updateStagedScript,
-} from "@/lib/batch/mutations"
-import {
-	getActiveBatchForPaper,
-	getStagedScriptPageUrls,
-} from "@/lib/batch/queries"
+} from "@/lib/batch/scripts/mutations"
+import { getStagedScriptPageUrls } from "@/lib/batch/scripts/queries"
 import type {
 	ActiveBatchInfo,
 	BatchIngestionState,

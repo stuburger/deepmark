@@ -3,8 +3,8 @@ import {
 	createBatchIngestJob,
 	triggerClassification,
 	updateBatchJobSettings,
-} from "@/lib/batch/mutations"
-import { getBatchIngestJob } from "@/lib/batch/queries"
+} from "@/lib/batch/upload/mutations"
+import { getBatchIngestJob } from "@/lib/batch/upload/queries"
 import { validateScriptFile } from "@/lib/upload-validation"
 import { useEffect, useRef, useState } from "react"
 import { toast } from "sonner"

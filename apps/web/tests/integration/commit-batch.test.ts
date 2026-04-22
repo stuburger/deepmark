@@ -13,7 +13,9 @@ import { afterEach, beforeAll, describe, expect, it } from "vitest"
 const Y10_PAPERS = path.resolve(process.cwd(), "y10_papers")
 
 // Same-package import — no cross-boundary violation
-const { commitBatchService } = await import("../../src/lib/batch/mutations")
+const { commitBatchService } = await import(
+	"../../src/lib/batch/lifecycle/mutations"
+)
 
 beforeAll(async () => {
 	await ensureExamPaper()

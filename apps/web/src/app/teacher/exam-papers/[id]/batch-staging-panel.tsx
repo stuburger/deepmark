@@ -120,7 +120,7 @@ function ScriptReviewLayout({
 
 			{/* RIGHT — paper tray (confirmed scripts + commit button) */}
 			<ResizablePanel defaultSize={42} minSize={25}>
-				<div className="h-full overflow-y-auto px-6 py-6">
+				<div className="h-full overflow-y-auto px-6 py-6 bg-muted/40">
 					<PaperTrayPanel
 						urls={urls}
 						confirmedScripts={confirmedScripts}
@@ -188,7 +188,7 @@ function ScriptReviewLeftPanel({
 			/>
 
 			{/* Scrollable content */}
-			<div className="flex-1 min-h-0 overflow-y-auto px-6 pb-6">
+			<div className="flex-1 min-h-0 overflow-y-auto px-6 pt-4 pb-6 bg-muted/30">
 				{scripts.length === 0 ? (
 					<div className="flex h-full items-center justify-center">
 						<div className="flex flex-col items-center gap-2 rounded-lg border border-dashed px-12 py-12 text-center">

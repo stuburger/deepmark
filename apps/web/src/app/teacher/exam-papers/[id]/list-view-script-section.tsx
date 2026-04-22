@@ -39,9 +39,9 @@ export function ListViewScriptSection({
 	const { setNodeRef, isOver } = useDroppable({ id: script.id })
 
 	return (
-		<div className="space-y-3">
-			{/* Section header */}
-			<div className="flex items-center gap-3 sticky top-0 z-10 bg-background/95 backdrop-blur -mx-6 px-6 py-3 border-b mb-4">
+		<div className="rounded-xl border bg-card overflow-clip">
+			{/* Card header — sticky so the student name + actions stay visible while scrolling pages */}
+			<div className="flex items-center gap-3 sticky top-0 z-10 bg-muted/50 backdrop-blur rounded-t-xl border-b px-4 py-3">
 				<div className="flex-1 min-w-0">
 					<Input
 						value={localName}
@@ -84,8 +84,8 @@ export function ListViewScriptSection({
 			{/* Sortable pages — tiled horizontally */}
 			<div
 				ref={setNodeRef}
-				className={`rounded-lg transition-colors ${
-					isOver ? "ring-2 ring-primary/30 bg-primary/5" : ""
+				className={`p-4 transition-colors rounded-b-xl ${
+					isOver ? "ring-2 ring-inset ring-primary/30 bg-primary/5" : ""
 				}`}
 			>
 				<SortableContext

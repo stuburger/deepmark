@@ -25,7 +25,7 @@ export function StagingReviewToolbar({
 	const count = deletedPages.length
 
 	return (
-		<div className="shrink-0 flex items-center gap-2 border-b bg-background px-4 h-11">
+		<div className="shrink-0 flex items-center gap-2 border-b bg-muted/40 px-4 h-11">
 			{/* Add script — left anchor */}
 			{onAddScript && (
 				<Button

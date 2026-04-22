@@ -337,7 +337,7 @@ export const StagedScriptReviewList = forwardRef<
 				onDragOver={handleDragOver}
 				onDragEnd={handleDragEnd}
 			>
-				<div className="space-y-12">
+				<div className="space-y-4">
 					<AnimatePresence mode="popLayout">
 						{visibleScripts.map((script) => (
 							<motion.div

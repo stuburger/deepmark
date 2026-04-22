@@ -5,9 +5,6 @@ import { useSortable } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 import { motion } from "framer-motion"
 import { Check, FileText, GripVertical, X } from "lucide-react"
-import { useState } from "react"
-import { createPortal } from "react-dom"
-import { type MagnifierAnchor, PageMagnifier } from "./page-magnifier"
 
 type ListViewPageItemProps = {
 	pageKey: string
@@ -42,41 +39,18 @@ export function ListViewPageItem({
 		transition,
 	}
 
-	const [magnifier, setMagnifier] = useState<MagnifierAnchor | null>(null)
-
-	function handleMouseMove(e: React.MouseEvent<HTMLDivElement>) {
-		if (isDragging || !url) return
-		const img = e.currentTarget.querySelector("img")
-		const rect = img
-			? img.getBoundingClientRect()
-			: e.currentTarget.getBoundingClientRect()
-		setMagnifier({
-			xPct: Math.max(
-				0,
-				Math.min(100, ((e.clientX - rect.left) / rect.width) * 100),
-			),
-			yPct: Math.max(
-				0,
-				Math.min(100, ((e.clientY - rect.top) / rect.height) * 100),
-			),
-		})
-	}
-
-	function handleMouseLeave() {
-		setMagnifier(null)
-	}
-
 	return (
 		<motion.div
 			ref={setNodeRef}
 			style={style}
 			layout
 			{...attributes}
-			onMouseMove={handleMouseMove}
-			onMouseLeave={handleMouseLeave}
 			className={cn(
-				"relative group/page rounded-md overflow-hidden w-fit select-none",
-				isDragging && "opacity-40",
+				// z-0 normally, z-20 on hover so the scaled tile sits above siblings
+				"relative group/page rounded-md overflow-hidden w-fit select-none z-0",
+				"transition-transform duration-150 origin-top-left",
+				"hover:scale-[1.75] hover:z-20 hover:shadow-xl",
+				isDragging && "opacity-40 !scale-100",
 			)}
 		>
 			{/* Thumbnail — drag handle + lightbox (shift+click selects instead) */}
@@ -111,7 +85,7 @@ export function ListViewPageItem({
 				)}
 			</button>
 
-			{/* Selection highlight — inset ring so overflow:hidden doesn't clip it */}
+			{/* Selection highlight — inset ring, clips safely inside overflow-hidden */}
 			{isSelected && (
 				<div className="absolute inset-0 ring-3 ring-inset ring-primary rounded-md pointer-events-none" />
 			)}
@@ -153,14 +127,6 @@ export function ListViewPageItem({
 			>
 				<Check className="h-3 w-3" />
 			</button>
-
-			{/* Magnifier portal */}
-			{magnifier &&
-				url &&
-				createPortal(
-					<PageMagnifier url={url} anchor={magnifier} />,
-					document.body,
-				)}
 		</motion.div>
 	)
 }

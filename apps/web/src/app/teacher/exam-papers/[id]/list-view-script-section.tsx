@@ -43,7 +43,7 @@ export function ListViewScriptSection({
 	const { setNodeRef, isOver } = useDroppable({ id: script.id })
 
 	return (
-		<div className="rounded-xl border bg-card overflow-clip">
+		<div className="rounded-xl border bg-card">
 			{/* Card header — sticky so the student name + actions stay visible while scrolling pages */}
 			<div className="flex items-center gap-3 sticky top-0 z-10 bg-muted/50 backdrop-blur rounded-t-xl border-b px-4 py-3">
 				<div className="flex-1 min-w-0">

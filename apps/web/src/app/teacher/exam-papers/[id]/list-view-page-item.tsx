@@ -39,12 +39,23 @@ export function ListViewPageItem({
 
 	const [magnifier, setMagnifier] = useState<MagnifierAnchor | null>(null)
 
-	function handleMouseMove(e: React.MouseEvent<HTMLButtonElement>) {
+	function handleMouseMove(e: React.MouseEvent<HTMLDivElement>) {
 		if (isDragging || !url) return
-		const rect = e.currentTarget.getBoundingClientRect()
+		// Use the first child (the thumbnail button) as the reference rect so
+		// the cursor percentages are relative to the image, not the whole wrapper.
+		const img = e.currentTarget.querySelector("img")
+		const rect = img
+			? img.getBoundingClientRect()
+			: e.currentTarget.getBoundingClientRect()
 		setMagnifier({
-			xPct: ((e.clientX - rect.left) / rect.width) * 100,
-			yPct: ((e.clientY - rect.top) / rect.height) * 100,
+			xPct: Math.max(
+				0,
+				Math.min(100, ((e.clientX - rect.left) / rect.width) * 100),
+			),
+			yPct: Math.max(
+				0,
+				Math.min(100, ((e.clientY - rect.top) / rect.height) * 100),
+			),
 			rect,
 		})
 	}
@@ -59,17 +70,17 @@ export function ListViewPageItem({
 			style={style}
 			layout
 			{...attributes}
+			onMouseMove={handleMouseMove}
+			onMouseLeave={handleMouseLeave}
 			className={`relative group/page rounded-md overflow-hidden w-fit select-none ${
 				isDragging ? "opacity-40" : ""
 			}`}
 		>
-			{/* Thumbnail — drag handle + lightbox + magnifier trigger */}
+			{/* Thumbnail — drag handle + lightbox */}
 			<button
 				type="button"
 				{...listeners}
 				onClick={url ? onLightbox : undefined}
-				onMouseMove={handleMouseMove}
-				onMouseLeave={handleMouseLeave}
 				className="block cursor-grab active:cursor-grabbing touch-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-md"
 				aria-label={`Page ${index + 1} — drag to reorder`}
 			>

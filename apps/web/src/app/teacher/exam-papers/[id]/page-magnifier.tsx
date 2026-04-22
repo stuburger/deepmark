@@ -57,7 +57,7 @@ export function PageMagnifier({
 
 	return (
 		<div
-			className="fixed z-9999 pointer-events-none rounded-lg border border-border/60 shadow-2xl overflow-hidden ring-1 ring-black/5"
+			className="fixed z-9999 pointer-events-none rounded-lg border border-border/60 shadow-2xl overflow-hidden ring-1 ring-black/5 bg-background"
 			style={{
 				left,
 				top,
@@ -73,10 +73,10 @@ export function PageMagnifier({
 				style={{
 					width: SCALED_W,
 					height: SCALED_H,
+					maxWidth: "none", // override Tailwind preflight's max-width: 100% which distorts the image
 					marginLeft,
 					marginTop,
 					display: "block",
-					imageRendering: "auto",
 				}}
 			/>
 		</div>

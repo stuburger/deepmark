@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent } from "@/components/ui/dialog"
-import type { BatchIngestionState } from "@/lib/batch/types"
+import type { BatchIngestionState, StagedScript } from "@/lib/batch/types"
 import { X } from "lucide-react"
 import { BatchStagingPanel } from "./batch-staging-panel"
 
@@ -13,7 +13,7 @@ type StagingReviewDialogProps = {
 	committingBatch: boolean
 	onCommitAll: () => Promise<void>
 	onUpdateScriptName: (id: string, name: string) => Promise<void>
-	onToggleExclude: (id: string, status: string) => Promise<void>
+	onToggleExclude: (id: string, status: StagedScript["status"]) => Promise<void>
 	onSplitScript: (scriptId: string, splitAfterIndex: number) => void
 	onDeleteScript: () => void
 	onAddScript: () => Promise<void>

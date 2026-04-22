@@ -2,20 +2,26 @@ import {
 	commitBatch,
 	createEmptyStagedScript,
 	splitStagedScript,
+	updateStagedScript,
 } from "@/lib/batch/mutations"
 import {
 	getActiveBatchForPaper,
 	getStagedScriptPageUrls,
 } from "@/lib/batch/queries"
-import type { ActiveBatchInfo, BatchIngestionState } from "@/lib/batch/types"
+import type {
+	ActiveBatchInfo,
+	BatchIngestionState,
+	StagedScript,
+} from "@/lib/batch/types"
 import { queryKeys } from "@/lib/query-keys"
-import { useQuery } from "@tanstack/react-query"
-import { useMemo, useState } from "react"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { useMemo } from "react"
 import { toast } from "sonner"
 
 // ─── Pure mapper ────────────────────────────────────────────────────────────
 
 function mapBatchToIngestionState(
+	paperId: string,
 	batch: ActiveBatchInfo,
 	urls: Record<string, string>,
 ): BatchIngestionState | null {
@@ -32,6 +38,7 @@ function mapBatchToIngestionState(
 		isProcessing: phase === "classifying",
 		isReadyForReview: phase === "staging",
 		batchId: batch.id,
+		paperId,
 		allScripts: batch.staged_scripts,
 		unsubmittedScripts,
 		urls,
@@ -43,7 +50,7 @@ function mapBatchToIngestionState(
 // ─── Hook ───────────────────────────────────────────────────────────────────
 
 export function useBatchIngestion(paperId: string) {
-	const [committingBatch, setCommittingBatch] = useState(false)
+	const queryClient = useQueryClient()
 
 	// Active batch — polls every 3s while classifying or staging (short-lived phases)
 	const { data: activeBatch, refetch: refetchActiveBatch } =
@@ -76,47 +83,173 @@ export function useBatchIngestion(paperId: string) {
 
 	// Derive the UI-facing ingestion state
 	const ingestion = useMemo(
-		() => mapBatchToIngestionState(activeBatch ?? null, urls),
-		[activeBatch, urls],
+		() => mapBatchToIngestionState(paperId, activeBatch ?? null, urls),
+		[paperId, activeBatch, urls],
 	)
 
-	async function handleCommitAll() {
-		if (!activeBatch) return
-		setCommittingBatch(true)
-		const r = await commitBatch(activeBatch.id)
-		setCommittingBatch(false)
-		if (!r.ok) {
-			toast.error(r.error)
-			return
-		}
-		void refetchActiveBatch()
+	// ── Shared invalidation helper ───────────────────────────────────────────
+
+	function invalidateBatch() {
+		void queryClient.invalidateQueries({
+			queryKey: queryKeys.activeBatch(paperId),
+		})
 	}
 
-	async function handleSplitScript(scriptId: string, splitAfterIndex: number) {
-		const r = await splitStagedScript(scriptId, splitAfterIndex)
-		if (!r.ok) {
-			toast.error(r.error)
-			return
+	// ── Commit batch ─────────────────────────────────────────────────────────
+
+	const commitBatchMutation = useMutation({
+		mutationFn: async (currentBatchId: string) => {
+			const r = await commitBatch(currentBatchId)
+			if (!r.ok) throw new Error(r.error)
+			return r
+		},
+		onError: (err) =>
+			toast.error(
+				err instanceof Error ? err.message : "Failed to start marking",
+			),
+		onSettled: () => {
+			// Invalidate both the batch (transitions to marking) and the
+			// submissions list (new submissions were created by the commit)
+			void queryClient.invalidateQueries({
+				queryKey: queryKeys.activeBatch(paperId),
+			})
+			void queryClient.invalidateQueries({
+				queryKey: queryKeys.submissions(paperId),
+			})
+		},
+	})
+
+	async function handleCommitAll(): Promise<void> {
+		if (!activeBatch) return
+		try {
+			await commitBatchMutation.mutateAsync(activeBatch.id)
+		} catch {
+			// Error already surfaced via mutation's onError toast
 		}
-		void refetchActiveBatch()
 	}
 
-	async function handleAddScript() {
+	// ── Split script ─────────────────────────────────────────────────────────
+
+	const splitScriptMutation = useMutation({
+		mutationFn: async ({
+			scriptId,
+			splitAfterIndex,
+		}: {
+			scriptId: string
+			splitAfterIndex: number
+		}) => {
+			const r = await splitStagedScript(scriptId, splitAfterIndex)
+			if (!r.ok) throw new Error(r.error)
+			return r
+		},
+		onError: (err) =>
+			toast.error(
+				err instanceof Error ? err.message : "Failed to split script",
+			),
+		onSettled: invalidateBatch,
+	})
+
+	function handleSplitScript(scriptId: string, splitAfterIndex: number) {
+		splitScriptMutation.mutate({ scriptId, splitAfterIndex })
+	}
+
+	// ── Add empty script ─────────────────────────────────────────────────────
+
+	const addScriptMutation = useMutation({
+		mutationFn: async (currentBatchId: string) => {
+			const r = await createEmptyStagedScript(currentBatchId)
+			if (!r.ok) throw new Error(r.error)
+			return r
+		},
+		onError: (err) =>
+			toast.error(err instanceof Error ? err.message : "Failed to add script"),
+		onSettled: invalidateBatch,
+	})
+
+	async function handleAddScript(): Promise<void> {
 		if (!activeBatch) return
-		const r = await createEmptyStagedScript(activeBatch.id)
-		if (!r.ok) {
-			toast.error(r.error)
-			return
+		try {
+			await addScriptMutation.mutateAsync(activeBatch.id)
+		} catch {
+			// Error already surfaced via mutation's onError toast
 		}
-		void refetchActiveBatch()
+	}
+
+	// ── Update script name ───────────────────────────────────────────────────
+
+	const updateScriptNameMutation = useMutation({
+		mutationFn: async ({
+			scriptId,
+			name,
+		}: {
+			scriptId: string
+			name: string
+		}) => {
+			const r = await updateStagedScript(scriptId, { confirmedName: name })
+			if (!r.ok) throw new Error(r.error)
+		},
+		onError: (err) =>
+			toast.error(err instanceof Error ? err.message : "Failed to update name"),
+		onSettled: invalidateBatch,
+	})
+
+	async function handleUpdateScriptName(
+		scriptId: string,
+		name: string,
+	): Promise<void> {
+		try {
+			await updateScriptNameMutation.mutateAsync({ scriptId, name })
+		} catch {
+			// Error already surfaced via mutation's onError toast
+		}
+	}
+
+	// ── Toggle script included/excluded ──────────────────────────────────────
+
+	const toggleExcludeMutation = useMutation({
+		mutationFn: async ({
+			scriptId,
+			currentStatus,
+		}: {
+			scriptId: string
+			currentStatus: StagedScript["status"]
+		}) => {
+			const newStatus =
+				currentStatus === "confirmed"
+					? ("excluded" as const)
+					: ("confirmed" as const)
+			const r = await updateStagedScript(scriptId, { status: newStatus })
+			if (!r.ok) throw new Error(r.error)
+		},
+		onError: (err) =>
+			toast.error(
+				err instanceof Error ? err.message : "Failed to update script status",
+			),
+		onSettled: invalidateBatch,
+	})
+
+	// Returns a Promise so the component can rollback optimistic UI on rejection
+	function handleToggleExclude(
+		scriptId: string,
+		currentStatus: StagedScript["status"],
+	): Promise<void> {
+		return toggleExcludeMutation
+			.mutateAsync({ scriptId, currentStatus })
+			.catch(() => {
+				// Error already surfaced via mutation's onError toast;
+				// re-throw so the caller can rollback its optimistic state
+				throw new Error("toggle failed")
+			})
 	}
 
 	return {
 		ingestion,
 		refetchIngestion: refetchActiveBatch,
-		committingBatch,
+		committingBatch: commitBatchMutation.isPending,
 		handleCommitAll,
 		handleSplitScript,
 		handleAddScript,
+		handleUpdateScriptName,
+		handleToggleExclude,
 	}
 }

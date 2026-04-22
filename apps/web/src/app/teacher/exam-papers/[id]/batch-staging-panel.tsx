@@ -15,7 +15,7 @@ type BatchStagingPanelProps = {
 	committingBatch: boolean
 	onCommitAll: () => Promise<void>
 	onUpdateScriptName: (id: string, name: string) => Promise<void>
-	onToggleExclude: (id: string, status: string) => Promise<void>
+	onToggleExclude: (id: string, status: StagedScript["status"]) => Promise<void>
 	onSplitScript: (scriptId: string, splitAfterIndex: number) => void
 	onDeleteScript: () => void
 	onAddScript: () => Promise<void>
@@ -50,6 +50,7 @@ export function BatchStagingPanel({
 
 	return (
 		<ScriptReviewLayout
+			paperId={ingestion.paperId}
 			scripts={scripts}
 			urls={ingestion.urls}
 			committingBatch={committingBatch}
@@ -68,6 +69,7 @@ export function BatchStagingPanel({
 // ── Resizable two-panel review layout ────────────────────────────────────────
 
 function ScriptReviewLayout({
+	paperId,
 	scripts,
 	urls,
 	committingBatch,
@@ -77,12 +79,13 @@ function ScriptReviewLayout({
 	onDeleteScript,
 	onAddScript,
 }: {
+	paperId: string
 	scripts: StagedScript[]
 	urls: Record<string, string>
 	committingBatch: boolean
 	onCommitAll: () => Promise<void>
 	onUpdateScriptName: (id: string, name: string) => Promise<void>
-	onToggleExclude: (id: string, status: string) => Promise<void>
+	onToggleExclude: (id: string, status: StagedScript["status"]) => Promise<void>
 	onSplitScript: (scriptId: string, splitAfterIndex: number) => void
 	onDeleteScript: () => void
 	onAddScript: () => Promise<void>
@@ -108,6 +111,7 @@ function ScriptReviewLayout({
 						</div>
 					) : (
 						<StagedScriptReviewList
+							paperId={paperId}
 							urls={urls}
 							scripts={pendingScripts}
 							onUpdateName={onUpdateScriptName}

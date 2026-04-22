@@ -3,6 +3,7 @@
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
 import type { StagedScript } from "@/lib/batch/types"
+import type { StagedScriptStatus } from "@mcp-gcse/db"
 import { AnimatePresence, motion } from "framer-motion"
 import { FileStack, X } from "lucide-react"
 import { useState } from "react"
@@ -14,7 +15,7 @@ type PaperTrayPanelProps = {
 	confirmedScripts: StagedScript[]
 	committingBatch: boolean
 	onCommitAll: () => Promise<void>
-	onToggleExclude: (id: string, status: string) => Promise<void>
+	onToggleExclude: (id: string, status: StagedScriptStatus) => Promise<void>
 }
 
 export function PaperTrayPanel({

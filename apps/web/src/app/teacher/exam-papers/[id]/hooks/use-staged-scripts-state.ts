@@ -5,7 +5,9 @@ import {
 	updateStagedScriptPageKeys,
 } from "@/lib/batch/mutations"
 import type { StagedScript } from "@/lib/batch/types"
+import { queryKeys } from "@/lib/query-keys"
 import { PointerSensor, useSensor, useSensors } from "@dnd-kit/core"
+import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 import type { PageItem } from "../staged-script-page-editor"
@@ -24,10 +26,13 @@ type ActiveDragState = {
 export type { CarouselState, ActiveDragState }
 
 export function useStagedScriptsState(
+	paperId: string,
 	urls: Record<string, string>,
 	scripts: StagedScript[],
 	onDeleteScript?: (scriptId: string) => void,
 ) {
+	const queryClient = useQueryClient()
+
 	const [localScripts, setLocalScripts] = useState(scripts)
 	const [localNames, setLocalNames] = useState<Record<string, string>>(() =>
 		Object.fromEntries(
@@ -78,24 +83,70 @@ export function useStagedScriptsState(
 		setCarousel({ pages, index: startIndex, scriptName: name })
 	}
 
-	async function persistPageKeys(script: StagedScript) {
-		const r = await updateStagedScriptPageKeys(script.id, script.page_keys)
-		if (!r.ok) toast.error(r.error)
-	}
+	// ── Page-key persistence ─────────────────────────────────────────────────
+	//
+	// Called after local state has already been updated optimistically. The
+	// optional `rollbackSnapshot` is restored on failure so the UI doesn't
+	// show an arrangement the server doesn't have.
 
-	async function handleDelete(scriptId: string) {
-		const r = await deleteStagedScript(scriptId)
+	async function persistPageKeys(
+		script: StagedScript,
+		rollbackSnapshot?: StagedScript[],
+	) {
+		const r = await updateStagedScriptPageKeys(script.id, script.page_keys)
 		if (!r.ok) {
-			toast.error(r.error)
+			if (rollbackSnapshot) setLocalScripts(rollbackSnapshot)
+			toast.error("Failed to save page layout — changes reverted")
 			return
 		}
+		void queryClient.invalidateQueries({
+			queryKey: queryKeys.activeBatch(paperId),
+		})
+	}
+
+	// ── Script deletion ──────────────────────────────────────────────────────
+	//
+	// Optimistic: the script disappears immediately; restored on server error.
+
+	const deleteScriptMutation = useMutation({
+		mutationFn: async ({
+			scriptId,
+		}: {
+			scriptId: string
+			snapshot: StagedScript[]
+			snapshotNames: Record<string, string>
+		}) => {
+			const r = await deleteStagedScript(scriptId)
+			if (!r.ok) throw new Error(r.error)
+		},
+		onError: (err, vars) => {
+			setLocalScripts(vars.snapshot)
+			setLocalNames(vars.snapshotNames)
+			toast.error(
+				err instanceof Error ? err.message : "Failed to delete script",
+			)
+		},
+		onSettled: (_, __, vars) => {
+			void queryClient.invalidateQueries({
+				queryKey: queryKeys.activeBatch(paperId),
+			})
+			onDeleteScript?.(vars.scriptId)
+		},
+	})
+
+	function handleDelete(scriptId: string) {
+		// Capture snapshots before the optimistic removal
+		const snapshot = [...localScripts]
+		const snapshotNames = { ...localNames }
+
 		setLocalScripts((prev) => prev.filter((s) => s.id !== scriptId))
 		setLocalNames((prev) => {
 			const next = { ...prev }
 			delete next[scriptId]
 			return next
 		})
-		onDeleteScript?.(scriptId)
+
+		deleteScriptMutation.mutate({ scriptId, snapshot, snapshotNames })
 	}
 
 	return {

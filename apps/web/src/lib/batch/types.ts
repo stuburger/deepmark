@@ -73,6 +73,7 @@ export type BatchIngestionState = {
 	isReadyForReview: boolean
 
 	batchId: string
+	paperId: string
 
 	/** All staged scripts for the current upload */
 	allScripts: StagedScript[]

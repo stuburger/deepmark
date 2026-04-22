@@ -13,10 +13,15 @@ import { ListViewScriptSection } from "./list-view-script-section"
 import { PageCarousel } from "./staged-script-page-editor"
 
 type StagedScriptListProps = {
+	paperId: string
 	urls: Record<string, string>
 	scripts: StagedScript[]
 	onUpdateName: (scriptId: string, name: string) => void
-	onToggleExclude: (scriptId: string, currentStatus: string) => void
+	/** Must return a Promise so optimistic UI can be rolled back on failure. */
+	onToggleExclude: (
+		scriptId: string,
+		currentStatus: StagedScript["status"],
+	) => Promise<void>
 	onDeleteScript?: (scriptId: string) => void
 	onAddScript?: () => Promise<void>
 }
@@ -26,6 +31,7 @@ function findScriptByPageKey(key: string, pool: StagedScript[]) {
 }
 
 export function StagedScriptReviewList({
+	paperId,
 	urls,
 	scripts,
 	onUpdateName,
@@ -47,7 +53,7 @@ export function StagedScriptReviewList({
 		openCarousel,
 		persistPageKeys,
 		handleDelete,
-	} = useStagedScriptsState(urls, scripts, onDeleteScript)
+	} = useStagedScriptsState(paperId, urls, scripts, onDeleteScript)
 
 	// IDs of scripts optimistically removed from the list (flying to tray)
 	const [optimisticConfirmedIds, setOptimisticConfirmedIds] = useState<
@@ -62,6 +68,7 @@ export function StagedScriptReviewList({
 		)
 		if (!sourceScript) return
 
+		const rollbackSnapshot = [...localScripts]
 		const newPages = sourceScript.page_keys
 			.filter((pk) => pk.s3_key !== pageKey)
 			.map((pk, i) => ({ ...pk, order: i + 1 }))
@@ -70,22 +77,31 @@ export function StagedScriptReviewList({
 		setLocalScripts((prev) =>
 			prev.map((s) => (s.id === sourceScript.id ? updated : s)),
 		)
-		void persistPageKeys(updated)
+		void persistPageKeys(updated, rollbackSnapshot)
 	}
 
-	function handleToggleInclude(scriptId: string, currentStatus: string) {
-		// Optimistically hide the script immediately so the exit animation fires
-		// before the server round-trip + refetch completes
-		if (currentStatus !== "confirmed") {
+	async function handleToggleInclude(
+		scriptId: string,
+		currentStatus: StagedScript["status"],
+	) {
+		const wasConfirmed = currentStatus === "confirmed"
+		// Optimistically hide/show the script so the exit animation fires
+		// immediately before the server round-trip + refetch completes
+		if (!wasConfirmed) {
 			setOptimisticConfirmedIds((prev) => new Set([...prev, scriptId]))
-		} else {
-			setOptimisticConfirmedIds((prev) => {
-				const next = new Set(prev)
-				next.delete(scriptId)
-				return next
-			})
 		}
-		onToggleExclude(scriptId, currentStatus)
+		try {
+			await onToggleExclude(scriptId, currentStatus)
+		} catch {
+			// Server call failed — roll back the optimistic hide
+			if (!wasConfirmed) {
+				setOptimisticConfirmedIds((prev) => {
+					const next = new Set(prev)
+					next.delete(scriptId)
+					return next
+				})
+			}
+		}
 	}
 
 	// ── DnD handlers ──────────────────────────────────────────────────────────
@@ -172,7 +188,8 @@ export function StagedScriptReviewList({
 			targetScript.status !== "confirmed"
 
 		if (isCrossScript && targetScript) {
-			// Apply the cross-script move now and persist both scripts
+			// Apply the cross-script move now and persist both scripts.
+			// Pass the pre-drag snapshot so a server failure can revert to it.
 			const draggedPage = sourceScript.page_keys.find(
 				(pk) => pk.s3_key === dragKey,
 			)
@@ -208,8 +225,8 @@ export function StagedScriptReviewList({
 					return s
 				}),
 			)
-			void persistPageKeys(updatedSource)
-			void persistPageKeys(updatedTarget)
+			void persistPageKeys(updatedSource, snapshot ?? undefined)
+			void persistPageKeys(updatedTarget, snapshot ?? undefined)
 			return
 		}
 
@@ -221,7 +238,7 @@ export function StagedScriptReviewList({
 				const currentKeys = current.page_keys.map((pk) => pk.s3_key).join(",")
 				const originalKeys = original.page_keys.map((pk) => pk.s3_key).join(",")
 				if (currentKeys !== originalKeys) {
-					void persistPageKeys(current)
+					void persistPageKeys(current, snapshot)
 				}
 			}
 		}

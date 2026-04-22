@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { updateStagedScript } from "@/lib/batch/mutations"
 import { deleteExamPaper } from "@/lib/exam-paper/paper/mutations"
 import type {
 	ExamPaperDetail,
@@ -107,6 +106,8 @@ export function ExamPaperPageShell({
 		handleCommitAll,
 		handleSplitScript,
 		handleAddScript,
+		handleUpdateScriptName,
+		handleToggleExclude,
 	} = useBatchIngestion(paper.id)
 
 	// Submissions — flat list, 60s poll + SW-triggered refresh
@@ -410,18 +411,9 @@ export function ExamPaperPageShell({
 				onOpenChange={setStagingOpen}
 				ingestion={ingestion}
 				committingBatch={committingBatch}
-				onCommitAll={async () => {
-					await handleCommitAll()
-					void refetchSubmissions()
-				}}
-				onUpdateScriptName={async (id, name) => {
-					await updateStagedScript(id, { confirmedName: name })
-				}}
-				onToggleExclude={async (id, status) => {
-					await updateStagedScript(id, {
-						status: status === "confirmed" ? "excluded" : "confirmed",
-					})
-				}}
+				onCommitAll={handleCommitAll}
+				onUpdateScriptName={handleUpdateScriptName}
+				onToggleExclude={handleToggleExclude}
 				onSplitScript={handleSplitScript}
 				onDeleteScript={() => {}}
 				onAddScript={handleAddScript}

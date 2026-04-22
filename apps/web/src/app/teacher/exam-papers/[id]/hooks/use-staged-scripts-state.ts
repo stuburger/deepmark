@@ -50,7 +50,8 @@ export function useStagedScriptsState(
 	// Instead of wholesale-replacing local state (which resets to server's
 	// created_at order every 3s poll), we merge: existing scripts stay in
 	// their local position with updated content, deleted scripts are removed,
-	// and brand-new scripts are appended to the end.
+	// and brand-new scripts are prepended so they appear at the top of the
+	// list (visible without scrolling).
 	useEffect(() => {
 		if (isDraggingRef.current) return
 		setLocalScripts((prevLocal) => {
@@ -62,10 +63,11 @@ export function useStagedScriptsState(
 				.filter((s) => serverById.has(s.id))
 				.map((s) => serverById.get(s.id) ?? s)
 
-			// Append scripts that are new on the server (e.g. added via "Add script")
+			// Prepend scripts that are new on the server (e.g. added via "Add script")
+			// so they land at the top of the list without requiring a scroll.
 			const brandNew = scripts.filter((s) => !localById.has(s.id))
 
-			return [...merged, ...brandNew]
+			return [...brandNew, ...merged]
 		})
 	}, [scripts])
 

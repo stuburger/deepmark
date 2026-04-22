@@ -46,11 +46,8 @@ export function ListViewPageItem({
 			layout
 			{...attributes}
 			className={cn(
-				// z-0 normally, z-20 on hover so the scaled tile sits above siblings
-				"relative group/page rounded-md overflow-hidden w-fit select-none z-0",
-				"transition-transform duration-150 origin-top-left",
-				"hover:scale-[1.75] hover:z-20 hover:shadow-xl",
-				isDragging && "opacity-40 !scale-100",
+				"relative group/page rounded-md overflow-hidden w-fit select-none",
+				isDragging && "opacity-40",
 			)}
 		>
 			{/* Thumbnail — drag handle + lightbox (shift+click selects instead) */}
@@ -76,7 +73,7 @@ export function ListViewPageItem({
 						alt={`Page ${index + 1}`}
 						draggable={false}
 						loading="lazy"
-						className="w-50 h-70.75 object-cover rounded-md border-2 border-foreground/20 dark:border-border"
+						className="w-50 h-70.75 object-cover rounded-md border-2 border-foreground/20 dark:border-border scale-[2]"
 					/>
 				) : (
 					<div className="w-50 h-70.75 flex items-center justify-center bg-muted/40 rounded-md border-2 border-foreground/20 dark:border-border">

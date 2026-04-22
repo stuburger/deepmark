@@ -4,7 +4,7 @@ import { PAGE_THUMB_H, PAGE_THUMB_W } from "./exam-paper-helpers"
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const ZOOM = 2.5
+const ZOOM = 5
 const PANEL_W = PAGE_THUMB_W * 1.4 // 280px — wider than the thumbnail for comfortable viewing
 const PANEL_H = PAGE_THUMB_H * 1.4 // ~396px — maintains A4 aspect
 const SCALED_W = PAGE_THUMB_W * ZOOM // 500px — zoomed image width

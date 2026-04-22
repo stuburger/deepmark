@@ -1,9 +1,10 @@
 "use client"
 
+import { cn } from "@/lib/utils"
 import { useSortable } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 import { motion } from "framer-motion"
-import { FileText, GripVertical, X } from "lucide-react"
+import { Check, FileText, GripVertical, X } from "lucide-react"
 import { useState } from "react"
 import { createPortal } from "react-dom"
 import { type MagnifierAnchor, PageMagnifier } from "./page-magnifier"
@@ -12,16 +13,20 @@ type ListViewPageItemProps = {
 	pageKey: string
 	url: string | undefined
 	index: number
+	isSelected: boolean
 	onLightbox: () => void
 	onDelete: () => void
+	onToggleSelect: () => void
 }
 
 export function ListViewPageItem({
 	pageKey,
 	url,
 	index,
+	isSelected,
 	onLightbox,
 	onDelete,
+	onToggleSelect,
 }: ListViewPageItemProps) {
 	const {
 		attributes,
@@ -41,8 +46,6 @@ export function ListViewPageItem({
 
 	function handleMouseMove(e: React.MouseEvent<HTMLDivElement>) {
 		if (isDragging || !url) return
-		// Use the first child (the thumbnail button) as the reference rect so
-		// the cursor percentages are relative to the image, not the whole wrapper.
 		const img = e.currentTarget.querySelector("img")
 		const rect = img
 			? img.getBoundingClientRect()
@@ -72,9 +75,10 @@ export function ListViewPageItem({
 			{...attributes}
 			onMouseMove={handleMouseMove}
 			onMouseLeave={handleMouseLeave}
-			className={`relative group/page rounded-md overflow-hidden w-fit select-none ${
-				isDragging ? "opacity-40" : ""
-			}`}
+			className={cn(
+				"relative group/page rounded-md overflow-hidden w-fit select-none",
+				isDragging && "opacity-40",
+			)}
 		>
 			{/* Thumbnail — drag handle + lightbox */}
 			<button
@@ -100,6 +104,11 @@ export function ListViewPageItem({
 				)}
 			</button>
 
+			{/* Selection highlight — inset ring so overflow:hidden doesn't clip it */}
+			{isSelected && (
+				<div className="absolute inset-0 ring-3 ring-inset ring-primary rounded-md pointer-events-none" />
+			)}
+
 			{/* Page number — bottom-left, always visible */}
 			<div className="absolute bottom-1.5 left-1.5 rounded bg-black/50 px-1.5 py-0.5 text-[10px] text-white font-medium tabular-nums pointer-events-none select-none">
 				{index + 1}
@@ -120,7 +129,25 @@ export function ListViewPageItem({
 				<X className="h-3 w-3" />
 			</button>
 
-			{/* Magnifier — rendered in a portal so it's never clipped by overflow:hidden parents */}
+			{/* Select checkbox — bottom-right */}
+			<button
+				type="button"
+				onClick={(e) => {
+					e.stopPropagation()
+					onToggleSelect()
+				}}
+				className={cn(
+					"absolute bottom-1.5 right-1.5 z-10 flex items-center justify-center h-5 w-5 rounded-full transition-all duration-150",
+					isSelected
+						? "bg-primary text-primary-foreground opacity-100 shadow-sm"
+						: "border-2 border-white/70 bg-black/30 text-transparent opacity-0 group-hover/page:opacity-100",
+				)}
+				title={isSelected ? "Deselect" : "Select page"}
+			>
+				<Check className="h-3 w-3" />
+			</button>
+
+			{/* Magnifier portal */}
 			{magnifier &&
 				url &&
 				createPortal(

@@ -15,6 +15,8 @@ import { usePageCarousel } from "./use-page-carousel"
 type ActiveDragState = {
 	key: string
 	url: string
+	/** Number of pages being dragged (1 for single, >1 for multi-select drag) */
+	count: number
 }
 
 export type { ActiveDragState }

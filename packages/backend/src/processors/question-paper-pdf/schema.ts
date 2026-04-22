@@ -1,33 +1,56 @@
 import { z } from "zod/v4"
 
+const QuestionSchema = z.object({
+	question_text: z.string(),
+	question_type: z.string().optional().describe("written | multiple_choice"),
+	total_marks: z.number().int(),
+	question_number: z.string().optional(),
+	options: z
+		.array(
+			z.object({
+				option_label: z.string().describe("The option label, e.g. A, B, C, D"),
+				option_text: z.string().describe("The full text of this answer option"),
+			}),
+		)
+		.nullable()
+		.optional()
+		.describe(
+			"For multiple choice questions: the answer options. Only include when question_type is multiple_choice.",
+		),
+})
+
 export const QuestionPaperSchema = z.object({
-	questions: z.array(
-		z.object({
-			question_text: z.string(),
-			question_type: z
-				.string()
-				.optional()
-				.describe("written | multiple_choice"),
-			total_marks: z.number().int(),
-			question_number: z.string().optional(),
-			options: z
-				.array(
-					z.object({
-						option_label: z
-							.string()
-							.describe("The option label, e.g. A, B, C, D"),
-						option_text: z
-							.string()
-							.describe("The full text of this answer option"),
-					}),
-				)
-				.nullable()
-				.optional()
-				.describe(
-					"For multiple choice questions: the answer options. Only include when question_type is multiple_choice.",
-				),
-		}),
-	),
+	sections: z
+		.array(
+			z.object({
+				title: z
+					.string()
+					.describe(
+						"Section header as printed on the paper, e.g. 'Section A', 'Section B', 'Part 1'. If the paper has no section headers, use 'Section 1'.",
+					),
+				description: z
+					.string()
+					.nullable()
+					.optional()
+					.describe(
+						"Optional section-level instructions/stimulus printed under the section header (excluding per-question stimulus such as 'Read Item A').",
+					),
+				total_marks: z
+					.number()
+					.int()
+					.describe(
+						"Section total as printed on the paper (e.g. 'Mark for Section A / 25' or 'Total for Section A: 25 marks'). If no section total is printed, use the sum of this section's question marks.",
+					),
+				questions: z
+					.array(QuestionSchema)
+					.describe(
+						"Questions that appear within this section, in paper order.",
+					),
+			}),
+		)
+		.describe(
+			"The paper's sections in the order they appear. A paper with no explicit section dividers must still return exactly one section.",
+		),
 })
 
 export const QuestionPaperMetadataSchema = z.object({

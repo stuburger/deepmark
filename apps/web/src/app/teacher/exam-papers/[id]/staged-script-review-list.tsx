@@ -98,6 +98,23 @@ export const StagedScriptReviewList = forwardRef<
 		Set<string>
 	>(new Set())
 
+	// ── Multi-select ──────────────────────────────────────────────────────────
+	const [selectedPageKeys, setSelectedPageKeys] = useState<Set<string>>(
+		new Set(),
+	)
+
+	function togglePageSelection(pageKey: string) {
+		setSelectedPageKeys((prev) => {
+			const next = new Set(prev)
+			if (next.has(pageKey)) next.delete(pageKey)
+			else next.add(pageKey)
+			return next
+		})
+	}
+
+	/** True once drag starts and >1 page is selected (set via ref for use in callbacks). */
+	const isMultiDragRef = useRef(false)
+
 	const dragSnapshotRef = useRef<StagedScript[] | null>(null)
 
 	// ── Page deletion + restoration ───────────────────────────────────────────
@@ -195,7 +212,20 @@ export const StagedScriptReviewList = forwardRef<
 			page_keys: [...s.page_keys],
 		}))
 		const key = event.active.id as string
-		setActiveDrag({ key, url: urls[key] ?? "" })
+
+		// Multi-drag: carry the group if the dragged key is already selected.
+		// Dragging an unselected key cancels the selection and drags only that page.
+		const isGroupDrag = selectedPageKeys.has(key) && selectedPageKeys.size > 1
+		isMultiDragRef.current = isGroupDrag
+		if (!selectedPageKeys.has(key)) {
+			setSelectedPageKeys(new Set())
+		}
+
+		setActiveDrag({
+			key,
+			url: urls[key] ?? "",
+			count: isGroupDrag ? selectedPageKeys.size : 1,
+		})
 	}
 
 	// Only handle within-script reordering during drag-over.
@@ -204,6 +234,9 @@ export const StagedScriptReviewList = forwardRef<
 	// dnd-kit to throw a client-side exception.
 	const handleDragOver = useCallback(
 		(event: DragOverEvent) => {
+			// Within-script reordering is undefined for a group — skip entirely.
+			if (isMultiDragRef.current) return
+
 			const { active, over } = event
 			if (!over) return
 
@@ -243,6 +276,8 @@ export const StagedScriptReviewList = forwardRef<
 		setActiveDrag(null)
 		const snapshot = dragSnapshotRef.current
 		dragSnapshotRef.current = null
+		const isMultiDrag = isMultiDragRef.current
+		isMultiDragRef.current = false
 
 		if (!over) {
 			if (snapshot) setLocalScripts(snapshot)
@@ -268,6 +303,65 @@ export const StagedScriptReviewList = forwardRef<
 			targetScript.status !== "confirmed"
 
 		if (isCrossScript && targetScript) {
+			if (isMultiDrag) {
+				// ── Multi-page cross-script move ──────────────────────────────────
+				// Build a mutable map of script state so we can remove pages from
+				// multiple sources and add them all to the target in one pass.
+				const scriptUpdates = new Map<string, StagedScript>()
+
+				for (const pageKey of selectedPageKeys) {
+					const src = findScriptByPageKey(pageKey, localScripts)
+					// Skip pages already in the target, or in confirmed scripts
+					if (!src || src.id === targetScript.id || src.status === "confirmed")
+						continue
+
+					const pageKeyData = src.page_keys.find((pk) => pk.s3_key === pageKey)
+					if (!pageKeyData) continue
+
+					// Remove from source
+					const currentSrc = scriptUpdates.get(src.id) ?? {
+						...src,
+						page_keys: [...src.page_keys],
+					}
+					scriptUpdates.set(src.id, {
+						...currentSrc,
+						page_keys: currentSrc.page_keys
+							.filter((pk) => pk.s3_key !== pageKey)
+							.map((pk, i) => ({ ...pk, order: i + 1 })),
+					})
+
+					// Append to target (accumulate in map)
+					const currentTarget = scriptUpdates.get(targetScript.id) ?? {
+						...targetScript,
+						page_keys: [...targetScript.page_keys],
+					}
+					scriptUpdates.set(targetScript.id, {
+						...currentTarget,
+						page_keys: [...currentTarget.page_keys, pageKeyData],
+					})
+				}
+
+				// Final ordering pass on target
+				const finalTarget = scriptUpdates.get(targetScript.id)
+				if (finalTarget) {
+					scriptUpdates.set(targetScript.id, {
+						...finalTarget,
+						page_keys: finalTarget.page_keys.map((pk, i) => ({
+							...pk,
+							order: i + 1,
+						})),
+					})
+				}
+
+				setLocalScripts((prev) => prev.map((s) => scriptUpdates.get(s.id) ?? s))
+				for (const updated of scriptUpdates.values()) {
+					void persistPageKeys(updated, snapshot ?? undefined)
+				}
+				setSelectedPageKeys(new Set())
+				return
+			}
+
+			// ── Single-page cross-script move ─────────────────────────────────
 			const draggedPage = sourceScript.page_keys.find(
 				(pk) => pk.s3_key === dragKey,
 			)
@@ -308,7 +402,8 @@ export const StagedScriptReviewList = forwardRef<
 			return
 		}
 
-		if (snapshot) {
+		// ── Within-script persist (single drag only) ──────────────────────────
+		if (!isMultiDrag && snapshot) {
 			for (const current of localScripts) {
 				const original = snapshot.find((s) => s.id === current.id)
 				if (!original) continue
@@ -357,6 +452,7 @@ export const StagedScriptReviewList = forwardRef<
 									script={script}
 									localName={localNames[script.id] ?? ""}
 									urls={urls}
+									selectedPageKeys={selectedPageKeys}
 									onOpenCarousel={openCarousel}
 									onUpdateLocalName={(value) =>
 										setLocalNames((prev) => ({
@@ -370,6 +466,7 @@ export const StagedScriptReviewList = forwardRef<
 									}
 									onDelete={() => handleDelete(script.id)}
 									onDeletePage={handleDeletePage}
+									onToggleSelectPage={togglePageSelection}
 								/>
 							</motion.div>
 						))}
@@ -377,19 +474,33 @@ export const StagedScriptReviewList = forwardRef<
 				</div>
 
 				<DragOverlay dropAnimation={null}>
-					{activeDrag?.url ? (
-						<div className="w-50 h-70.75 rounded-md border-2 border-primary shadow-xl overflow-hidden rotate-1 opacity-90">
-							{/* eslint-disable-next-line @next/next/no-img-element */}
-							<img
-								src={activeDrag.url}
-								alt="Dragging"
-								className="w-full h-full object-cover"
-								draggable={false}
-							/>
-						</div>
-					) : activeDrag ? (
-						<div className="w-50 h-70.75 rounded-md border-2 border-primary shadow-xl flex items-center justify-center bg-card rotate-1">
-							<FileText className="h-8 w-8 text-muted-foreground/30" />
+					{activeDrag ? (
+						<div className="relative">
+							{/* Ghost layer — suggests a stack when dragging multiple pages */}
+							{activeDrag.count > 1 && (
+								<div className="absolute inset-0 w-50 h-70.75 rounded-md border-2 border-primary/50 bg-primary/10 translate-x-2 translate-y-2" />
+							)}
+							{activeDrag.url ? (
+								<div className="relative w-50 h-70.75 rounded-md border-2 border-primary shadow-xl overflow-hidden rotate-1 opacity-90">
+									{/* eslint-disable-next-line @next/next/no-img-element */}
+									<img
+										src={activeDrag.url}
+										alt="Dragging"
+										className="w-full h-full object-cover"
+										draggable={false}
+									/>
+								</div>
+							) : (
+								<div className="relative w-50 h-70.75 rounded-md border-2 border-primary shadow-xl flex items-center justify-center bg-card rotate-1">
+									<FileText className="h-8 w-8 text-muted-foreground/30" />
+								</div>
+							)}
+							{/* Count badge for multi-drag */}
+							{activeDrag.count > 1 && (
+								<div className="absolute -top-2 -right-2 flex h-6 w-6 items-center justify-center rounded-full bg-primary text-[11px] font-bold text-primary-foreground shadow-md">
+									{activeDrag.count}
+								</div>
+							)}
 						</div>
 					) : null}
 				</DragOverlay>

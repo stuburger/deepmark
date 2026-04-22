@@ -14,24 +14,28 @@ type ListViewScriptSectionProps = {
 	script: StagedScript
 	localName: string
 	urls: Record<string, string>
+	selectedPageKeys: Set<string>
 	onToggleInclude: () => void
 	onOpenCarousel: (script: StagedScript, index: number) => void
 	onUpdateLocalName: (value: string) => void
 	onUpdateName: (name: string) => void
 	onDelete: () => void
 	onDeletePage: (pageKey: string) => void
+	onToggleSelectPage: (pageKey: string) => void
 }
 
 export function ListViewScriptSection({
 	script,
 	localName,
 	urls,
+	selectedPageKeys,
 	onToggleInclude,
 	onOpenCarousel,
 	onUpdateLocalName,
 	onUpdateName,
 	onDelete,
 	onDeletePage,
+	onToggleSelectPage,
 }: ListViewScriptSectionProps) {
 	const pageKeys = script.page_keys.slice().sort((a, b) => a.order - b.order)
 	const pageKeyIds = pageKeys.map((pk) => pk.s3_key)
@@ -105,8 +109,10 @@ export function ListViewScriptSection({
 									pageKey={pk.s3_key}
 									url={urls[pk.s3_key]}
 									index={idx}
+									isSelected={selectedPageKeys.has(pk.s3_key)}
 									onLightbox={() => onOpenCarousel(script, idx)}
 									onDelete={() => onDeletePage(pk.s3_key)}
+									onToggleSelect={() => onToggleSelectPage(pk.s3_key)}
 								/>
 							))}
 						</div>

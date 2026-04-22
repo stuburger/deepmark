@@ -1,5 +1,8 @@
 import { db } from "@/db"
-import { linkJobQuestionsToExamPaper } from "@/lib/grading/link-job-questions"
+import {
+	type LinkSectionInput,
+	linkJobQuestionsToExamPaperSections,
+} from "@/lib/grading/link-job-questions"
 import { normalizeQuestionNumber } from "@/lib/grading/normalize-question-number"
 import {
 	type CancellationToken,
@@ -163,12 +166,17 @@ export async function handler(
 
 			logger.info(TAG, "LLM extraction complete", { jobId })
 			const parsed = questionsResult.output as {
-				questions?: Array<{
-					question_text: string
-					question_type?: string
+				sections?: Array<{
+					title: string
+					description?: string | null
 					total_marks: number
-					question_number?: string
-					options?: Array<{ option_label: string; option_text: string }>
+					questions: Array<{
+						question_text: string
+						question_type?: string
+						total_marks: number
+						question_number?: string
+						options?: Array<{ option_label: string; option_text: string }>
+					}>
 				}>
 			}
 
@@ -189,64 +197,83 @@ export async function handler(
 				// ignore
 			}
 
-			const questionCount = parsed.questions?.length ?? 0
+			const sections = parsed.sections ?? []
+			const questionCount = sections.reduce(
+				(acc, s) => acc + s.questions.length,
+				0,
+			)
 			logger.info(TAG, "Creating questions from paper", {
 				jobId,
+				section_count: sections.length,
 				question_count: questionCount,
 				detected_title: detectedMetadata?.title ?? null,
 			})
 
-			for (let i = 0; i < questionCount; i++) {
-				const q = parsed.questions?.[i]
-				if (!q) continue
+			const sectionInputs: LinkSectionInput[] = []
+			let questionIndex = 0
+			for (const section of sections) {
+				if (cancellation.isCancelled()) break
+				const questionIds: string[] = []
 
-				if (cancellation.isCancelled()) {
-					logger.info(TAG, "Job cancelled mid-processing — stopping loop", {
+				for (const q of section.questions) {
+					if (cancellation.isCancelled()) {
+						logger.info(TAG, "Job cancelled mid-processing — stopping loop", {
+							jobId,
+							question_index: questionIndex + 1,
+						})
+						break
+					}
+					questionIndex++
+
+					const questionText = q.question_text
+					const canonicalNumber = q.question_number
+						? normalizeQuestionNumber(q.question_number)
+						: null
+					logger.info(TAG, "Creating question", {
 						jobId,
-						question_index: i + 1,
+						section: section.title,
+						index: questionIndex,
+						total: questionCount,
+						question_number: canonicalNumber,
+						marks: q.total_marks,
+						type: q.question_type ?? "written",
 					})
-					break
+					const embeddingVec = await embedQuestionText(questionText)
+					const vecStr = embeddingToVectorStr(embeddingVec)
+
+					const newQuestion = await db.question.create({
+						data: {
+							text: questionText,
+							topic: subject,
+							created_by_id: uploadedBy,
+							subject,
+							points: q.total_marks,
+							question_type:
+								q.question_type === "multiple_choice"
+									? "multiple_choice"
+									: "written",
+							multiple_choice_options:
+								q.question_type === "multiple_choice" && q.options?.length
+									? q.options
+									: [],
+							source_pdf_ingestion_job_id: jobId,
+							origin: "question_paper",
+							question_number: canonicalNumber,
+						},
+					})
+
+					await db.$executeRaw`
+						UPDATE questions SET embedding = (${vecStr}::text)::vector WHERE id = ${newQuestion.id}
+					`
+					questionIds.push(newQuestion.id)
 				}
 
-				const questionText = q.question_text
-				const canonicalNumber = q.question_number
-					? normalizeQuestionNumber(q.question_number)
-					: null
-				logger.info(TAG, "Creating question", {
-					jobId,
-					index: i + 1,
-					total: questionCount,
-					question_number: canonicalNumber,
-					marks: q.total_marks,
-					type: q.question_type ?? "written",
+				sectionInputs.push({
+					title: section.title,
+					description: section.description ?? null,
+					total_marks: section.total_marks,
+					question_ids: questionIds,
 				})
-				const embeddingVec = await embedQuestionText(questionText)
-				const vecStr = embeddingToVectorStr(embeddingVec)
-
-				const newQuestion = await db.question.create({
-					data: {
-						text: questionText,
-						topic: subject,
-						created_by_id: uploadedBy,
-						subject,
-						points: q.total_marks,
-						question_type:
-							q.question_type === "multiple_choice"
-								? "multiple_choice"
-								: "written",
-						multiple_choice_options:
-							q.question_type === "multiple_choice" && q.options?.length
-								? q.options
-								: [],
-						source_pdf_ingestion_job_id: jobId,
-						origin: "question_paper",
-						question_number: canonicalNumber,
-					},
-				})
-
-				await db.$executeRaw`
-					UPDATE questions SET embedding = (${vecStr}::text)::vector WHERE id = ${newQuestion.id}
-				`
 			}
 
 			if (cancellation.isCancelled()) {
@@ -254,10 +281,14 @@ export async function handler(
 				continue
 			}
 
-			// If the job is linked to an existing exam paper, add all created questions
-			// to that paper's first section (creating the section if it doesn't exist yet).
+			// If the job is linked to an existing exam paper, create one ExamSection
+			// per LLM-reported section and link questions accordingly.
 			if (job.exam_paper_id) {
-				await linkJobQuestionsToExamPaper(jobId, job.exam_paper_id, uploadedBy)
+				await linkJobQuestionsToExamPaperSections(
+					job.exam_paper_id,
+					uploadedBy,
+					sectionInputs,
+				)
 
 				// Defensive tier backfill: the pre-ingestion metadata extraction is the
 				// primary source, but when it misses (older flow, MCP creation) the

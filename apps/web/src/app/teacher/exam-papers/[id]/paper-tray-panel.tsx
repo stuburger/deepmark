@@ -6,9 +6,9 @@ import type { StagedScript } from "@/lib/batch/types"
 import type { StagedScriptStatus } from "@mcp-gcse/db"
 import { AnimatePresence, motion } from "framer-motion"
 import { FileStack, X } from "lucide-react"
-import { useState } from "react"
+import { usePageCarousel } from "./hooks/use-page-carousel"
 import { ListViewLockedStack } from "./list-view-locked-stack"
-import { PageCarousel, type PageItem } from "./staged-script-page-editor"
+import { PageCarousel } from "./page-carousel"
 
 type PaperTrayPanelProps = {
 	urls: Record<string, string>
@@ -25,24 +25,16 @@ export function PaperTrayPanel({
 	onCommitAll,
 	onToggleExclude,
 }: PaperTrayPanelProps) {
-	const [carousel, setCarousel] = useState<{
-		pages: PageItem[]
-		index: number
-		scriptName: string
-	} | null>(null)
+	const {
+		carousel,
+		setCarousel,
+		openCarousel: openPageCarousel,
+	} = usePageCarousel(urls)
 
 	function openCarousel(script: StagedScript, startIndex: number) {
-		const sorted = script.page_keys.slice().sort((a, b) => a.order - b.order)
-		const pages: PageItem[] = sorted.map((pk) => ({
-			key: pk.s3_key,
-			url: urls[pk.s3_key] ?? "",
-			order: pk.order,
-			mimeType: pk.mime_type,
-			sourceFile: pk.source_file,
-		}))
 		const name =
 			script.confirmed_name ?? script.proposed_name ?? "Unnamed student"
-		setCarousel({ pages, index: startIndex, scriptName: name })
+		openPageCarousel(script, startIndex, name)
 	}
 
 	const count = confirmedScripts.length

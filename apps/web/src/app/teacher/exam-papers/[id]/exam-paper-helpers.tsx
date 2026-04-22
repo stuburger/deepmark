@@ -3,6 +3,7 @@
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
+import type { StagedScript } from "@/lib/batch/types"
 import { Trash2 } from "lucide-react"
 import { useState } from "react"
 import { useDeleteQuestion } from "./hooks/use-exam-paper-mutations"
@@ -49,6 +50,34 @@ export function originLabel(origin: string) {
 export function capitalize(s: string) {
 	return s.charAt(0).toUpperCase() + s.slice(1)
 }
+
+// ─── Script confidence display helpers ───────────────────────────────────────
+//
+// Shared by all components that render a StagedScript confidence badge.
+
+export function confidenceBadgeVariant(
+	confidence: StagedScript["confidence"],
+): "default" | "destructive" | "outline" | "secondary" {
+	if (confidence === null) return "secondary"
+	if (confidence >= 0.9) return "default"
+	if (confidence >= 0.7) return "outline"
+	return "destructive"
+}
+
+export function confidenceLabel(
+	confidence: StagedScript["confidence"],
+): string {
+	if (confidence === null) return "—"
+	return (Math.round(confidence * 10) / 10).toFixed(1)
+}
+
+// ─── Page thumbnail dimensions ───────────────────────────────────────────────
+//
+// A4 aspect ratio thumbnail used across the staging review UI.
+// Tailwind equivalent: w-[200px] h-[283px] (or w-50 / h-[283px]).
+
+export const PAGE_THUMB_W = 200
+export const PAGE_THUMB_H = 283
 
 export function TableRowDeleteButton({
 	questionId,

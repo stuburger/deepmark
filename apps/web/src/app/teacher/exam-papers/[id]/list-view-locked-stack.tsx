@@ -3,6 +3,7 @@
 import { Badge } from "@/components/ui/badge"
 import { motion } from "framer-motion"
 import { FileText, Undo2 } from "lucide-react"
+import { PAGE_THUMB_H, PAGE_THUMB_W } from "./exam-paper-helpers"
 
 type ListViewLockedStackProps = {
 	pageKeys: Array<{ s3_key: string; order: number }>
@@ -40,8 +41,8 @@ export function ListViewLockedStack({
 				onClick={onOpenCarousel}
 				className="relative block rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
 				style={{
-					width: 200 + (visible.length - 1) * 1.5 + 16,
-					height: 283 + (visible.length - 1) * 3 + 16,
+					width: PAGE_THUMB_W + (visible.length - 1) * 1.5 + 16,
+					height: PAGE_THUMB_H + (visible.length - 1) * 3 + 16,
 				}}
 			>
 				{visible.map((pk, index) => {
@@ -65,7 +66,7 @@ export function ListViewLockedStack({
 								damping: 25,
 								delay: index * 0.03,
 							}}
-							className="absolute top-2 left-2 w-[200px] h-[283px] rounded-md border bg-card overflow-hidden"
+							className="absolute top-2 left-2 w-50 h-70.75 rounded-md border bg-card overflow-hidden"
 							style={{
 								zIndex,
 								boxShadow: `0 ${1 + index}px ${2 + index * 2}px rgba(0,0,0,0.08)`,

@@ -7,6 +7,7 @@ import type { StagedScript } from "@/lib/batch/types"
 import { useDroppable } from "@dnd-kit/core"
 import { SortableContext, rectSortingStrategy } from "@dnd-kit/sortable"
 import { CheckCircle2, Trash2 } from "lucide-react"
+import { confidenceBadgeVariant, confidenceLabel } from "./exam-paper-helpers"
 import { ListViewPageItem } from "./list-view-page-item"
 
 type ListViewScriptSectionProps = {
@@ -19,18 +20,6 @@ type ListViewScriptSectionProps = {
 	onUpdateName: (name: string) => void
 	onDelete: () => void
 	onDeletePage: (pageKey: string) => void
-}
-
-function confidenceColor(confidence: number | null): string {
-	if (confidence === null) return "secondary"
-	if (confidence >= 0.9) return "default"
-	if (confidence >= 0.7) return "outline"
-	return "destructive"
-}
-
-function confidenceLabel(confidence: number | null): string {
-	if (confidence === null) return "—"
-	return (Math.round(confidence * 10) / 10).toFixed(1)
 }
 
 export function ListViewScriptSection({
@@ -59,20 +48,12 @@ export function ListViewScriptSection({
 						onChange={(e) => onUpdateLocalName(e.target.value)}
 						onBlur={() => onUpdateName(localName)}
 						placeholder="Student name"
-						className="h-8 text-sm font-medium max-w-[280px]"
+						className="h-8 text-sm font-medium max-w-70"
 					/>
 				</div>
 
 				<div className="flex items-center gap-2 shrink-0">
-					<Badge
-						variant={
-							confidenceColor(script.confidence) as
-								| "default"
-								| "destructive"
-								| "outline"
-								| "secondary"
-						}
-					>
+					<Badge variant={confidenceBadgeVariant(script.confidence)}>
 						{confidenceLabel(script.confidence)}
 					</Badge>
 
@@ -88,14 +69,15 @@ export function ListViewScriptSection({
 						Include
 					</Button>
 
-					<button
-						type="button"
+					<Button
+						size="sm"
+						variant="ghost"
+						className="h-7 px-2 text-xs gap-1 text-muted-foreground hover:text-destructive"
 						onClick={onDelete}
-						className="flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive transition-colors"
 					>
 						<Trash2 className="h-3 w-3" />
 						Delete
-					</button>
+					</Button>
 				</div>
 			</div>
 

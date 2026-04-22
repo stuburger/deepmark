@@ -10,7 +10,7 @@ import { FileText, Plus } from "lucide-react"
 import { useCallback, useRef, useState } from "react"
 import { useStagedScriptsState } from "./hooks/use-staged-scripts-state"
 import { ListViewScriptSection } from "./list-view-script-section"
-import { PageCarousel } from "./staged-script-page-editor"
+import { PageCarousel } from "./page-carousel"
 
 type StagedScriptListProps = {
 	paperId: string
@@ -313,7 +313,7 @@ export function StagedScriptReviewList({
 
 				<DragOverlay dropAnimation={null}>
 					{activeDrag?.url ? (
-						<div className="w-[200px] h-[283px] rounded-md border-2 border-primary shadow-xl overflow-hidden rotate-1 opacity-90">
+						<div className="w-50 h-70.75 rounded-md border-2 border-primary shadow-xl overflow-hidden rotate-1 opacity-90">
 							{/* eslint-disable-next-line @next/next/no-img-element */}
 							<img
 								src={activeDrag.url}
@@ -323,7 +323,7 @@ export function StagedScriptReviewList({
 							/>
 						</div>
 					) : activeDrag ? (
-						<div className="w-[200px] h-[283px] rounded-md border-2 border-primary shadow-xl flex items-center justify-center bg-card rotate-1">
+						<div className="w-50 h-70.75 rounded-md border-2 border-primary shadow-xl flex items-center justify-center bg-card rotate-1">
 							<FileText className="h-8 w-8 text-muted-foreground/30" />
 						</div>
 					) : null}

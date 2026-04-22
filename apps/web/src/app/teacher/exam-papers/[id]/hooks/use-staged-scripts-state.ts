@@ -10,20 +10,14 @@ import { PointerSensor, useSensor, useSensors } from "@dnd-kit/core"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
-import type { PageItem } from "../staged-script-page-editor"
-
-type CarouselState = {
-	pages: PageItem[]
-	index: number
-	scriptName: string
-}
+import { usePageCarousel } from "./use-page-carousel"
 
 type ActiveDragState = {
 	key: string
 	url: string
 }
 
-export type { CarouselState, ActiveDragState }
+export type { ActiveDragState }
 
 export function useStagedScriptsState(
 	paperId: string,
@@ -40,12 +34,17 @@ export function useStagedScriptsState(
 		),
 	)
 	const [activeDrag, setActiveDrag] = useState<ActiveDragState | null>(null)
-	const [carousel, setCarousel] = useState<CarouselState | null>(null)
 	const isDraggingRef = useRef(false)
 
 	const sensors = useSensors(
 		useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
 	)
+
+	const {
+		carousel,
+		setCarousel,
+		openCarousel: openPageCarousel,
+	} = usePageCarousel(urls)
 
 	// Sync local scripts from server data without disrupting local ordering.
 	// Instead of wholesale-replacing local state (which resets to server's
@@ -71,16 +70,8 @@ export function useStagedScriptsState(
 	}, [scripts])
 
 	function openCarousel(script: StagedScript, startIndex: number) {
-		const pageKeys = script.page_keys.slice().sort((a, b) => a.order - b.order)
-		const pages: PageItem[] = pageKeys.map((pk) => ({
-			key: pk.s3_key,
-			url: urls[pk.s3_key] ?? "",
-			order: pk.order,
-			mimeType: pk.mime_type,
-			sourceFile: pk.source_file,
-		}))
 		const name = localNames[script.id] ?? script.proposed_name ?? ""
-		setCarousel({ pages, index: startIndex, scriptName: name })
+		openPageCarousel(script, startIndex, name)
 	}
 
 	// ── Page-key persistence ─────────────────────────────────────────────────

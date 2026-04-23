@@ -16,6 +16,16 @@ export interface GcseMarkPoint {
 	isRequired: boolean
 }
 
+/**
+ * A stimulus (case study / source / item / figure / table) the question
+ * references. Rendered into the grading prompt so the marker judges the
+ * answer *against the stimulus context*, not in isolation.
+ */
+export interface QuestionStimulusContext {
+	label: string
+	content: string
+}
+
 /** A question with its mark scheme, adapted for GCSE (written | multiple_choice). */
 export interface QuestionWithMarkScheme {
 	id: string
@@ -32,6 +42,12 @@ export interface QuestionWithMarkScheme {
 	/** Rich markdown content — indicative content, exemplar answers, marker notes, level descriptors.
 	 *  Primary source of question-specific marking guidance for LoR. */
 	content?: string | null
+	/**
+	 * Stimuli the question references ("Item A", "Source B", …), in the order
+	 * they should be presented. Empty/omitted for questions with no attached
+	 * case study.
+	 */
+	stimuli?: QuestionStimulusContext[]
 }
 
 /** Response parsed from student submission. */

@@ -102,6 +102,14 @@ const submissionDetailInclude = {
 										select: { correct_option_labels: true },
 										take: 1,
 									},
+									question_stimuli: {
+										orderBy: { order: "asc" as const },
+										select: {
+											stimulus: {
+												select: { label: true, content: true },
+											},
+										},
+									},
 								},
 							},
 						},
@@ -181,6 +189,9 @@ function toJobPayload(sub: {
 					points: number | null
 					multiple_choice_options: unknown
 					mark_schemes: Array<{ correct_option_labels: string[] }>
+					question_stimuli: Array<{
+						stimulus: { label: string; content: string }
+					}>
 				}
 			}>
 		}>
@@ -221,11 +232,16 @@ function toJobPayload(sub: {
 	const rawResults = (latestGrading?.grading_results ?? []) as GradingResult[]
 	const withRegions = mergeRegionsIntoResults(rawResults, sub.answer_regions)
 
-	// Enrich MCQ results with options and correct labels from the exam paper
+	// Enrich MCQ results with options and correct labels from the exam paper,
+	// and all results with their linked stimuli.
 	type McqOption = { option_label: string; option_text: string }
 	const mcqLookup = new Map<
 		string,
 		{ options: McqOption[]; correctLabels: string[] }
+	>()
+	const stimuliLookup = new Map<
+		string,
+		Array<{ label: string; content: string }>
 	>()
 	for (const section of sub.exam_paper?.sections ?? []) {
 		for (const esq of section.exam_section_questions) {
@@ -239,16 +255,27 @@ function toJobPayload(sub: {
 					correctLabels: q.mark_schemes[0]?.correct_option_labels ?? [],
 				})
 			}
+			if (q.question_stimuli.length > 0) {
+				stimuliLookup.set(
+					q.id,
+					q.question_stimuli.map((qs) => ({
+						label: qs.stimulus.label,
+						content: qs.stimulus.content,
+					})),
+				)
+			}
 		}
 	}
 	const gradingResults = withRegions.map((r) => {
 		const mcq = mcqLookup.get(r.question_id)
-		if (!mcq) return r
-		return {
-			...r,
-			multiple_choice_options: mcq.options,
-			correct_option_labels: mcq.correctLabels,
+		const stimuli = stimuliLookup.get(r.question_id)
+		const next = { ...r }
+		if (mcq) {
+			next.multiple_choice_options = mcq.options
+			next.correct_option_labels = mcq.correctLabels
 		}
+		if (stimuli) next.stimuli = stimuli
+		return next
 	})
 	const totalAwarded = gradingResults.reduce((s, r) => s + r.awarded_score, 0)
 	const totalMax = sumPaperPoints(sub.exam_paper?.sections ?? [])

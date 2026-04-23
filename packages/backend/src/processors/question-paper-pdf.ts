@@ -170,11 +170,13 @@ export async function handler(
 					title: string
 					description?: string | null
 					total_marks: number
+					stimuli?: Array<{ label: string; content: string }>
 					questions: Array<{
 						question_text: string
 						question_type?: string
 						total_marks: number
 						question_number?: string
+						stimulus_labels?: string[]
 						options?: Array<{ option_label: string; option_text: string }>
 					}>
 				}>
@@ -213,7 +215,10 @@ export async function handler(
 			let questionIndex = 0
 			for (const section of sections) {
 				if (cancellation.isCancelled()) break
-				const questionIds: string[] = []
+				const questionsForLink: Array<{
+					question_id: string
+					stimulus_labels?: string[]
+				}> = []
 
 				for (const q of section.questions) {
 					if (cancellation.isCancelled()) {
@@ -237,6 +242,7 @@ export async function handler(
 						question_number: canonicalNumber,
 						marks: q.total_marks,
 						type: q.question_type ?? "written",
+						stimulus_labels: q.stimulus_labels ?? [],
 					})
 					const embeddingVec = await embedQuestionText(questionText)
 					const vecStr = embeddingToVectorStr(embeddingVec)
@@ -265,14 +271,18 @@ export async function handler(
 					await db.$executeRaw`
 						UPDATE questions SET embedding = (${vecStr}::text)::vector WHERE id = ${newQuestion.id}
 					`
-					questionIds.push(newQuestion.id)
+					questionsForLink.push({
+						question_id: newQuestion.id,
+						stimulus_labels: q.stimulus_labels,
+					})
 				}
 
 				sectionInputs.push({
 					title: section.title,
 					description: section.description ?? null,
 					total_marks: section.total_marks,
-					question_ids: questionIds,
+					stimuli: section.stimuli,
+					questions: questionsForLink,
 				})
 			}
 

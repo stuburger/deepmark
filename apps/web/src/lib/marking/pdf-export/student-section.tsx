@@ -96,6 +96,14 @@ function WrittenQuestionCard({
 					{levelTag}
 				</Text>
 			</View>
+			{result.stimuli && result.stimuli.length > 0
+				? result.stimuli.map((s) => (
+						<View key={s.label} style={styles.stimulusBox}>
+							<Text style={styles.stimulusLabel}>{s.label}</Text>
+							<Text style={styles.stimulusContent}>{s.content}</Text>
+						</View>
+					))
+				: null}
 			<Text style={styles.questionText}>{result.question_text}</Text>
 
 			{marks.length > 0 ? (

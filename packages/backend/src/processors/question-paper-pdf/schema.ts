@@ -1,10 +1,21 @@
 import { z } from "zod/v4"
 
 const QuestionSchema = z.object({
-	question_text: z.string(),
+	question_text: z
+		.string()
+		.describe(
+			"The question itself — the instruction/prompt the student must answer. MUST NOT include any case study / Item / Source / Figure text. Put that in stimuli instead.",
+		),
 	question_type: z.string().optional().describe("written | multiple_choice"),
 	total_marks: z.number().int(),
 	question_number: z.string().optional(),
+	stimulus_labels: z
+		.array(z.string())
+		.optional()
+		.default([])
+		.describe(
+			"Labels of stimuli (defined in the enclosing section.stimuli) that this question references. E.g. ['Item A'] for a question that says 'Read Item A and answer…'. Empty array if the question is standalone.",
+		),
 	options: z
 		.array(
 			z.object({
@@ -16,6 +27,19 @@ const QuestionSchema = z.object({
 		.optional()
 		.describe(
 			"For multiple choice questions: the answer options. Only include when question_type is multiple_choice.",
+		),
+})
+
+const StimulusSchema = z.object({
+	label: z
+		.string()
+		.describe(
+			"Stimulus label as printed on the paper — 'Item A', 'Source B', 'Figure 1', 'Table 2', 'Extract 1', etc.",
+		),
+	content: z
+		.string()
+		.describe(
+			"The full text of the case study / source / extract. Preserve paragraphs. Plain text or simple markdown.",
 		),
 })
 
@@ -40,6 +64,13 @@ export const QuestionPaperSchema = z.object({
 					.int()
 					.describe(
 						"Section total as printed on the paper (e.g. 'Mark for Section A / 25' or 'Total for Section A: 25 marks'). If no section total is printed, use the sum of this section's question marks.",
+					),
+				stimuli: z
+					.array(StimulusSchema)
+					.optional()
+					.default([])
+					.describe(
+						"Case studies / sources / figures introduced in this section. Each stimulus is emitted ONCE here and referenced from questions via stimulus_labels. Empty array if the section has no stimuli.",
 					),
 				questions: z
 					.array(QuestionSchema)

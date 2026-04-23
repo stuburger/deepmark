@@ -27,12 +27,14 @@ export async function runAndPersistAdversarialTests(args: {
 	aoDescription: string
 	guidance: string | null | undefined
 	grader: Grader
+	stimuli?: Array<{ label: string; content: string }>
 }): Promise<void> {
 	const questionWithScheme = buildQuestionWithMarkScheme({
 		questionId: args.questionId,
 		questionText: args.questionText,
 		topic: args.topic,
 		questionType: args.questionType,
+		stimuli: args.stimuli,
 		markScheme: {
 			description: args.aoDescription,
 			guidance: args.guidance,

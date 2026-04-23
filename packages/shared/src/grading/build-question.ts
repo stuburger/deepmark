@@ -20,6 +20,8 @@ export interface BuildQuestionInput {
 		correctOptionLabels?: string[]
 		content?: string | null
 	}
+	/** Stimuli in display order. Omit when the question has no attached content. */
+	stimuli?: Array<{ label: string; content: string }>
 }
 
 /**
@@ -80,5 +82,7 @@ export function buildQuestionWithMarkScheme(
 		availableOptions: parseMultipleChoiceOptions(input.multipleChoiceOptions),
 		markingMethod: normalizeMarkingMethod(markScheme.markingMethod),
 		content: markScheme.content ?? null,
+		stimuli:
+			input.stimuli && input.stimuli.length > 0 ? input.stimuli : undefined,
 	}
 }

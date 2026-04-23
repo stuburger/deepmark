@@ -138,6 +138,26 @@ export const styles = StyleSheet.create({
 		color: colors.muted,
 		marginBottom: 6,
 	},
+	// Stimulus / case-study block rendered above the question text
+	stimulusBox: {
+		backgroundColor: "#FFFBEB", // amber-50
+		borderLeftWidth: 2,
+		borderLeftColor: "#F59E0B", // amber-500
+		paddingVertical: 5,
+		paddingHorizontal: 8,
+		marginBottom: 6,
+	},
+	stimulusLabel: {
+		fontSize: 8,
+		fontFamily: "Helvetica-Bold",
+		color: "#92400E", // amber-900
+		marginBottom: 2,
+	},
+	stimulusContent: {
+		fontSize: 8,
+		color: "#78350F", // amber-950-ish
+		lineHeight: 1.3,
+	},
 	answerBox: {
 		backgroundColor: colors.answerBg,
 		borderWidth: 0.5,

@@ -50,6 +50,10 @@ export const handler = tool(EvaluateAnswerSchema, async (args, extra) => {
 			points: true,
 			question_type: true,
 			multiple_choice_options: true,
+			question_stimuli: {
+				orderBy: { order: "asc" },
+				select: { stimulus: { select: { label: true, content: true } } },
+			},
 		},
 	})
 
@@ -86,6 +90,10 @@ export const handler = tool(EvaluateAnswerSchema, async (args, extra) => {
 		topic: question.topic,
 		questionType: question.question_type,
 		multipleChoiceOptions: question.multiple_choice_options,
+		stimuli: question.question_stimuli.map((qs) => ({
+			label: qs.stimulus.label,
+			content: qs.stimulus.content,
+		})),
 		markScheme: {
 			description: markScheme.description,
 			guidance: markScheme.guidance,

@@ -3,6 +3,7 @@ import type {
 	ParsedResponse,
 	QuestionWithMarkScheme,
 } from "../types"
+import { renderStimuliBlock } from "./stimuli"
 
 /**
  * Builds the prompt for batch-grading multiple questions at once.
@@ -30,13 +31,14 @@ export function buildBatchPrompt(
 						`   [pointNumber: ${mp.pointNumber}] ${mp.criteria} (${mp.points} mark${mp.points > 1 ? "s" : ""}${mp.isRequired ? ", REQUIRED" : ""})`,
 				)
 				.join("\n\n")
+			const stimulusSection = renderStimuliBlock(q.stimuli)
 			return `### Question ${index + 1} [ID: ${q.id}]
 Type: ${q.questionType}
 Total Points: ${q.totalPoints}
 
 **Topic:** ${q.topic}
 
-**Question:**\n${q.questionText}
+${stimulusSection}**Question:**\n${q.questionText}
 
 **Mark Scheme:**\n${q.rubric}\n${q.guidance ? `\nGuidance: ${q.guidance}` : ""}
 

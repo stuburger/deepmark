@@ -70,8 +70,16 @@ export async function linkJobQuestionsToExamPaper(
 export type LinkSectionInput = {
 	title: string
 	description?: string | null
-	/** Question IDs in the order they appear within this section. */
-	question_ids: string[]
+	/** Stimuli introduced in this section, keyed by label (paper-scoped). */
+	stimuli?: Array<{
+		label: string
+		content: string
+	}>
+	/** Questions in paper order, each with the labels of stimuli it references. */
+	questions: Array<{
+		question_id: string
+		stimulus_labels?: string[]
+	}>
 	/**
 	 * Optional per-section total. When omitted, the sum of the linked questions'
 	 * `points` is used. Provided for callers that want the paper's printed total
@@ -96,7 +104,9 @@ export async function linkJobQuestionsToExamPaperSections(
 ): Promise<void> {
 	if (sections.length === 0) return
 
-	const allQuestionIds = sections.flatMap((s) => s.question_ids)
+	const allQuestionIds = sections.flatMap((s) =>
+		s.questions.map((q) => q.question_id),
+	)
 	if (allQuestionIds.length === 0) return
 
 	const questionPoints = new Map<string, number>(
@@ -107,6 +117,39 @@ export async function linkJobQuestionsToExamPaperSections(
 			})
 		).map((q) => [q.id, q.points ?? 0]),
 	)
+
+	// ── Stimuli: create/reuse paper-scoped Stimulus rows (unique by label) ──
+
+	const stimulusIdByLabel = new Map<string, string>()
+	const existingStimuli = await db.stimulus.findMany({
+		where: { exam_paper_id: examPaperId },
+		select: { id: true, label: true, order: true },
+	})
+	for (const s of existingStimuli) stimulusIdByLabel.set(s.label, s.id)
+	let maxStimulusOrder = existingStimuli.reduce(
+		(m, s) => Math.max(m, s.order),
+		0,
+	)
+
+	for (const section of sections) {
+		for (const stim of section.stimuli ?? []) {
+			if (stimulusIdByLabel.has(stim.label)) continue
+			maxStimulusOrder++
+			const created = await db.stimulus.create({
+				data: {
+					exam_paper_id: examPaperId,
+					label: stim.label,
+					content: stim.content,
+					content_type: "text",
+					order: maxStimulusOrder,
+					created_by_id: uploadedBy,
+				},
+			})
+			stimulusIdByLabel.set(created.label, created.id)
+		}
+	}
+
+	// ── Sections + question links + question/stimulus junctions ──
 
 	const existingSections = await db.examSection.findMany({
 		where: { exam_paper_id: examPaperId },
@@ -119,8 +162,8 @@ export async function linkJobQuestionsToExamPaperSections(
 	)
 
 	for (const input of sections) {
-		const sumPoints = input.question_ids.reduce(
-			(acc, id) => acc + (questionPoints.get(id) ?? 0),
+		const sumPoints = input.questions.reduce(
+			(acc, q) => acc + (questionPoints.get(q.question_id) ?? 0),
 			0,
 		)
 		const sectionTotal = input.total_marks ?? sumPoints
@@ -148,16 +191,41 @@ export async function linkJobQuestionsToExamPaperSections(
 		const existingQuestionIds = new Set(existingLinks.map((l) => l.question_id))
 		let orderOffset = existingLinks.reduce((m, l) => Math.max(m, l.order), 0)
 
-		for (const questionId of input.question_ids) {
-			if (existingQuestionIds.has(questionId)) continue
-			orderOffset++
-			await db.examSectionQuestion.create({
-				data: {
-					exam_section_id: section.id,
-					question_id: questionId,
-					order: orderOffset,
-				},
+		for (const q of input.questions) {
+			if (!existingQuestionIds.has(q.question_id)) {
+				orderOffset++
+				await db.examSectionQuestion.create({
+					data: {
+						exam_section_id: section.id,
+						question_id: q.question_id,
+						order: orderOffset,
+					},
+				})
+			}
+
+			// Link question → stimuli. Skip labels we couldn't resolve (LLM
+			// referenced a stimulus it didn't emit — rare, we log upstream).
+			const labels = q.stimulus_labels ?? []
+			if (labels.length === 0) continue
+			const existingQs = await db.questionStimulus.findMany({
+				where: { question_id: q.question_id },
+				select: { stimulus_id: true },
 			})
+			const linked = new Set(existingQs.map((qs) => qs.stimulus_id))
+			let stimOrder = 0
+			for (const label of labels) {
+				stimOrder++
+				const stimId = stimulusIdByLabel.get(label)
+				if (!stimId) continue
+				if (linked.has(stimId)) continue
+				await db.questionStimulus.create({
+					data: {
+						question_id: q.question_id,
+						stimulus_id: stimId,
+						order: stimOrder,
+					},
+				})
+			}
 		}
 	}
 }

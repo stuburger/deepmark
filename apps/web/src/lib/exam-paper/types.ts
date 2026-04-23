@@ -20,6 +20,13 @@ export type ExamPaperListItem = {
 
 // ── Detail view ─────────────────────────────────────────────────────────────
 
+export type ExamPaperQuestionStimulus = {
+	id: string
+	label: string
+	content: string
+	content_type: "text" | "image" | "table"
+}
+
 export type ExamPaperQuestion = {
 	id: string
 	text: string
@@ -35,6 +42,8 @@ export type ExamPaperQuestion = {
 	order: number
 	question_number: string | null
 	multiple_choice_options: { option_label: string; option_text: string }[]
+	/** Stimuli referenced by this question, in display order. Empty when the question is standalone. */
+	stimuli: ExamPaperQuestionStimulus[]
 }
 
 export type ExamPaperSection = {

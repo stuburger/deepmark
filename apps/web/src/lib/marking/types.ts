@@ -130,6 +130,11 @@ export type McqOption = {
 	option_text: string
 }
 
+export type ResultStimulus = {
+	label: string
+	content: string
+}
+
 export type GradingResult = {
 	question_id: string
 	question_text: string
@@ -151,6 +156,8 @@ export type GradingResult = {
 	correct_option_labels?: string[]
 	/** Per-mark-point results from point_based grading. */
 	mark_points_results?: MarkPointResult[]
+	/** Stimuli the question references (case studies, sources). Empty for standalone questions. */
+	stimuli?: ResultStimulus[]
 }
 
 export type TriggerGradingResult = { ok: true } | { ok: false; error: string }

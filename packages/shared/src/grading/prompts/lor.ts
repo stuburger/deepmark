@@ -1,4 +1,5 @@
 import type { LearningContentItem, QuestionWithMarkScheme } from "../types"
+import { renderStimuliBlock } from "./stimuli"
 
 /**
  * Builds the prompt for grading a single Level-of-Response question.
@@ -28,9 +29,11 @@ export function buildLoRPrompt(
 			? `\n<ParsingInstructions>This is question ${questionNumber} of ${totalQuestions}. Extract the answer for THIS question from the student's response before marking.</ParsingInstructions>\n`
 			: ""
 
+	const stimulusSection = renderStimuliBlock(question.stimuli)
+
 	return `Mark this answer using Level of Response marking. First decide which level the response reaches, then award a mark within that level's range. Quote short snippets from the student's text as evidence; do not infer application not present in the text.
 
-${learningSection}<Topic>\n${question.topic}\n</Topic>
+${learningSection}${stimulusSection}<Topic>\n${question.topic}\n</Topic>
 
 <Question>\nQuestion ID: ${question.id}\n\n${question.questionText}\n</Question>
 

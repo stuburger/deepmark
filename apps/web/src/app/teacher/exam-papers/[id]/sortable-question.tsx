@@ -24,6 +24,7 @@ import {
 import { useState } from "react"
 import { toast } from "sonner"
 import { useDeleteQuestion } from "./hooks/use-exam-paper-mutations"
+import { QuestionStimuli } from "./question-stimuli"
 import { EvalDialog } from "./questions/[question_id]/eval-dialog"
 import { MarkSchemeDialog } from "./questions/[question_id]/mark-scheme-dialog"
 import { QuestionEditDialog } from "./questions/[question_id]/question-edit-dialog"
@@ -138,6 +139,7 @@ export function SortableQuestion({
 
 				{/* Question body */}
 				<div className="flex-1 min-w-0">
+					<QuestionStimuli stimuli={question.stimuli} />
 					<div className="flex items-start justify-between gap-4">
 						<p className="text-sm leading-relaxed">{question.text}</p>
 						<div className="flex items-center gap-1.5 shrink-0">

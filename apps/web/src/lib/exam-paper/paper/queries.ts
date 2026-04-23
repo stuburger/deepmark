@@ -93,6 +93,19 @@ export async function getExamPaperDetail(
 											},
 											take: 1,
 										},
+										question_stimuli: {
+											orderBy: { order: "asc" },
+											select: {
+												stimulus: {
+													select: {
+														id: true,
+														label: true,
+														content: true,
+														content_type: true,
+													},
+												},
+											},
+										},
 									},
 								},
 							},
@@ -145,6 +158,12 @@ export async function getExamPaperDetail(
 							mark_scheme_correct_option_labels:
 								ms?.correct_option_labels ?? [],
 							mark_scheme_points_total: ms?.points_total ?? null,
+							stimuli: esq.question.question_stimuli.map((qs) => ({
+								id: qs.stimulus.id,
+								label: qs.stimulus.label,
+								content: qs.stimulus.content,
+								content_type: qs.stimulus.content_type,
+							})),
 							order: esq.order,
 						}
 					}),

@@ -1,4 +1,5 @@
 import type { LearningContentItem, QuestionWithMarkScheme } from "../types"
+import { renderStimuliBlock } from "./stimuli"
 
 /**
  * Builds the prompt for grading a single point-based question.
@@ -30,9 +31,11 @@ export function buildPointBasedPrompt(
 			? `\n<ParsingInstructions>This is question ${questionNumber} of ${totalQuestions}. Extract the answer for THIS question from the student's response before marking.</ParsingInstructions>\n`
 			: ""
 
+	const stimulusSection = renderStimuliBlock(question.stimuli)
+
 	return `Mark the answer against the provided mark scheme.
 
-${learningSection}<Topic>\n${question.topic}\n</Topic>
+${learningSection}${stimulusSection}<Topic>\n${question.topic}\n</Topic>
 
 <Question>\nQuestion ID: ${question.id}\nType: ${question.questionType}\n\n${question.questionText}\n</Question>
 

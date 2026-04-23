@@ -26,6 +26,12 @@ async function loadAnswer(answer_id: string) {
 					topic: true,
 					question_type: true,
 					multiple_choice_options: true,
+					question_stimuli: {
+						orderBy: { order: "asc" },
+						select: {
+							stimulus: { select: { label: true, content: true } },
+						},
+					},
 				},
 			},
 		},
@@ -68,6 +74,10 @@ export async function markAnswerById(answer_id: string): Promise<{
 		topic: q.topic,
 		questionType: q.question_type,
 		multipleChoiceOptions: q.multiple_choice_options,
+		stimuli: q.question_stimuli.map((qs) => ({
+			label: qs.stimulus.label,
+			content: qs.stimulus.content,
+		})),
 		markScheme: {
 			description: markScheme.description,
 			guidance: markScheme.guidance,

@@ -9,9 +9,18 @@ Papers are almost always divided into sections. Look for:
 
 Return a \`sections\` array in the order sections appear on the paper. Each section contains:
 - title: the section header as printed (e.g. "Section A"). If the paper has no section dividers at all, return a single section titled "Section 1".
-- description: optional section-level instructions printed under the header. Do NOT include per-question stimulus (like "Read Item A") — that belongs to the question itself.
+- description: optional section-level instructions printed under the header (NOT the per-question instruction like "Read Item A" — that goes in stimulus_labels).
 - total_marks: the section total as printed on the paper (e.g. "Mark for Section A / 25" on a cover page, or "Total for Section A: 25 marks" at the end of a block). If no per-section total is printed, use the sum of the section's question marks.
+- stimuli: case studies / sources / figures introduced in this section (see STIMULUS EXTRACTION below).
 - questions: the questions within that section, in paper order.
+
+STIMULUS EXTRACTION (required when a question references a case study):
+Many questions reference a "case study" block — labelled variously as "Item A", "Source B", "Extract 1", "Figure 1", "Table 2". You MUST:
+1. Extract the case study text ONCE into the enclosing section's \`stimuli\` array, with its printed label (e.g. "Item A") and its full content (preserve paragraphs).
+2. Reference it from each question that uses it via \`stimulus_labels: ["Item A"]\`. A question can reference multiple stimuli (e.g. "Using Source A and Source B…" → \`stimulus_labels: ["Source A", "Source B"]\`).
+3. Keep \`question_text\` clean — it must contain ONLY the question itself (the instruction/prompt), NOT the case study text. If the original prints "Read Item A and answer Q1. [case study] Analyse two reasons…", the question_text is just "Analyse two reasons…" and \`stimulus_labels: ["Item A"]\` carries the reference.
+4. If the same case study is referenced by multiple questions in the section, emit it ONCE in \`stimuli\` and reference it from each.
+5. If a question is standalone (no case study reference), omit \`stimulus_labels\` or return an empty array.
 
 IMPORTANT — Multiple Choice Questions (MCQ):
 Extract EACH numbered MCQ as a SEPARATE question entry — do NOT create a single entry for a whole section. For each MCQ:

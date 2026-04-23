@@ -158,6 +158,12 @@ enum ClassificationMode {
   blank_separator
 }
 
+enum StimulusContentType {
+  text
+  image
+  table
+}
+
 model User {
   id         String   @id @default(cuid())
   email      String?  @unique
@@ -173,6 +179,7 @@ model User {
   created_exam_papers    ExamPaper[]
   created_mark_schemes   MarkScheme[]
   created_exam_sections  ExamSection[]
+  created_stimuli        Stimulus[]
   created_question_banks QuestionBank[]
 
   students             Student[]              @relation("TeacherStudents")
@@ -217,6 +224,7 @@ model Question {
   mark_schemes             MarkScheme[]
   answers                  Answer[]
   exam_section_questions   ExamSectionQuestion[]
+  question_stimuli         QuestionStimulus[]
   question_bank_items      QuestionBankItem[]
   source_pdf_ingestion_job PdfIngestionJob?      @relation("QuestionSource", fields: [source_pdf_ingestion_job_id], references: [id])
   exemplar_answers         ExemplarAnswer[]
@@ -343,6 +351,7 @@ model ExamPaper {
 
   created_by           User                @relation(fields: [created_by_id], references: [id])
   sections             ExamSection[]
+  stimuli              Stimulus[]
   pdf_ingestion_jobs   PdfIngestionJob[]
   student_submissions  StudentSubmission[] @relation("SubmissionExamPaper")
   batch_ingest_jobs    BatchIngestJob[]
@@ -382,6 +391,50 @@ model ExamSectionQuestion {
   @@unique([exam_section_id, question_id])
   @@unique([exam_section_id, order])
   @@map("exam_section_questions")
+}
+
+/// Stimulus = a case study / source / item / figure / table referenced by one
+/// or more questions. Scoped to an exam paper; referenced via QuestionStimulus.
+/// Extraction populates `label` with the paper's printed name ("Item A",
+/// "Source B", "Figure 1"); `content` currently holds plain-text/markdown
+/// extract. `content_type` is future-proofing for images/tables.
+model Stimulus {
+  id            String              @id @default(cuid())
+  exam_paper_id String
+  /// As printed on the paper — "Item A", "Source B", "Figure 1", "Table 2".
+  label         String
+  /// Full text/markdown of the case study. For image stimuli this is an S3 key;
+  /// for table stimuli this is markdown-formatted.
+  content       String
+  content_type  StimulusContentType @default(text)
+  /// Display order within the paper (Item A before Item B).
+  order         Int
+  created_by_id String
+  created_at    DateTime            @default(now())
+  updated_at    DateTime            @updatedAt
+
+  created_by       User               @relation(fields: [created_by_id], references: [id])
+  exam_paper       ExamPaper          @relation(fields: [exam_paper_id], references: [id])
+  question_stimuli QuestionStimulus[]
+
+  @@unique([exam_paper_id, label])
+  @@map("stimuli")
+}
+
+/// Many-to-many join between Question and Stimulus. `order` disambiguates when
+/// a single question references multiple stimuli (e.g. "Using Source A and
+/// Source B…" — Source A is order=1, Source B order=2).
+model QuestionStimulus {
+  id          String @id @default(cuid())
+  question_id String
+  stimulus_id String
+  order       Int
+
+  question Question @relation(fields: [question_id], references: [id])
+  stimulus Stimulus @relation(fields: [stimulus_id], references: [id])
+
+  @@unique([question_id, stimulus_id])
+  @@map("question_stimuli")
 }
 
 model QuestionBank {

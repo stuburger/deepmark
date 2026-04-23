@@ -54,4 +54,56 @@ export const GCSE_BUSINESS_YR9_GWA_2_FIXTURE: QuestionPaperSectionsFixture = {
 			question_numbers: ["1", "02."],
 		},
 	],
+	stimulusExpectations: [
+		{
+			// MCQs must never attract stimuli.
+			questionNumber: "01.1",
+			labels: [],
+		},
+		{
+			questionNumber: "01.2",
+			labels: [],
+		},
+		{
+			questionNumber: "01.3",
+			labels: [],
+		},
+		{
+			// Section A standalone written question — no stimulus.
+			questionNumber: "2",
+			labels: [],
+		},
+		{
+			// Section B Q1 references Item A (Tesco case study).
+			// Paper prints "Q1." — LLM preserves that form per prompt instruction.
+			questionNumber: "Q1.",
+			labels: ["Item A"],
+			// Distinctive phrases from Item A's case study text.
+			contentMustContain: ["Tesco", "private sector employer", "Tesco Express"],
+			questionTextMustContain: ["Analyse", "Tesco"], // the *question* refers to Tesco by name
+			questionTextMustNotContain: [
+				"Item A",
+				"private sector employer",
+				"Tesco Extras",
+				"80%",
+			], // case-study prose must NOT leak into the question body
+		},
+		{
+			// Section B Q02 references Item B (Quality Wallpaper Ltd case study).
+			questionNumber: "02.",
+			labels: ["Item B"],
+			contentMustContain: [
+				"Quality Wallpaper",
+				"Jim Walls",
+				"franchis", // covers "franchising" / "franchisor" / "franchisees"
+			],
+			questionTextMustContain: ["Analyse", "franchis"],
+			questionTextMustNotContain: [
+				"Jim Walls",
+				"Quality Wallpaper Ltd ten years ago",
+				"redundancy money",
+				"rising employment levels",
+			],
+		},
+	],
 }

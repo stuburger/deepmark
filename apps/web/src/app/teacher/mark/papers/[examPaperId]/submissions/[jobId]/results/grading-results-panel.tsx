@@ -18,7 +18,6 @@ import type {
 	UpsertTeacherOverrideInput,
 } from "@/lib/marking/types"
 import { useMemo } from "react"
-import { StimuliBanner } from "./stimuli-banner"
 
 function scoreBadgeVariant(
 	awarded: number,
@@ -154,8 +153,6 @@ export function GradingResultsPanel({
 					{data.examiner_summary}
 				</p>
 			)}
-
-			<StimuliBanner gradingResults={data.grading_results} />
 
 			{/* Answer sheet — always rendered, even for empty grading_results.
 			    buildAnnotatedDoc produces a placeholder block in that case so

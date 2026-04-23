@@ -1,6 +1,7 @@
 "use client"
 
 import { McqOptions } from "@/components/mcq-options"
+import { StimulusDisclosure } from "@/components/stimulus-disclosure"
 import { Progress } from "@/components/ui/progress"
 import type { McqOption } from "@/lib/marking/types"
 import { cn } from "@/lib/utils"
@@ -23,7 +24,10 @@ export function McqAnswerView({
 	const studentAnswer = node.attrs.studentAnswer as string | null
 	const awardedScore = node.attrs.awardedScore as number
 
-	const { overridesByQuestionId, activeQuestionNumber } = useGradingData()
+	const { overridesByQuestionId, activeQuestionNumber, gradingResults } =
+		useGradingData()
+	const result = qId ? gradingResults.get(qId) : undefined
+	const stimuli = result?.stimuli ?? []
 	const override = qId ? overridesByQuestionId.get(qId) : undefined
 	const effectiveScore = override?.score_override ?? awardedScore
 	const pct =
@@ -61,6 +65,11 @@ export function McqAnswerView({
 								<p className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 leading-snug">
 									{qText}
 								</p>
+							)}
+							{stimuli.length > 0 && (
+								<div className="pt-1">
+									<StimulusDisclosure stimuli={stimuli} size="xs" />
+								</div>
 							)}
 						</div>
 						<span

@@ -397,8 +397,13 @@ model ExamSectionQuestion {
 /// Stimulus = a case study / source / item / figure / table referenced by one
 /// or more questions. Scoped to an exam paper; referenced via QuestionStimulus.
 /// Extraction populates `label` with the paper's printed name ("Item A",
-/// "Source B", "Figure 1"); `content` currently holds plain-text/markdown
-/// extract. `content_type` is future-proofing for images/tables.
+/// "Source B", "Figure 1").
+///
+/// NOTE (April 2026): The end-to-end pipeline — extractor, grader, UI, PDF —
+/// currently assumes `content_type = text` and stores the extract inline in
+/// `content`. The `image` / `table` enum values are reserved so we don't have
+/// to migrate the schema when we add them; the plan is for `content` to hold
+/// an S3 key (image) or markdown-table string (table) at that point.
 model Stimulus {
   id            String              @id @default(cuid())
   exam_paper_id String

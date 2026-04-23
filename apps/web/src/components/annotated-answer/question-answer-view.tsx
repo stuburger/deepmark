@@ -2,6 +2,7 @@
 
 import { FeedbackOverrideEditor } from "@/components/feedback-override-editor"
 import { ScoreOverrideEditor } from "@/components/score-override-editor"
+import { StimulusDisclosure } from "@/components/stimulus-disclosure"
 import { cn } from "@/lib/utils"
 import type { Node as PmNode } from "@tiptap/pm/model"
 import { NodeViewContent, NodeViewWrapper } from "@tiptap/react"
@@ -33,6 +34,7 @@ export function QuestionAnswerView({
 
 	const www = result?.what_went_well ?? []
 	const ebi = result?.even_better_if ?? []
+	const stimuli = result?.stimuli ?? []
 	const feedback = override?.feedback_override ?? result?.feedback_summary
 	const hasFeedback = !!feedback
 
@@ -65,6 +67,11 @@ export function QuestionAnswerView({
 							<p className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 leading-snug">
 								{qText}
 							</p>
+						)}
+						{stimuli.length > 0 && (
+							<div className="pt-1">
+								<StimulusDisclosure stimuli={stimuli} size="xs" />
+							</div>
 						)}
 					</div>
 					<ScoreOverrideEditor

@@ -8,6 +8,10 @@ import type { QuestionStimulusContext } from "../types"
  * the student to apply knowledge *to the case study context*. Without the
  * stimulus, point-based mark points and LoR level descriptors can't be
  * evaluated fairly.
+ *
+ * NOTE: assumes `content` is plain text / markdown. When image or table
+ * stimuli land, this helper will need a branch to embed an image URL or
+ * render a pipe-table.
  */
 export function renderStimuliBlock(
 	stimuli: QuestionStimulusContext[] | undefined,

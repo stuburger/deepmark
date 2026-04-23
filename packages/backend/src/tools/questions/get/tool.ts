@@ -8,7 +8,19 @@ export const handler = tool(GetQuestionByIdSchema, async (args) => {
 	// Query the database for the specific question
 	const question = await db.question.findUniqueOrThrow({
 		where: { id },
+		include: {
+			question_stimuli: {
+				orderBy: { order: "asc" },
+				include: { stimulus: { select: { label: true, content: true } } },
+			},
+		},
 	})
+
+	const stimuliBlock = question.question_stimuli.length
+		? `\n\nAttached Source Material:\n${question.question_stimuli
+				.map((qs) => `**${qs.stimulus.label}**\n${qs.stimulus.content}`)
+				.join("\n\n")}`
+		: ""
 
 	// Build the question details
 	const questionDetails = `Question Details:
@@ -24,7 +36,7 @@ Created At: ${question.created_at.toLocaleDateString()} ${question.created_at.to
 Updated At: ${question.updated_at.toLocaleDateString()} ${question.updated_at.toLocaleTimeString()}
 
 Question Text:
-${question.text}${question.stem_text ? `\n\nStem/Context:\n${question.stem_text}` : ""}`
+${question.text}${stimuliBlock}`
 
 	return questionDetails
 })

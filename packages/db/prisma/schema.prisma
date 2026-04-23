@@ -212,10 +212,11 @@ model Question {
   // Canonical question number extracted from PDF e.g. "1a", "2bii", "3"
   question_number             String?
 
-  // ── Flat-model grouping (replaces QuestionPart table) ──
-  // Shared stimulus/context from parent question (e.g., "Read Source A below")
-  stem_text                   String?
-  // Grouping key for display (e.g., "2" for questions "2a", "2b", "2c")
+  // ── Sub-part grouping (replaces QuestionPart table) ──
+  // Grouping key for display (e.g., "2" for questions "2a", "2b", "2c").
+  // NOTE: question-level stimulus/context lives in the Stimulus +
+  // QuestionStimulus tables, not on the question itself — one stimulus
+  // can be referenced by multiple questions.
   parent_number               String?
   // Sub-question designator (e.g., "a", "b", "i", "ii")
   part_label                  String?

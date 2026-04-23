@@ -33,12 +33,6 @@ export const CreateQuestionSchema = {
 		.describe(
 			"Multiple choice options (required for multiple_choice type questions)",
 		),
-	stem_text: z
-		.string()
-		.optional()
-		.describe(
-			"Shared stimulus/context from a parent question group (e.g., 'Read Source A below')",
-		),
 	parent_number: z
 		.string()
 		.optional()

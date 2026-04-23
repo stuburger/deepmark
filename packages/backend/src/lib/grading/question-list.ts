@@ -9,6 +9,9 @@ export type ExamPaperWithSections = Prisma.ExamPaperGetPayload<{
 						question: {
 							include: {
 								mark_schemes: true
+								question_stimuli: {
+									include: { stimulus: true }
+								}
 							}
 						}
 					}

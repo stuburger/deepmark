@@ -3,6 +3,10 @@ import type {
 	MarkPointResultEntry,
 } from "@/lib/grading/grade-questions"
 import type { MarkingMethod } from "@mcp-gcse/db"
+import {
+	type QuestionStimulusContext,
+	renderStimuliBlock,
+} from "@mcp-gcse/shared"
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -26,6 +30,9 @@ type MarkSchemeContext = {
 type AnnotationPromptArgs = {
 	gradingResult: GradingResult
 	questionText: string
+	/** Stimuli the question references. Rendered before the question so the
+	 * annotator can anchor mark-point spans against the case study context. */
+	stimuli?: QuestionStimulusContext[]
 	maxScore: number
 	tokens: TokenSummary[]
 	examBoard: string | null
@@ -264,6 +271,7 @@ export function buildAnnotationPrompt(args: AnnotationPromptArgs): string {
 	const {
 		gradingResult: r,
 		questionText,
+		stimuli,
 		maxScore,
 		tokens,
 		examBoard,
@@ -272,8 +280,12 @@ export function buildAnnotationPrompt(args: AnnotationPromptArgs): string {
 		levelDescriptors,
 	} = args
 
+	// Shared grader helper; emits "" when no stimuli so filter() below drops it.
+	const stimulusSection = renderStimuliBlock(stimuli).trimEnd()
+
 	// ── Data context ────────────────────────────────────────────────────────
 	const contextSections = [
+		stimulusSection,
 		questionContext(questionText),
 		markSchemeSection(markScheme),
 		gradingResultSection(r, maxScore),

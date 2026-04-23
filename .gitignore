@@ -14,3 +14,7 @@ dist
 packages/db/src/generated/
 .open-next
 biome-audit.txt
+
+# Local sample scripts pulled from S3 for testing — never committed.
+# Contains real student handwriting + names; re-download from S3 if needed.
+sample-data/

@@ -141,6 +141,14 @@ export async function gradeAndAnnotateAll(
 
 			const annotations = await annotateOneResult({
 				result,
+				stimuli:
+					qItem.question_obj.question_stimuli.length > 0
+						? qItem.question_obj.question_stimuli.map((qs) => ({
+								label: qs.stimulus.label,
+								content: qs.stimulus.content,
+								contentType: qs.stimulus.content_type,
+							}))
+						: undefined,
 				markScheme: qItem.mark_scheme,
 				annotationContext,
 				annotationLlm,
@@ -321,6 +329,15 @@ function buildQuestionWithScheme(
 			}))
 		: undefined
 
+	const stimuli =
+		qItem.question_obj.question_stimuli.length > 0
+			? qItem.question_obj.question_stimuli.map((qs) => ({
+					label: qs.stimulus.label,
+					content: qs.stimulus.content,
+					contentType: qs.stimulus.content_type,
+				}))
+			: undefined
+
 	return {
 		id: qItem.question_id,
 		questionType:
@@ -344,5 +361,6 @@ function buildQuestionWithScheme(
 				| "point_based"
 				| "level_of_response") ?? undefined,
 		content: ms.content,
+		stimuli,
 	}
 }

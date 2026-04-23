@@ -6,6 +6,7 @@ import type {
 	GcseMarkPoint,
 	LlmRunner,
 	NormalisedBox,
+	QuestionStimulusContext,
 } from "@mcp-gcse/shared"
 
 type BasePendingAnnotation = {
@@ -58,6 +59,8 @@ export type TokenRow = {
 
 export type AnnotateOneQuestionArgs = {
 	gradingResult: GradingResult
+	/** Stimuli the question references — empty/undefined when standalone. */
+	stimuli?: QuestionStimulusContext[]
 	allTokens: TokenRow[]
 	examBoard: string | null
 	levelDescriptors: string | null

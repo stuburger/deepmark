@@ -9,3 +9,4 @@ export {
 	GradingResultDbSchema,
 	type GradingResultDb,
 } from "./parse-grading-result"
+export { renderStimuliBlock } from "./prompts/stimuli"

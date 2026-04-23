@@ -14,6 +14,7 @@ export async function annotateOneQuestion(
 ): Promise<PendingAnnotation[]> {
 	const {
 		gradingResult,
+		stimuli,
 		allTokens,
 		examBoard,
 		levelDescriptors,
@@ -59,6 +60,7 @@ export async function annotateOneQuestion(
 	const prompt = buildAnnotationPrompt({
 		gradingResult,
 		questionText: gradingResult.question_text,
+		stimuli,
 		maxScore: gradingResult.max_score,
 		tokens: tokenSummaries,
 		examBoard,

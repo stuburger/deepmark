@@ -1,7 +1,11 @@
 import type { GradingResult } from "@/lib/grading/grade-questions"
 import type { MarkScheme } from "@/lib/grading/question-list"
 import { logger } from "@/lib/infra/logger"
-import { type LlmRunner, parseMarkPointsFromPrisma } from "@mcp-gcse/shared"
+import {
+	type LlmRunner,
+	type QuestionStimulusContext,
+	parseMarkPointsFromPrisma,
+} from "@mcp-gcse/shared"
 import type { AnnotationContext } from "./data-loading"
 import {
 	deterministicMcqAnnotation,
@@ -14,6 +18,7 @@ const TAG = "annotate-result"
 
 export type AnnotateOneResultArgs = {
 	result: GradingResult
+	stimuli?: QuestionStimulusContext[]
 	markScheme: MarkScheme | null
 	annotationContext: AnnotationContext
 	annotationLlm: LlmRunner
@@ -31,6 +36,7 @@ export type AnnotateOneResultArgs = {
  */
 export async function annotateOneResult({
 	result,
+	stimuli,
 	markScheme,
 	annotationContext,
 	annotationLlm,
@@ -51,6 +57,7 @@ export async function annotateOneResult({
 		}
 		return await annotateOneQuestion({
 			gradingResult: result,
+			stimuli,
 			allTokens,
 			examBoard,
 			levelDescriptors,

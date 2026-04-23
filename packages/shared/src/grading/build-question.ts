@@ -21,7 +21,11 @@ export interface BuildQuestionInput {
 		content?: string | null
 	}
 	/** Stimuli in display order. Omit when the question has no attached content. */
-	stimuli?: Array<{ label: string; content: string }>
+	stimuli?: Array<{
+		label: string
+		content: string
+		content_type?: "text" | "table" | "image"
+	}>
 }
 
 /**
@@ -83,6 +87,12 @@ export function buildQuestionWithMarkScheme(
 		markingMethod: normalizeMarkingMethod(markScheme.markingMethod),
 		content: markScheme.content ?? null,
 		stimuli:
-			input.stimuli && input.stimuli.length > 0 ? input.stimuli : undefined,
+			input.stimuli && input.stimuli.length > 0
+				? input.stimuli.map((s) => ({
+						label: s.label,
+						content: s.content,
+						contentType: s.content_type,
+					}))
+				: undefined,
 	}
 }

@@ -158,6 +158,41 @@ export const styles = StyleSheet.create({
 		color: "#78350F", // amber-950-ish
 		lineHeight: 1.3,
 	},
+	stimulusImagePlaceholder: {
+		fontSize: 8,
+		color: "#92400E",
+		fontFamily: "Helvetica-Oblique",
+	},
+	stimulusTableRow: {
+		flexDirection: "row",
+		borderBottomWidth: 0.5,
+		borderBottomColor: "#D1D5DB",
+	},
+	stimulusTableHeader: {
+		flexDirection: "row",
+		borderBottomWidth: 1,
+		borderBottomColor: "#92400E",
+		backgroundColor: "#FEF3C7",
+	},
+	stimulusTableCell: {
+		flex: 1,
+		fontSize: 8,
+		color: "#78350F",
+		paddingVertical: 3,
+		paddingHorizontal: 4,
+		borderRightWidth: 0.5,
+		borderRightColor: "#D1D5DB",
+	},
+	stimulusTableHeaderCell: {
+		flex: 1,
+		fontSize: 8,
+		fontFamily: "Helvetica-Bold",
+		color: "#92400E",
+		paddingVertical: 3,
+		paddingHorizontal: 4,
+		borderRightWidth: 0.5,
+		borderRightColor: "#92400E",
+	},
 	answerBox: {
 		backgroundColor: colors.answerBg,
 		borderWidth: 0.5,

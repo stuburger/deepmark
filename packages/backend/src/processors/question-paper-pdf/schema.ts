@@ -36,10 +36,17 @@ const StimulusSchema = z.object({
 		.describe(
 			"Stimulus label as printed on the paper — 'Item A', 'Source B', 'Figure 1', 'Table 2', 'Extract 1', etc.",
 		),
+	content_type: z
+		.enum(["text", "table"])
+		.optional()
+		.default("text")
+		.describe(
+			"'text' for a case study / extract / prose source. 'table' for tabular data (rows × columns). 'image' is reserved for future use — do NOT emit it; transcribe figures/diagrams as prose under 'text' when possible.",
+		),
 	content: z
 		.string()
 		.describe(
-			"The full text of the case study / source / extract. Preserve paragraphs. Plain text or simple markdown.",
+			"For text: the full text of the case study, preserving paragraphs. For table: a GitHub-flavoured markdown pipe-table (header row + separator row + data rows). Never wrap in a code fence.",
 		),
 })
 

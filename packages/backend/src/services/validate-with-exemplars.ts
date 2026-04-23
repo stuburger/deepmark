@@ -29,7 +29,11 @@ export async function validateWithExemplars(
 					multiple_choice_options: true,
 					question_stimuli: {
 						orderBy: { order: "asc" },
-						select: { stimulus: { select: { label: true, content: true } } },
+						select: {
+							stimulus: {
+								select: { label: true, content: true, content_type: true },
+							},
+						},
 					},
 				},
 			},
@@ -65,6 +69,7 @@ export async function validateWithExemplars(
 		stimuli: q.question_stimuli.map((qs) => ({
 			label: qs.stimulus.label,
 			content: qs.stimulus.content,
+			content_type: qs.stimulus.content_type,
 		})),
 		markScheme: {
 			description: markScheme.description,

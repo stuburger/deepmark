@@ -133,6 +133,7 @@ export type McqOption = {
 export type ResultStimulus = {
 	label: string
 	content: string
+	content_type: "text" | "image" | "table"
 }
 
 export type GradingResult = {

@@ -1,7 +1,9 @@
+import { parseMarkdownTable } from "@/lib/markdown-table"
 import { computeGrade } from "@mcp-gcse/shared"
 import { Page, Text, View } from "@react-pdf/renderer"
 import type {
 	PageToken,
+	ResultStimulus,
 	StudentPaperAnnotation,
 	StudentPaperResultPayload,
 } from "../types"
@@ -12,6 +14,59 @@ function scoreColour(pct: number): string {
 	if (pct >= 70) return colors.good
 	if (pct >= 40) return colors.warn
 	return colors.bad
+}
+
+function StimulusBody({ stim }: { stim: ResultStimulus }) {
+	const kind = stim.content_type ?? "text"
+
+	if (kind === "table") {
+		const parsed = parseMarkdownTable(stim.content)
+		if (parsed) {
+			return (
+				<View>
+					<View style={styles.stimulusTableHeader}>
+						{parsed.headers.map((h, i) => (
+							<Text
+								// biome-ignore lint/suspicious/noArrayIndexKey: header order is stable per stimulus
+								key={`h-${i}`}
+								style={styles.stimulusTableHeaderCell}
+							>
+								{h}
+							</Text>
+						))}
+					</View>
+					{parsed.rows.map((row, ri) => (
+						// biome-ignore lint/suspicious/noArrayIndexKey: row order is stable per stimulus
+						<View key={`r-${ri}`} style={styles.stimulusTableRow}>
+							{row.map((cell, ci) => (
+								<Text
+									// biome-ignore lint/suspicious/noArrayIndexKey: cell order is stable per row
+									key={`r-${ri}-c-${ci}`}
+									style={styles.stimulusTableCell}
+								>
+									{cell}
+								</Text>
+							))}
+						</View>
+					))}
+				</View>
+			)
+		}
+		// Falls through to text render when the table doesn't parse.
+	}
+
+	if (kind === "image") {
+		// The extractor doesn't emit image stimuli yet — when it does, `content`
+		// will be an S3 key and this branch should resolve it to bytes and use
+		// <Image src={...} />.
+		return (
+			<Text style={styles.stimulusImagePlaceholder}>
+				[Image stimulus — not yet rendered in report]
+			</Text>
+		)
+	}
+
+	return <Text style={styles.stimulusContent}>{stim.content}</Text>
 }
 
 function McqTable({
@@ -100,7 +155,7 @@ function WrittenQuestionCard({
 				? result.stimuli.map((s) => (
 						<View key={s.label} style={styles.stimulusBox}>
 							<Text style={styles.stimulusLabel}>{s.label}</Text>
-							<Text style={styles.stimulusContent}>{s.content}</Text>
+							<StimulusBody stim={s} />
 						</View>
 					))
 				: null}

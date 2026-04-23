@@ -20,10 +20,17 @@ export interface GcseMarkPoint {
  * A stimulus (case study / source / item / figure / table) the question
  * references. Rendered into the grading prompt so the marker judges the
  * answer *against the stimulus context*, not in isolation.
+ *
+ * `content_type` disambiguates how `content` should be interpreted:
+ *   - "text"  — prose / markdown-ish plain text (default)
+ *   - "table" — a GitHub-flavoured markdown pipe-table
+ *   - "image" — reserved; `content` is an S3 key, not yet wired into
+ *               multimodal grading prompts
  */
 export interface QuestionStimulusContext {
 	label: string
 	content: string
+	contentType?: "text" | "table" | "image"
 }
 
 /** A question with its mark scheme, adapted for GCSE (written | multiple_choice). */

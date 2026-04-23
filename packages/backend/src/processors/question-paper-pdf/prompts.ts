@@ -16,11 +16,15 @@ Return a \`sections\` array in the order sections appear on the paper. Each sect
 
 STIMULUS EXTRACTION (required when a question references a case study):
 Many questions reference a "case study" block — labelled variously as "Item A", "Source B", "Extract 1", "Figure 1", "Table 2". You MUST:
-1. Extract the case study text ONCE into the enclosing section's \`stimuli\` array, with its printed label (e.g. "Item A") and its full content (preserve paragraphs).
-2. Reference it from each question that uses it via \`stimulus_labels: ["Item A"]\`. A question can reference multiple stimuli (e.g. "Using Source A and Source B…" → \`stimulus_labels: ["Source A", "Source B"]\`).
-3. Keep \`question_text\` clean — it must contain ONLY the question itself (the instruction/prompt), NOT the case study text. If the original prints "Read Item A and answer Q1. [case study] Analyse two reasons…", the question_text is just "Analyse two reasons…" and \`stimulus_labels: ["Item A"]\` carries the reference.
-4. If the same case study is referenced by multiple questions in the section, emit it ONCE in \`stimuli\` and reference it from each.
-5. If a question is standalone (no case study reference), omit \`stimulus_labels\` or return an empty array.
+1. Extract the case study ONCE into the enclosing section's \`stimuli\` array, with its printed label (e.g. "Item A").
+2. Set \`content_type\`:
+   - "table" if the stimulus is tabular data (rows × columns). Emit \`content\` as a GitHub-flavoured markdown pipe-table — header row, separator row of dashes, then data rows. Do NOT wrap in a code fence. Preserve the exact column headers and cell values as printed.
+   - "text" for everything else — case studies, prose sources, extracts. Preserve paragraphs.
+   - Do NOT emit "image" — figures and diagrams that can't be transcribed should still use "text" with a description ("Figure 1 shows a cross-section of a leaf with organelles labelled A–D…").
+3. Reference the stimulus from each question that uses it via \`stimulus_labels: ["Item A"]\`. A question can reference multiple stimuli (e.g. "Using Source A and Source B…" → \`stimulus_labels: ["Source A", "Source B"]\`).
+4. Keep \`question_text\` clean — it must contain ONLY the question itself (the instruction/prompt), NOT the stimulus content. If the original prints "Read Item A and answer Q1. [case study] Analyse two reasons…", the question_text is just "Analyse two reasons…" and \`stimulus_labels: ["Item A"]\` carries the reference.
+5. If the same stimulus is referenced by multiple questions in the section, emit it ONCE in \`stimuli\` and reference it from each.
+6. If a question is standalone (no stimulus reference), omit \`stimulus_labels\` or return an empty array.
 
 IMPORTANT — Multiple Choice Questions (MCQ):
 Extract EACH numbered MCQ as a SEPARATE question entry — do NOT create a single entry for a whole section. For each MCQ:

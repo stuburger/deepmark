@@ -106,7 +106,11 @@ const submissionDetailInclude = {
 										orderBy: { order: "asc" as const },
 										select: {
 											stimulus: {
-												select: { label: true, content: true },
+												select: {
+													label: true,
+													content: true,
+													content_type: true,
+												},
 											},
 										},
 									},
@@ -190,7 +194,11 @@ function toJobPayload(sub: {
 					multiple_choice_options: unknown
 					mark_schemes: Array<{ correct_option_labels: string[] }>
 					question_stimuli: Array<{
-						stimulus: { label: string; content: string }
+						stimulus: {
+							label: string
+							content: string
+							content_type: "text" | "image" | "table"
+						}
 					}>
 				}
 			}>
@@ -241,7 +249,11 @@ function toJobPayload(sub: {
 	>()
 	const stimuliLookup = new Map<
 		string,
-		Array<{ label: string; content: string }>
+		Array<{
+			label: string
+			content: string
+			content_type: "text" | "image" | "table"
+		}>
 	>()
 	for (const section of sub.exam_paper?.sections ?? []) {
 		for (const esq of section.exam_section_questions) {
@@ -261,6 +273,7 @@ function toJobPayload(sub: {
 					q.question_stimuli.map((qs) => ({
 						label: qs.stimulus.label,
 						content: qs.stimulus.content,
+						content_type: qs.stimulus.content_type,
 					})),
 				)
 			}

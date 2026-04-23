@@ -170,7 +170,11 @@ export async function handler(
 					title: string
 					description?: string | null
 					total_marks: number
-					stimuli?: Array<{ label: string; content: string }>
+					stimuli?: Array<{
+						label: string
+						content: string
+						content_type?: "text" | "table"
+					}>
 					questions: Array<{
 						question_text: string
 						question_type?: string
@@ -281,7 +285,11 @@ export async function handler(
 					title: section.title,
 					description: section.description ?? null,
 					total_marks: section.total_marks,
-					stimuli: section.stimuli,
+					stimuli: section.stimuli?.map((s) => ({
+						label: s.label,
+						content: s.content,
+						content_type: s.content_type ?? "text",
+					})),
 					questions: questionsForLink,
 				})
 			}

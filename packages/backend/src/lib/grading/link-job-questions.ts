@@ -70,10 +70,15 @@ export async function linkJobQuestionsToExamPaper(
 export type LinkSectionInput = {
 	title: string
 	description?: string | null
-	/** Stimuli introduced in this section, keyed by label (paper-scoped). */
+	/**
+	 * Stimuli introduced in this section, keyed by label (paper-scoped).
+	 * `content_type` defaults to "text" when omitted. "image" is reserved for
+	 * future work and is not yet emitted by the extractor.
+	 */
 	stimuli?: Array<{
 		label: string
 		content: string
+		content_type?: "text" | "table" | "image"
 	}>
 	/** Questions in paper order, each with the labels of stimuli it references. */
 	questions: Array<{
@@ -140,7 +145,7 @@ export async function linkJobQuestionsToExamPaperSections(
 					exam_paper_id: examPaperId,
 					label: stim.label,
 					content: stim.content,
-					content_type: "text",
+					content_type: stim.content_type ?? "text",
 					order: maxStimulusOrder,
 					created_by_id: uploadedBy,
 				},

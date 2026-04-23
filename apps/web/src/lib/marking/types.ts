@@ -255,6 +255,10 @@ export type UpdateExtractedAnswerResult =
 	| { ok: true }
 	| { ok: false; error: string }
 
+export type UpdateExaminerSummaryResult =
+	| { ok: true }
+	| { ok: false; error: string }
+
 export type RetriggerGradingResult =
 	| { ok: true; newJobId: string }
 	| { ok: false; error: string }

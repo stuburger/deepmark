@@ -30,6 +30,7 @@ import {
 	removeAllAnnotationMarks,
 } from "./apply-annotation-mark"
 import { CommentSidebar } from "./comment-sidebar"
+import { ExaminerSummaryNode } from "./examiner-summary-node"
 import { HoverHighlightPlugin } from "./hover-highlight-plugin"
 import { MARK_ACTIONS } from "./mark-actions"
 import { McqTableNode } from "./mcq-table-node"
@@ -191,10 +192,13 @@ export function AnnotatedAnswerSheet({
 			immediatelyRender: false,
 			editable: true,
 			extensions: [
-				Document.extend({ content: "(questionAnswer | mcqTable)+" }),
+				Document.extend({
+					content: "examinerSummary? (questionAnswer | mcqTable)+",
+				}),
 				Text,
 				HardBreak,
 				History,
+				ExaminerSummaryNode,
 				QuestionAnswerNode,
 				McqTableNode,
 				...annotationMarks,

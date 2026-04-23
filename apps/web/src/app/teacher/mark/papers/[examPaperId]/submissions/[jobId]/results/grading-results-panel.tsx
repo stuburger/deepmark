@@ -83,12 +83,16 @@ export function GradingResultsPanel({
 				marksByQuestion,
 				alignmentByQuestion,
 				tokensByQuestion,
+				data.examiner_summary,
+				jobId,
 			),
 		[
 			data.grading_results,
 			marksByQuestion,
 			alignmentByQuestion,
 			tokensByQuestion,
+			data.examiner_summary,
+			jobId,
 		],
 	)
 
@@ -145,13 +149,6 @@ export function GradingResultsPanel({
 						<span className="text-[10px] text-blue-500 shrink-0">Adjusted</span>
 					)}
 				</div>
-			)}
-
-			{/* Examiner summary — compact */}
-			{data.examiner_summary && (
-				<p className="text-xs text-muted-foreground leading-relaxed px-1">
-					{data.examiner_summary}
-				</p>
 			)}
 
 			{/* Answer sheet — always rendered, even for empty grading_results.

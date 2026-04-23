@@ -8,6 +8,7 @@ import type {
 	LinkStudentToJobResult,
 	SubmissionFeedback,
 	SubmissionFeedbackRating,
+	UpdateExaminerSummaryResult,
 	UpdateExtractedAnswerResult,
 	UpdateStudentNameResult,
 	UpsertSubmissionFeedbackResult,
@@ -152,6 +153,30 @@ export async function updateExtractedAnswer(
 		data: { extracted_answers_raw: updated },
 	})
 
+	return { ok: true }
+}
+
+/**
+ * Updates the examiner summary text on the latest grading run for a job.
+ */
+export async function updateExaminerSummary(
+	jobId: string,
+	text: string,
+): Promise<UpdateExaminerSummaryResult> {
+	const session = await auth()
+	if (!session) return { ok: false, error: "Not authenticated" }
+
+	const run = await db.gradingRun.findFirst({
+		where: { submission_id: jobId },
+		orderBy: { created_at: "desc" },
+		select: { id: true },
+	})
+	if (!run) return { ok: false, error: "Grading run not found" }
+
+	await db.gradingRun.update({
+		where: { id: run.id },
+		data: { examiner_summary: text.trim() || null },
+	})
 	return { ok: true }
 }
 

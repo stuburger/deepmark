@@ -138,14 +138,28 @@ function buildTextContent(
  * and token alignment data. Each non-MCQ question becomes a `questionAnswer`
  * block node whose text content carries both annotation marks AND ocrToken
  * marks binding each word to its scan bounding box.
+ *
+ * When `examinerSummary` is provided (along with `jobId`), an editable
+ * `examinerSummary` atom node is prepended to the document.
  */
 export function buildAnnotatedDoc(
 	gradingResults: GradingResult[],
 	marksByQuestion: Map<string, TextMark[]>,
 	alignmentByQuestion: Map<string, TokenAlignment>,
 	tokensByQuestion: Map<string, PageToken[]>,
+	examinerSummary?: string | null,
+	jobId?: string | null,
 ): JSONContent {
 	const blocks: JSONContent[] = []
+
+	// Prepend the examiner summary block when present
+	if (examinerSummary !== undefined && jobId) {
+		blocks.push({
+			type: "examinerSummary",
+			attrs: { jobId },
+			content: examinerSummary ? [{ type: "text", text: examinerSummary }] : [],
+		})
+	}
 
 	// Group all MCQ questions into a single table node
 	const mcqResults = gradingResults.filter(

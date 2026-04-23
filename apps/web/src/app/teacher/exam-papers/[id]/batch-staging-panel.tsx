@@ -18,8 +18,6 @@ import { StagingReviewToolbar } from "./staging-review-toolbar"
 
 type BatchStagingPanelProps = {
 	ingestion: BatchIngestionState
-	committingBatch: boolean
-	onCommitAll: () => Promise<void>
 	onUpdateScriptName: (id: string, name: string) => Promise<void>
 	onToggleExclude: (id: string, status: StagedScript["status"]) => Promise<void>
 	onSplitScript: (scriptId: string, splitAfterIndex: number) => void
@@ -29,8 +27,6 @@ type BatchStagingPanelProps = {
 
 export function BatchStagingPanel({
 	ingestion,
-	committingBatch,
-	onCommitAll,
 	onUpdateScriptName,
 	onToggleExclude,
 	onSplitScript,
@@ -59,8 +55,6 @@ export function BatchStagingPanel({
 			paperId={ingestion.paperId}
 			scripts={scripts}
 			urls={ingestion.urls}
-			committingBatch={committingBatch}
-			onCommitAll={onCommitAll}
 			onUpdateScriptName={onUpdateScriptName}
 			onToggleExclude={onToggleExclude}
 			onSplitScript={onSplitScript}
@@ -78,8 +72,6 @@ function ScriptReviewLayout({
 	paperId,
 	scripts,
 	urls,
-	committingBatch,
-	onCommitAll,
 	onUpdateScriptName,
 	onToggleExclude,
 	onDeleteScript,
@@ -88,8 +80,6 @@ function ScriptReviewLayout({
 	paperId: string
 	scripts: StagedScript[]
 	urls: Record<string, string>
-	committingBatch: boolean
-	onCommitAll: () => Promise<void>
 	onUpdateScriptName: (id: string, name: string) => Promise<void>
 	onToggleExclude: (id: string, status: StagedScript["status"]) => Promise<void>
 	onSplitScript: (scriptId: string, splitAfterIndex: number) => void
@@ -98,16 +88,15 @@ function ScriptReviewLayout({
 	pagesPerScript: number
 	classificationMode: ClassificationMode
 }) {
-	const pendingScripts = scripts.filter((s) => s.status !== "confirmed")
 	const confirmedScripts = scripts.filter((s) => s.status === "confirmed")
 
 	return (
 		<ResizablePanelGroup orientation="horizontal" className="h-full">
-			{/* LEFT — scripts awaiting review */}
+			{/* LEFT — all unsubmitted scripts (checked and unchecked) */}
 			<ResizablePanel defaultSize={58} minSize={30}>
 				<ScriptReviewLeftPanel
 					paperId={paperId}
-					scripts={pendingScripts}
+					scripts={scripts}
 					urls={urls}
 					onUpdateScriptName={onUpdateScriptName}
 					onToggleExclude={onToggleExclude}
@@ -118,14 +107,12 @@ function ScriptReviewLayout({
 
 			<ResizableHandle withHandle />
 
-			{/* RIGHT — paper tray (confirmed scripts + commit button) */}
+			{/* RIGHT — paper tray (confirmed scripts) */}
 			<ResizablePanel defaultSize={42} minSize={25}>
 				<div className="h-full overflow-y-auto px-6 py-6 bg-muted/40">
 					<PaperTrayPanel
 						urls={urls}
 						confirmedScripts={confirmedScripts}
-						committingBatch={committingBatch}
-						onCommitAll={onCommitAll}
 						onToggleExclude={onToggleExclude}
 					/>
 				</div>
@@ -192,10 +179,7 @@ function ScriptReviewLeftPanel({
 				{scripts.length === 0 ? (
 					<div className="flex h-full items-center justify-center">
 						<div className="flex flex-col items-center gap-2 rounded-lg border border-dashed px-12 py-12 text-center">
-							<p className="text-sm font-medium">All scripts confirmed</p>
-							<p className="text-xs text-muted-foreground">
-								Click &ldquo;Start marking&rdquo; on the right to begin
-							</p>
+							<p className="text-sm font-medium">No scripts to review</p>
 						</div>
 					</div>
 				) : (

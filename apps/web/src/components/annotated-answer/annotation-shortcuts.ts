@@ -1,5 +1,8 @@
 import { Extension } from "@tiptap/core"
-import { applyAnnotationMark } from "./apply-annotation-mark"
+import {
+	applyAnnotationMark,
+	canApplyAnnotations,
+} from "./apply-annotation-mark"
 import { MARK_ACTIONS } from "./mark-actions"
 
 type ShortcutOptions = {
@@ -24,6 +27,7 @@ export const AnnotationShortcuts = Extension.create<ShortcutOptions>({
 			shortcuts[action.key] = () => {
 				const { from, to } = this.editor.state.selection
 				if (from === to) return false
+				if (!canApplyAnnotations(this.editor)) return false
 
 				const id = applyAnnotationMark(this.editor, action.name, action.attrs)
 				if (id) {

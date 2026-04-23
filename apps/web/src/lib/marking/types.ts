@@ -168,6 +168,20 @@ export type ExtractedAnswer = {
 	answer_text: string
 }
 
+/**
+ * A question from the exam paper, used to seed skeleton blocks in the PM
+ * document before grading_results arrive.
+ */
+export type ExamPaperQuestion = {
+	question_id: string
+	question_number: string
+	question_text: string
+	max_score: number
+	marking_method: "deterministic" | "point_based" | null
+	multiple_choice_options: McqOption[]
+	correct_option_labels: string[]
+}
+
 export type StudentPaperJobPayload = {
 	status: string
 	error: string | null
@@ -200,6 +214,10 @@ export type StudentPaperJobPayload = {
 	ocr_llm_snapshot?: unknown
 	grading_llm_snapshot?: unknown
 	annotation_llm_snapshot?: unknown
+	/** All questions from the exam paper in display order. Present when an exam
+	 *  paper is linked. Used to seed skeleton document blocks before grading
+	 *  results arrive. */
+	exam_paper_questions?: ExamPaperQuestion[] | null
 }
 
 export type GetStudentPaperJobResult =
@@ -252,10 +270,6 @@ export type ListMySubmissionsResult =
 export type DeleteSubmissionResult = { ok: true } | { ok: false; error: string }
 
 export type UpdateExtractedAnswerResult =
-	| { ok: true }
-	| { ok: false; error: string }
-
-export type UpdateExaminerSummaryResult =
 	| { ok: true }
 	| { ok: false; error: string }
 

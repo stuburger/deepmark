@@ -75,7 +75,10 @@ export function GradingResultsPanel({
 	const { marksByQuestion, alignmentByQuestion, tokensByQuestion } =
 		useQuestionAlignments(data.grading_results, annotations, pageTokens)
 
-	// Build PM document from grading results + alignment marks + token data
+	// Build PM document from grading results + alignment marks + token data.
+	// When grading results are absent but exam paper questions are available,
+	// skeleton blocks are built from the paper structure so the teacher sees
+	// the question layout while processing is underway.
 	const doc = useMemo(
 		() =>
 			buildAnnotatedDoc(
@@ -84,7 +87,8 @@ export function GradingResultsPanel({
 				alignmentByQuestion,
 				tokensByQuestion,
 				data.examiner_summary,
-				jobId,
+				data.exam_paper_questions,
+				data.extracted_answers,
 			),
 		[
 			data.grading_results,
@@ -92,7 +96,8 @@ export function GradingResultsPanel({
 			alignmentByQuestion,
 			tokensByQuestion,
 			data.examiner_summary,
-			jobId,
+			data.exam_paper_questions,
+			data.extracted_answers,
 		],
 	)
 

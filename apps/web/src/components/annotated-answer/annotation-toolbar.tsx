@@ -8,24 +8,28 @@ import {
 } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
 import type { Editor } from "@tiptap/core"
+import { useEditorState } from "@tiptap/react"
 import {
+	Bold,
 	Box,
 	Check,
 	ChevronsUp,
 	Circle,
 	Eraser,
+	Italic,
 	Link2,
 	Underline,
 	X,
 } from "lucide-react"
 import {
 	applyAnnotationMark,
+	canApplyAnnotations,
 	hasAnnotationMarkInSelection,
 	removeAllAnnotationMarks,
 } from "./apply-annotation-mark"
 import type { MARK_ACTIONS } from "./mark-actions"
 
-// ─── Icon map ───────────────────────────────────────────────────────────────
+// ─── Icon maps ───────────────────────────────────────────────────────────────
 
 const MARK_ICONS: Record<string, React.ReactNode> = {
 	tick: <Check className="h-3.5 w-3.5" />,
@@ -37,7 +41,13 @@ const MARK_ICONS: Record<string, React.ReactNode> = {
 	chain: <Link2 className="h-3.5 w-3.5" />,
 }
 
-// ─── Component ──────────────────────────────────────────────────────────────
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function Divider() {
+	return <div className="mx-1 h-4 w-px bg-border" />
+}
+
+// ─── Component ───────────────────────────────────────────────────────────────
 
 export function AnnotationToolbar({
 	editor,
@@ -48,13 +58,80 @@ export function AnnotationToolbar({
 	actions: typeof MARK_ACTIONS
 	onMarkApplied?: (annotationId: string) => void
 }) {
+	const { hasSelection, annotationContextOk } = useEditorState({
+		editor,
+		selector: (ctx) => ({
+			hasSelection:
+				ctx.editor.state.selection.from !== ctx.editor.state.selection.to,
+			annotationContextOk: canApplyAnnotations(ctx.editor),
+		}),
+	})
+
 	return (
 		<TooltipProvider delay={300}>
 			<div className="sticky top-0 z-10 flex items-center gap-0.5 border-b bg-white/90 dark:bg-zinc-950/90 backdrop-blur-sm px-4 py-1.5 rounded-t">
+				{/* ── Formatting zone: always available when there's a selection ── */}
+				{(
+					[
+						{
+							cmd: "toggleBold",
+							key: "bold",
+							icon: <Bold className="h-3.5 w-3.5" />,
+							label: "Bold",
+							shortcut: "⌘B",
+						},
+						{
+							cmd: "toggleItalic",
+							key: "italic",
+							icon: <Italic className="h-3.5 w-3.5" />,
+							label: "Italic",
+							shortcut: "⌘I",
+						},
+						{
+							cmd: "toggleUnderline",
+							key: "underline",
+							icon: <Underline className="h-3.5 w-3.5" />,
+							label: "Underline",
+							shortcut: "⌘U",
+						},
+					] as const
+				).map(({ cmd, key, icon, label, shortcut }) => (
+					<Tooltip key={key}>
+						<TooltipTrigger
+							render={
+								<button
+									type="button"
+									onMouseDown={(e) => {
+										e.preventDefault()
+										editor.chain().focus()[cmd]().run()
+									}}
+									disabled={!hasSelection}
+									className={cn(
+										"relative flex items-center justify-center rounded w-8 h-7 text-xs font-medium transition-colors",
+										"hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed",
+										editor.isActive(key) &&
+											"bg-primary text-primary-foreground hover:bg-primary/90",
+									)}
+								/>
+							}
+						>
+							{icon}
+						</TooltipTrigger>
+						<TooltipContent side="bottom">
+							{label}
+							<kbd className="ml-1.5 rounded border bg-muted px-1 py-0.5 text-[10px] font-mono">
+								{shortcut}
+							</kbd>
+						</TooltipContent>
+					</Tooltip>
+				))}
+
+				<Divider />
+
+				{/* ── Annotation zone: only active when inside a questionAnswer ── */}
 				{actions.map((action) => {
 					const isActive = editor.isActive(action.name)
-					const hasSelection =
-						editor.state.selection.from !== editor.state.selection.to
+					const canAnnotate = annotationContextOk
 
 					return (
 						<Tooltip key={action.name}>
@@ -71,7 +148,7 @@ export function AnnotationToolbar({
 											)
 											if (id) onMarkApplied?.(id)
 										}}
-										disabled={!hasSelection}
+										disabled={!canAnnotate}
 										className={cn(
 											"relative flex items-center justify-center rounded w-8 h-7 text-xs font-medium transition-colors",
 											"hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed",
@@ -96,10 +173,9 @@ export function AnnotationToolbar({
 					)
 				})}
 
-				{/* Divider */}
-				<div className="mx-1 h-4 w-px bg-border" />
+				<Divider />
 
-				{/* Remove all annotations in selection */}
+				{/* Remove all annotation marks in selection */}
 				<Tooltip>
 					<TooltipTrigger
 						render={
@@ -109,7 +185,9 @@ export function AnnotationToolbar({
 									e.preventDefault()
 									removeAllAnnotationMarks(editor)
 								}}
-								disabled={!hasAnnotationMarkInSelection(editor)}
+								disabled={
+									!annotationContextOk || !hasAnnotationMarkInSelection(editor)
+								}
 								className={cn(
 									"relative flex items-center justify-center rounded w-8 h-7 text-xs font-medium transition-colors",
 									"hover:bg-destructive/10 hover:text-destructive",

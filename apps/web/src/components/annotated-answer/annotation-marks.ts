@@ -21,6 +21,7 @@ const sharedAttrs = {
 
 export const TickMark = Mark.create({
 	name: "tick",
+	inclusive: false,
 	addAttributes() {
 		return { ...sharedAttrs }
 	},
@@ -42,6 +43,7 @@ export const TickMark = Mark.create({
 
 export const CrossMark = Mark.create({
 	name: "cross",
+	inclusive: false,
 	addAttributes() {
 		return { ...sharedAttrs }
 	},
@@ -63,6 +65,7 @@ export const CrossMark = Mark.create({
 
 export const UnderlineMark = Mark.create({
 	name: "annotationUnderline",
+	inclusive: false,
 	addAttributes() {
 		return { ...sharedAttrs }
 	},
@@ -84,6 +87,7 @@ export const UnderlineMark = Mark.create({
 
 export const DoubleUnderlineMark = Mark.create({
 	name: "doubleUnderline",
+	inclusive: false,
 	addAttributes() {
 		return { ...sharedAttrs }
 	},
@@ -106,6 +110,7 @@ export const DoubleUnderlineMark = Mark.create({
 
 export const BoxMark = Mark.create({
 	name: "box",
+	inclusive: false,
 	addAttributes() {
 		return { ...sharedAttrs }
 	},
@@ -127,6 +132,7 @@ export const BoxMark = Mark.create({
 
 export const CircleMark = Mark.create({
 	name: "circle",
+	inclusive: false,
 	addAttributes() {
 		return { ...sharedAttrs }
 	},
@@ -150,6 +156,7 @@ export const CircleMark = Mark.create({
 
 export const ChainMark = Mark.create({
 	name: "chain",
+	inclusive: false,
 	addAttributes() {
 		return {
 			sentiment: { default: "neutral" },

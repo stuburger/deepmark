@@ -1,6 +1,11 @@
 import { SIGNAL_TO_TIPTAP } from "@/lib/marking/mark-registry"
 import type { TextMark, TokenAlignment } from "@/lib/marking/token-alignment"
-import type { GradingResult, PageToken } from "@/lib/marking/types"
+import type {
+	ExamPaperQuestion,
+	ExtractedAnswer,
+	GradingResult,
+	PageToken,
+} from "@/lib/marking/types"
 import type { JSONContent } from "@tiptap/core"
 
 // ─── Token range: inverted view of a TokenAlignment for mark generation ─────
@@ -139,8 +144,14 @@ function buildTextContent(
  * block node whose text content carries both annotation marks AND ocrToken
  * marks binding each word to its scan bounding box.
  *
- * When `examinerSummary` is provided (along with `jobId`), an editable
- * `examinerSummary` atom node is prepended to the document.
+ * When `examinerSummary` is non-empty, a leading `paragraph` block is
+ * prepended (teacher notes / AI examiner summary seed).
+ *
+ * When `grading_results` is empty but `examPaperQuestions` is provided,
+ * skeleton blocks are built from the exam paper structure so the teacher
+ * sees the question layout while processing is underway. If
+ * `extractedAnswers` are also present (OCR done, grading pending), each
+ * skeleton block is pre-populated with the OCR text.
  */
 export function buildAnnotatedDoc(
 	gradingResults: GradingResult[],
@@ -148,81 +159,124 @@ export function buildAnnotatedDoc(
 	alignmentByQuestion: Map<string, TokenAlignment>,
 	tokensByQuestion: Map<string, PageToken[]>,
 	examinerSummary?: string | null,
-	jobId?: string | null,
+	examPaperQuestions?: ExamPaperQuestion[] | null,
+	extractedAnswers?: ExtractedAnswer[] | null,
 ): JSONContent {
 	const blocks: JSONContent[] = []
 
-	// Prepend the examiner summary block when present
-	if (examinerSummary !== undefined && jobId) {
+	if (examinerSummary) {
 		blocks.push({
-			type: "examinerSummary",
-			attrs: { jobId },
-			content: examinerSummary ? [{ type: "text", text: examinerSummary }] : [],
+			type: "paragraph",
+			content: [{ type: "text", text: examinerSummary }],
 		})
 	}
 
-	// Group all MCQ questions into a single table node
-	const mcqResults = gradingResults.filter(
-		(r) => r.marking_method === "deterministic",
-	)
-	if (mcqResults.length > 0) {
-		blocks.push({
-			type: "mcqTable",
-			attrs: {
-				results: mcqResults.map((r) => ({
+	// ── Grading-complete path: real results with marks and scores ────────────
+	if (gradingResults.length > 0) {
+		// Group all MCQ questions into a single table node
+		const mcqResults = gradingResults.filter(
+			(r) => r.marking_method === "deterministic",
+		)
+		if (mcqResults.length > 0) {
+			blocks.push({
+				type: "mcqTable",
+				attrs: {
+					results: mcqResults.map((r) => ({
+						questionId: r.question_id,
+						questionNumber: r.question_number,
+						questionText: r.question_text || null,
+						maxScore: r.max_score,
+						options: r.multiple_choice_options ?? [],
+						correctLabels: r.correct_option_labels ?? [],
+						studentAnswer: r.student_answer,
+						awardedScore: r.awarded_score,
+					})),
+				},
+			})
+		}
+
+		for (const r of gradingResults) {
+			if (r.marking_method === "deterministic") continue
+
+			const marks = marksByQuestion.get(r.question_id) ?? []
+			const alignment = alignmentByQuestion.get(r.question_id)
+			const tokens = tokensByQuestion.get(r.question_id)
+			const tokenRanges =
+				alignment && tokens ? tokenRangesFromAlignment(alignment, tokens) : []
+
+			const content = buildTextContent(r.student_answer, marks, tokenRanges)
+
+			blocks.push({
+				type: "questionAnswer",
+				attrs: {
 					questionId: r.question_id,
 					questionNumber: r.question_number,
 					questionText: r.question_text || null,
 					maxScore: r.max_score,
-					options: r.multiple_choice_options ?? [],
-					correctLabels: r.correct_option_labels ?? [],
-					studentAnswer: r.student_answer,
-					awardedScore: r.awarded_score,
-				})),
-			},
-		})
-	}
-
-	// Written questions as individual blocks
-	for (const r of gradingResults) {
-		if (r.marking_method === "deterministic") continue
-
-		const marks = marksByQuestion.get(r.question_id) ?? []
-		const alignment = alignmentByQuestion.get(r.question_id)
-		const tokens = tokensByQuestion.get(r.question_id)
-		const tokenRanges =
-			alignment && tokens ? tokenRangesFromAlignment(alignment, tokens) : []
-
-		const content = buildTextContent(r.student_answer, marks, tokenRanges)
-
-		blocks.push({
-			type: "questionAnswer",
-			attrs: {
-				questionId: r.question_id,
-				questionNumber: r.question_number,
-				questionText: r.question_text || null,
-				maxScore: r.max_score,
-			},
-			content,
-		})
-	}
-
-	// If no blocks, add a placeholder block to satisfy PM schema. This is
-	// the inert state shown while OCR/grading are still running — the
-	// editor is always mounted so it can progressively come to life as
-	// data arrives via setContent in annotated-answer-sheet.
-	if (blocks.length === 0) {
-		blocks.push({
-			type: "questionAnswer",
-			attrs: { questionId: null, questionNumber: null },
-			content: [
-				{
-					type: "text",
-					text: "Waiting for student answers…",
 				},
-			],
-		})
+				content,
+			})
+		}
+
+		return { type: "doc", content: blocks }
 	}
+
+	// ── Pre-grading skeleton path: paper structure known, results not yet in ─
+	if (examPaperQuestions && examPaperQuestions.length > 0) {
+		// Build a quick lookup from question_number → extracted answer text
+		const extractedByNumber = new Map<string, string>()
+		for (const ea of extractedAnswers ?? []) {
+			extractedByNumber.set(ea.question_number, ea.answer_text)
+		}
+
+		const mcqQuestions = examPaperQuestions.filter(
+			(q) => q.marking_method === "deterministic",
+		)
+		if (mcqQuestions.length > 0) {
+			blocks.push({
+				type: "mcqTable",
+				attrs: {
+					results: mcqQuestions.map((q) => ({
+						questionId: q.question_id,
+						questionNumber: q.question_number,
+						questionText: q.question_text || null,
+						maxScore: q.max_score,
+						options: q.multiple_choice_options,
+						correctLabels: q.correct_option_labels,
+						// Show OCR-extracted answer if available, otherwise null
+						studentAnswer: extractedByNumber.get(q.question_number) ?? null,
+						awardedScore: 0,
+					})),
+				},
+			})
+		}
+
+		for (const q of examPaperQuestions) {
+			if (q.marking_method === "deterministic") continue
+
+			const ocrText = extractedByNumber.get(q.question_number) ?? ""
+
+			blocks.push({
+				type: "questionAnswer",
+				attrs: {
+					questionId: q.question_id,
+					questionNumber: q.question_number,
+					questionText: q.question_text || null,
+					maxScore: q.max_score,
+				},
+				content: [{ type: "text", text: ocrText || " " }],
+			})
+		}
+
+		return { type: "doc", content: blocks }
+	}
+
+	// ── Fallback: no paper structure yet — minimal placeholder ───────────────
+	blocks.push({
+		type: "questionAnswer",
+		attrs: { questionId: null, questionNumber: null },
+		content: [{ type: "text", text: "Waiting for student answers…" }],
+	})
 
 	return { type: "doc", content: blocks }
 }

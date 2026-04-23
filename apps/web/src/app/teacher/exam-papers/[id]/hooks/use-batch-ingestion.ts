@@ -219,10 +219,36 @@ export function useBatchIngestion(paperId: string) {
 			const r = await updateStagedScript(scriptId, { status: newStatus })
 			if (!r.ok) throw new Error(r.error)
 		},
-		onError: (err) =>
+		onMutate: async ({ scriptId, currentStatus }) => {
+			const queryKey = queryKeys.activeBatch(paperId)
+			await queryClient.cancelQueries({ queryKey })
+			const previous = queryClient.getQueryData<ActiveBatchInfo>(queryKey)
+			const newStatus =
+				currentStatus === "confirmed"
+					? ("excluded" as const)
+					: ("confirmed" as const)
+			queryClient.setQueryData<ActiveBatchInfo>(queryKey, (old) => {
+				if (!old) return old
+				return {
+					...old,
+					staged_scripts: old.staged_scripts.map((s) =>
+						s.id === scriptId ? { ...s, status: newStatus } : s,
+					),
+				}
+			})
+			return { previous }
+		},
+		onError: (err, _vars, context) => {
+			if (context?.previous !== undefined) {
+				queryClient.setQueryData(
+					queryKeys.activeBatch(paperId),
+					context.previous,
+				)
+			}
 			toast.error(
 				err instanceof Error ? err.message : "Failed to update script status",
-			),
+			)
+		},
 		onSettled: invalidateBatch,
 	})
 

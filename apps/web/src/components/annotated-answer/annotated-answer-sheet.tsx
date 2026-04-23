@@ -3,18 +3,23 @@
 import type { StudentPaperAnnotation } from "@/lib/marking/types"
 import { cn } from "@/lib/utils"
 import type { JSONContent } from "@tiptap/core"
+import BoldExtension from "@tiptap/extension-bold"
 import Document from "@tiptap/extension-document"
 import HardBreak from "@tiptap/extension-hard-break"
 import History from "@tiptap/extension-history"
+import ItalicExtension from "@tiptap/extension-italic"
 import Text from "@tiptap/extension-text"
+import UnderlineExtension from "@tiptap/extension-underline"
 import { EditorContent, useEditor } from "@tiptap/react"
 import { BubbleMenu } from "@tiptap/react/menus"
 import {
+	Bold,
 	Box,
 	Check,
 	ChevronsUp,
 	Circle,
 	Eraser,
+	Italic,
 	Link2,
 	Underline,
 	X,
@@ -26,18 +31,20 @@ import { AnnotationShortcuts } from "./annotation-shortcuts"
 import { AnnotationToolbar } from "./annotation-toolbar"
 import {
 	applyAnnotationMark,
+	canApplyAnnotations,
 	hasAnnotationMarkInSelection,
 	removeAllAnnotationMarks,
 } from "./apply-annotation-mark"
 import { CommentSidebar } from "./comment-sidebar"
-import { ExaminerSummaryNode } from "./examiner-summary-node"
 import { HoverHighlightPlugin } from "./hover-highlight-plugin"
+import { InsertParagraphPlugin } from "./insert-paragraph-plugin"
 import { MARK_ACTIONS } from "./mark-actions"
 import { McqTableNode } from "./mcq-table-node"
 import { OcrTokenMark } from "./ocr-token-mark"
+import { ParagraphNode } from "./paragraph-node"
 import { QuestionAnswerNode } from "./question-answer-node"
-import { BYPASS_READ_ONLY, ReadOnlyText } from "./read-only-text"
 import { useDerivedAnnotations } from "./use-derived-annotations"
+import { useTokenHighlight } from "./use-token-highlight"
 
 // ─── Bubble menu icons ─────────────────────────────────────────────────────
 
@@ -52,100 +59,6 @@ const BUBBLE_ICONS: Record<string, React.ReactNode> = {
 }
 
 const BUBBLE_ERASER = <Eraser className="h-3.5 w-3.5" />
-
-// ─── Helpers: resolve PM marks to scan token IDs ────────────────────────────
-
-/**
- * Collects ocrToken mark token IDs from all text nodes in a PM range.
- * Each word in the document carries an ocrToken mark with its OCR token ID,
- * so this is a direct structural lookup — no side-channel alignment needed.
- */
-function resolveTokensForRange(
-	editor: { state: { doc: import("@tiptap/pm/model").Node } },
-	from: number,
-	to: number,
-): string[] | null {
-	const tokenIds: string[] = []
-	const seen = new Set<string>()
-
-	editor.state.doc.nodesBetween(from, to, (node) => {
-		if (!node.isText) return
-
-		for (const mark of node.marks) {
-			if (mark.type.name !== "ocrToken") continue
-			const id = mark.attrs.tokenId as string | null
-			if (id && !seen.has(id)) {
-				seen.add(id)
-				tokenIds.push(id)
-			}
-		}
-	})
-
-	return tokenIds.length > 0 ? tokenIds : null
-}
-
-/**
- * Finds all ocrToken marks on text that also carries a specific annotation ID.
- * Returns the union of token IDs across all matching text nodes.
- */
-function resolveTokensForAnnotation(
-	editor: { state: { doc: import("@tiptap/pm/model").Node } },
-	annotationId: string,
-): string[] | null {
-	const tokenIds: string[] = []
-	const seen = new Set<string>()
-
-	editor.state.doc.descendants((node) => {
-		if (!node.isText) return
-
-		const hasAnnotation = node.marks.some(
-			(m) => (m.attrs.annotationId as string | null) === annotationId,
-		)
-		if (!hasAnnotation) return
-
-		for (const mark of node.marks) {
-			if (mark.type.name !== "ocrToken") continue
-			const id = mark.attrs.tokenId as string | null
-			if (id && !seen.has(id)) {
-				seen.add(id)
-				tokenIds.push(id)
-			}
-		}
-	})
-
-	return tokenIds.length > 0 ? tokenIds : null
-}
-
-/**
- * Returns the ocrToken ID at a collapsed cursor position.
- * Checks the text node to the right of the cursor first (the word the cursor
- * is inside or immediately before), then falls back to the node on the left
- * (cursor at the trailing edge of a word).
- */
-function resolveTokenAtCursor(
-	editor: { state: { doc: import("@tiptap/pm/model").Node } },
-	pos: number,
-): string | null {
-	const $pos = editor.state.doc.resolve(pos)
-
-	// Text node to the right of the cursor
-	const after = $pos.nodeAfter
-	if (after?.isText) {
-		for (const mark of after.marks) {
-			if (mark.type.name === "ocrToken") return mark.attrs.tokenId as string
-		}
-	}
-
-	// Text node to the left of the cursor (cursor at trailing edge of a word)
-	const before = $pos.nodeBefore
-	if (before?.isText) {
-		for (const mark of before.marks) {
-			if (mark.type.name === "ocrToken") return mark.attrs.tokenId as string
-		}
-	}
-
-	return null
-}
 
 // ─── Main component ─────────────────────────────────────────────────────────
 
@@ -193,21 +106,24 @@ export function AnnotatedAnswerSheet({
 			editable: true,
 			extensions: [
 				Document.extend({
-					content: "examinerSummary? (questionAnswer | mcqTable)+",
+					content: "(paragraph | questionAnswer | mcqTable)+",
 				}),
 				Text,
 				HardBreak,
 				History,
-				ExaminerSummaryNode,
+				BoldExtension,
+				ItalicExtension,
+				UnderlineExtension,
+				ParagraphNode,
 				QuestionAnswerNode,
 				McqTableNode,
 				...annotationMarks,
 				OcrTokenMark,
-				ReadOnlyText,
 				AnnotationShortcuts.configure({ onMarkAppliedRef }),
 				HoverHighlightPlugin.configure({
 					onAnnotationHoverRef,
 				}),
+				InsertParagraphPlugin,
 			],
 			content: doc,
 			editorProps: {
@@ -250,15 +166,12 @@ export function AnnotatedAnswerSheet({
 		const { from, to } = editor.state.selection
 		const wasFocused = editor.isFocused
 
-		// Dispatch the content replacement as a raw transaction so we can
-		// tag it with BYPASS_READ_ONLY — ReadOnlyText's filterTransaction
-		// would otherwise reject it (setContent uses ReplaceStep, which is
-		// how we block user typing). addToHistory:false keeps stage-driven
-		// updates out of the teacher's undo stack.
+		// Dispatch the content replacement as a raw transaction.
+		// addToHistory:false keeps stage-driven updates out of the teacher's
+		// undo stack.
 		const newDoc = editor.schema.nodeFromJSON(doc)
 		const replaceTr = editor.state.tr
 			.replaceWith(0, editor.state.doc.content.size, newDoc.content)
-			.setMeta(BYPASS_READ_ONLY, true)
 			.setMeta("addToHistory", false)
 			.setMeta("preventUpdate", true)
 		editor.view.dispatch(replaceTr)
@@ -282,40 +195,7 @@ export function AnnotatedAnswerSheet({
 	// Derive annotations from PM state for the scan overlay.
 	useDerivedAnnotations(editor, stableOnDerived)
 
-	// Editor → Scan: highlight handwritten words that correspond to the
-	// current text selection OR the active annotation card.
-	// Selection takes precedence (active user action).
-	useEffect(() => {
-		if (!editor || !onTokenHighlight) return
-
-		const handleUpdate = () => {
-			const { from, to } = editor.state.selection
-			const hasSelection = from !== to
-
-			// Priority 1: text selection → highlight those words
-			if (hasSelection) {
-				onTokenHighlight(resolveTokensForRange(editor, from, to))
-				return
-			}
-
-			// Priority 2: active annotation card → highlight its words
-			if (activeAnnotationId) {
-				onTokenHighlight(resolveTokensForAnnotation(editor, activeAnnotationId))
-				return
-			}
-
-			// Priority 3: cursor position → highlight the single word under the cursor
-			const cursorToken = resolveTokenAtCursor(editor, from)
-			onTokenHighlight(cursorToken ? [cursorToken] : null)
-		}
-
-		// Run once immediately + on every transaction
-		handleUpdate()
-		editor.on("transaction", handleUpdate)
-		return () => {
-			editor.off("transaction", handleUpdate)
-		}
-	}, [editor, activeAnnotationId, onTokenHighlight])
+	useTokenHighlight(editor, activeAnnotationId, onTokenHighlight)
 
 	if (!editor) return null
 
@@ -335,59 +215,105 @@ export function AnnotatedAnswerSheet({
 					editor={editor}
 					className="flex items-center gap-0.5 rounded-lg border bg-background shadow-lg px-1 py-0.5"
 				>
-					{MARK_ACTIONS.map((action) => {
-						const isActive = editor.isActive(action.name)
-						return (
+					{/* Formatting: always available */}
+					{(
+						[
+							{
+								cmd: "toggleBold",
+								key: "bold",
+								icon: <Bold className="h-3.5 w-3.5" />,
+								label: "Bold",
+							},
+							{
+								cmd: "toggleItalic",
+								key: "italic",
+								icon: <Italic className="h-3.5 w-3.5" />,
+								label: "Italic",
+							},
+							{
+								cmd: "toggleUnderline",
+								key: "underline",
+								icon: <Underline className="h-3.5 w-3.5" />,
+								label: "Underline",
+							},
+						] as const
+					).map(({ cmd, key, icon, label }) => (
+						<button
+							key={key}
+							type="button"
+							onMouseDown={(e) => {
+								e.preventDefault()
+								editor.chain().focus()[cmd]().run()
+							}}
+							className={cn(
+								"flex items-center justify-center rounded w-7 h-7 transition-colors",
+								"hover:bg-muted",
+								editor.isActive(key) &&
+									"bg-primary text-primary-foreground hover:bg-primary/90",
+							)}
+							title={label}
+						>
+							{icon}
+						</button>
+					))}
+
+					{/* Annotation marks: only in questionAnswer context */}
+					{canApplyAnnotations(editor) && (
+						<>
+							<div className="mx-0.5 h-4 w-px bg-border" />
+
+							{MARK_ACTIONS.map((action) => {
+								const isActive = editor.isActive(action.name)
+								return (
+									<button
+										key={action.name}
+										type="button"
+										onMouseDown={(e) => {
+											e.preventDefault()
+											const id = applyAnnotationMark(
+												editor,
+												action.name,
+												action.attrs,
+											)
+											if (id) handleMarkApplied(id)
+										}}
+										className={cn(
+											"flex items-center gap-1 rounded px-2 py-1 text-xs font-medium transition-colors",
+											"hover:bg-muted",
+											isActive &&
+												"bg-primary text-primary-foreground hover:bg-primary/90",
+										)}
+										title={`${action.label} (${action.key})`}
+									>
+										{BUBBLE_ICONS[action.name]}
+										<kbd className="text-[9px] font-mono opacity-50 ml-0.5">
+											{action.key}
+										</kbd>
+									</button>
+								)
+							})}
+
+							<div className="mx-0.5 h-4 w-px bg-border" />
+
 							<button
-								key={action.name}
 								type="button"
 								onMouseDown={(e) => {
 									e.preventDefault()
-									const id = applyAnnotationMark(
-										editor,
-										action.name,
-										action.attrs,
-									)
-									if (id) handleMarkApplied(id)
+									removeAllAnnotationMarks(editor)
 								}}
+								disabled={!hasAnnotationMarkInSelection(editor)}
 								className={cn(
 									"flex items-center gap-1 rounded px-2 py-1 text-xs font-medium transition-colors",
-									"hover:bg-muted",
-									isActive &&
-										"bg-primary text-primary-foreground hover:bg-primary/90",
+									"hover:bg-destructive/10 hover:text-destructive",
+									"disabled:opacity-30 disabled:cursor-not-allowed",
 								)}
-								title={`${action.label} (${action.key})`}
+								title="Remove all annotations"
 							>
-								{BUBBLE_ICONS[action.name]}
-								<span className="hidden sm:inline">{action.label}</span>
-								<kbd className="text-[9px] font-mono opacity-50 ml-0.5">
-									{action.key}
-								</kbd>
+								{BUBBLE_ERASER}
+								<span className="hidden sm:inline">Clear</span>
 							</button>
-						)
-					})}
-
-					{/* Divider */}
-					<div className="mx-0.5 h-4 w-px bg-border" />
-
-					{/* Remove all annotations in selection */}
-					<button
-						type="button"
-						onMouseDown={(e) => {
-							e.preventDefault()
-							removeAllAnnotationMarks(editor)
-						}}
-						disabled={!hasAnnotationMarkInSelection(editor)}
-						className={cn(
-							"flex items-center gap-1 rounded px-2 py-1 text-xs font-medium transition-colors",
-							"hover:bg-destructive/10 hover:text-destructive",
-							"disabled:opacity-30 disabled:cursor-not-allowed",
-						)}
-						title="Remove all annotations"
-					>
-						{BUBBLE_ERASER}
-						<span className="hidden sm:inline">Clear</span>
-					</button>
+						</>
+					)}
 				</BubbleMenu>
 
 				{/* Editor content */}

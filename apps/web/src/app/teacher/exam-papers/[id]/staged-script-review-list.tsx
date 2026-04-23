@@ -93,11 +93,6 @@ export const StagedScriptReviewList = forwardRef<
 		handleDelete,
 	} = useStagedScriptsState(paperId, urls, scripts, onDeleteScript)
 
-	// IDs of scripts optimistically removed from the list (flying to tray)
-	const [optimisticConfirmedIds, setOptimisticConfirmedIds] = useState<
-		Set<string>
-	>(new Set())
-
 	// ── Multi-select ──────────────────────────────────────────────────────────
 	const [selectedPageKeys, setSelectedPageKeys] = useState<Set<string>>(
 		new Set(),
@@ -179,29 +174,6 @@ export const StagedScriptReviewList = forwardRef<
 	}
 
 	useImperativeHandle(ref, () => ({ restorePage: handleRestorePage }), [])
-
-	// ── Toggle include/exclude ────────────────────────────────────────────────
-
-	async function handleToggleInclude(
-		scriptId: string,
-		currentStatus: StagedScript["status"],
-	) {
-		const wasConfirmed = currentStatus === "confirmed"
-		if (!wasConfirmed) {
-			setOptimisticConfirmedIds((prev) => new Set([...prev, scriptId]))
-		}
-		try {
-			await onToggleExclude(scriptId, currentStatus)
-		} catch {
-			if (!wasConfirmed) {
-				setOptimisticConfirmedIds((prev) => {
-					const next = new Set(prev)
-					next.delete(scriptId)
-					return next
-				})
-			}
-		}
-	}
 
 	// ── DnD handlers ──────────────────────────────────────────────────────────
 
@@ -418,10 +390,6 @@ export const StagedScriptReviewList = forwardRef<
 
 	// ── Render ────────────────────────────────────────────────────────────────
 
-	const visibleScripts = localScripts.filter(
-		(s) => !optimisticConfirmedIds.has(s.id),
-	)
-
 	return (
 		<>
 			<DndContext
@@ -434,7 +402,7 @@ export const StagedScriptReviewList = forwardRef<
 			>
 				<div className="space-y-4">
 					<AnimatePresence mode="popLayout">
-						{visibleScripts.map((script) => (
+						{localScripts.map((script) => (
 							<motion.div
 								key={script.id}
 								layout
@@ -462,7 +430,7 @@ export const StagedScriptReviewList = forwardRef<
 									}
 									onUpdateName={(name) => onUpdateName(script.id, name)}
 									onToggleInclude={() =>
-										handleToggleInclude(script.id, script.status)
+										void onToggleExclude(script.id, script.status)
 									}
 									onDelete={() => handleDelete(script.id)}
 									onDeletePage={handleDeletePage}

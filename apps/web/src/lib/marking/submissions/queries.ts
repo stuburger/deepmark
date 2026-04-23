@@ -6,6 +6,7 @@ import type {
 	GradingStatus,
 	JobEvent,
 	OcrStatus,
+	Prisma,
 	TierLevel,
 } from "@mcp-gcse/db"
 import {
@@ -85,12 +86,18 @@ const submissionDetailInclude = {
 			grade_boundaries: true,
 			grade_boundary_mode: true,
 			sections: {
+				orderBy: { order: "asc" as const },
 				select: {
+					order: true,
 					exam_section_questions: {
+						orderBy: { order: "asc" as const },
 						select: {
+							order: true,
 							question: {
 								select: {
 									id: true,
+									text: true,
+									question_number: true,
 									question_type: true,
 									// Used for total_max — the paper's invariant, not
 									// derived from grading_results (which shrinks under
@@ -160,6 +167,10 @@ const submissionDetailInclude = {
 	},
 } as const
 
+type SubmissionWithDetail = Prisma.StudentSubmissionGetPayload<{
+	include: typeof submissionDetailInclude
+}>
+
 type PageEntry = { key: string; order: number; mime_type: string }
 type RawExtracted = {
 	student_name?: string | null
@@ -170,63 +181,7 @@ type RawExtracted = {
  * Maps a StudentSubmission (with included runs) to the legacy
  * StudentPaperJobPayload shape consumed by the UI.
  */
-function toJobPayload(sub: {
-	id: string
-	student_name: string | null
-	student_id: string | null
-	detected_subject: string | null
-	pages: unknown
-	exam_paper_id: string
-	created_at: Date
-	exam_paper: {
-		id: string
-		title: string
-		level_descriptors: string | null
-		tier: TierLevel | null
-		grade_boundaries: unknown
-		grade_boundary_mode: BoundaryMode | null
-		sections: Array<{
-			exam_section_questions: Array<{
-				question: {
-					id: string
-					question_type: string
-					points: number | null
-					multiple_choice_options: unknown
-					mark_schemes: Array<{ correct_option_labels: string[] }>
-					question_stimuli: Array<{
-						stimulus: {
-							label: string
-							content: string
-							content_type: "text" | "image" | "table"
-						}
-					}>
-				}
-			}>
-		}>
-	} | null
-	answer_regions: RegionRow[]
-	ocr_runs: Array<{
-		id: string
-		status: OcrStatus
-		error: string | null
-		extracted_answers_raw: unknown
-		page_analyses: unknown
-		job_events: unknown
-		llm_snapshot: unknown
-	}>
-	grading_runs: Array<{
-		id: string
-		status: GradingStatus
-		error: string | null
-		grading_results: unknown
-		examiner_summary: string | null
-		job_events: unknown
-		llm_snapshot: unknown
-		annotation_llm_snapshot: unknown
-		annotation_error: string | null
-		annotations_completed_at: Date | null
-	}>
-}) {
+function toJobPayload(sub: SubmissionWithDetail) {
 	const latestOcr = sub.ocr_runs[0] ?? null
 	const latestGrading = sub.grading_runs[0] ?? null
 
@@ -255,17 +210,28 @@ function toJobPayload(sub: {
 			content_type: "text" | "image" | "table"
 		}>
 	>()
+	// Flat ordered list of all questions from the exam paper — used for
+	// skeleton rendering before grading_results arrive.
+	const examPaperQuestions: Array<{
+		question_id: string
+		question_number: string
+		question_text: string
+		max_score: number
+		marking_method: "deterministic" | "point_based" | null
+		multiple_choice_options: McqOption[]
+		correct_option_labels: string[]
+	}> = []
+
 	for (const section of sub.exam_paper?.sections ?? []) {
 		for (const esq of section.exam_section_questions) {
 			const q = esq.question
+			const options = Array.isArray(q.multiple_choice_options)
+				? (q.multiple_choice_options as McqOption[])
+				: []
+			const correctLabels = q.mark_schemes[0]?.correct_option_labels ?? []
+
 			if (q.question_type === "multiple_choice") {
-				const options = Array.isArray(q.multiple_choice_options)
-					? (q.multiple_choice_options as McqOption[])
-					: []
-				mcqLookup.set(q.id, {
-					options,
-					correctLabels: q.mark_schemes[0]?.correct_option_labels ?? [],
-				})
+				mcqLookup.set(q.id, { options, correctLabels })
 			}
 			if (q.question_stimuli.length > 0) {
 				stimuliLookup.set(
@@ -277,6 +243,17 @@ function toJobPayload(sub: {
 					})),
 				)
 			}
+
+			examPaperQuestions.push({
+				question_id: q.id,
+				question_number: q.question_number ?? "",
+				question_text: q.text,
+				max_score: q.points ?? 0,
+				marking_method:
+					q.question_type === "multiple_choice" ? "deterministic" : null,
+				multiple_choice_options: options,
+				correct_option_labels: correctLabels,
+			})
 		}
 	}
 	const gradingResults = withRegions.map((r) => {
@@ -329,6 +306,8 @@ function toJobPayload(sub: {
 		ocr_llm_snapshot: latestOcr?.llm_snapshot ?? null,
 		grading_llm_snapshot: latestGrading?.llm_snapshot ?? null,
 		annotation_llm_snapshot: latestGrading?.annotation_llm_snapshot ?? null,
+		exam_paper_questions:
+			examPaperQuestions.length > 0 ? examPaperQuestions : null,
 	}
 }
 

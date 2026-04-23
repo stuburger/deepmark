@@ -2,6 +2,7 @@
 
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent } from "@/components/ui/dialog"
+import { Spinner } from "@/components/ui/spinner"
 import type { BatchIngestionState, StagedScript } from "@/lib/batch/types"
 import { X } from "lucide-react"
 import { BatchStagingPanel } from "./batch-staging-panel"
@@ -31,6 +32,11 @@ export function StagingReviewDialog({
 	onDeleteScript,
 	onAddScript,
 }: StagingReviewDialogProps) {
+	const confirmedCount = ingestion
+		? ingestion.unsubmittedScripts.filter((s) => s.status === "confirmed")
+				.length
+		: 0
+
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent
@@ -61,8 +67,6 @@ export function StagingReviewDialog({
 					{ingestion ? (
 						<BatchStagingPanel
 							ingestion={ingestion}
-							committingBatch={committingBatch}
-							onCommitAll={onCommitAll}
 							onUpdateScriptName={onUpdateScriptName}
 							onToggleExclude={onToggleExclude}
 							onSplitScript={onSplitScript}
@@ -70,6 +74,25 @@ export function StagingReviewDialog({
 							onAddScript={onAddScript}
 						/>
 					) : null}
+				</div>
+
+				{/* Footer */}
+				<div className="flex items-center justify-end border-t bg-muted/50 px-6 py-4 shrink-0">
+					<Button
+						disabled={committingBatch || confirmedCount === 0}
+						onClick={onCommitAll}
+					>
+						{committingBatch ? (
+							<>
+								<Spinner className="h-3.5 w-3.5 mr-1.5" />
+								Starting…
+							</>
+						) : confirmedCount === 0 ? (
+							"Start Marking"
+						) : (
+							`Start Marking ${confirmedCount} script${confirmedCount === 1 ? "" : "s"}`
+						)}
+					</Button>
 				</div>
 			</DialogContent>
 		</Dialog>

@@ -5,6 +5,33 @@ import { MARK_ACTIONS } from "./mark-actions"
 
 const ANNOTATION_MARK_NAMES = MARK_ACTIONS.map((a) => a.name)
 
+/** True when [from, to) lies entirely inside one `questionAnswer` block. */
+function rangeInsideQuestionAnswer(
+	doc: PmNode,
+	from: number,
+	to: number,
+): boolean {
+	const $from = doc.resolve(from)
+	let qaDepth = -1
+	for (let d = $from.depth; d >= 0; d--) {
+		if ($from.node(d).type.name === "questionAnswer") {
+			qaDepth = d
+			break
+		}
+	}
+	if (qaDepth < 0) return false
+	const qaStart = $from.start(qaDepth)
+	const qaEnd = $from.end(qaDepth)
+	return from >= qaStart && to <= qaEnd
+}
+
+/** Non-collapsed selection fully inside a `questionAnswer` block (toolbar / bubble menu). */
+export function canApplyAnnotations(editor: Editor): boolean {
+	const { from, to } = editor.state.selection
+	if (from === to) return false
+	return rangeInsideQuestionAnswer(editor.state.doc, from, to)
+}
+
 /** Returns true if any text node in [from, to) carries the named mark. */
 function hasMarkInRange(
 	doc: PmNode,
@@ -65,10 +92,11 @@ function snapToWordBounds(
  *
  * 1. Extends the current selection to word boundaries
  * 2. Generates a unique annotationId for the mark
- * 3. Applies the mark via addMark (passes through ReadOnlyText)
+ * 3. Applies the mark via addMark
  *
  * Returns the generated annotationId so callers can activate the sidebar card.
- * Returns null if no selection exists.
+ * Returns null if no selection exists or the selection is not entirely inside a
+ * `questionAnswer` block (e.g. teacher `paragraph` notes).
  */
 export function applyAnnotationMark(
 	editor: Editor,
@@ -77,6 +105,10 @@ export function applyAnnotationMark(
 ): string | null {
 	const { from: selFrom, to: selTo } = editor.state.selection
 	if (selFrom === selTo) return null
+
+	if (!rangeInsideQuestionAnswer(editor.state.doc, selFrom, selTo)) {
+		return null
+	}
 
 	const markType = editor.schema.marks[markName]
 	if (!markType) return null
@@ -124,6 +156,8 @@ export function hasAnnotationMarkInSelection(editor: Editor): boolean {
 export function removeAllAnnotationMarks(editor: Editor): void {
 	const { from: selFrom, to: selTo } = editor.state.selection
 	if (selFrom === selTo) return
+
+	if (!rangeInsideQuestionAnswer(editor.state.doc, selFrom, selTo)) return
 
 	const { from, to } = snapToWordBounds(editor.state.doc, selFrom, selTo)
 

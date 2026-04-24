@@ -1,12 +1,19 @@
 "use client"
 
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
 	Popover,
 	PopoverContent,
 	PopoverTrigger,
 } from "@/components/ui/popover"
-import { FileText, Plus, Trash2 } from "lucide-react"
+import {
+	ChevronsDownUp,
+	ChevronsUpDown,
+	FileText,
+	Plus,
+	Trash2,
+} from "lucide-react"
 import type { DeletedPage } from "./staged-script-review-list"
 
 type StagingReviewToolbarProps = {
@@ -14,6 +21,13 @@ type StagingReviewToolbarProps = {
 	onRestore: (pageKey: string) => void
 	onAddScript?: () => Promise<void>
 	addingScript: boolean
+	allConfirmed: boolean
+	canToggleIncludeAll: boolean
+	onToggleIncludeAll: () => Promise<void>
+	allCollapsed: boolean
+	canToggleCollapseAll: boolean
+	onExpandAll: () => void
+	onCollapseAll: () => void
 }
 
 export function StagingReviewToolbar({
@@ -21,12 +35,57 @@ export function StagingReviewToolbar({
 	onRestore,
 	onAddScript,
 	addingScript,
+	allConfirmed,
+	canToggleIncludeAll,
+	onToggleIncludeAll,
+	allCollapsed,
+	canToggleCollapseAll,
+	onExpandAll,
+	onCollapseAll,
 }: StagingReviewToolbarProps) {
 	const count = deletedPages.length
 
 	return (
 		<div className="shrink-0 flex items-center gap-2 border-b bg-muted/40 px-4 h-11">
-			{/* Add script — left anchor */}
+			{/* Include-all — left anchor */}
+			<label
+				htmlFor="include-all"
+				className="flex items-center gap-1.5 text-xs font-medium cursor-pointer select-none text-muted-foreground hover:text-foreground data-disabled:cursor-not-allowed data-disabled:opacity-50"
+				data-disabled={canToggleIncludeAll ? undefined : ""}
+			>
+				<Checkbox
+					id="include-all"
+					checked={allConfirmed}
+					disabled={!canToggleIncludeAll}
+					onCheckedChange={() => void onToggleIncludeAll()}
+					className="data-checked:border-green-600 data-checked:bg-green-600 dark:data-checked:bg-green-600"
+					aria-label={
+						allConfirmed ? "Exclude all scripts" : "Include all scripts"
+					}
+				/>
+				Include all
+			</label>
+
+			{/* Expand / collapse all */}
+			<Button
+				variant="ghost"
+				size="icon"
+				className="h-7 w-7 text-muted-foreground"
+				onClick={allCollapsed ? onExpandAll : onCollapseAll}
+				disabled={!canToggleCollapseAll}
+				aria-label={
+					allCollapsed ? "Expand all scripts" : "Collapse all scripts"
+				}
+				title={allCollapsed ? "Expand all" : "Collapse all"}
+			>
+				{allCollapsed ? (
+					<ChevronsUpDown className="h-4 w-4" />
+				) : (
+					<ChevronsDownUp className="h-4 w-4" />
+				)}
+			</Button>
+
+			{/* Add script */}
 			{onAddScript && (
 				<Button
 					variant="ghost"

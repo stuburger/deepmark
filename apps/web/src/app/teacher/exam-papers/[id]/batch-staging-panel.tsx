@@ -19,6 +19,7 @@ type BatchStagingPanelProps = {
 	ingestion: BatchIngestionState
 	onUpdateScriptName: (id: string, name: string) => Promise<void>
 	onToggleExclude: (id: string, status: StagedScript["status"]) => Promise<void>
+	onToggleIncludeAll: () => Promise<void>
 	onSplitScript: (scriptId: string, splitAfterIndex: number) => void
 	onDeleteScript: () => void
 	onAddScript: () => Promise<void>
@@ -28,6 +29,7 @@ export function BatchStagingPanel({
 	ingestion,
 	onUpdateScriptName,
 	onToggleExclude,
+	onToggleIncludeAll,
 	onSplitScript,
 	onDeleteScript,
 	onAddScript,
@@ -53,9 +55,9 @@ export function BatchStagingPanel({
 		<ScriptReviewLayout
 			paperId={ingestion.paperId}
 			scripts={scripts}
-			urls={ingestion.urls}
 			onUpdateScriptName={onUpdateScriptName}
 			onToggleExclude={onToggleExclude}
+			onToggleIncludeAll={onToggleIncludeAll}
 			onSplitScript={onSplitScript}
 			onDeleteScript={onDeleteScript}
 			onAddScript={onAddScript}
@@ -68,17 +70,17 @@ export function BatchStagingPanel({
 function ScriptReviewLayout({
 	paperId,
 	scripts,
-	urls,
 	onUpdateScriptName,
 	onToggleExclude,
+	onToggleIncludeAll,
 	onDeleteScript,
 	onAddScript,
 }: {
 	paperId: string
 	scripts: StagedScript[]
-	urls: Record<string, string>
 	onUpdateScriptName: (id: string, name: string) => Promise<void>
 	onToggleExclude: (id: string, status: StagedScript["status"]) => Promise<void>
+	onToggleIncludeAll: () => Promise<void>
 	onSplitScript: (scriptId: string, splitAfterIndex: number) => void
 	onDeleteScript: () => void
 	onAddScript: () => Promise<void>
@@ -92,9 +94,9 @@ function ScriptReviewLayout({
 				<ScriptReviewLeftPanel
 					paperId={paperId}
 					scripts={scripts}
-					urls={urls}
 					onUpdateScriptName={onUpdateScriptName}
 					onToggleExclude={onToggleExclude}
+					onToggleIncludeAll={onToggleIncludeAll}
 					onDeleteScript={onDeleteScript}
 					onAddScript={onAddScript}
 				/>
@@ -104,13 +106,10 @@ function ScriptReviewLayout({
 
 			{/* RIGHT — paper tray (confirmed scripts) */}
 			<ResizablePanel defaultSize={42} minSize={25}>
-				<div className="h-full overflow-y-auto px-6 py-6 bg-muted/40">
-					<PaperTrayPanel
-						urls={urls}
-						confirmedScripts={confirmedScripts}
-						onToggleExclude={onToggleExclude}
-					/>
-				</div>
+				<PaperTrayPanel
+					confirmedScripts={confirmedScripts}
+					onToggleExclude={onToggleExclude}
+				/>
 			</ResizablePanel>
 		</ResizablePanelGroup>
 	)
@@ -121,23 +120,24 @@ function ScriptReviewLayout({
 function ScriptReviewLeftPanel({
 	paperId,
 	scripts,
-	urls,
 	onUpdateScriptName,
 	onToggleExclude,
+	onToggleIncludeAll,
 	onDeleteScript,
 	onAddScript,
 }: {
 	paperId: string
 	scripts: StagedScript[]
-	urls: Record<string, string>
 	onUpdateScriptName: (id: string, name: string) => Promise<void>
 	onToggleExclude: (id: string, status: StagedScript["status"]) => Promise<void>
+	onToggleIncludeAll: () => Promise<void>
 	onDeleteScript: () => void
 	onAddScript: () => Promise<void>
 }) {
 	const listRef = useRef<StagedScriptReviewListHandle>(null)
 	const [deletedPages, setDeletedPages] = useState<DeletedPage[]>([])
 	const [addingScript, setAddingScript] = useState(false)
+	const [collapsedMap, setCollapsedMap] = useState<Record<string, boolean>>({})
 
 	function handlePageDeleted(page: DeletedPage) {
 		setDeletedPages((prev) => [...prev, page])
@@ -159,6 +159,21 @@ function ScriptReviewLeftPanel({
 		}
 	}
 
+	function handleCollapsedChange(scriptId: string, collapsed: boolean) {
+		setCollapsedMap((prev) => ({ ...prev, [scriptId]: collapsed }))
+	}
+
+	function setAllCollapsed(collapsed: boolean) {
+		setCollapsedMap(Object.fromEntries(scripts.map((s) => [s.id, collapsed])))
+	}
+
+	const allConfirmed =
+		scripts.length > 0 && scripts.every((s) => s.status === "confirmed")
+
+	const allCollapsed =
+		scripts.length > 0 &&
+		scripts.every((s) => collapsedMap[s.id] ?? s.status === "confirmed")
+
 	return (
 		<div className="h-full flex flex-col min-h-0">
 			{/* Toolbar — sits above the scroll area, always visible */}
@@ -167,6 +182,13 @@ function ScriptReviewLeftPanel({
 				onRestore={handleRestore}
 				onAddScript={handleAddScript}
 				addingScript={addingScript}
+				allConfirmed={allConfirmed}
+				onToggleIncludeAll={onToggleIncludeAll}
+				canToggleIncludeAll={scripts.length > 0}
+				allCollapsed={allCollapsed}
+				canToggleCollapseAll={scripts.length > 0}
+				onExpandAll={() => setAllCollapsed(false)}
+				onCollapseAll={() => setAllCollapsed(true)}
 			/>
 
 			{/* Scrollable content */}
@@ -181,8 +203,9 @@ function ScriptReviewLeftPanel({
 					<StagedScriptReviewList
 						ref={listRef}
 						paperId={paperId}
-						urls={urls}
 						scripts={scripts}
+						collapsedMap={collapsedMap}
+						onCollapsedChange={handleCollapsedChange}
 						onUpdateName={onUpdateScriptName}
 						onToggleExclude={onToggleExclude}
 						onDeleteScript={() => onDeleteScript()}

@@ -108,6 +108,7 @@ export function ExamPaperPageShell({
 		handleAddScript,
 		handleUpdateScriptName,
 		handleToggleExclude,
+		handleToggleIncludeAll,
 	} = useBatchIngestion(paper.id)
 
 	// Submissions — flat list, 60s poll + SW-triggered refresh
@@ -414,6 +415,7 @@ export function ExamPaperPageShell({
 				onCommitAll={handleCommitAll}
 				onUpdateScriptName={handleUpdateScriptName}
 				onToggleExclude={handleToggleExclude}
+				onToggleIncludeAll={handleToggleIncludeAll}
 				onSplitScript={handleSplitScript}
 				onDeleteScript={() => {}}
 				onAddScript={handleAddScript}

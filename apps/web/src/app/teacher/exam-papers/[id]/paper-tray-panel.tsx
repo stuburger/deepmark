@@ -9,13 +9,11 @@ import { ListViewLockedStack } from "./list-view-locked-stack"
 import { PageCarousel } from "./page-carousel"
 
 type PaperTrayPanelProps = {
-	urls: Record<string, string>
 	confirmedScripts: StagedScript[]
 	onToggleExclude: (id: string, status: StagedScriptStatus) => Promise<void>
 }
 
 export function PaperTrayPanel({
-	urls,
 	confirmedScripts,
 	onToggleExclude,
 }: PaperTrayPanelProps) {
@@ -23,7 +21,7 @@ export function PaperTrayPanel({
 		carousel,
 		setCarousel,
 		openCarousel: openPageCarousel,
-	} = usePageCarousel(urls)
+	} = usePageCarousel()
 
 	function openCarousel(script: StagedScript, startIndex: number) {
 		const name =
@@ -34,14 +32,18 @@ export function PaperTrayPanel({
 	const count = confirmedScripts.length
 
 	return (
-		<>
-			<div>
+		<div className="h-full flex flex-col min-h-0">
+			{/* Toolbar — matches the left panel's toolbar for visual symmetry */}
+			<div className="shrink-0 flex items-center gap-2 border-b bg-muted/40 px-4 h-11" />
+
+			{/* Scrollable content */}
+			<div className="flex-1 min-h-0 overflow-y-auto px-6 py-6 bg-muted/40 flex flex-col">
 				{count === 0 ? (
 					<motion.div
 						key="empty"
 						initial={{ opacity: 0 }}
 						animate={{ opacity: 1 }}
-						className="flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed py-16 text-center"
+						className="flex-1 flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed text-center"
 					>
 						<FileStack className="h-8 w-8 text-muted-foreground/30" />
 						<p className="text-xs text-muted-foreground px-4">
@@ -87,7 +89,6 @@ export function PaperTrayPanel({
 									>
 										<ListViewLockedStack
 											pageKeys={sortedPageKeys}
-											urls={urls}
 											showUndo={false}
 											showPageCount={false}
 											onUnlock={() =>
@@ -141,6 +142,6 @@ export function PaperTrayPanel({
 					}
 				/>
 			)}
-		</>
+		</div>
 	)
 }

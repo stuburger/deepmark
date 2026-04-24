@@ -7,9 +7,10 @@ import {
 import type {
 	GradingResult,
 	PageToken,
-	ScanPageUrl,
+	ScanPage,
 	StudentPaperAnnotation,
 } from "@/lib/marking/types"
+import { scanProxyUrl } from "@/lib/scan-url"
 import { useEffect, useRef } from "react"
 
 /**
@@ -99,7 +100,7 @@ export function AnnotatedScanColumn({
 	showChains = false,
 	highlightedTokenIds,
 }: {
-	pages: ScanPageUrl[]
+	pages: ScanPage[]
 	/** Cloud Vision word-level tokens for all pages — filtered per page internally. */
 	pageTokens?: PageToken[]
 	showHighlights: boolean
@@ -155,6 +156,7 @@ export function AnnotatedScanColumn({
 		<div ref={containerRef} className="flex flex-col gap-8 px-6 py-6">
 			{pages.map((page, i) => {
 				const isPdf = page.mimeType === "application/pdf"
+				const pageUrl = scanProxyUrl(page.key)
 				const label =
 					pages.length > 1 ? `Page ${i + 1} of ${pages.length}` : null
 				const gradingAnns = annotationsForPage(gradingResults, page.order)
@@ -180,14 +182,14 @@ export function AnnotatedScanColumn({
 						{isPdf ? (
 							<div className="relative overflow-hidden rounded-xl border bg-muted/20">
 								<iframe
-									src={page.url}
+									src={pageUrl}
 									title={`Page ${i + 1}`}
 									className="h-[80vh] w-full border-0"
 								/>
 							</div>
 						) : page.analysis ? (
 							<BoundingBoxViewer
-								imageUrl={page.url}
+								imageUrl={pageUrl}
 								analysis={page.analysis}
 								tokens={tokensForPage}
 								showAnalysisText={false}
@@ -207,9 +209,9 @@ export function AnnotatedScanColumn({
 							/>
 						) : (
 							<div className="relative overflow-hidden rounded-xl border bg-muted/20">
-								{/* eslint-disable-next-line @next/next/no-img-element -- presigned S3 URL */}
+								{/* eslint-disable-next-line @next/next/no-img-element -- in-app proxy URL */}
 								<img
-									src={page.url}
+									src={pageUrl}
 									alt={`Scan page ${i + 1}`}
 									className="block w-full rounded-xl"
 								/>

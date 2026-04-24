@@ -15,6 +15,7 @@ type StagingReviewDialogProps = {
 	onCommitAll: () => Promise<void>
 	onUpdateScriptName: (id: string, name: string) => Promise<void>
 	onToggleExclude: (id: string, status: StagedScript["status"]) => Promise<void>
+	onToggleIncludeAll: () => Promise<void>
 	onSplitScript: (scriptId: string, splitAfterIndex: number) => void
 	onDeleteScript: () => void
 	onAddScript: () => Promise<void>
@@ -28,6 +29,7 @@ export function StagingReviewDialog({
 	onCommitAll,
 	onUpdateScriptName,
 	onToggleExclude,
+	onToggleIncludeAll,
 	onSplitScript,
 	onDeleteScript,
 	onAddScript,
@@ -69,6 +71,7 @@ export function StagingReviewDialog({
 							ingestion={ingestion}
 							onUpdateScriptName={onUpdateScriptName}
 							onToggleExclude={onToggleExclude}
+							onToggleIncludeAll={onToggleIncludeAll}
 							onSplitScript={onSplitScript}
 							onDeleteScript={onDeleteScript}
 							onAddScript={onAddScript}

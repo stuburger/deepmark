@@ -8,7 +8,7 @@ export const queryKeys = {
 	submissions: (examPaperId: string) => ["submissions", examPaperId] as const,
 	studentJob: (jobId: string) => ["studentJob", jobId] as const,
 	jobStages: (jobId: string) => ["jobStages", jobId] as const,
-	jobScanUrls: (jobId: string) => ["jobScanUrls", jobId] as const,
+	jobScanPages: (jobId: string) => ["jobScanPages", jobId] as const,
 	jobPageTokens: (jobId: string) => ["jobPageTokens", jobId] as const,
 	jobAnnotations: (jobId: string) => ["jobAnnotations", jobId] as const,
 	jobVersions: (jobId: string) => ["jobVersions", jobId] as const,
@@ -21,5 +21,4 @@ export const queryKeys = {
 		["submissionFeedback", submissionId] as const,
 	// ─── Batch ingestion ───────────────────────────────────────────────────────
 	activeBatch: (paperId: string) => ["activeBatch", paperId] as const,
-	batchPageUrls: (batchId: string) => ["batchPageUrls", batchId] as const,
 }

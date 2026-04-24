@@ -69,7 +69,4 @@ export type BatchIngestionState = {
 	allScripts: StagedScript[]
 	/** Scripts not yet committed as submissions (status !== "submitted") */
 	unsubmittedScripts: StagedScript[]
-
-	/** Presigned S3 URLs for all page images, keyed by s3_key */
-	urls: Record<string, string>
 }

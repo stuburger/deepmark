@@ -17,7 +17,7 @@ const onOcrComplete: TransitionInvalidator = (queryClient, jobId) => {
 	// extracted_answers, page_analyses on the payload
 	queryClient.invalidateQueries({ queryKey: queryKeys.studentJob(jobId) })
 	// page.analysis populates after OCR
-	queryClient.invalidateQueries({ queryKey: queryKeys.jobScanUrls(jobId) })
+	queryClient.invalidateQueries({ queryKey: queryKeys.jobScanPages(jobId) })
 	// word tokens are written by the OCR processor
 	queryClient.invalidateQueries({ queryKey: queryKeys.jobPageTokens(jobId) })
 }

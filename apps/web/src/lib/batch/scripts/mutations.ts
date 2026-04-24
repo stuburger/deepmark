@@ -39,6 +39,32 @@ export async function updateStagedScript(
 	return { ok: true }
 }
 
+// ─── bulkUpdateStagedScriptStatus ───────────────────────────────────────────
+
+export type BulkUpdateStagedScriptStatusResult =
+	| { ok: true; count: number }
+	| { ok: false; error: string }
+
+/**
+ * Flip every unsubmitted script in a batch to the given status in one UPDATE.
+ * Submitted scripts are preserved — they're already committed for marking and
+ * can't be toggled back.
+ */
+export async function bulkUpdateStagedScriptStatus(
+	batchId: string,
+	status: "confirmed" | "excluded",
+): Promise<BulkUpdateStagedScriptStatusResult> {
+	const session = await auth()
+	if (!session) return { ok: false, error: "Not authenticated" }
+
+	const result = await db.stagedScript.updateMany({
+		where: { batch_job_id: batchId, status: { not: "submitted" } },
+		data: { status },
+	})
+
+	return { ok: true, count: result.count }
+}
+
 // ─── updateStagedScriptPageKeys ─────────────────────────────────────────────
 
 export type UpdateStagedScriptPageKeysResult =

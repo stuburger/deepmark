@@ -92,7 +92,7 @@ batchClassifyQueue.subscribe({
 	],
 	timeout: "4 minutes",
 	memory: "1 GB",
-	nodejs: { install: ["sharp"] },
+	nodejs: { install: ["sharp", "mupdf"] },
 })
 
 // Triggered automatically: S3 fires a message when a PDF is uploaded to pdfs/mark-schemes/.

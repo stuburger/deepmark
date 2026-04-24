@@ -40,7 +40,7 @@ describe("invalidateOnStageTransitions", () => {
 		expect(spy).not.toHaveBeenCalled()
 	})
 
-	it("invalidates studentJob + scan urls + page tokens when OCR flips to done", () => {
+	it("invalidates studentJob + scan pages + page tokens when OCR flips to done", () => {
 		const qc = new QueryClient()
 		const spy = vi.spyOn(qc, "invalidateQueries")
 		invalidateOnStageTransitions(
@@ -53,7 +53,7 @@ describe("invalidateOnStageTransitions", () => {
 			queryKey: queryKeys.studentJob("job_1"),
 		})
 		expect(spy).toHaveBeenCalledWith({
-			queryKey: queryKeys.jobScanUrls("job_1"),
+			queryKey: queryKeys.jobScanPages("job_1"),
 		})
 		expect(spy).toHaveBeenCalledWith({
 			queryKey: queryKeys.jobPageTokens("job_1"),

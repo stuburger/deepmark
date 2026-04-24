@@ -1,13 +1,13 @@
 "use client"
 
 import { Badge } from "@/components/ui/badge"
+import { scanProxyUrl } from "@/lib/scan-url"
 import { motion } from "framer-motion"
-import { FileText, Undo2 } from "lucide-react"
+import { Undo2 } from "lucide-react"
 import { PAGE_THUMB_H, PAGE_THUMB_W } from "./exam-paper-helpers"
 
 type ListViewLockedStackProps = {
 	pageKeys: Array<{ s3_key: string; order: number }>
-	urls: Record<string, string>
 	onUnlock: () => void
 	onOpenCarousel: () => void
 	showUndo?: boolean
@@ -18,7 +18,6 @@ const MAX_VISIBLE_PAGES = 5
 
 export function ListViewLockedStack({
 	pageKeys,
-	urls,
 	onUnlock,
 	onOpenCarousel,
 	showUndo = true,
@@ -46,7 +45,6 @@ export function ListViewLockedStack({
 				}}
 			>
 				{visible.map((pk, index) => {
-					const url = urls[pk.s3_key]
 					const rotation = (index - mid) * 0.4
 					const zIndex = total - index
 
@@ -72,20 +70,14 @@ export function ListViewLockedStack({
 								boxShadow: `0 ${1 + index}px ${2 + index * 2}px rgba(0,0,0,0.08)`,
 							}}
 						>
-							{url ? (
-								// eslint-disable-next-line @next/next/no-img-element
-								<img
-									src={url}
-									alt={`Page ${index + 1}`}
-									draggable={false}
-									loading="lazy"
-									className="w-full h-full object-cover"
-								/>
-							) : (
-								<div className="w-full h-full flex items-center justify-center bg-muted/40">
-									<FileText className="h-8 w-8 text-muted-foreground/30" />
-								</div>
-							)}
+							{/* eslint-disable-next-line @next/next/no-img-element */}
+							<img
+								src={scanProxyUrl(pk.s3_key)}
+								alt={`Page ${index + 1}`}
+								draggable={false}
+								loading="lazy"
+								className="w-full h-full object-cover"
+							/>
 						</motion.div>
 					)
 				})}

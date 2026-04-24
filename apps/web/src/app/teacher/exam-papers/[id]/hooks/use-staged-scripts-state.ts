@@ -23,7 +23,6 @@ export type { ActiveDragState }
 
 export function useStagedScriptsState(
 	paperId: string,
-	urls: Record<string, string>,
 	scripts: StagedScript[],
 	onDeleteScript?: (scriptId: string) => void,
 ) {
@@ -46,7 +45,7 @@ export function useStagedScriptsState(
 		carousel,
 		setCarousel,
 		openCarousel: openPageCarousel,
-	} = usePageCarousel(urls)
+	} = usePageCarousel()
 
 	// Sync local scripts from server data without disrupting local ordering.
 	// Instead of wholesale-replacing local state (which resets to server's
@@ -149,7 +148,6 @@ export function useStagedScriptsState(
 		setLocalScripts,
 		localNames,
 		setLocalNames,
-		urls,
 		activeDrag,
 		setActiveDrag,
 		carousel,

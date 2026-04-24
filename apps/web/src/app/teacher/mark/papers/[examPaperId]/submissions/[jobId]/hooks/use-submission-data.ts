@@ -1,17 +1,14 @@
 "use client"
 
 import { getJobAnnotations } from "@/lib/marking/annotations/queries"
-import {
-	getJobPageTokens,
-	getJobScanPageUrls,
-} from "@/lib/marking/scan/queries"
+import { getJobPageTokens, getJobScanPages } from "@/lib/marking/scan/queries"
 import { type MarkingPhase, derivePhase } from "@/lib/marking/stages/phase"
 import { getJobStages } from "@/lib/marking/stages/queries"
 import type { JobStages } from "@/lib/marking/stages/types"
 import { useJobStream } from "@/lib/marking/stages/use-job-stream"
 import type {
 	PageToken,
-	ScanPageUrl,
+	ScanPage,
 	StudentPaperAnnotation,
 	StudentPaperJobPayload,
 } from "@/lib/marking/types"
@@ -29,7 +26,7 @@ const TERMINAL_SUBMISSION_STATUSES = new Set([
 export type UseSubmissionDataArgs = {
 	jobId: string
 	initialData: StudentPaperJobPayload
-	initialScanPages: ScanPageUrl[]
+	initialScanPages: ScanPage[]
 	initialPageTokens: PageToken[]
 	initialStages: JobStages
 }
@@ -37,7 +34,7 @@ export type UseSubmissionDataArgs = {
 export type UseSubmissionDataResult = {
 	data: StudentPaperJobPayload
 	stages: JobStages
-	scanPages: ScanPageUrl[]
+	scanPages: ScanPage[]
 	pageTokens: PageToken[]
 	annotations: StudentPaperAnnotation[]
 	phase: MarkingPhase
@@ -80,9 +77,9 @@ export function useSubmissionData({
 	})
 
 	const { data: scanPages } = useQuery({
-		queryKey: queryKeys.jobScanUrls(jobId),
+		queryKey: queryKeys.jobScanPages(jobId),
 		queryFn: async () => {
-			const r = await getJobScanPageUrls(jobId)
+			const r = await getJobScanPages(jobId)
 			return r.ok ? r.pages : []
 		},
 		initialData: initialScanPages,
@@ -128,7 +125,7 @@ export function useSubmissionData({
 		prevAnnotationStatusRef.current = stages.annotation.status
 	}, [stages.annotation.status, jobId, queryClient])
 
-	// OCR done → invalidate scan URLs so page.analysis data is fetched.
+	// OCR done → invalidate scan pages so page.analysis data is fetched.
 	const prevPhaseRef = useRef(phase)
 	useEffect(() => {
 		if (
@@ -136,7 +133,7 @@ export function useSubmissionData({
 			phase === "marking_in_progress"
 		) {
 			void queryClient.invalidateQueries({
-				queryKey: queryKeys.jobScanUrls(jobId),
+				queryKey: queryKeys.jobScanPages(jobId),
 			})
 		}
 		prevPhaseRef.current = phase

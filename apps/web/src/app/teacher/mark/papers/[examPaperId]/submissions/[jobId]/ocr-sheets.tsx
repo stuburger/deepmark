@@ -7,7 +7,7 @@ import {
 	SheetTitle,
 	SheetTrigger,
 } from "@/components/ui/sheet"
-import type { ScanPageUrl } from "@/lib/marking/types"
+import type { ScanPage } from "@/lib/marking/types"
 import { FileText, StickyNote } from "lucide-react"
 import type { ReactElement, ReactNode } from "react"
 
@@ -48,7 +48,7 @@ export function TranscriptSheet({
 	onOpenChange,
 }: {
 	trigger?: ReactElement
-	scanPages: ScanPageUrl[]
+	scanPages: ScanPage[]
 	open?: boolean
 	onOpenChange?: (open: boolean) => void
 }) {
@@ -96,7 +96,7 @@ export function ObservationsSheet({
 	onOpenChange,
 }: {
 	trigger?: ReactElement
-	scanPages: ScanPageUrl[]
+	scanPages: ScanPage[]
 	open?: boolean
 	onOpenChange?: (open: boolean) => void
 }) {

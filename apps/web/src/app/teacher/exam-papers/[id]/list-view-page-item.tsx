@@ -4,11 +4,11 @@ import { cn } from "@/lib/utils"
 import { useSortable } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 import { motion } from "framer-motion"
-import { Check, FileText, GripVertical, X } from "lucide-react"
+import { Check, GripVertical, X } from "lucide-react"
 
 type ListViewPageItemProps = {
 	pageKey: string
-	url: string | undefined
+	url: string
 	index: number
 	isSelected: boolean
 	onLightbox: () => void
@@ -56,7 +56,6 @@ export function ListViewPageItem({
 				type="button"
 				{...listeners}
 				onClick={(e) => {
-					if (!url) return
 					if (e.shiftKey) {
 						e.preventDefault()
 						onToggleSelect()
@@ -67,20 +66,14 @@ export function ListViewPageItem({
 				className="block cursor-grab active:cursor-grabbing touch-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-md"
 				aria-label={`Page ${index + 1} — shift+click to select, click to enlarge`}
 			>
-				{url ? (
-					// eslint-disable-next-line @next/next/no-img-element
-					<img
-						src={url}
-						alt={`Page ${index + 1}`}
-						draggable={false}
-						loading="lazy"
-						className="w-50 h-70.75 object-cover scale-[3]"
-					/>
-				) : (
-					<div className="w-50 h-70.75 flex items-center justify-center bg-muted/40 rounded-md border-2 border-foreground/20 dark:border-border">
-						<FileText className="h-8 w-8 text-muted-foreground/30" />
-					</div>
-				)}
+				{/* eslint-disable-next-line @next/next/no-img-element */}
+				<img
+					src={url}
+					alt={`Page ${index + 1}`}
+					draggable={false}
+					loading="lazy"
+					className="w-50 h-70.75 object-cover scale-[3]"
+				/>
 			</button>
 
 			{/* Selection highlight — inset ring, clips safely inside overflow-hidden */}

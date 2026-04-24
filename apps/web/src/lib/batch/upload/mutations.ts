@@ -104,6 +104,15 @@ export async function triggerClassification(
 		}),
 	)
 
+	// Flip to "classifying" so the client's activeBatch query picks it up
+	// immediately on refetch. Without this, the row sits at "uploading" until
+	// the Lambda wakes up — leaving the teacher with no visible feedback for
+	// 1–3s after closing the upload dialog.
+	await db.batchIngestJob.update({
+		where: { id: batchJobId },
+		data: { status: "classifying" },
+	})
+
 	log.info(TAG, "Classification triggered", {
 		userId: session.userId,
 		batchJobId,

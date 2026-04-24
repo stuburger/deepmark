@@ -1,6 +1,7 @@
 "use client"
 
 import type { PageKey, StagedScript } from "@/lib/batch/types"
+import { scanProxyUrl } from "@/lib/scan-url"
 import { DndContext, DragOverlay, closestCenter } from "@dnd-kit/core"
 import type { DragEndEvent, DragOverEvent, DragStartEvent } from "@dnd-kit/core"
 import { arrayMove } from "@dnd-kit/sortable"
@@ -24,7 +25,7 @@ export type DeletedPage = {
 	pageKey: string
 	/** Full page key data needed to restore the page */
 	pageKeyData: PageKey
-	/** Presigned URL for the thumbnail preview */
+	/** Proxy URL for the thumbnail preview */
 	url: string
 	/** Script this page belonged to */
 	scriptId: string
@@ -41,8 +42,9 @@ export type StagedScriptReviewListHandle = {
 
 type StagedScriptListProps = {
 	paperId: string
-	urls: Record<string, string>
 	scripts: StagedScript[]
+	collapsedMap: Record<string, boolean>
+	onCollapsedChange: (scriptId: string, collapsed: boolean) => void
 	onUpdateName: (scriptId: string, name: string) => void
 	/** Must return a Promise so optimistic UI can be rolled back on failure. */
 	onToggleExclude: (
@@ -68,8 +70,9 @@ export const StagedScriptReviewList = forwardRef<
 >(function StagedScriptReviewList(
 	{
 		paperId,
-		urls,
 		scripts,
+		collapsedMap,
+		onCollapsedChange,
 		onUpdateName,
 		onToggleExclude,
 		onDeleteScript,
@@ -91,7 +94,7 @@ export const StagedScriptReviewList = forwardRef<
 		openCarousel,
 		persistPageKeys,
 		handleDelete,
-	} = useStagedScriptsState(paperId, urls, scripts, onDeleteScript)
+	} = useStagedScriptsState(paperId, scripts, onDeleteScript)
 
 	// ── Multi-select ──────────────────────────────────────────────────────────
 	const [selectedPageKeys, setSelectedPageKeys] = useState<Set<string>>(
@@ -139,7 +142,7 @@ export const StagedScriptReviewList = forwardRef<
 		onPageDeleted?.({
 			pageKey,
 			pageKeyData,
-			url: urls[pageKey] ?? "",
+			url: scanProxyUrl(pageKey),
 			scriptId: sourceScript.id,
 			scriptName:
 				localNames[sourceScript.id] ??
@@ -195,7 +198,7 @@ export const StagedScriptReviewList = forwardRef<
 
 		setActiveDrag({
 			key,
-			url: urls[key] ?? "",
+			url: scanProxyUrl(key),
 			count: isGroupDrag ? selectedPageKeys.size : 1,
 		})
 	}
@@ -405,7 +408,7 @@ export const StagedScriptReviewList = forwardRef<
 						{localScripts.map((script) => (
 							<motion.div
 								key={script.id}
-								layout
+								layout="position"
 								initial={{ opacity: 0, y: 8 }}
 								animate={{ opacity: 1, y: 0 }}
 								exit={{
@@ -419,8 +422,13 @@ export const StagedScriptReviewList = forwardRef<
 								<ListViewScriptSection
 									script={script}
 									localName={localNames[script.id] ?? ""}
-									urls={urls}
 									selectedPageKeys={selectedPageKeys}
+									collapsed={
+										collapsedMap[script.id] ?? script.status === "confirmed"
+									}
+									onCollapsedChange={(collapsed) =>
+										onCollapsedChange(script.id, collapsed)
+									}
 									onOpenCarousel={openCarousel}
 									onUpdateLocalName={(value) =>
 										setLocalNames((prev) => ({

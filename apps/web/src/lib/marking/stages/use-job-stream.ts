@@ -62,7 +62,7 @@ export function useJobStream(jobId: string): void {
 			queryClient.setQueryData<JobStages>(queryKeys.jobStages(jobId), next)
 
 			// Fan out: when a stage flips to `done`, dependent queries
-			// (studentJob, jobScanUrls, jobPageTokens, jobAnnotations) hold
+			// (studentJob, jobScanPages, jobPageTokens, jobAnnotations) hold
 			// stale data until they refetch. Trigger that refetch here
 			// rather than leaving each consumer to poll defensively.
 			invalidateOnStageTransitions(queryClient, jobId, prev, next)

@@ -10,7 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import type { JobStages } from "@/lib/marking/stages/types"
 import type {
 	PageToken,
-	ScanPageUrl,
+	ScanPage,
 	StudentPaperJobPayload,
 	UpsertTeacherOverrideInput,
 } from "@/lib/marking/types"
@@ -42,7 +42,7 @@ export function SubmissionView({
 	examPaperId: string
 	jobId: string
 	initialData: StudentPaperJobPayload
-	scanPages: ScanPageUrl[]
+	scanPages: ScanPage[]
 	pageTokens: PageToken[]
 	initialStages: JobStages
 	debugMode?: boolean

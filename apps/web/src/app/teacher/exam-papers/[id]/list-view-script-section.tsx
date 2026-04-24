@@ -4,17 +4,18 @@ import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import type { StagedScript } from "@/lib/batch/types"
+import { scanProxyUrl } from "@/lib/scan-url"
 import { useDroppable } from "@dnd-kit/core"
 import { SortableContext, rectSortingStrategy } from "@dnd-kit/sortable"
 import { ChevronDown, ChevronUp, Trash2 } from "lucide-react"
-import { useState } from "react"
 import { ListViewPageItem } from "./list-view-page-item"
 
 type ListViewScriptSectionProps = {
 	script: StagedScript
 	localName: string
-	urls: Record<string, string>
 	selectedPageKeys: Set<string>
+	collapsed: boolean
+	onCollapsedChange: (collapsed: boolean) => void
 	onToggleInclude: () => void
 	onOpenCarousel: (script: StagedScript, index: number) => void
 	onUpdateLocalName: (value: string) => void
@@ -27,8 +28,9 @@ type ListViewScriptSectionProps = {
 export function ListViewScriptSection({
 	script,
 	localName,
-	urls,
 	selectedPageKeys,
+	collapsed,
+	onCollapsedChange,
 	onToggleInclude,
 	onOpenCarousel,
 	onUpdateLocalName,
@@ -40,11 +42,10 @@ export function ListViewScriptSection({
 	const pageKeys = script.page_keys.slice().sort((a, b) => a.order - b.order)
 	const pageKeyIds = pageKeys.map((pk) => pk.s3_key)
 	const isIncluded = script.status === "confirmed"
-	const [collapsed, setCollapsed] = useState(isIncluded)
 
 	function handleToggleInclude() {
 		// Including ⇒ assume we're done, collapse. Excluding ⇒ expand for review.
-		setCollapsed(!isIncluded)
+		onCollapsedChange(!isIncluded)
 		onToggleInclude()
 	}
 
@@ -99,7 +100,7 @@ export function ListViewScriptSection({
 						size="icon"
 						variant="ghost"
 						className="h-7 w-7 text-muted-foreground"
-						onClick={() => setCollapsed((v) => !v)}
+						onClick={() => onCollapsedChange(!collapsed)}
 						aria-label={collapsed ? "Expand script" : "Collapse script"}
 						title={collapsed ? "Expand" : "Collapse"}
 					>
@@ -135,7 +136,7 @@ export function ListViewScriptSection({
 									<ListViewPageItem
 										key={pk.s3_key}
 										pageKey={pk.s3_key}
-										url={urls[pk.s3_key]}
+										url={scanProxyUrl(pk.s3_key)}
 										index={idx}
 										isSelected={selectedPageKeys.has(pk.s3_key)}
 										onLightbox={() => onOpenCarousel(script, idx)}

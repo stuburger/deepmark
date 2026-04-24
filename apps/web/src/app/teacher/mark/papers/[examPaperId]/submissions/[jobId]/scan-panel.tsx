@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/tooltip"
 import type {
 	PageToken,
-	ScanPageUrl,
+	ScanPage,
 	StudentPaperAnnotation,
 	StudentPaperJobPayload,
 } from "@/lib/marking/types"
@@ -52,7 +52,7 @@ export function ScanPanel({
 	hasAnnotations = false,
 	highlightedTokenIds,
 }: {
-	scanPages: ScanPageUrl[]
+	scanPages: ScanPage[]
 	pageTokens: PageToken[]
 	gradingResults: StudentPaperJobPayload["grading_results"]
 	levelDescriptors?: string | null

@@ -2,9 +2,18 @@ import { inflateSync } from "node:zlib"
 import { s3 } from "@/lib/infra/s3"
 import { computeInkDensity } from "@/lib/scan-extraction/blank-detection"
 import { GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3"
+import * as mupdf from "mupdf"
 import { PDFDict, PDFDocument, PDFName, PDFRawStream, PDFRef } from "pdf-lib"
 import { Resource } from "sst"
 import type { PageData } from "./types"
+
+/**
+ * Scale factor for the MuPDF fallback renderer — targets ~144 DPI for an A4
+ * page, producing JPEGs of similar resolution to the ~100 DPI embedded
+ * scans this pipeline normally handles. Slightly higher than source to
+ * avoid losing detail when the fallback fires.
+ */
+const FALLBACK_RENDER_SCALE = 2.0
 
 const BLANK_THRESHOLD = 0.005
 
@@ -85,11 +94,30 @@ export async function extractPdfPages(
 }
 
 /**
- * Extracts the first JPEG image from a single-page PDF's XObject resources.
- * Handles both /DCTDecode and [ /FlateDecode /DCTDecode ] filter chains.
- * Returns null if no JPEG image is found (blank/non-image page).
+ * Extracts a JPEG for a single-page PDF.
+ *
+ * Fast path: reach into the page's image XObject and pull the embedded
+ * JPEG bytes directly (handles /DCTDecode and [/FlateDecode /DCTDecode]).
+ * This is what the overwhelming majority of scanned PDFs need, and it's
+ * essentially free — no rendering.
+ *
+ * Fallback: if the embedded stream can't be extracted (missing XObject,
+ * malformed filter chain, truncated Flate stream — yes, this happens in
+ * the wild, e.g. 9dbs5.pdf page 108), render the page via MuPDF. MuPDF
+ * tolerates ragged streams that pdf-lib chokes on.
+ *
+ * Returns null only when both paths fail — at which point the page is
+ * genuinely unreadable and should be surfaced upstream.
  */
 export async function extractJpegFromPdfPage(
+	pdfBytes: Uint8Array,
+): Promise<Buffer | null> {
+	const embedded = await tryExtractEmbeddedJpeg(pdfBytes)
+	if (embedded) return embedded
+	return await tryRenderPdfPageToJpeg(pdfBytes)
+}
+
+async function tryExtractEmbeddedJpeg(
 	pdfBytes: Uint8Array,
 ): Promise<Buffer | null> {
 	let pdfDoc: PDFDocument
@@ -126,15 +154,36 @@ export async function extractJpegFromPdfPage(
 			return Buffer.from(stream.contents)
 		}
 
-		// Handle [ /FlateDecode /DCTDecode ] — zlib-wrapped JPEG
+		// [ /FlateDecode /DCTDecode ] — zlib-wrapped JPEG
 		if (filterStr.includes("DCTDecode") && filterStr.includes("FlateDecode")) {
 			try {
 				return inflateSync(Buffer.from(stream.contents))
 			} catch {
+				// Truncated/malformed stream — caller falls back to MuPDF render.
 				return null
 			}
 		}
 	}
 
 	return null
+}
+
+async function tryRenderPdfPageToJpeg(
+	pdfBytes: Uint8Array,
+): Promise<Buffer | null> {
+	try {
+		const doc = mupdf.Document.openDocument(
+			pdfBytes instanceof Uint8Array ? pdfBytes : new Uint8Array(pdfBytes),
+			"application/pdf",
+		)
+		const page = doc.loadPage(0)
+		const pixmap = page.toPixmap(
+			mupdf.Matrix.scale(FALLBACK_RENDER_SCALE, FALLBACK_RENDER_SCALE),
+			mupdf.ColorSpace.DeviceRGB,
+			false,
+		)
+		return Buffer.from(pixmap.asJPEG(80))
+	} catch {
+		return null
+	}
 }

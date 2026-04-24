@@ -1,11 +1,11 @@
 import { commitBatch } from "@/lib/batch/lifecycle/mutations"
 import { getActiveBatchForPaper } from "@/lib/batch/lifecycle/queries"
 import {
+	bulkUpdateStagedScriptStatus,
 	createEmptyStagedScript,
 	splitStagedScript,
 	updateStagedScript,
 } from "@/lib/batch/scripts/mutations"
-import { getStagedScriptPageUrls } from "@/lib/batch/scripts/queries"
 import type {
 	ActiveBatchInfo,
 	BatchIngestionState,
@@ -21,7 +21,6 @@ import { toast } from "sonner"
 function mapBatchToIngestionState(
 	paperId: string,
 	batch: ActiveBatchInfo,
-	urls: Record<string, string>,
 ): BatchIngestionState | null {
 	if (!batch) return null
 
@@ -39,7 +38,6 @@ function mapBatchToIngestionState(
 		paperId,
 		allScripts: batch.staged_scripts,
 		unsubmittedScripts,
-		urls,
 	}
 }
 
@@ -64,23 +62,10 @@ export function useBatchIngestion(paperId: string) {
 			},
 		})
 
-	// Presigned URLs for page images — fetched once per batch
-	const batchId = activeBatch?.id ?? null
-	const { data: urls = {} } = useQuery({
-		queryKey: queryKeys.batchPageUrls(batchId ?? ""),
-		queryFn: async () => {
-			if (!batchId) return {}
-			const r = await getStagedScriptPageUrls(batchId)
-			return r.ok ? r.urls : {}
-		},
-		enabled: batchId !== null,
-		staleTime: Number.POSITIVE_INFINITY,
-	})
-
 	// Derive the UI-facing ingestion state
 	const ingestion = useMemo(
-		() => mapBatchToIngestionState(paperId, activeBatch ?? null, urls),
-		[paperId, activeBatch, urls],
+		() => mapBatchToIngestionState(paperId, activeBatch ?? null),
+		[paperId, activeBatch],
 	)
 
 	// ── Shared invalidation helper ───────────────────────────────────────────
@@ -264,6 +249,66 @@ export function useBatchIngestion(paperId: string) {
 			})
 	}
 
+	// ── Toggle all unsubmitted scripts included/excluded ─────────────────────
+
+	const toggleIncludeAllMutation = useMutation({
+		mutationFn: async ({
+			batchId,
+			targetStatus,
+		}: {
+			batchId: string
+			targetStatus: "confirmed" | "excluded"
+		}) => {
+			const r = await bulkUpdateStagedScriptStatus(batchId, targetStatus)
+			if (!r.ok) throw new Error(r.error)
+		},
+		onMutate: async ({ targetStatus }) => {
+			const queryKey = queryKeys.activeBatch(paperId)
+			await queryClient.cancelQueries({ queryKey })
+			const previous = queryClient.getQueryData<ActiveBatchInfo>(queryKey)
+			queryClient.setQueryData<ActiveBatchInfo>(queryKey, (old) => {
+				if (!old) return old
+				return {
+					...old,
+					staged_scripts: old.staged_scripts.map((s) =>
+						s.status === "submitted" ? s : { ...s, status: targetStatus },
+					),
+				}
+			})
+			return { previous }
+		},
+		onError: (err, _vars, context) => {
+			if (context?.previous !== undefined) {
+				queryClient.setQueryData(
+					queryKeys.activeBatch(paperId),
+					context.previous,
+				)
+			}
+			toast.error(
+				err instanceof Error ? err.message : "Failed to update all scripts",
+			)
+		},
+		onSettled: invalidateBatch,
+	})
+
+	async function handleToggleIncludeAll(): Promise<void> {
+		if (!activeBatch) return
+		const unsubmitted = activeBatch.staged_scripts.filter(
+			(s) => s.status !== "submitted",
+		)
+		if (unsubmitted.length === 0) return
+		const allConfirmed = unsubmitted.every((s) => s.status === "confirmed")
+		const targetStatus = allConfirmed ? "excluded" : "confirmed"
+		try {
+			await toggleIncludeAllMutation.mutateAsync({
+				batchId: activeBatch.id,
+				targetStatus,
+			})
+		} catch {
+			// Error already surfaced via mutation's onError toast
+		}
+	}
+
 	return {
 		ingestion,
 		refetchIngestion: refetchActiveBatch,
@@ -273,5 +318,6 @@ export function useBatchIngestion(paperId: string) {
 		handleAddScript,
 		handleUpdateScriptName,
 		handleToggleExclude,
+		handleToggleIncludeAll,
 	}
 }

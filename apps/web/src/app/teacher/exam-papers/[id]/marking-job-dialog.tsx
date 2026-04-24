@@ -1,10 +1,7 @@
 "use client"
 
 import { Dialog, DialogContent } from "@/components/ui/dialog"
-import {
-	getJobPageTokens,
-	getJobScanPageUrls,
-} from "@/lib/marking/scan/queries"
+import { getJobPageTokens, getJobScanPages } from "@/lib/marking/scan/queries"
 import { getJobStages } from "@/lib/marking/stages/queries"
 import type { JobStages } from "@/lib/marking/stages/types"
 import { getStudentPaperJobForPaper } from "@/lib/marking/submissions/queries"
@@ -30,7 +27,7 @@ export function MarkingJobDialog({
 	const enabled = open && !!jobId
 
 	// Three separate queries keyed correctly so that SubmissionView's internal
-	// queries (useJobQuery, jobScanUrls, jobPageTokens) hit warm cache immediately
+	// queries (useJobQuery, jobScanPages, jobPageTokens) hit warm cache immediately
 	// instead of seeing a mis-typed combined object under the same key.
 	const { data: jobData } = useQuery<StudentPaperJobPayload | null>({
 		queryKey: queryKeys.studentJob(jobId ?? ""),
@@ -44,10 +41,10 @@ export function MarkingJobDialog({
 	})
 
 	const { data: scanPages = [] } = useQuery({
-		queryKey: queryKeys.jobScanUrls(jobId ?? ""),
+		queryKey: queryKeys.jobScanPages(jobId ?? ""),
 		queryFn: async () => {
 			if (!jobId) return []
-			const result = await getJobScanPageUrls(jobId)
+			const result = await getJobScanPages(jobId)
 			return result.ok ? result.pages : []
 		},
 		enabled,

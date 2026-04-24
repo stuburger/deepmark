@@ -1,32 +1,27 @@
 "use server"
 
 import { db } from "@/lib/db"
-import { GetObjectCommand, S3Client } from "@aws-sdk/client-s3"
-import { getSignedUrl } from "@aws-sdk/s3-request-presigner"
 import { sortTokensSpatially } from "@mcp-gcse/shared"
-import { Resource } from "sst"
 import { auth } from "../../auth"
 import type {
 	GetJobPageTokensResult,
-	GetJobScanPageUrlsResult,
+	GetJobScanPagesResult,
 	HandwritingAnalysis,
 	PageToken,
 } from "../types"
 
-const bucketName = Resource.ScansBucket.name
-const s3 = new S3Client({})
-
 type PageEntry = { key: string; order: number; mime_type: string }
 
-// ─── getJobScanPageUrls ─────────────────────────────────────────────────────
+// ─── getJobScanPages ────────────────────────────────────────────────────────
 
 /**
- * Returns short-lived presigned GET URLs for every page uploaded to a job,
- * merged with the stored per-page OCR analysis where available.
+ * Returns every page uploaded to a job (S3 key + mime type), merged with the
+ * stored per-page OCR analysis where available. Clients build the download
+ * URL via `scanProxyUrl(page.key)` — no presigned URLs are handed out.
  */
-export async function getJobScanPageUrls(
+export async function getJobScanPages(
 	jobId: string,
-): Promise<GetJobScanPageUrlsResult> {
+): Promise<GetJobScanPagesResult> {
 	const session = await auth()
 	if (!session) return { ok: false, error: "Not authenticated" }
 
@@ -34,7 +29,6 @@ export async function getJobScanPageUrls(
 		where: { id: jobId },
 		select: {
 			pages: true,
-			s3_bucket: true,
 			ocr_runs: {
 				orderBy: { created_at: "desc" },
 				take: 1,
@@ -64,23 +58,15 @@ export async function getJobScanPageUrls(
 		]),
 	)
 
-	const bucket = sub.s3_bucket || bucketName
-
-	const resolved = await Promise.all(
-		pages
-			.slice()
-			.sort((a, b) => a.order - b.order)
-			.map(async (p) => {
-				const cmd = new GetObjectCommand({ Bucket: bucket, Key: p.key })
-				const url = await getSignedUrl(s3, cmd, { expiresIn: 3600 })
-				return {
-					order: p.order,
-					url,
-					mimeType: p.mime_type,
-					analysis: analysisByPage.get(p.order),
-				}
-			}),
-	)
+	const resolved = pages
+		.slice()
+		.sort((a, b) => a.order - b.order)
+		.map((p) => ({
+			order: p.order,
+			key: p.key,
+			mimeType: p.mime_type,
+			analysis: analysisByPage.get(p.order),
+		}))
 
 	return { ok: true, pages: resolved }
 }

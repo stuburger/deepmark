@@ -2,6 +2,7 @@ import { db } from "@/db"
 import { loadAnnotationContext } from "@/lib/annotations/data-loading"
 import { persistAnnotations } from "@/lib/annotations/persist-annotations"
 import type { PendingAnnotation } from "@/lib/annotations/types"
+import { writeAiAnnotationsToYDoc } from "@/lib/collab/write-ai-annotations"
 import { generateExaminerSummary } from "@/lib/grading/examiner-summary"
 import { loadExamPaperForGrading } from "@/lib/grading/grade-queries"
 import {
@@ -252,6 +253,14 @@ async function completeGradingJob(args: CompleteGradingJobArgs): Promise<void> {
 		args.jobId,
 		args.annotationsByQuestion,
 	)
+	// K-6: mirror AI annotations to the Y.Doc via Hocuspocus. Best-effort —
+	// DB rows remain authoritative today; the K-7 projection Lambda will
+	// eventually flip this so Y.Doc is authoritative and DB is the projection.
+	// jobId === submission_id in this processor (see db lookup above).
+	await writeAiAnnotationsToYDoc({
+		submissionId: args.jobId,
+		annotationsByQuestion: args.annotationsByQuestion,
+	})
 	await markGradingRunComplete({
 		jobId: args.jobId,
 		gradingResults: args.gradingResults,

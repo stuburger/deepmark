@@ -42,6 +42,21 @@ export function subdomain(name: string): string {
 
 export const webUrl = $dev ? "http://localhost:3000" : `https://${domain}`
 
+/**
+ * URL for the Hocuspocus collaborative editing server.
+ *
+ * - `sst dev`       → http://localhost:1234 (the Service's dev.command runs locally)
+ * - Permanent stages → https://collab.<domain> via subdomain("collab")
+ * - PR / personal    → points to the shared development collab URL
+ *
+ * Clients swap http→ws / https→wss when opening the WebSocket connection.
+ */
+export const collabUrl = $dev
+	? "http://localhost:1234"
+	: isPermanentStage
+		? `https://${subdomain("collab")}`
+		: `https://collab.dev.${baseDomain}`
+
 // Shared secrets used by API handlers and background processors.
 export const geminiApiKey = new sst.Secret("GeminiApiKey")
 export const cloudVisionApiKey = new sst.Secret("CloudVisionApiKey")
@@ -54,3 +69,13 @@ export const githubClientSecret = new sst.Secret("GithubClientSecret")
 export const googleClientId = new sst.Secret("GoogleClientId")
 export const googleClientSecret = new sst.Secret("GoogleClientSecret")
 export const anthropicApiKey = new sst.Secret("AnthropicApiKey")
+
+/**
+ * Shared secret used by backend Lambdas to authenticate to the Hocuspocus
+ * collab server as a "service" role (bypasses per-user ACL). Linked to both
+ * the collab server (for verification) and the Lambdas that write to Y.Doc
+ * (extract seed, grading annotations).
+ *
+ * Set with: `sst secret set CollabServiceSecret <random-64-char-string>`.
+ */
+export const collabServiceSecret = new sst.Secret("CollabServiceSecret")

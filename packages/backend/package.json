@@ -15,6 +15,7 @@
 		"@aws-sdk/client-sqs": "^3.1009.0",
 		"@aws-sdk/s3-request-presigner": "^3.1009.0",
 		"@google-cloud/vision": "^5.3.5",
+		"@hocuspocus/provider": "^4.0.0",
 		"@hono/zod-openapi": "^1.1.0",
 		"@mcp-gcse/db": "*",
 		"@mcp-gcse/shared": "*",
@@ -26,10 +27,13 @@
 		"mupdf": "^1.27.0",
 		"pdf-lib": "^1.17.1",
 		"sharp": "^0.34.5",
+		"ws": "^8.20.0",
+		"yjs": "^13.6.30",
 		"zod": "^4.3.5"
 	},
 	"devDependencies": {
 		"@types/sharp": "^0.32.0",
-		"@types/web-push": "^3.6.4"
+		"@types/web-push": "^3.6.4",
+		"@types/ws": "^8.18.1"
 	}
 }

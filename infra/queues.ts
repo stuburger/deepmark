@@ -1,7 +1,10 @@
+import { collabServer } from "./collab"
 import {
 	anthropicApiKey,
 	cloudVisionApiKey,
+	collabServiceSecret,
 	geminiApiKey,
+	isPermanentStage,
 	openAiApiKey,
 } from "./config"
 import { neonPostgres } from "./database"
@@ -49,6 +52,16 @@ export const studentPaperQueue = new sst.aws.Queue("StudentPaperQueue", {
 	dlq: { queue: studentPaperGradingDlq.arn, retry: 2 },
 })
 
+// K-7: projection queue. Fires on Y.Doc snapshot writes from Hocuspocus
+// (yjs/${stage}:submission:${id}.bin) and rebuilds the AI annotation rows in
+// Neon idempotently. Only created on permanent stages — non-prod stages don't
+// run their own Hocuspocus and have no bucket to subscribe to.
+export const annotationProjectionQueue = isPermanentStage
+	? new sst.aws.Queue("AnnotationProjectionQueue", {
+			visibilityTimeout: "5 minutes",
+		})
+	: undefined
+
 scansBucket.notify({
 	notifications: [
 		{
@@ -73,7 +86,28 @@ scansBucket.notify({
 			filterSuffix: ".pdf",
 		},
 		// Student paper OCR and grading are manually queued by server actions.
+		...(annotationProjectionQueue
+			? [
+					{
+						name: "YjsSnapshotTrigger",
+						queue: annotationProjectionQueue,
+						events: ["s3:ObjectCreated:*" as const],
+						filterPrefix: "yjs/",
+						filterSuffix: ".bin",
+					},
+				]
+			: []),
 	],
+})
+
+annotationProjectionQueue?.subscribe({
+	handler: "packages/backend/src/processors/annotation-projection.handler",
+	link: [neonPostgres, scansBucket],
+	environment: {
+		STAGE: $app.stage,
+	},
+	timeout: "2 minutes",
+	memory: "512 MB",
 })
 
 export const batchClassifyQueue = new sst.aws.Queue("BatchClassifyQueue", {
@@ -196,7 +230,12 @@ studentPaperQueue.subscribe({
 		scansBucket,
 		vapidPublicKey,
 		vapidPrivateKey,
+		collabServer,
+		collabServiceSecret,
 	],
+	environment: {
+		STAGE: $app.stage,
+	},
 	timeout: "10 minutes",
 	memory: "1 GB",
 })

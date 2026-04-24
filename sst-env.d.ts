@@ -58,6 +58,10 @@ declare module "sst" {
       "type": "sst.sst.Secret"
       "value": string
     }
+    "HocuspocusServer": {
+      "type": "sst.sst.Linkable"
+      "url": string
+    }
     "Interactions": {
       "name": string
       "type": "sst.aws.Function"

@@ -6,6 +6,7 @@ import {
 	type GradingDataContextValue,
 	GradingDataProvider,
 } from "@/components/annotated-answer/grading-data-context"
+import { useYDoc } from "@/components/annotated-answer/use-y-doc"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { useQuestionAlignments } from "@/lib/marking/token-alignment"
@@ -136,6 +137,12 @@ export function GradingResultsPanel({
 	// grading completes, total_max becomes non-zero and the bar appears.
 	const showScoreBar = data.total_max > 0
 
+	// Collaborative Y.Doc keyed by submission_id (falls back to jobId for
+	// legacy jobs that predate the Submission model). The hook owns lifecycle:
+	// IndexedDB offline cache + HocuspocusProvider sync + clean teardown.
+	const docKey = data.submission_id ?? jobId
+	const { doc: ydoc, synced } = useYDoc(docKey)
+
 	return (
 		<div className="space-y-4">
 			{showScoreBar && (
@@ -156,16 +163,21 @@ export function GradingResultsPanel({
 				</div>
 			)}
 
-			{/* Answer sheet — always rendered, even for empty grading_results.
-			    buildAnnotatedDoc produces a placeholder block in that case so
-			    the PM editor still mounts and persists across stage
-			    transitions. */}
+			{/* Answer sheet — gated on Y.Doc sync so AI annotations applied
+			    server-side don't race an empty initial doc. */}
 			<GradingDataProvider value={ctxValue}>
-				<AnnotatedAnswerSheet
-					doc={doc}
-					onDerivedAnnotations={onDerivedAnnotations}
-					onTokenHighlight={onTokenHighlight}
-				/>
+				{ydoc && synced ? (
+					<AnnotatedAnswerSheet
+						ydoc={ydoc}
+						doc={doc}
+						onDerivedAnnotations={onDerivedAnnotations}
+						onTokenHighlight={onTokenHighlight}
+					/>
+				) : (
+					<div className="flex items-center justify-center py-20 text-sm text-muted-foreground">
+						Loading annotations…
+					</div>
+				)}
 			</GradingDataProvider>
 		</div>
 	)

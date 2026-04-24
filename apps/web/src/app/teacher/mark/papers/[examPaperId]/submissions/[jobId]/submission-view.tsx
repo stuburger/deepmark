@@ -1,6 +1,6 @@
 "use client"
 
-import { useAnnotationSync } from "@/components/annotated-answer/use-annotation-sync"
+import { useAnnotationCacheSync } from "@/components/annotated-answer/use-annotation-cache-sync"
 import {
 	ResizableHandle,
 	ResizablePanel,
@@ -131,12 +131,10 @@ export function SubmissionView({
 		}
 	}, [annotations])
 
-	// Unified sync: editor transactions → React Query cache → server.
-	// The `jobAnnotations` cache is the single source of truth for
-	// annotations (AI + teacher). The callback writes derived state into the
-	// cache and schedules a debounced save mutation that races safely against
-	// annotation refetches via `cancelQueries` in `onMutate`.
-	const handleDerivedAnnotations = useAnnotationSync(jobId)
+	// Editor transactions → React Query cache. The `jobAnnotations` cache
+	// drives the scan viewer overlay. Teacher edits persist through the Y.Doc
+	// (Hocuspocus + IndexedDB), not via a server mutation here.
+	const handleDerivedAnnotations = useAnnotationCacheSync(jobId)
 
 	return (
 		<div className="flex flex-col overflow-hidden h-full">

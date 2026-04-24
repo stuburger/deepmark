@@ -4,9 +4,9 @@ import type { StudentPaperAnnotation } from "@/lib/marking/types"
 import { cn } from "@/lib/utils"
 import type { JSONContent } from "@tiptap/core"
 import BoldExtension from "@tiptap/extension-bold"
+import Collaboration from "@tiptap/extension-collaboration"
 import Document from "@tiptap/extension-document"
 import HardBreak from "@tiptap/extension-hard-break"
-import History from "@tiptap/extension-history"
 import ItalicExtension from "@tiptap/extension-italic"
 import Text from "@tiptap/extension-text"
 import UnderlineExtension from "@tiptap/extension-underline"
@@ -25,6 +25,7 @@ import {
 	X,
 } from "lucide-react"
 import { useCallback, useEffect, useRef, useState } from "react"
+import type * as Y from "yjs"
 import "./annotation-marks.css"
 import { annotationMarks } from "./annotation-marks"
 import { AnnotationShortcuts } from "./annotation-shortcuts"
@@ -63,18 +64,24 @@ const BUBBLE_ERASER = <Eraser className="h-3.5 w-3.5" />
 // ─── Main component ─────────────────────────────────────────────────────────
 
 /**
- * Pure PM editor component. Renders a tiptap document with annotation marks,
- * floating toolbar, bubble menu, comment sidebar, and hover word linking.
+ * Pure PM editor component. Content is owned by a Yjs Y.Doc via the
+ * Collaboration extension; local edits are CRDT ops that sync through
+ * HocuspocusProvider + IndexedDB. Grading data (scores, overrides, feedback)
+ * is consumed by NodeViews via GradingDataContext.
  *
- * OCR token data is embedded in the document as ocrToken marks — no external
- * alignment maps needed. Grading data (scores, overrides, feedback) is
- * consumed by NodeViews via GradingDataContext.
+ * Seeding: on first mount, if the Y.Doc is empty, the initial JSONContent
+ * produced by buildAnnotatedDoc() is applied inside a `ydoc.transact(..., "seed")`
+ * so all clients see the same starting state. Subsequent stage updates
+ * (new OCR, new grading, new AI annotations) will eventually be written
+ * directly to the Y.Doc by backend Lambdas (K-6), not re-seeded client-side.
  */
 export function AnnotatedAnswerSheet({
+	ydoc,
 	doc,
 	onDerivedAnnotations,
 	onTokenHighlight,
 }: {
+	ydoc: Y.Doc
 	doc: JSONContent
 	onDerivedAnnotations?: (annotations: StudentPaperAnnotation[]) => void
 	onTokenHighlight?: (tokenIds: string[] | null) => void
@@ -96,10 +103,9 @@ export function AnnotatedAnswerSheet({
 	const onMarkAppliedRef = useRef(handleMarkApplied)
 	onMarkAppliedRef.current = handleMarkApplied
 
-	// Editor is created ONCE and persists across doc changes (progressive
-	// rendering). Stage updates (OCR → grading → enrichment) apply as
-	// setContent calls rather than remounting the whole editor, which would
-	// lose focus/selection and create a visible flash.
+	// Editor is bound to the Y.Doc via the Collaboration extension. Content
+	// flows through CRDT ops — no content prop, no setContent sync dance.
+	// The editor re-creates if ydoc identity changes (submission switch).
 	const editor = useEditor(
 		{
 			immediatelyRender: false,
@@ -110,7 +116,6 @@ export function AnnotatedAnswerSheet({
 				}),
 				Text,
 				HardBreak,
-				History,
 				BoldExtension,
 				ItalicExtension,
 				UnderlineExtension,
@@ -124,8 +129,8 @@ export function AnnotatedAnswerSheet({
 					onAnnotationHoverRef,
 				}),
 				InsertParagraphPlugin,
+				Collaboration.configure({ document: ydoc, field: "doc" }),
 			],
-			content: doc,
 			editorProps: {
 				attributes: {
 					class:
@@ -133,58 +138,49 @@ export function AnnotatedAnswerSheet({
 				},
 			},
 		},
-		[],
+		[ydoc],
 	)
 
-	// Sync new doc content into the existing editor when upstream stages
-	// produce new data (tokens arrive after OCR, marks arrive after
-	// enrichment). Only updates when content actually differs.
+	// One-time seed: when the editor is ready AND the Y.Doc is empty AND the
+	// built JSONContent is real (not a placeholder), apply it so all clients
+	// see the same starting state.
 	//
-	// Cursor preservation: replacing doc content via setContent would
-	// normally reset the selection to the start of the doc. Since the
-	// pipeline may emit new data while the teacher is actively reading or
-	// editing, we snapshot the selection and focus state before the
-	// replacement and restore them afterwards. Positions are clamped to
-	// the new doc size to guard against structural changes.
+	// Two guards:
+	//   1. `hasRealContent` — wait until grading produces question blocks.
+	//      Seeding the "Waiting for student answers…" placeholder would lock
+	//      the Y.Doc at the placeholder forever (we only seed once).
+	//   2. `meta.seeded` Y.Map flag — narrows the window where two clients
+	//      simultaneously opening a fresh submission could both call
+	//      setContent and produce doubled content. Once one client has
+	//      seeded and synced, later clients see the flag and skip.
+	//      The flag is *not* a true distributed lock — Yjs can't give one
+	//      across clients — but it handles every case except a sub-100ms
+	//      simultaneous first-open race. Structural fix is to move seeding
+	//      into the OCR Lambda (noted in plan, deferred).
 	//
-	// IME guard: setContent while an IME composition is active can corrupt
-	// the composition buffer. We skip the update and reset the fingerprint
-	// so the next render retries — by then composition has usually ended.
-	const lastDocFpRef = useRef<string>("")
+	// Subsequent `doc` prop changes are IGNORED client-side — backend
+	// Lambdas (K-6) own stage-driven updates.
 	useEffect(() => {
 		if (!editor) return
-		const fp = JSON.stringify(doc)
-		if (fp === lastDocFpRef.current) return
 
-		if (editor.view.composing) {
-			// Leave lastDocFpRef untouched so the next render retries
-			return
-		}
+		const fragment = ydoc.getXmlFragment("doc")
+		if (fragment.length > 0) return
 
-		lastDocFpRef.current = fp
+		const hasRealContent =
+			doc?.content?.some(
+				(b) => b.type === "questionAnswer" || b.type === "mcqTable",
+			) ?? false
+		if (!hasRealContent) return
 
-		const { from, to } = editor.state.selection
-		const wasFocused = editor.isFocused
+		const meta = ydoc.getMap<boolean>("meta")
+		if (meta.get("seeded")) return
 
-		// Dispatch the content replacement as a raw transaction.
-		// addToHistory:false keeps stage-driven updates out of the teacher's
-		// undo stack.
-		const newDoc = editor.schema.nodeFromJSON(doc)
-		const replaceTr = editor.state.tr
-			.replaceWith(0, editor.state.doc.content.size, newDoc.content)
-			.setMeta("addToHistory", false)
-			.setMeta("preventUpdate", true)
-		editor.view.dispatch(replaceTr)
-
-		const docSize = editor.state.doc.content.size
-		const clampedFrom = Math.min(Math.max(from, 0), docSize)
-		const clampedTo = Math.min(Math.max(to, 0), docSize)
-		editor.commands.setTextSelection({
-			from: clampedFrom,
-			to: clampedTo,
-		})
-		if (wasFocused) editor.commands.focus(undefined, { scrollIntoView: false })
-	}, [editor, doc])
+		ydoc.transact(() => {
+			if (meta.get("seeded")) return
+			editor.commands.setContent(doc)
+			meta.set("seeded", true)
+		}, "seed")
+	}, [editor, ydoc, doc])
 
 	// Stable callback ref — avoids re-subscribing the transaction listener
 	const stableOnDerived = useCallback(

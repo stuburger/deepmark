@@ -98,7 +98,7 @@ export function useSubmissionData({
 
 	// Annotations — fetched once on mount and re-fetched when annotation
 	// completes (see the effect below). Teacher edits update the cache
-	// directly via useAnnotationSync, so no polling is needed.
+	// directly via useAnnotationCacheSync, so no polling is needed.
 	const { data: annotations = [] } = useQuery<StudentPaperAnnotation[]>({
 		queryKey: queryKeys.jobAnnotations(jobId),
 		queryFn: async () => {

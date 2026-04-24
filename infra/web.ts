@@ -1,7 +1,9 @@
 import { auth, authUrl } from "./auth"
+import { collabServer } from "./collab"
 import {
 	domain,
 	anthropicApiKey,
+	collabUrl,
 	geminiApiKey,
 	openAiApiKey,
 	webUrl,
@@ -32,6 +34,7 @@ export const web = new sst.aws.Nextjs("Web", {
 		studentPaperOcrQueue,
 		studentPaperQueue,
 		batchClassifyQueue,
+		collabServer,
 		geminiApiKey,
 		openAiApiKey,
 		anthropicApiKey,
@@ -48,5 +51,7 @@ export const web = new sst.aws.Nextjs("Web", {
 	environment: {
 		OPENAUTH_ISSUER: authUrl,
 		NEXT_PUBLIC_APP_URL: webUrl,
+		NEXT_PUBLIC_COLLAB_URL: collabUrl,
+		NEXT_PUBLIC_STAGE: $app.stage,
 	},
 })

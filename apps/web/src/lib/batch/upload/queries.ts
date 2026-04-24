@@ -79,9 +79,6 @@ export async function getBatchIngestJob(
 		batch: {
 			id: batch.id,
 			status: batch.status,
-			review_mode: batch.review_mode,
-			classification_mode: batch.classification_mode,
-			pages_per_script: batch.pages_per_script,
 			total_student_jobs: batch.total_student_jobs,
 			notification_sent_at: batch.notification_sent_at,
 			error: batch.error,

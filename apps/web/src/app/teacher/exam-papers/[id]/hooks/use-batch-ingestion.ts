@@ -40,8 +40,6 @@ function mapBatchToIngestionState(
 		allScripts: batch.staged_scripts,
 		unsubmittedScripts,
 		urls,
-		pagesPerScript: batch.pages_per_script,
-		classificationMode: batch.classification_mode,
 	}
 }
 

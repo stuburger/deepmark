@@ -6,7 +6,6 @@ import {
 	ResizablePanelGroup,
 } from "@/components/ui/resizable"
 import type { BatchIngestionState, StagedScript } from "@/lib/batch/types"
-import type { ClassificationMode } from "@mcp-gcse/db"
 import { useRef, useState } from "react"
 import { PaperTrayPanel } from "./paper-tray-panel"
 import {
@@ -60,8 +59,6 @@ export function BatchStagingPanel({
 			onSplitScript={onSplitScript}
 			onDeleteScript={onDeleteScript}
 			onAddScript={onAddScript}
-			pagesPerScript={ingestion.pagesPerScript}
-			classificationMode={ingestion.classificationMode}
 		/>
 	)
 }
@@ -85,8 +82,6 @@ function ScriptReviewLayout({
 	onSplitScript: (scriptId: string, splitAfterIndex: number) => void
 	onDeleteScript: () => void
 	onAddScript: () => Promise<void>
-	pagesPerScript: number
-	classificationMode: ClassificationMode
 }) {
 	const confirmedScripts = scripts.filter((s) => s.status === "confirmed")
 

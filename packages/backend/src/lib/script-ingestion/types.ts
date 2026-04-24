@@ -15,16 +15,8 @@ export type PageData = {
 	jpegBuffer: Buffer | null
 }
 
-export type PageGroup = {
-	pages: PageData[]
-	proposedName: string | null
-	confidence: number
-	hasUncertainPage: boolean
-}
-
 export type StagedScriptData = {
 	page_keys: PageKey[]
 	proposed_name: string | null
 	confidence: number
-	hasUncertainPage: boolean
 }

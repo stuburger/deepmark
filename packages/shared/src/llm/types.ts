@@ -269,45 +269,21 @@ export const LLM_CALL_SITE_DEFAULTS: Array<{
 		],
 	},
 
-	// ── Batch Classification ─────────────────────────────────────────────
-	// Runs when a multi-student PDF is uploaded and segmented into scripts.
+	// ── Script Segmentation ──────────────────────────────────────────────
+	// Runs once per uploaded PDF. A single vision call sees thumbnails of every
+	// page and returns the list of student scripts with their page ranges and
+	// extracted names.
 	{
-		key: "script-boundary-classification",
-		display_name: "Script Boundary Classification",
+		key: "pdf-script-segmentation",
+		display_name: "PDF Script Segmentation",
 		description:
-			"Classifies whether a page starts a new student script during batch segmentation.",
-		input_type: "vision",
+			"Single call per uploaded PDF — reads Cloud Vision OCR of every page, returns script ranges and student names.",
+		input_type: "text",
 		phase: "segmentation",
 		step: 1,
-		multiplier: "per-page",
-		models: [
-			{ provider: "google", model: "gemini-2.5-flash", temperature: 0.2 },
-		],
-	},
-	{
-		key: "blank-page-classification",
-		display_name: "Blank Page Classification",
-		description:
-			"Classifies blank pages as separators, script pages, or artifacts.",
-		input_type: "vision",
-		phase: "segmentation",
-		step: 1,
-		multiplier: "per-page",
-		models: [
-			{ provider: "google", model: "gemini-2.5-flash", temperature: 0.2 },
-		],
-	},
-	{
-		key: "student-name-extraction",
-		display_name: "Student Name Extraction",
-		description:
-			"Extracts student name from the first page of a script during batch classification.",
-		input_type: "vision",
-		phase: "segmentation",
-		step: 2,
 		multiplier: "once",
 		models: [
-			{ provider: "google", model: "gemini-2.5-flash", temperature: 0.2 },
+			{ provider: "google", model: "gemini-2.5-flash", temperature: 0.0 },
 		],
 	},
 

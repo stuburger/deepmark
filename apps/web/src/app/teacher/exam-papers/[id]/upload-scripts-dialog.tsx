@@ -9,9 +9,8 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
 import { Spinner } from "@/components/ui/spinner"
-import { ChevronDown, FileText, Loader2, Trash2, Upload } from "lucide-react"
+import { FileText, Loader2, Trash2, Upload } from "lucide-react"
 import { useBatchUpload } from "./hooks/use-batch-upload"
 
 export function UploadScriptsDialog({
@@ -36,61 +35,14 @@ export function UploadScriptsDialog({
 						<DialogHeader>
 							<DialogTitle>Upload student scripts</DialogTitle>
 							<DialogDescription>
-								Upload PDFs or images. Each file can be a single student&apos;s
-								script or contain multiple students&apos; scripts in one PDF.
+								Upload PDFs or images. DeepMark will read each file and split
+								multi-student PDFs into individual scripts for you to review
+								before marking.
 							</DialogDescription>
 						</DialogHeader>
 
 						<div className="space-y-4">
-							{/* 1. Segmentation mode */}
-							<ClassificationModeSelector
-								value={batch.classificationMode}
-								disabled={batch.phase !== "upload"}
-								onChange={(next) => {
-									batch.setClassificationMode(next)
-									batch.handleUpdateSettings({
-										classificationMode: next,
-									})
-								}}
-							/>
-
-							{/* Pages per script — shown inline when fixed_pages is selected */}
-							{batch.classificationMode === "fixed_pages" && (
-								<div className="flex items-center gap-4">
-									<div className="space-y-1">
-										<label
-											htmlFor="pages-per-script"
-											className="text-sm font-medium"
-										>
-											Pages per student script
-										</label>
-										<p className="text-xs text-muted-foreground">
-											A remainder at the end will be flagged for review.
-										</p>
-									</div>
-									<Input
-										id="pages-per-script"
-										type="number"
-										min={1}
-										max={50}
-										value={batch.pagesPerScript}
-										onChange={(e) => {
-											const next = Math.min(
-												50,
-												Math.max(1, Number(e.target.value)),
-											)
-											batch.setPagesPerScript(next)
-											batch.handleUpdateSettings({
-												pagesPerScript: next,
-											})
-										}}
-										className="h-8 w-20 text-sm shrink-0"
-										disabled={batch.phase !== "upload"}
-									/>
-								</div>
-							)}
-
-							{/* 2. Drop / upload area */}
+							{/* Drop / upload area */}
 							<div className="space-y-3">
 								<button
 									type="button"
@@ -153,72 +105,6 @@ export function UploadScriptsDialog({
 									</div>
 								)}
 							</div>
-
-							{/* 3. Advanced settings */}
-							<div>
-								<Button
-									variant="ghost"
-									size="xs"
-									onClick={() => batch.setShowAdvanced((v) => !v)}
-									className="text-muted-foreground hover:text-foreground"
-								>
-									<ChevronDown
-										className={`h-3.5 w-3.5 transition-transform ${
-											batch.showAdvanced ? "rotate-180" : ""
-										}`}
-									/>
-									Advanced
-								</Button>
-								{batch.showAdvanced && (
-									<div className="mt-3 space-y-4 rounded-lg border bg-muted/20 p-4">
-										{/* Auto-start marking */}
-										<ToggleSetting
-											label="Auto-start marking"
-											description="Skip review if all scripts are detected with high confidence. When off, always review before marking."
-											checked={batch.autoCommit}
-											disabled={batch.phase !== "upload"}
-											onToggle={() => {
-												const next = !batch.autoCommit
-												batch.setAutoCommit(next)
-												batch.handleUpdateSettings({
-													reviewMode: next ? "auto" : "required",
-												})
-											}}
-										/>
-
-										{/* Approx pages — auto mode only */}
-										{batch.classificationMode === "auto" && (
-											<div className="space-y-1.5">
-												<label
-													htmlFor="pages-per-script"
-													className="text-sm font-medium"
-												>
-													Approx. pages per student script
-												</label>
-												<Input
-													id="pages-per-script"
-													type="number"
-													min={1}
-													max={50}
-													value={batch.pagesPerScript}
-													onChange={(e) => {
-														const next = Math.min(
-															50,
-															Math.max(1, Number(e.target.value)),
-														)
-														batch.setPagesPerScript(next)
-														batch.handleUpdateSettings({
-															pagesPerScript: next,
-														})
-													}}
-													className="h-8 w-24 text-sm"
-													disabled={batch.phase !== "upload"}
-												/>
-											</div>
-										)}
-									</div>
-								)}
-							</div>
 						</div>
 
 						<DialogFooter>
@@ -252,27 +138,26 @@ export function UploadScriptsDialog({
 				{batch.phase === "classifying" && (
 					<>
 						<DialogHeader>
-							<DialogTitle>Analysing your upload</DialogTitle>
+							<DialogTitle>Finding student scripts</DialogTitle>
 							<DialogDescription>
-								{batch.classificationMode === "auto"
-									? "DeepMark is reading and grouping the scripts by student. This usually takes under a minute."
-									: "Preparing your scripts for review."}
+								We're reading each page and splitting your upload into
+								individual student scripts. You can safely close this window —
+								processing continues in the background, and the scripts will
+								appear here when they're ready.
 							</DialogDescription>
 						</DialogHeader>
 						<div className="flex flex-col items-center gap-4 py-8">
 							<Loader2 className="h-10 w-10 animate-spin text-primary" />
 							<p className="text-sm text-muted-foreground">
-								{batch.classificationMode === "per_file"
-									? "Processing pages…"
-									: "Analysing your upload…"}
+								Usually takes under a minute…
 							</p>
 						</div>
 						<DialogFooter>
 							<Button
-								variant="ghost"
+								variant="outline"
 								onClick={() => batch.handleOpenChange(false)}
 							>
-								Cancel
+								Close
 							</Button>
 						</DialogFooter>
 					</>
@@ -291,119 +176,5 @@ export function UploadScriptsDialog({
 				/>
 			</DialogContent>
 		</Dialog>
-	)
-}
-
-// ── 4-way segmentation mode picker ──────────────────────────────────────────
-
-type ClassificationModeValue =
-	| "auto"
-	| "per_file"
-	| "fixed_pages"
-	| "blank_separator"
-
-const CLASSIFICATION_MODE_OPTIONS: {
-	value: ClassificationModeValue
-	label: string
-	description: string
-}[] = [
-	{
-		value: "auto",
-		label: "Smart AI",
-		description: "AI reads context to detect boundaries",
-	},
-	{
-		value: "blank_separator",
-		label: "Blank separator",
-		description: "Blank pages mark script boundaries",
-	},
-	{
-		value: "fixed_pages",
-		label: "Fixed pages",
-		description: "Split every N pages exactly",
-	},
-	{
-		value: "per_file",
-		label: "Per file",
-		description: "One student per uploaded file",
-	},
-]
-
-function ClassificationModeSelector({
-	value,
-	disabled,
-	onChange,
-}: {
-	value: ClassificationModeValue
-	disabled: boolean
-	onChange: (mode: ClassificationModeValue) => void
-}) {
-	return (
-		<div className="space-y-1.5">
-			<p className="text-sm font-medium">Segmentation mode</p>
-			<div className="grid grid-cols-2 gap-1.5">
-				{CLASSIFICATION_MODE_OPTIONS.map((opt) => (
-					<button
-						key={opt.value}
-						type="button"
-						disabled={disabled}
-						onClick={() => onChange(opt.value)}
-						className={`flex flex-col items-start gap-0.5 rounded-md border px-3 py-2.5 text-left text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
-							value === opt.value
-								? "border-primary bg-primary/5 text-primary"
-								: "border-border hover:border-muted-foreground/40 hover:bg-muted/30 text-foreground"
-						}`}
-					>
-						<span className="font-medium">{opt.label}</span>
-						<span
-							className={`leading-tight ${value === opt.value ? "text-primary/70" : "text-muted-foreground"}`}
-						>
-							{opt.description}
-						</span>
-					</button>
-				))}
-			</div>
-		</div>
-	)
-}
-
-// ── Reusable toggle switch for advanced settings ────────────────────────────
-
-function ToggleSetting({
-	label,
-	description,
-	checked,
-	disabled,
-	onToggle,
-}: {
-	label: string
-	description: string
-	checked: boolean
-	disabled: boolean
-	onToggle: () => void
-}) {
-	return (
-		<div className="flex items-center justify-between gap-4">
-			<div className="space-y-0.5">
-				<p className="text-sm font-medium">{label}</p>
-				<p className="text-xs text-muted-foreground">{description}</p>
-			</div>
-			<button
-				type="button"
-				role="switch"
-				aria-checked={checked}
-				disabled={disabled}
-				onClick={onToggle}
-				className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 ${
-					checked ? "bg-primary" : "bg-input"
-				}`}
-			>
-				<span
-					className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-background shadow-lg ring-0 transition-transform ${
-						checked ? "translate-x-4" : "translate-x-0"
-					}`}
-				/>
-			</button>
-		</div>
 	)
 }

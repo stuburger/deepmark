@@ -2,7 +2,6 @@ import {
 	addFileToBatch,
 	createBatchIngestJob,
 	triggerClassification,
-	updateBatchJobSettings,
 } from "@/lib/batch/upload/mutations"
 import { getBatchIngestJob } from "@/lib/batch/upload/queries"
 import { validateScriptFile } from "@/lib/upload-validation"
@@ -32,12 +31,6 @@ export function useBatchUpload({
 	const [phase, setPhase] = useState<Phase>("upload")
 	const [files, setFiles] = useState<FileItem[]>([])
 	const [batchJobId, setBatchJobId] = useState<string | null>(null)
-	const [showAdvanced, setShowAdvanced] = useState(false)
-	const [autoCommit, setAutoCommit] = useState(false)
-	const [pagesPerScript, setPagesPerScript] = useState(4)
-	const [classificationMode, setClassificationMode] = useState<
-		"auto" | "per_file" | "fixed_pages" | "blank_separator"
-	>("auto")
 	const fileInputRef = useRef<HTMLInputElement>(null)
 	const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
@@ -84,10 +77,6 @@ export function useBatchUpload({
 			setPhase("upload")
 			setFiles([])
 			setBatchJobId(null)
-			setShowAdvanced(false)
-			setAutoCommit(false)
-			setPagesPerScript(4)
-			setClassificationMode("auto")
 		}
 		onOpenChange(next)
 	}
@@ -96,12 +85,7 @@ export function useBatchUpload({
 
 	async function ensureBatchJob(): Promise<string> {
 		if (batchJobId) return batchJobId
-		const result = await createBatchIngestJob(
-			examPaperId,
-			autoCommit ? "auto" : "required",
-			pagesPerScript,
-			classificationMode,
-		)
+		const result = await createBatchIngestJob(examPaperId)
 		if (!result.ok) throw new Error(result.error)
 		setBatchJobId(result.batchJobId)
 		return result.batchJobId
@@ -202,14 +186,6 @@ export function useBatchUpload({
 		startPolling(batchJobId)
 	}
 
-	function handleUpdateSettings(
-		settings: Parameters<typeof updateBatchJobSettings>[1],
-	) {
-		if (batchJobId) {
-			void updateBatchJobSettings(batchJobId, settings)
-		}
-	}
-
 	// ── Derived values ────────────────────────────────────────────────────────
 
 	const isUploading = files.some((f) => f.uploading)
@@ -222,20 +198,11 @@ export function useBatchUpload({
 		setFiles,
 		fileInputRef,
 		batchJobId,
-		showAdvanced,
-		setShowAdvanced,
-		autoCommit,
-		setAutoCommit,
-		pagesPerScript,
-		setPagesPerScript,
-		classificationMode,
-		setClassificationMode,
 		isUploading,
 		hasErrors,
 		canStart,
 		handleOpenChange,
 		handleFiles,
 		handleStartClassifying,
-		handleUpdateSettings,
 	}
 }

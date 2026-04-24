@@ -33,8 +33,6 @@ export async function getActiveBatchForPaper(
 		batch: {
 			id: batch.id,
 			status: batch.status,
-			classification_mode: batch.classification_mode,
-			pages_per_script: batch.pages_per_script,
 			total_student_jobs: batch.total_student_jobs,
 			staged_scripts: batch.staged_scripts.map((s) => ({
 				id: s.id,

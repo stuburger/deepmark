@@ -1,12 +1,13 @@
-import { SIGNAL_TO_TIPTAP } from "@/lib/marking/mark-registry"
-import type { TextMark, TokenAlignment } from "@/lib/marking/token-alignment"
+import type { JSONContent } from "@tiptap/core"
+import type { TextMark, TokenAlignment } from "./alignment/types"
+import { SIGNAL_TO_TIPTAP } from "./mark-registry"
+import { type SegmentMark, segmentText } from "./segment-text"
 import type {
 	ExamPaperQuestion,
 	ExtractedAnswer,
 	GradingResult,
 	PageToken,
-} from "@/lib/marking/types"
-import type { JSONContent } from "@tiptap/core"
+} from "./types"
 
 // ─── Token range: inverted view of a TokenAlignment for mark generation ─────
 
@@ -52,91 +53,38 @@ function buildTextContent(
 ): JSONContent[] {
 	if (text.length === 0) return [{ type: "text", text: " " }]
 
-	// Collect boundary points from both annotation marks and token ranges
-	const boundaries = new Set<number>()
-	boundaries.add(0)
-	boundaries.add(text.length)
-	for (const m of marks) {
-		if (m.from >= 0 && m.from <= text.length) boundaries.add(m.from)
-		if (m.to >= 0 && m.to <= text.length) boundaries.add(m.to)
-	}
-	for (const tr of tokenRanges) {
-		if (tr.from >= 0 && tr.from <= text.length) boundaries.add(tr.from)
-		if (tr.to >= 0 && tr.to <= text.length) boundaries.add(tr.to)
-	}
+	const segmentMarks: SegmentMark[] = marks.map((m) => ({
+		from: m.from,
+		to: m.to,
+		type: SIGNAL_TO_TIPTAP[m.type],
+		attrs: {
+			sentiment: m.sentiment,
+			reason: (m.attrs.reason as string) ?? null,
+			annotationId: m.annotationId,
+			...(m.attrs.ao_category
+				? {
+						ao_category: m.attrs.ao_category ?? null,
+						ao_display: m.attrs.ao_display ?? null,
+						ao_quality: m.attrs.ao_quality ?? null,
+					}
+				: {}),
+			...(m.attrs.comment ? { comment: m.attrs.comment ?? null } : {}),
+			...(m.type === "chain"
+				? {
+						chainType: m.attrs.chainType ?? "reasoning",
+						phrase: m.attrs.phrase ?? null,
+					}
+				: {}),
+			scanBbox: m.attrs.scanBbox ?? null,
+			scanPageOrder: m.attrs.scanPageOrder ?? null,
+			scanTokenStartId: m.attrs.scanTokenStartId ?? null,
+			scanTokenEndId: m.attrs.scanTokenEndId ?? null,
+		},
+	}))
 
-	const sorted = [...boundaries].sort((a, b) => a - b)
-	const nodes: JSONContent[] = []
-
-	for (let i = 0; i < sorted.length - 1; i++) {
-		const start = sorted[i]
-		const end = sorted[i + 1]
-		if (start === end) continue
-
-		const segText = text.slice(start, end)
-		const coveringMarks = marks.filter((m) => m.from < end && m.to > start)
-		const coveringTokens = tokenRanges.filter(
-			(tr) => tr.from < end && tr.to > start,
-		)
-
-		const node: JSONContent = { type: "text", text: segText }
-		const allMarks: NonNullable<JSONContent["marks"]> = []
-
-		// Annotation marks
-		for (const m of coveringMarks) {
-			allMarks.push({
-				type: SIGNAL_TO_TIPTAP[m.type],
-				attrs: {
-					sentiment: m.sentiment,
-					reason: (m.attrs.reason as string) ?? null,
-					annotationId: m.annotationId,
-					...(m.attrs.ao_category
-						? {
-								ao_category: m.attrs.ao_category ?? null,
-								ao_display: m.attrs.ao_display ?? null,
-								ao_quality: m.attrs.ao_quality ?? null,
-							}
-						: {}),
-					...(m.attrs.comment ? { comment: m.attrs.comment ?? null } : {}),
-					...(m.type === "chain"
-						? {
-								chainType: m.attrs.chainType ?? "reasoning",
-								phrase: m.attrs.phrase ?? null,
-							}
-						: {}),
-					// Carry scan metadata through for lossless round-trip
-					scanBbox: m.attrs.scanBbox ?? null,
-					scanPageOrder: m.attrs.scanPageOrder ?? null,
-					scanTokenStartId: m.attrs.scanTokenStartId ?? null,
-					scanTokenEndId: m.attrs.scanTokenEndId ?? null,
-				},
-			})
-		}
-
-		// OCR token marks (one per word — take first if overlapping)
-		if (coveringTokens.length > 0) {
-			const tr = coveringTokens[0]
-			allMarks.push({
-				type: "ocrToken",
-				attrs: {
-					tokenId: tr.tokenId,
-					bbox: tr.bbox,
-					pageOrder: tr.pageOrder,
-				},
-			})
-		}
-
-		if (allMarks.length > 0) {
-			node.marks = allMarks
-		}
-
-		nodes.push(node)
-	}
-
+	const nodes = segmentText(text, segmentMarks, tokenRanges)
 	return nodes.length > 0 ? nodes : [{ type: "text", text }]
 }
-
-// ─── Public API ─────────────────────────────────────────────────────────────
 
 /**
  * Builds a tiptap-compatible JSON document from grading results, text marks,
@@ -171,9 +119,7 @@ export function buildAnnotatedDoc(
 		})
 	}
 
-	// ── Grading-complete path: real results with marks and scores ────────────
 	if (gradingResults.length > 0) {
-		// Group all MCQ questions into a single table node
 		const mcqResults = gradingResults.filter(
 			(r) => r.marking_method === "deterministic",
 		)
@@ -221,9 +167,7 @@ export function buildAnnotatedDoc(
 		return { type: "doc", content: blocks }
 	}
 
-	// ── Pre-grading skeleton path: paper structure known, results not yet in ─
 	if (examPaperQuestions && examPaperQuestions.length > 0) {
-		// Build a quick lookup from question_number → extracted answer text
 		const extractedByNumber = new Map<string, string>()
 		for (const ea of extractedAnswers ?? []) {
 			extractedByNumber.set(ea.question_number, ea.answer_text)
@@ -243,7 +187,6 @@ export function buildAnnotatedDoc(
 						maxScore: q.max_score,
 						options: q.multiple_choice_options,
 						correctLabels: q.correct_option_labels,
-						// Show OCR-extracted answer if available, otherwise null
 						studentAnswer: extractedByNumber.get(q.question_number) ?? null,
 						awardedScore: 0,
 					})),
@@ -271,7 +214,6 @@ export function buildAnnotatedDoc(
 		return { type: "doc", content: blocks }
 	}
 
-	// ── Fallback: no paper structure yet — minimal placeholder ───────────────
 	blocks.push({
 		type: "questionAnswer",
 		attrs: { questionId: null, questionNumber: null },

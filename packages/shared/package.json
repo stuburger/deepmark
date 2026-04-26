@@ -9,6 +9,10 @@
 		".": {
 			"import": "./dist/index.js",
 			"types": "./dist/index.d.ts"
+		},
+		"./collab": {
+			"import": "./dist/collab/index.js",
+			"types": "./dist/collab/index.d.ts"
 		}
 	},
 	"files": ["dist", "src"],
@@ -21,6 +25,14 @@
 		"@ai-sdk/anthropic": "^3.0.68",
 		"@ai-sdk/google": "^3.0.61",
 		"@ai-sdk/openai": "^3.0.52",
+		"@tiptap/core": "^3.22.3",
+		"@tiptap/extension-bold": "^3.22.4",
+		"@tiptap/extension-document": "^3.22.3",
+		"@tiptap/extension-hard-break": "^3.22.3",
+		"@tiptap/extension-italic": "^3.22.4",
+		"@tiptap/extension-text": "^3.22.3",
+		"@tiptap/extension-underline": "^3.22.4",
+		"@tiptap/pm": "^3.22.3",
 		"ai": "^6.0.19",
 		"zod": "^4.3.5"
 	},

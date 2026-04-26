@@ -1,6 +1,6 @@
 "use client"
 
-import { TIPTAP_TO_ENTRY } from "@/lib/marking/mark-registry"
+import { TIPTAP_TO_ENTRY } from "@mcp-gcse/shared"
 import type { Editor } from "@tiptap/core"
 import {
 	useCallback,
@@ -114,17 +114,35 @@ export function CommentSidebar({
 		for (const frag of fragments) {
 			const annotationId = frag.attrs.annotationId as string | null
 
-			const identity = annotationId
-				? annotationId
-				: `${frag.markType}|${frag.attrs.sentiment ?? ""}|${frag.attrs.reason ?? ""}|${frag.attrs.comment ?? ""}`
+			if (annotationId) {
+				// annotationId is authoritative — same id = same annotation,
+				// even when PM splits the mark across text nodes because of an
+				// intervening non-text node (hardBreak, inline embed). Merge
+				// unconditionally and take the bounding range so the card
+				// anchors at the start and click-to-select covers the whole
+				// annotation.
+				const existing = merged.get(annotationId)
+				if (existing) {
+					existing.from = Math.min(existing.from, frag.from)
+					existing.to = Math.max(existing.to, frag.to)
+				} else {
+					merged.set(annotationId, { ...frag })
+				}
+				continue
+			}
 
-			const existing = merged.get(identity)
+			// No annotationId — fall back to content fingerprint. Two
+			// fragments with identical fingerprints at non-contiguous
+			// positions are treated as separate annotations; we can't prove
+			// otherwise without a stable id.
+			const fingerprint = `${frag.markType}|${frag.attrs.sentiment ?? ""}|${frag.attrs.reason ?? ""}|${frag.attrs.comment ?? ""}`
+			const existing = merged.get(fingerprint)
 			if (existing && frag.from <= existing.to) {
 				existing.to = Math.max(existing.to, frag.to)
 			} else if (!existing) {
-				merged.set(identity, { ...frag })
+				merged.set(fingerprint, { ...frag })
 			} else {
-				merged.set(`${identity}@${frag.from}`, { ...frag })
+				merged.set(`${fingerprint}@${frag.from}`, { ...frag })
 			}
 		}
 

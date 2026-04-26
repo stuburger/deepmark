@@ -19,6 +19,11 @@ export function QuestionAnswerView({
 	const qNum = node.attrs.questionNumber as string | null
 	const qText = node.attrs.questionText as string | null
 	const maxScore = node.attrs.maxScore as number | null
+	// AI score is the source-of-truth on the block itself. Defaults to 0
+	// while grading is still in progress (block exists, score not yet
+	// dispatched). Teacher override + WWW/EBI/feedback still come via
+	// useGradingData() until step 2/3 of the doc-as-truth migration land.
+	const docAwardedScore = node.attrs.awardedScore as number | null
 
 	const {
 		gradingResults,
@@ -29,7 +34,7 @@ export function QuestionAnswerView({
 
 	const result = qId ? gradingResults.get(qId) : undefined
 	const override = qId ? overridesByQuestionId.get(qId) : undefined
-	const aiScore = result?.awarded_score ?? 0
+	const aiScore = docAwardedScore ?? 0
 	const max = maxScore ?? result?.max_score ?? 0
 
 	const www = result?.what_went_well ?? []

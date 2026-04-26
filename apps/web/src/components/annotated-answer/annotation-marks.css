@@ -21,3 +21,20 @@ span[data-mark-type="cross"]::after {
 	font-size: 0.75em;
 	margin-left: 2px;
 }
+
+/* When annotation marks overlap on the same span, ProseMirror nests their
+   <span>s. The outer mark provides the visual decoration; inner marks
+   suppress their own underline, ring, background, and padding so the
+   visuals don't stack into doubled underlines or borders. The trailing
+   ::after glyphs (✓ for tick, ✗ for cross) are intentionally preserved
+   so multi-mark spans remain identifiable, and the comment sidebar
+   continues to surface the full mark set per annotation. */
+.ProseMirror [data-mark-type] [data-mark-type] {
+	text-decoration-line: none;
+	background: none;
+	box-shadow: none;
+	--tw-ring-shadow: 0 0 #0000;
+	--tw-ring-offset-shadow: 0 0 #0000;
+	padding: 0;
+	border-radius: 0;
+}

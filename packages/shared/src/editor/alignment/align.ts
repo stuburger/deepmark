@@ -29,7 +29,6 @@ export function alignTokensToAnswer(
 	let wordCursor = 0
 	let fuzzyCount = 0
 
-	// ── Pass 1: fuzzy match ─────────────────────────────────────────────
 	for (const token of tokens) {
 		if (wordCursor >= answerWords.length) break
 
@@ -60,7 +59,6 @@ export function alignTokensToAnswer(
 		}
 	}
 
-	// ── Pass 2: positional fill for unmatched tokens ────────────────────
 	const unmatchedTokens = tokens.filter((t) => !tokenMap[t.id])
 	if (unmatchedTokens.length > 0 && assignedWordIndices.size > 0) {
 		const freeWords: number[] = []

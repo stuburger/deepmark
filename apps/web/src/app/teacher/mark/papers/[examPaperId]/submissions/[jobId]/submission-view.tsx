@@ -1,6 +1,5 @@
 "use client"
 
-import { useAnnotationCacheSync } from "@/components/annotated-answer/use-annotation-cache-sync"
 import {
 	ResizableHandle,
 	ResizablePanel,
@@ -11,11 +10,12 @@ import type { JobStages } from "@/lib/marking/stages/types"
 import type {
 	PageToken,
 	ScanPage,
+	StudentPaperAnnotation,
 	StudentPaperJobPayload,
 	UpsertTeacherOverrideInput,
 } from "@/lib/marking/types"
 import { parseAsString, useQueryState } from "nuqs"
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { EventLog } from "./event-log"
 import { useScrollToQuestion } from "./hooks/use-scroll-to-question"
 import { useSubmissionData } from "./hooks/use-submission-data"
@@ -55,7 +55,7 @@ export function SubmissionView({
 		stages,
 		scanPages,
 		pageTokens,
-		annotations,
+		annotations: serverAnnotations,
 		phase,
 		isTerminal,
 	} = useSubmissionData({
@@ -65,6 +65,28 @@ export function SubmissionView({
 		initialPageTokens,
 		initialStages,
 	})
+
+	// Editor-derived annotations (anchored to ocrToken marks in the PM doc).
+	// `null` until the editor mounts and emits its first derivation; until
+	// then we fall back to anchored annotations from the server projection.
+	// After the editor has produced a derivation, it's authoritative for
+	// anchored marks — server projection only feeds spatial-only marks
+	// (MCQ / deterministic, no anchor tokens) which never live in the doc.
+	const [editorAnnotations, setEditorAnnotations] = useState<
+		StudentPaperAnnotation[] | null
+	>(null)
+
+	const annotations = useMemo<StudentPaperAnnotation[]>(() => {
+		const spatialOnly = serverAnnotations.filter(
+			(a) => !a.anchor_token_start_id || !a.anchor_token_end_id,
+		)
+		const anchored =
+			editorAnnotations ??
+			serverAnnotations.filter(
+				(a) => a.anchor_token_start_id && a.anchor_token_end_id,
+			)
+		return [...anchored, ...spatialOnly]
+	}, [editorAnnotations, serverAnnotations])
 
 	const [showOcr, setShowOcr] = useState(false)
 	const [showRegions, setShowRegions] = useState(true)
@@ -131,10 +153,21 @@ export function SubmissionView({
 		}
 	}, [annotations])
 
-	// Editor transactions → React Query cache. The `jobAnnotations` cache
-	// drives the scan viewer overlay. Teacher edits persist through the Y.Doc
-	// (Hocuspocus + IndexedDB), not via a server mutation here.
-	const handleDerivedAnnotations = useAnnotationCacheSync(jobId)
+	// Editor transactions → local state, fanned out to ScanPanel and
+	// SubmissionToolbar via the merged `annotations` above. The Y.Doc (via
+	// Hocuspocus + IndexedDB) is the persistence layer; the React Query cache
+	// is reserved for server-projected state and never written by the editor.
+	const handleDerivedAnnotations = useCallback(
+		(derived: StudentPaperAnnotation[]) => setEditorAnnotations(derived),
+		[],
+	)
+
+	// Drop the previous editor's derivation when the submission switches —
+	// otherwise ScanPanel briefly shows stale anchored marks until the new
+	// editor mounts and re-derives.
+	useEffect(() => {
+		setEditorAnnotations(null)
+	}, [jobId])
 
 	return (
 		<div className="flex flex-col overflow-hidden h-full">
@@ -198,8 +231,6 @@ export function SubmissionView({
 							data={data}
 							phase={phase}
 							activeQuestionNumber={activeQuestionNumber}
-							annotations={annotations}
-							pageTokens={pageTokens}
 							overridesByQuestionId={overridesByQuestionId}
 							onOverrideChange={handleOverrideChange}
 							onDerivedAnnotations={handleDerivedAnnotations}
@@ -244,8 +275,6 @@ export function SubmissionView({
 						data={data}
 						phase={phase}
 						activeQuestionNumber={activeQuestionNumber}
-						annotations={annotations}
-						pageTokens={pageTokens}
 						overridesByQuestionId={overridesByQuestionId}
 						onOverrideChange={handleOverrideChange}
 						onDerivedAnnotations={handleDerivedAnnotations}

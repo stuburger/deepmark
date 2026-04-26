@@ -1,7 +1,10 @@
-import type { TextMark, TokenAlignment } from "@/lib/marking/token-alignment"
 import type { GradingResult, PageToken } from "@/lib/marking/types"
+import {
+	type TextMark,
+	type TokenAlignment,
+	buildAnnotatedDoc,
+} from "@mcp-gcse/shared"
 import { describe, expect, it } from "vitest"
-import { buildAnnotatedDoc } from "../build-doc"
 
 function makeGradingResult(
 	questionId: string,

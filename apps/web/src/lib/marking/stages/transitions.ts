@@ -28,6 +28,11 @@ const onGradingComplete: TransitionInvalidator = (queryClient, jobId) => {
 }
 
 const onAnnotationComplete: TransitionInvalidator = (queryClient, jobId) => {
+	// Refresh server-projected annotations: spatial-only marks (MCQ /
+	// deterministic) and the initial-render fallback for anchored marks
+	// before the editor mounts. Editor-anchored marks live in SubmissionView
+	// state once the editor has produced its first derivation, so this
+	// invalidation never clobbers live editor truth.
 	queryClient.invalidateQueries({ queryKey: queryKeys.jobAnnotations(jobId) })
 }
 

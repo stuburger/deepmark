@@ -1,5 +1,5 @@
+import type { ResolvedTokenSpan, TokenAlignment } from "@mcp-gcse/shared"
 import type { PageToken } from "../types"
-import type { ResolvedTokenSpan, TokenAlignment } from "./types"
 
 /**
  * Reverse-maps a character range in student_answer back to OCR tokens.

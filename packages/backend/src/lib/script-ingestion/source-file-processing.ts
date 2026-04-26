@@ -2,10 +2,7 @@ import { logger } from "@/lib/infra/logger"
 import { s3 } from "@/lib/infra/s3"
 import { extractPdfPages, fetchS3Bytes } from "@/lib/script-ingestion/pdf-pages"
 import { segmentPdfScripts } from "@/lib/script-ingestion/segment-script"
-import type {
-	PageKey,
-	StagedScriptData,
-} from "@/lib/script-ingestion/types"
+import type { PageKey, StagedScriptData } from "@/lib/script-ingestion/types"
 import { guessMime } from "@/lib/script-ingestion/utils"
 import { ListObjectsV2Command } from "@aws-sdk/client-s3"
 import { Resource } from "sst"

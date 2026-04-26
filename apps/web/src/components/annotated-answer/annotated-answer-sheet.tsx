@@ -2,7 +2,7 @@
 
 import type { StudentPaperAnnotation } from "@/lib/marking/types"
 import { cn } from "@/lib/utils"
-import type { JSONContent } from "@tiptap/core"
+import { OcrTokenMark, ParagraphNode, annotationMarks } from "@mcp-gcse/shared"
 import BoldExtension from "@tiptap/extension-bold"
 import Collaboration from "@tiptap/extension-collaboration"
 import Document from "@tiptap/extension-document"
@@ -24,10 +24,9 @@ import {
 	Underline,
 	X,
 } from "lucide-react"
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useRef, useState } from "react"
 import type * as Y from "yjs"
 import "./annotation-marks.css"
-import { annotationMarks } from "./annotation-marks"
 import { AnnotationShortcuts } from "./annotation-shortcuts"
 import { AnnotationToolbar } from "./annotation-toolbar"
 import {
@@ -41,8 +40,6 @@ import { HoverHighlightPlugin } from "./hover-highlight-plugin"
 import { InsertParagraphPlugin } from "./insert-paragraph-plugin"
 import { MARK_ACTIONS } from "./mark-actions"
 import { McqTableNode } from "./mcq-table-node"
-import { OcrTokenMark } from "./ocr-token-mark"
-import { ParagraphNode } from "./paragraph-node"
 import { QuestionAnswerNode } from "./question-answer-node"
 import { useDerivedAnnotations } from "./use-derived-annotations"
 import { useTokenHighlight } from "./use-token-highlight"
@@ -69,20 +66,18 @@ const BUBBLE_ERASER = <Eraser className="h-3.5 w-3.5" />
  * HocuspocusProvider + IndexedDB. Grading data (scores, overrides, feedback)
  * is consumed by NodeViews via GradingDataContext.
  *
- * Seeding: on first mount, if the Y.Doc is empty, the initial JSONContent
- * produced by buildAnnotatedDoc() is applied inside a `ydoc.transact(..., "seed")`
- * so all clients see the same starting state. Subsequent stage updates
- * (new OCR, new grading, new AI annotations) will eventually be written
- * directly to the Y.Doc by backend Lambdas (K-6), not re-seeded client-side.
+ * Doc content is authored entirely server-side: the OCR Lambda seeds question
+ * skeletons + answer text + ocrToken marks, and the grading Lambda overlays
+ * AI annotation marks. Teachers add their own marks via the editor; those
+ * flow back through the Collaboration extension and the projection Lambda
+ * picks them up via the `source: "teacher"` mark attr.
  */
 export function AnnotatedAnswerSheet({
 	ydoc,
-	doc,
 	onDerivedAnnotations,
 	onTokenHighlight,
 }: {
 	ydoc: Y.Doc
-	doc: JSONContent
 	onDerivedAnnotations?: (annotations: StudentPaperAnnotation[]) => void
 	onTokenHighlight?: (tokenIds: string[] | null) => void
 }) {
@@ -140,47 +135,6 @@ export function AnnotatedAnswerSheet({
 		},
 		[ydoc],
 	)
-
-	// One-time seed: when the editor is ready AND the Y.Doc is empty AND the
-	// built JSONContent is real (not a placeholder), apply it so all clients
-	// see the same starting state.
-	//
-	// Two guards:
-	//   1. `hasRealContent` — wait until grading produces question blocks.
-	//      Seeding the "Waiting for student answers…" placeholder would lock
-	//      the Y.Doc at the placeholder forever (we only seed once).
-	//   2. `meta.seeded` Y.Map flag — narrows the window where two clients
-	//      simultaneously opening a fresh submission could both call
-	//      setContent and produce doubled content. Once one client has
-	//      seeded and synced, later clients see the flag and skip.
-	//      The flag is *not* a true distributed lock — Yjs can't give one
-	//      across clients — but it handles every case except a sub-100ms
-	//      simultaneous first-open race. Structural fix is to move seeding
-	//      into the OCR Lambda (noted in plan, deferred).
-	//
-	// Subsequent `doc` prop changes are IGNORED client-side — backend
-	// Lambdas (K-6) own stage-driven updates.
-	useEffect(() => {
-		if (!editor) return
-
-		const fragment = ydoc.getXmlFragment("doc")
-		if (fragment.length > 0) return
-
-		const hasRealContent =
-			doc?.content?.some(
-				(b) => b.type === "questionAnswer" || b.type === "mcqTable",
-			) ?? false
-		if (!hasRealContent) return
-
-		const meta = ydoc.getMap<boolean>("meta")
-		if (meta.get("seeded")) return
-
-		ydoc.transact(() => {
-			if (meta.get("seeded")) return
-			editor.commands.setContent(doc)
-			meta.set("seeded", true)
-		}, "seed")
-	}, [editor, ydoc, doc])
 
 	// Stable callback ref — avoids re-subscribing the transaction listener
 	const stableOnDerived = useCallback(

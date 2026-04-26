@@ -33,8 +33,19 @@ export async function runVisionOcr(
 ): Promise<VisionPageResult> {
 	const apiKey = Resource.CloudVisionApiKey.value
 
+	// `fallback: false` pins the gRPC transport. Without it, the client
+	// auto-detects fallback by checking `typeof window !== "undefined" &&
+	// typeof window.fetch === "function"` (see `image_annotator_client.js`
+	// in @google-cloud/vision). Anything that installs a DOM polyfill on
+	// `globalThis.window` before Vision runs (e.g. happy-dom inside
+	// `ensureHeadlessDom`, used by HeadlessEditor) flips that auto-detect
+	// to true → the request goes through the polyfill's fetch instead of
+	// node's, the apiKey doesn't make it onto the wire, and Vision returns
+	// 403 PERMISSION_DENIED with "no identity". Pinning gRPC keeps Vision
+	// independent of whatever else has touched globalThis in this Lambda.
 	const client = new ImageAnnotatorClient.ImageAnnotatorClient({
 		apiKey,
+		fallback: false,
 	})
 
 	const [response] = await client.documentTextDetection({

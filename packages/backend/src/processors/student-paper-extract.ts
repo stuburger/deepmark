@@ -278,6 +278,15 @@ export async function handler(
 				},
 			})
 
+			// OCR Lambda no longer writes to the Y.Doc. The grade Lambda
+			// owns the editor session and projects the OCR shape (skeleton +
+			// answer text + ocrToken marks) at the start of its own run, so
+			// the original-grade and re-grade flows converge — re-grade
+			// creates a new submission with a fresh empty Y.Doc and bypasses
+			// this Lambda entirely, but still gets a populated editor
+			// because the projection happens grade-side. See
+			// `docs/build-plan-doc-as-source-of-truth.md`.
+
 			await db.ocrRun.update({
 				where: { id: jobId },
 				data: {

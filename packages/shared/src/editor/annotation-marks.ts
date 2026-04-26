@@ -5,6 +5,11 @@ const sharedAttrs = {
 	sentiment: { default: "neutral" },
 	reason: { default: null },
 	annotationId: { default: null },
+	// Origin of this mark — read by the projection Lambda to populate the
+	// `student_paper_annotations.source` column. Lambda transactions set "ai"
+	// (also the schema default); the web client's `applyAnnotationMark` sets
+	// "teacher" for marks the teacher applies through the UI.
+	source: { default: "ai" },
 	ao_category: { default: null },
 	ao_display: { default: null },
 	ao_quality: { default: null },
@@ -16,8 +21,6 @@ const sharedAttrs = {
 	scanTokenStartId: { default: null },
 	scanTokenEndId: { default: null },
 }
-
-// ─── Mark signals ───────────────────────────────────────────────────────────
 
 export const TickMark = Mark.create({
 	name: "tick",
@@ -152,8 +155,6 @@ export const CircleMark = Mark.create({
 	},
 })
 
-// ─── Chain highlight ────────────────────────────────────────────────────────
-
 export const ChainMark = Mark.create({
 	name: "chain",
 	inclusive: false,
@@ -162,6 +163,7 @@ export const ChainMark = Mark.create({
 			sentiment: { default: "neutral" },
 			reason: { default: null },
 			annotationId: { default: null },
+			source: { default: "ai" },
 			chainType: { default: "reasoning" },
 			phrase: { default: null },
 		}
@@ -188,8 +190,6 @@ export const ChainMark = Mark.create({
 		]
 	},
 })
-
-// ─── All marks as array ─────────────────────────────────────────────────────
 
 export const annotationMarks = [
 	TickMark,

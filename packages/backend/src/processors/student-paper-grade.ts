@@ -1,8 +1,14 @@
 import { db } from "@/db"
 import { loadAnnotationContext } from "@/lib/annotations/data-loading"
-import { persistAnnotations } from "@/lib/annotations/persist-annotations"
 import type { PendingAnnotation } from "@/lib/annotations/types"
-import { writeAiAnnotationsToYDoc } from "@/lib/collab/write-ai-annotations"
+import {
+	type PerQuestionAnswer,
+	type QuestionSkeleton,
+	dispatchExtractedDoc,
+	withHeadlessEditor,
+} from "@/lib/collab/editor-seed"
+import { loadTokensByQuestion } from "@/lib/collab/load-tokens"
+import { claimGradingRun } from "@/lib/grading/claim-grading-run"
 import { generateExaminerSummary } from "@/lib/grading/examiner-summary"
 import { loadExamPaperForGrading } from "@/lib/grading/grade-queries"
 import {
@@ -85,6 +91,21 @@ async function gradeJob({
 }: GradeJobArgs): Promise<void> {
 	logger.info(TAG, "Grading job received", { jobId })
 
+	// Atomic claim BEFORE any other work — guarantees at most one grade
+	// Lambda is mid-flight per submission_id at any time. Without this,
+	// two concurrent invocations (SQS at-least-once redelivery, OCR
+	// Lambda retry that re-sends the grade message, double-clicked
+	// re-grade) both open empty CRDT replicas, both insert blocks, Yjs
+	// merges into 2× of every block. See `claimGradingRun` docstring.
+	const claim = await claimGradingRun(db.gradingRun, jobId)
+	if (!claim.ok) {
+		logger.info(TAG, "Skipping duplicate grade invocation", {
+			jobId,
+			reason: claim.reason,
+		})
+		return
+	}
+
 	const sub = await db.studentSubmission.findUniqueOrThrow({
 		where: { id: jobId },
 		include: {
@@ -96,8 +117,6 @@ async function gradeJob({
 	if (!latestOcr?.extracted_answers_raw) {
 		return await rejectJobMissingOcr(jobId)
 	}
-
-	await markJobAsGrading(jobId)
 
 	const examPaper = await loadExamPaperForGrading(sub.exam_paper_id)
 	const questionList = loadQuestionList({ examPaper })
@@ -122,21 +141,64 @@ async function gradeJob({
 
 	logger.info(TAG, "Answer map built", { jobId, answer_count: answerMap.size })
 
-	// Annotation context must be loaded before grading so each question can
-	// grade → annotate in the same Promise.all pass.
-	const annotationContext = await loadAnnotationContext(jobId)
+	// Annotation context + per-question tokens loaded once for the whole
+	// grade pass. Tokens map is read inside each per-question dispatch to
+	// resolve annotation char ranges — preloaded so the per-question loop
+	// stays synchronous from the editor's perspective.
+	const [annotationContext, tokensByQuestion] = await Promise.all([
+		loadAnnotationContext(jobId),
+		loadTokensByQuestion(jobId),
+	])
 
-	const { results: gradingResults, annotationsByQuestion } =
-		await gradeAndAnnotateAll({
-			questionList,
-			answerMap,
-			examPaper,
-			orchestrator,
-			jobId,
-			cancellation,
-			annotationContext,
-			annotationLlm,
-		})
+	// One editor session for the whole grade Lambda invocation. The session
+	// is responsible for both:
+	//
+	//   1. Projecting the OCR doc shape (skeleton blocks, MCQ table,
+	//      stitched answer_text per question, ocrToken marks for the scan
+	//      overlay). This is a one-shot bootstrap: setAnswerText is
+	//      idempotent (skip-if-text-exists), so the second time the grade
+	//      Lambda runs against a doc that already has content (a manual
+	//      retry, say), the projection is a no-op for any block the
+	//      teacher has populated.
+	//
+	//   2. Dispatching per-question scores + AI annotation marks as each
+	//      grade completes inside `gradeAndAnnotateAll`, so the teacher's
+	//      view fills in progressively.
+	//
+	// The grade Lambda is the *only* place that writes to the Y.Doc — re-grade
+	// (which creates a new submission with a fresh empty Y.Doc and bypasses
+	// the OCR Lambda entirely) gets the same code path as the original
+	// flow, no special-casing required.
+	const skeletons = buildSkeletonsFromQuestionList(questionList)
+	const perQuestion = buildPerQuestionAnswers(
+		answerMap,
+		tokensByQuestion,
+	)
+
+	const { gradingResults, annotationsByQuestion } = await withHeadlessEditor(
+		jobId,
+		"grade-job",
+		async (editor) => {
+			dispatchExtractedDoc(editor, skeletons, perQuestion)
+
+			const out = await gradeAndAnnotateAll({
+				questionList,
+				answerMap,
+				examPaper,
+				orchestrator,
+				jobId,
+				cancellation,
+				annotationContext,
+				annotationLlm,
+				editor,
+				tokensByQuestion,
+			})
+			return {
+				gradingResults: out.results,
+				annotationsByQuestion: out.annotationsByQuestion,
+			}
+		},
+	)
 
 	if (cancellation.isCancelled()) {
 		logger.info(TAG, "Job was cancelled — skipping completion", { jobId })
@@ -194,22 +256,60 @@ async function rejectJobMissingOcr(jobId: string): Promise<void> {
 		.catch(() => {})
 }
 
-async function markJobAsGrading(jobId: string): Promise<void> {
-	await db.gradingRun.upsert({
-		where: { id: jobId },
-		create: {
-			id: jobId,
-			submission_id: jobId,
-			ocr_run_id: jobId,
-			status: "processing" satisfies GradingStatus,
-			started_at: new Date(),
-		},
-		update: {
-			status: "processing" satisfies GradingStatus,
-			error: null,
-			started_at: new Date(),
-		},
-	})
+
+/**
+ * Convert the loaded `questionList` into the `QuestionSkeleton[]` shape
+ * `dispatchExtractedDoc` consumes. Carries the MCQ-specific fields
+ * (`question_type`, `options`, `correctLabels`) so the projection
+ * branches on `multiple_choice` and packs them into a single `mcqTable`
+ * block at the top of the doc.
+ */
+function buildSkeletonsFromQuestionList(
+	questionList: Array<{
+		question_id: string
+		question_number: string
+		question_text: string
+		question_obj: {
+			question_type: string
+			points: number | null
+			multiple_choice_options: unknown
+		}
+		mark_scheme: { correct_option_labels: string[] } | null
+	}>,
+): QuestionSkeleton[] {
+	return questionList.map((q) => ({
+		questionId: q.question_id,
+		questionNumber: q.question_number,
+		questionText: q.question_text,
+		maxScore: q.question_obj.points,
+		questionType: q.question_obj.question_type,
+		options: (q.question_obj.multiple_choice_options as Array<{
+			option_label: string
+			option_text: string
+		}>) ?? [],
+		correctLabels: q.mark_scheme?.correct_option_labels ?? [],
+	}))
+}
+
+/**
+ * Build the `PerQuestionAnswer[]` payload from the OCR-extracted answer map
+ * + per-question token map. Skips entries with no answer_text — empty
+ * blocks stay empty.
+ */
+function buildPerQuestionAnswers(
+	answerMap: Map<string, string>,
+	tokensByQuestion: Map<string, Awaited<ReturnType<typeof loadTokensByQuestion>> extends Map<string, infer T> ? T : never>,
+): PerQuestionAnswer[] {
+	const out: PerQuestionAnswer[] = []
+	for (const [questionId, text] of answerMap) {
+		if (text.trim().length === 0) continue
+		out.push({
+			questionId,
+			text,
+			tokens: tokensByQuestion.get(questionId) ?? [],
+		})
+	}
+	return out
 }
 
 function extractRawAnswers(source: { extracted_answers_raw: unknown }): Array<{
@@ -249,23 +349,14 @@ async function completeGradingJob(args: CompleteGradingJobArgs): Promise<void> {
 	})
 
 	await updateStudentNameIfExtracted(args.jobId, args.sub, args.ocrRun)
-	const annotationError = await persistAnnotationsBestEffort(
-		args.jobId,
-		args.annotationsByQuestion,
-	)
-	// K-6: mirror AI annotations to the Y.Doc via Hocuspocus. Best-effort —
-	// DB rows remain authoritative today; the K-7 projection Lambda will
-	// eventually flip this so Y.Doc is authoritative and DB is the projection.
-	// jobId === submission_id in this processor (see db lookup above).
-	await writeAiAnnotationsToYDoc({
-		submissionId: args.jobId,
-		annotationsByQuestion: args.annotationsByQuestion,
-	})
+	// AI annotation marks were already dispatched per-question inside
+	// `gradeAndAnnotateAll`, against the editor session opened by `gradeJob`
+	// — by the time we get here, the doc has every mark and the session is
+	// closed. Nothing more to do for the editor; just record the run as
+	// complete on the DB and notify downstream.
 	await markGradingRunComplete({
 		jobId: args.jobId,
-		gradingResults: args.gradingResults,
 		examinerSummary: args.examinerSummary,
-		annotationError,
 	})
 	logGradingCompleteEvent(args.jobId, totals)
 	await persistAnswerRowsIfLinked(args)
@@ -297,58 +388,27 @@ async function updateStudentNameIfExtracted(
 	})
 }
 
-/**
- * Persist annotations alongside grading (replaces the old enrichment queue hop).
- * Each question already has a best-effort result — failed per-question annotate
- * calls return []. Surface any insert failure as annotation_error without
- * blocking grading completion.
- */
-async function persistAnnotationsBestEffort(
-	jobId: string,
-	annotationsByQuestion: Map<string, PendingAnnotation[]>,
-): Promise<string | null> {
-	const perQuestionGroups: PendingAnnotation[][] = Array.from(
-		annotationsByQuestion.values(),
-	)
-	const totalAnnotations = perQuestionGroups.reduce((s, g) => s + g.length, 0)
-
-	try {
-		await persistAnnotations(jobId, perQuestionGroups)
-		logger.info(TAG, "Annotations persisted", {
-			jobId,
-			total: totalAnnotations,
-		})
-		return null
-	} catch (err) {
-		const annotationError = err instanceof Error ? err.message : String(err)
-		logger.error(TAG, "Failed to persist annotations", {
-			jobId,
-			error: annotationError,
-		})
-		return annotationError
-	}
-}
-
 async function markGradingRunComplete({
 	jobId,
-	gradingResults,
 	examinerSummary,
-	annotationError,
 }: {
 	jobId: string
-	gradingResults: GradingResult[]
 	examinerSummary: string | null
-	annotationError: string | null
 }): Promise<void> {
+	// `grading_results` is no longer written here — the doc is the source
+	// of truth for per-question grade metadata, and the projection Lambda
+	// (annotation-projection.ts) mirrors it onto this column on every
+	// snapshot via `writeGradingResults`. We only own the lifecycle
+	// fields (status, timestamps, errors) + paper-level metadata
+	// (examiner_summary).
 	await db.gradingRun.update({
 		where: { id: jobId },
 		data: {
 			status: "complete" satisfies GradingStatus,
-			grading_results: gradingResults,
 			examiner_summary: examinerSummary,
 			completed_at: new Date(),
-			annotations_completed_at: annotationError ? null : new Date(),
-			annotation_error: annotationError,
+			annotations_completed_at: new Date(),
+			annotation_error: null,
 			error: null,
 		},
 	})

@@ -1,13 +1,20 @@
 import { Resource } from "sst"
 import { z } from "zod"
 
-const IntrospectResponse = z.object({
-	active: z.boolean(),
-	sub: z.string().optional(),
-	exp: z.number().optional(),
-	scope: z.string().optional(),
-	client_id: z.string().optional(),
-})
+// RFC 7662 introspection: when `active` is false the other fields may be
+// absent. When `active` is true an OpenAuth-issued token always carries
+// `sub`. A discriminated union encodes that contract so TS narrows `sub`
+// to `string` after the active-check downstream, no casts needed.
+const IntrospectResponse = z.discriminatedUnion("active", [
+	z.object({ active: z.literal(false) }),
+	z.object({
+		active: z.literal(true),
+		sub: z.string(),
+		exp: z.number().optional(),
+		scope: z.string().optional(),
+		client_id: z.string().optional(),
+	}),
+])
 
 export type VerifiedClaims = {
 	userId: string
@@ -55,7 +62,6 @@ export async function verifyOpenAuthToken(
 	if (!parsed.active) throw new AuthFailure("token not active")
 	if (parsed.exp && parsed.exp < Date.now() / 1000)
 		throw new AuthFailure("token expired")
-	if (!parsed.sub) throw new AuthFailure("token missing sub claim")
 
 	return { userId: parsed.sub, role: "user", expiresAt: parsed.exp }
 }

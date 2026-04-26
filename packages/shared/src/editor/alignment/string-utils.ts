@@ -21,7 +21,6 @@ export function levenshtein(a: string, b: string): number {
 	if (m === 0) return n
 	if (n === 0) return m
 
-	// Single-row DP
 	let prev = Array.from({ length: n + 1 }, (_, i) => i)
 	for (let i = 1; i <= m; i++) {
 		const curr = [i]

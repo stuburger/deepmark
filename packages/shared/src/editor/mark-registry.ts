@@ -5,15 +5,14 @@
  * lookup tables, tiptap extension names, and UI metadata from this registry.
  * Adding a new mark type means adding one entry here — not five separate files.
  */
-import type { AnnotationSignal } from "@/lib/marking/token-alignment"
 import type {
 	AnnotationPayload,
 	AnyAnnotationPayload,
+	MarkSignal,
 	OverlayType,
-} from "@/lib/marking/types"
-import { MARK_SIGNAL_NAMES } from "@mcp-gcse/shared"
-
-// ─── Registry entry ────────────────────────────────────────────────────────
+} from "../annotation/types"
+import { MARK_SIGNAL_NAMES } from "../annotation/types"
+import type { AnnotationSignal } from "./alignment/types"
 
 export type MarkRegistryEntry = {
 	/** Domain-level signal name (e.g. "tick", "underline", "chain") */
@@ -25,8 +24,6 @@ export type MarkRegistryEntry = {
 	/** Build a typed payload from tiptap mark attrs */
 	buildPayload: (attrs: Record<string, unknown>) => AnyAnnotationPayload
 }
-
-// ─── Payload builder for signal annotations ───────────────────────────────
 
 function buildSignalPayload(
 	signal: AnnotationPayload["signal"],
@@ -48,8 +45,6 @@ function buildSignalPayload(
 		...(attrs.comment ? { comment: attrs.comment as string } : {}),
 	}
 }
-
-// ─── The registry ──────────────────────────────────────────────────────────
 
 export const MARK_REGISTRY: readonly MarkRegistryEntry[] = [
 	{
@@ -101,8 +96,6 @@ export const MARK_REGISTRY: readonly MarkRegistryEntry[] = [
 	},
 ] as const
 
-// ─── Derived lookup tables ─────────────────────────────────────────────────
-
 /** Tiptap mark name → registry entry (used when reading PM doc marks) */
 export const TIPTAP_TO_ENTRY: ReadonlyMap<string, MarkRegistryEntry> = new Map(
 	MARK_REGISTRY.map((e) => [e.tiptapName, e]),
@@ -114,6 +107,14 @@ export const SIGNAL_TO_TIPTAP: Readonly<Record<AnnotationSignal, string>> =
 		MARK_REGISTRY.map((e) => [e.signal, e.tiptapName]),
 	) as Record<AnnotationSignal, string>
 
+/** The set of valid mark signal names (the 6 physical mark signals) */
+export const MARK_SIGNALS: ReadonlySet<MarkSignal> = new Set(MARK_SIGNAL_NAMES)
+
+/** Type-guard narrowing an arbitrary string to the `MarkSignal` union. */
+export function isMarkSignal(value: string): value is MarkSignal {
+	return (MARK_SIGNALS as ReadonlySet<string>).has(value)
+}
+
 /** Overlay type → domain signal (used when resolving annotation → TextMark type) */
 export function resolveSignal(
 	overlayType: OverlayType,
@@ -121,9 +122,9 @@ export function resolveSignal(
 ): AnnotationSignal | null {
 	switch (overlayType) {
 		case "annotation": {
-			const signal = payload.signal as string | undefined
-			if (signal && MARK_SIGNALS.has(signal)) return signal as AnnotationSignal
-			return "underline" // fallback for unknown signals
+			const signal = payload.signal
+			if (typeof signal === "string" && isMarkSignal(signal)) return signal
+			return "underline"
 		}
 		case "chain":
 			return "chain"
@@ -131,6 +132,3 @@ export function resolveSignal(
 			return null
 	}
 }
-
-/** The set of valid mark signal names (the 6 physical mark signals) */
-export const MARK_SIGNALS: ReadonlySet<string> = new Set(MARK_SIGNAL_NAMES)

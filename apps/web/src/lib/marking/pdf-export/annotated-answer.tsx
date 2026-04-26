@@ -1,9 +1,12 @@
+import {
+	type TextMark,
+	type TextSegment,
+	alignTokensToAnswer,
+	deriveTextMarks,
+} from "@mcp-gcse/shared"
 import { Text, View } from "@react-pdf/renderer"
 import type { Style } from "@react-pdf/types"
-import { alignTokensToAnswer } from "../alignment/align"
-import { deriveTextMarks } from "../alignment/marks"
 import { splitIntoSegments } from "../alignment/segments"
-import type { TextMark, TextSegment } from "../alignment/types"
 import { aoHex, aoLabel } from "../ao-palette"
 import type { GradingResult, PageToken, StudentPaperAnnotation } from "../types"
 import { styles } from "./styles"

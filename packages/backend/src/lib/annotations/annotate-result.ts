@@ -7,10 +7,6 @@ import {
 	parseMarkPointsFromPrisma,
 } from "@mcp-gcse/shared"
 import type { AnnotationContext } from "./data-loading"
-import {
-	deterministicMcqAnnotation,
-	pointBasedAnnotations,
-} from "./deterministic-annotations"
 import { annotateOneQuestion } from "./llm-annotations"
 import type { PendingAnnotation } from "./types"
 
@@ -49,11 +45,14 @@ export async function annotateOneResult({
 	const region = regionByQuestion.get(result.question_id)
 
 	try {
-		if (method === "point_based") {
-			return pointBasedAnnotations(result, region)
-		}
-		if (method === "deterministic") {
-			return deterministicMcqAnnotation(result, region)
+		// Point-based and deterministic MCQ "annotations" used to produce a
+		// summary tick/cross with bbox-only positioning (no token anchor).
+		// That information is now carried as `awardedScore` on the
+		// `questionAnswer` block — see `setQuestionScore`. Renderers draw
+		// the tick/cross themselves from `awardedScore` vs `maxScore`. Only
+		// LoR-style token-anchored annotations flow through this pipeline.
+		if (method === "point_based" || method === "deterministic") {
+			return []
 		}
 		return await annotateOneQuestion({
 			gradingResult: result,

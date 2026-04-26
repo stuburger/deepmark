@@ -1,4 +1,4 @@
-import type { TextMark, TextSegment } from "./types"
+import type { TextMark, TextSegment } from "@mcp-gcse/shared"
 
 /**
  * Splits text into segments at mark boundaries (interval-splitting algorithm).

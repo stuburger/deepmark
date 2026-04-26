@@ -1,4 +1,4 @@
-import type { MarkSignal } from "../types"
+import type { MarkSignal } from "../../annotation/types"
 
 /** Per-token alignment to character positions in student_answer */
 export type TokenAlignment = {
@@ -30,9 +30,7 @@ export type WordWithOffset = { word: string; start: number; end: number }
 export type ResolvedTokenSpan = {
 	startTokenId: string
 	endTokenId: string
-	/** All token IDs in the span */
 	tokenIds: string[]
-	/** [yMin, xMin, yMax, xMax] normalised 0–1000, hull of all matched tokens */
 	bbox: [number, number, number, number]
 	pageOrder: number
 }

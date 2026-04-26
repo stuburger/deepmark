@@ -1,4 +1,4 @@
-import { TIPTAP_TO_ENTRY } from "@/lib/marking/mark-registry"
+import { TIPTAP_TO_ENTRY } from "@mcp-gcse/shared"
 import { type Editor, Extension } from "@tiptap/core"
 import { Plugin, PluginKey } from "@tiptap/pm/state"
 import { Decoration, DecorationSet } from "@tiptap/pm/view"

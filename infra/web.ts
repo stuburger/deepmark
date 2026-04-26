@@ -3,6 +3,7 @@ import { collabServer } from "./collab"
 import {
 	domain,
 	anthropicApiKey,
+	collabServiceSecret,
 	collabUrl,
 	geminiApiKey,
 	openAiApiKey,
@@ -35,6 +36,10 @@ export const web = new sst.aws.Nextjs("Web", {
 		studentPaperQueue,
 		batchClassifyQueue,
 		collabServer,
+		// Server-action override mutations open a HeadlessEditor against
+		// Hocuspocus and dispatch the change onto the doc — see
+		// `apps/web/src/lib/collab/headless-edit.ts`.
+		collabServiceSecret,
 		geminiApiKey,
 		openAiApiKey,
 		anthropicApiKey,

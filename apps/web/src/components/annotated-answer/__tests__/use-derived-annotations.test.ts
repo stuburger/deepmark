@@ -1,8 +1,7 @@
-import type { TokenAlignment } from "@/lib/marking/token-alignment"
 import type { GradingResult, PageToken } from "@/lib/marking/types"
+import { type TokenAlignment, buildAnnotatedDoc } from "@mcp-gcse/shared"
 import type { Node as PmNode } from "@tiptap/pm/model"
 import { describe, expect, it } from "vitest"
-import { buildAnnotatedDoc } from "../build-doc"
 import { deriveAnnotationsFromDoc } from "../use-derived-annotations"
 
 // ─── Helpers to build mock PM nodes ────────────────────────────────────────
@@ -22,14 +21,13 @@ type MockTextNode = {
 type MockNode = {
 	type: { name: string }
 	attrs: Record<string, unknown>
-	forEach: (
-		callback: (child: MockTextNode, offset: number, index: number) => void,
-	) => void
+	childCount: number
+	child: (i: number) => MockTextNode
 }
 
 /**
  * Build a minimal mock PM doc that satisfies deriveAnnotationsFromDoc's
- * interface (doc.descendants + node.forEach + text node shape).
+ * interface (doc.descendants + node.childCount/child + text node shape).
  */
 function mockDoc(questionAnswers: MockNode[]): PmNode {
 	return {
@@ -45,28 +43,26 @@ function mockDoc(questionAnswers: MockNode[]): PmNode {
 	} as unknown as PmNode
 }
 
+/**
+ * `offset` is preserved on each child for documentation only — production
+ * uses cumulative `nodeSize` to compute char offsets, so test expectations
+ * for offset-derived dedupe keys must align with the cumulative sum.
+ */
 function mockQuestionAnswer(
 	questionId: string,
 	children: { text: string; offset: number; marks: MockMark[] }[],
 ): MockNode {
+	const textNodes: MockTextNode[] = children.map((c) => ({
+		isText: true,
+		marks: c.marks,
+		nodeSize: c.text.length,
+		textContent: c.text,
+	}))
 	return {
 		type: { name: "questionAnswer" },
 		attrs: { questionId },
-		forEach: (callback) => {
-			for (let i = 0; i < children.length; i++) {
-				const child = children[i]
-				callback(
-					{
-						isText: true,
-						marks: child.marks,
-						nodeSize: child.text.length,
-						textContent: child.text,
-					},
-					child.offset,
-					i,
-				)
-			}
-		},
+		childCount: textNodes.length,
+		child: (i: number) => textNodes[i],
 	}
 }
 
@@ -215,7 +211,10 @@ describe("deriveAnnotationsFromDoc", () => {
 			{
 				type: { name: "questionAnswer" },
 				attrs: { questionId: null },
-				forEach: () => {},
+				childCount: 0,
+				child: () => {
+					throw new Error("not called")
+				},
 			},
 		])
 
@@ -409,8 +408,7 @@ describe("deriveAnnotationsFromDoc (real PM schema)", () => {
 		const Text = (await import("@tiptap/extension-text")).default
 		const HardBreak = (await import("@tiptap/extension-hard-break")).default
 		const { QuestionAnswerNode } = await import("../question-answer-node")
-		const { annotationMarks } = await import("../annotation-marks")
-		const { OcrTokenMark } = await import("../ocr-token-mark")
+		const { annotationMarks, OcrTokenMark } = await import("@mcp-gcse/shared")
 
 		const schema = getSchema([
 			Document.extend({ content: "questionAnswer+" }),

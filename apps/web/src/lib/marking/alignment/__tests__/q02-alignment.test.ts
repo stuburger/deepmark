@@ -1,8 +1,10 @@
-import { sortTokensSpatially } from "@mcp-gcse/shared"
+import {
+	alignTokensToAnswer,
+	normalizedDistance,
+	sortTokensSpatially,
+} from "@mcp-gcse/shared"
 import { describe, expect, it } from "vitest"
 import type { PageToken } from "../../types"
-import { alignTokensToAnswer } from "../align"
-import { normalizedDistance } from "../string-utils"
 import {
 	Q02_ANSWER_TEXT,
 	Q02_TOKENS_PARA_ORDER,

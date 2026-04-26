@@ -85,9 +85,13 @@ export function useTeacherOverrideMutations(submissionId: string | undefined) {
 			}
 			toast.error("Failed to save override")
 		},
-		onSettled: () => {
-			void queryClient.invalidateQueries({ queryKey: key })
-		},
+		// No `onSettled` invalidate — the optimistic cache value is the
+		// authoritative read until the next natural refetch. Otherwise the
+		// invalidation fires before the projection Lambda lands the
+		// `TeacherOverride` row in PG (~2s after the doc snapshot
+		// debounces), the refetch returns the pre-override state, and the
+		// UI flickers back. Doc-as-truth: we trust the dispatch we just
+		// performed; PG catches up in the background.
 	})
 
 	const deleteMutation = useMutation({
@@ -110,9 +114,8 @@ export function useTeacherOverrideMutations(submissionId: string | undefined) {
 			}
 			toast.error("Failed to reset override")
 		},
-		onSettled: () => {
-			void queryClient.invalidateQueries({ queryKey: key })
-		},
+		// See `upsertMutation` above — no invalidation to avoid pre-projection
+		// flicker.
 	})
 
 	return {

@@ -21,4 +21,16 @@ export type QuestionSeed = {
 	question_number: string
 	question_text: string
 	question_type: string
+	max_score: number
+	/** Present when `question_type === "multiple_choice"`. */
+	multiple_choice_options?: Array<{
+		option_label: string
+		option_text: string
+	}>
+	/**
+	 * Correct answer labels for an MCQ — populated from the linked mark
+	 * scheme when one exists. Empty array if mark scheme isn't available
+	 * yet at OCR time.
+	 */
+	correct_option_labels?: string[]
 }

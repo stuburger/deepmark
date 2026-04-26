@@ -10,10 +10,19 @@ import type {
 	BoundaryMode,
 	GradeBoundary,
 	AnnotationPayload as SharedAnnotationPayload,
+	AnswerRegion as SharedAnswerRegion,
 	AnyAnnotationPayload as SharedAnyAnnotationPayload,
 	ChainPayload as SharedChainPayload,
+	ExamPaperQuestion as SharedExamPaperQuestion,
+	ExtractedAnswer as SharedExtractedAnswer,
+	GradingResult as SharedGradingResult,
+	MarkPointResult as SharedMarkPointResult,
 	MarkSignal as SharedMarkSignal,
+	McqOption as SharedMcqOption,
 	OverlayType as SharedOverlayType,
+	PageToken as SharedPageToken,
+	ResultStimulus as SharedResultStimulus,
+	StudentPaperAnnotation as SharedStudentPaperAnnotation,
 } from "@mcp-gcse/shared"
 
 /** Per-page OCR result from the Gemini transcript call. */
@@ -22,36 +31,9 @@ export type HandwritingAnalysis = {
 	observations: string[]
 }
 
-/**
- * A word-level token from Cloud Vision Document Text Detection,
- * stored in `student_paper_page_tokens` and returned by `getJobPageTokens`.
- */
-export type PageToken = {
-	id: string
-	page_order: number
-	para_index: number
-	line_index: number
-	word_index: number
-	text_raw: string
-	text_corrected: string | null
-	/** [yMin, xMin, yMax, xMax] normalised 0–1000 */
-	bbox: [number, number, number, number]
-	confidence: number | null
-	/** Which question this token was attributed to (null for unattributed tokens). */
-	question_id: string | null
-	/** Character offset (start) in student_answer where this token aligns. Null if unaligned. */
-	answer_char_start: number | null
-	/** Character offset (end, exclusive) in student_answer where this token aligns. */
-	answer_char_end: number | null
-}
+export type PageToken = SharedPageToken
 
-export type MarkPointResult = {
-	pointNumber: number
-	awarded: boolean
-	reasoning: string
-	expectedCriteria: string
-	studentCovered: string
-}
+export type MarkPointResult = SharedMarkPointResult
 
 /** Shape used by GradedScanViewer / layout helpers. */
 export type GradedAnswerOnPage = {
@@ -76,14 +58,7 @@ export type GradedPage = {
 	gradedAnswers: GradedAnswerOnPage[]
 }
 
-export type AnswerRegion = {
-	/** 1-indexed page order matching the job's pages array */
-	page: number
-	/** [yMin, xMin, yMax, xMax] normalised 0–1000 */
-	box: [number, number, number, number]
-	/** null = precise Vision token hull; "gemini_fallback" = Gemini Vision estimate */
-	source: string | null
-}
+export type AnswerRegion = SharedAnswerRegion
 
 // ─── Annotation types (re-exported from @mcp-gcse/shared) ───────────────────
 
@@ -92,32 +67,7 @@ export type MarkSignal = SharedMarkSignal
 export type AnnotationPayload = SharedAnnotationPayload
 export type ChainPayload = SharedChainPayload
 export type AnyAnnotationPayload = SharedAnyAnnotationPayload
-
-/** Shared fields present on every annotation variant. */
-type AnnotationBase = {
-	id: string
-	/** Null for teacher-authored annotations (source=teacher) and for marks derived from the PM editor that never touched the server. */
-	grading_run_id: string | null
-	question_id: string
-	page_order: number
-	sentiment: string | null
-	bbox: [number, number, number, number]
-	/** FK to the first token in this annotation's span (null for older enrichment runs). */
-	anchor_token_start_id: string | null
-	/** FK to the last token in this annotation's span (null for older enrichment runs). */
-	anchor_token_end_id: string | null
-}
-
-/**
- * Discriminated union on `overlay_type`.
- * Checking `a.overlay_type === "annotation"` narrows `a.payload` to `AnnotationPayload`.
- */
-export type StudentPaperAnnotation =
-	| (AnnotationBase & {
-			overlay_type: "annotation"
-			payload: AnnotationPayload
-	  })
-	| (AnnotationBase & { overlay_type: "chain"; payload: ChainPayload })
+export type StudentPaperAnnotation = SharedStudentPaperAnnotation
 
 export type GetJobAnnotationsResult =
 	| { ok: true; annotations: StudentPaperAnnotation[] }
@@ -125,62 +75,12 @@ export type GetJobAnnotationsResult =
 
 // ─── Grading types ───────────────────────────────────────────────────────────
 
-export type McqOption = {
-	option_label: string
-	option_text: string
-}
-
-export type ResultStimulus = {
-	label: string
-	content: string
-	content_type: "text" | "image" | "table"
-}
-
-export type GradingResult = {
-	question_id: string
-	question_text: string
-	question_number: string
-	student_answer: string
-	awarded_score: number
-	max_score: number
-	llm_reasoning: string
-	feedback_summary: string
-	marking_method: "deterministic" | "point_based" | "level_of_response" | null
-	level_awarded?: number
-	what_went_well?: string[]
-	even_better_if?: string[]
-	/** Spatial regions on the scan where this answer was written. Empty for older jobs. */
-	answer_regions?: AnswerRegion[]
-	/** MCQ only: available options for this question. */
-	multiple_choice_options?: McqOption[]
-	/** MCQ only: the correct option label(s) from the mark scheme. */
-	correct_option_labels?: string[]
-	/** Per-mark-point results from point_based grading. */
-	mark_points_results?: MarkPointResult[]
-	/** Stimuli the question references (case studies, sources). Empty for standalone questions. */
-	stimuli?: ResultStimulus[]
-}
-
+export type McqOption = SharedMcqOption
+export type ResultStimulus = SharedResultStimulus
+export type GradingResult = SharedGradingResult
 export type TriggerGradingResult = { ok: true } | { ok: false; error: string }
-
-export type ExtractedAnswer = {
-	question_number: string
-	answer_text: string
-}
-
-/**
- * A question from the exam paper, used to seed skeleton blocks in the PM
- * document before grading_results arrive.
- */
-export type ExamPaperQuestion = {
-	question_id: string
-	question_number: string
-	question_text: string
-	max_score: number
-	marking_method: "deterministic" | "point_based" | null
-	multiple_choice_options: McqOption[]
-	correct_option_labels: string[]
-}
+export type ExtractedAnswer = SharedExtractedAnswer
+export type ExamPaperQuestion = SharedExamPaperQuestion
 
 export type StudentPaperJobPayload = {
 	status: string

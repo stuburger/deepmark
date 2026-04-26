@@ -1,7 +1,6 @@
 "use client"
 
 import { AnnotatedAnswerSheet } from "@/components/annotated-answer/annotated-answer-sheet"
-import { buildAnnotatedDoc } from "@/components/annotated-answer/build-doc"
 import {
 	type GradingDataContextValue,
 	GradingDataProvider,
@@ -9,10 +8,8 @@ import {
 import { useYDoc } from "@/components/annotated-answer/use-y-doc"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
-import { useQuestionAlignments } from "@/lib/marking/token-alignment"
 import type {
 	GradingResult,
-	PageToken,
 	StudentPaperAnnotation,
 	StudentPaperResultPayload,
 	TeacherOverride,
@@ -31,14 +28,77 @@ function scoreBadgeVariant(
 	return "destructive"
 }
 
+function OrganicDocumentLoader() {
+	return (
+		<svg
+			aria-hidden="true"
+			className="h-14 w-14 text-blue-500"
+			viewBox="0 0 96 96"
+			fill="none"
+		>
+			<title>Loading document</title>
+			<path
+				d="M28 18C28 13.5817 31.5817 10 36 10H58L72 24V78C72 82.4183 68.4183 86 64 86H36C31.5817 86 28 82.4183 28 78V18Z"
+				className="fill-blue-500/10 stroke-current"
+				strokeWidth="3"
+			/>
+			<path
+				d="M58 10V22C58 23.1046 58.8954 24 60 24H72"
+				className="stroke-current opacity-60"
+				strokeWidth="3"
+				strokeLinecap="round"
+				strokeLinejoin="round"
+			/>
+			<path
+				d="M37 38C43 33 51 43 59 37"
+				className="stroke-current"
+				strokeWidth="3"
+				strokeLinecap="round"
+			>
+				<animate
+					attributeName="d"
+					dur="2.4s"
+					repeatCount="indefinite"
+					values="M37 38C43 33 51 43 59 37;M37 38C43 43 51 33 59 39;M37 38C43 33 51 43 59 37"
+				/>
+			</path>
+			<path
+				d="M36 52C44 47 52 57 60 52"
+				className="stroke-current opacity-70"
+				strokeWidth="3"
+				strokeLinecap="round"
+			>
+				<animate
+					attributeName="d"
+					dur="2.8s"
+					repeatCount="indefinite"
+					values="M36 52C44 47 52 57 60 52;M36 52C44 58 52 47 60 53;M36 52C44 47 52 57 60 52"
+				/>
+			</path>
+			<circle cx="48" cy="68" r="4" className="fill-current">
+				<animate
+					attributeName="r"
+					dur="1.6s"
+					repeatCount="indefinite"
+					values="3;5;3"
+				/>
+				<animate
+					attributeName="opacity"
+					dur="1.6s"
+					repeatCount="indefinite"
+					values="0.35;0.9;0.35"
+				/>
+			</circle>
+		</svg>
+	)
+}
+
 export function GradingResultsPanel({
 	jobId,
 	data,
 	answers,
 	activeQuestionNumber,
 	onAnswerSaved,
-	annotations = [],
-	pageTokens = [],
 	overridesByQuestionId,
 	onOverrideChange,
 	onDerivedAnnotations,
@@ -49,8 +109,6 @@ export function GradingResultsPanel({
 	answers: Record<string, string>
 	activeQuestionNumber: string | null
 	onAnswerSaved: (questionId: string, text: string) => void
-	annotations?: StudentPaperAnnotation[]
-	pageTokens?: PageToken[]
 	overridesByQuestionId?: Map<string, TeacherOverride>
 	onOverrideChange?: (
 		questionId: string,
@@ -71,36 +129,6 @@ export function GradingResultsPanel({
 		data.total_max > 0
 			? Math.round((effectiveTotalAwarded / data.total_max) * 100)
 			: 0
-
-	// Compute alignment data for the answer sheet
-	const { marksByQuestion, alignmentByQuestion, tokensByQuestion } =
-		useQuestionAlignments(data.grading_results, annotations, pageTokens)
-
-	// Build PM document from grading results + alignment marks + token data.
-	// When grading results are absent but exam paper questions are available,
-	// skeleton blocks are built from the paper structure so the teacher sees
-	// the question layout while processing is underway.
-	const doc = useMemo(
-		() =>
-			buildAnnotatedDoc(
-				data.grading_results,
-				marksByQuestion,
-				alignmentByQuestion,
-				tokensByQuestion,
-				data.examiner_summary,
-				data.exam_paper_questions,
-				data.extracted_answers,
-			),
-		[
-			data.grading_results,
-			marksByQuestion,
-			alignmentByQuestion,
-			tokensByQuestion,
-			data.examiner_summary,
-			data.exam_paper_questions,
-			data.extracted_answers,
-		],
-	)
 
 	// Build grading results lookup map for context
 	const gradingResultsMap = useMemo(() => {
@@ -169,13 +197,13 @@ export function GradingResultsPanel({
 				{ydoc && synced ? (
 					<AnnotatedAnswerSheet
 						ydoc={ydoc}
-						doc={doc}
 						onDerivedAnnotations={onDerivedAnnotations}
 						onTokenHighlight={onTokenHighlight}
 					/>
 				) : (
-					<div className="flex items-center justify-center py-20 text-sm text-muted-foreground">
-						Loading annotations…
+					<div className="flex flex-col items-center justify-center gap-3 py-20 text-sm text-muted-foreground">
+						<OrganicDocumentLoader />
+						<span>Loading document...</span>
 					</div>
 				)}
 			</GradingDataProvider>

@@ -241,8 +241,214 @@ proceeding.
    _Verify_: fresh upload → teacher opens → sees populated doc → adds a
    teacher mark → reloads → mark persists → Neon has it with source="teacher".
 
-6. **Phase F — Migration.** Run `backfill-yjs-seeds.ts` against production.
+6. **Phase E.5 — Cleanup pass.** Pay down the debt accumulated during the
+   transitional phases. See "Phase E.5 detailed" below — it's a punch list,
+   not a new architecture step. Run `bun typecheck`, `bun check`, and
+   `bunx vitest run --project=backend:unit --project=web:unit
+   --project=shared:unit` after each item; behaviour should be unchanged.
+
+7. **Phase F — Migration.** Run `backfill-yjs-seeds.ts` against production.
    Spot-check a handful of existing submissions.
+
+## Phase E.5 detailed — cleanup pass
+
+A self-contained punch list. Each item is independent — work in order or
+in parallel, commit after each. No behavioural changes intended; the
+verification command after each item is the same:
+
+```bash
+bunx turbo typecheck --filter='!@mcp-gcse/db' && \
+  bunx biome check && \
+  bunx vitest run --project=backend:unit --project=web:unit --project=shared:unit
+```
+
+### High priority
+
+#### E.5-1 — Delete the web barrel re-exports
+CLAUDE.md forbids barrel re-export files. Phases A → E created nine of
+them. Update consumers to import from `@mcp-gcse/shared` directly, then
+delete the barrels.
+
+**Delete:**
+- `apps/web/src/components/annotated-answer/build-doc.ts` (zero consumers
+  after Phase E — should be a free delete)
+- `apps/web/src/components/annotated-answer/annotation-marks.ts`
+- `apps/web/src/components/annotated-answer/ocr-token-mark.ts`
+- `apps/web/src/components/annotated-answer/paragraph-node.ts`
+- `apps/web/src/lib/marking/mark-registry.ts`
+- `apps/web/src/lib/marking/alignment/types.ts`
+- `apps/web/src/lib/marking/alignment/string-utils.ts`
+- `apps/web/src/lib/marking/alignment/align.ts`
+- `apps/web/src/lib/marking/alignment/marks.ts`
+
+**Then:** rewrite `apps/web/src/lib/marking/alignment/index.ts` to re-export
+only the files that remain in web (`reverse.ts`, `segments.ts`,
+`use-question-alignments.ts`) and delete `apps/web/src/lib/marking/token-alignment.ts`
+(its only purpose was to be a barrel). Update consumers to import from
+either `@mcp-gcse/shared` (for the moved bits) or the specific web file
+(for the remaining bits).
+
+**Heuristic:** `grep -rn 'from "@/lib/marking/alignment"\|from "@/lib/marking/mark-registry"\|from "@/lib/marking/token-alignment"\|from "@/components/annotated-answer/annotation-marks"' apps/web/`
+finds the call sites.
+
+#### E.5-2 — Extract `loadTokensByQuestion`
+Identical ~25-line block lives in `student-paper-extract.ts`
+(`writeAnswersToYDoc`) and `student-paper-grade.ts`
+(`writeAnnotationsToYDocFragment`). Pull it into a single helper:
+
+**Create:** `packages/backend/src/lib/collab/load-tokens.ts`
+
+```ts
+import { db } from "@/db"
+import type { PageToken } from "@mcp-gcse/shared"
+
+/** Returns DB tokens grouped by `question_id`, only those with a question assigned. */
+export async function loadTokensByQuestion(
+  submissionId: string,
+): Promise<Map<string, PageToken[]>> { ... }
+```
+
+Then call it from both processors and delete the inline duplications.
+
+#### E.5-3 — Wrap projection's snapshot decode in try/catch
+Currently the chain in `annotation-projection.ts` will throw cryptically
+("Invalid input for Node.fromJSON") on a corrupt snapshot, with no
+submission_id in the trace.
+
+**Fix:** wrap `deriveAnnotationsFromBytes` body in try/catch; on failure,
+`logger.error(TAG, "Failed to decode snapshot", { submissionId, key, error })`
+and rethrow OR mark the message as a per-record failure
+(`failures.push({ itemIdentifier: record.messageId })`) so SQS retries it
+and eventually moves to DLQ. The latter is preferable — corrupt snapshots
+shouldn't quietly project as "no annotations" (which would wipe the
+submission's rows).
+
+#### E.5-4 — Move grading-side annotation helpers out of the processor
+`student-paper-grade.ts` is now ~500 lines, breaking the ~400-line seam
+guideline. The natural extraction:
+
+**Create:** `packages/backend/src/processors/student-paper-grade/annotations-to-ydoc.ts`
+containing `writeAnnotationsToYDocFragment`, `pendingAnnotationToSpec`,
+and `signalFromPending`. The processor stays in
+`packages/backend/src/processors/student-paper-grade.ts` and imports them.
+
+(Other processors with helpers — `mark-scheme-pdf/`, `question-paper-pdf/`,
+`exemplar-pdf/` — already use this sibling-folder pattern. Match it.)
+
+#### E.5-5 — `await` the skeleton seed
+In `student-paper-extract.ts`:
+
+```ts
+// before
+void withCollabSession(jobId, "seed-skeleton", (session) => seedSkeleton(...))
+// after
+await withCollabSession(jobId, "seed-skeleton", (session) => seedSkeleton(...))
+```
+
+It's <1s and the OCR pipeline that follows is 30s+. The current `void`
+makes the OCR "complete" log line lie about ordering and creates a small
+race window with the next handler invocation.
+
+### Medium priority
+
+#### E.5-6 — Unify `buildSegmentedContent` and `buildTextContent`
+Two implementations of the same boundary-splitting algorithm:
+- `packages/shared/src/editor/build-doc.ts` — `buildTextContent`
+- `packages/backend/src/lib/collab/y-doc-ops.ts` — `buildSegmentedContent`
+
+Same shape (collect boundaries → sort → slice text → attach covering marks),
+different input types (`TextMark` vs `AnnotationMarkRange`).
+
+**Fix:** lift the algorithm into `packages/shared/src/editor/segment-text.ts`
+with a generic mark-spec interface that both call sites can satisfy. The
+backend `AnnotationMarkRange` becomes a thin wrapper or alias.
+
+#### E.5-7 — Delete dead `connectAndMutate`
+`packages/backend/src/lib/collab/headless-client.ts` exports
+`connectAndMutate` (no callers since Phase D) and `buildSubmissionDocumentName`
+(used by `session.ts`).
+
+**Fix:** move `buildSubmissionDocumentName` into `session.ts` (or a tiny
+`document-name.ts`), delete `headless-client.ts` entirely.
+
+#### E.5-8 — Inline `BindingMetadata` should be a named helper
+`y-doc-ops.ts` has:
+
+```ts
+const meta = { mapping: new Map(), isOMark: new Map() }
+updateYFragment(fragment.doc, fragment, pmNode, meta)
+```
+
+This duplicates y-tiptap's internal `createEmptyMeta` (which is not
+exported). Wrap in a single helper in `editor-schema.ts` so future
+y-tiptap shape changes have one place to fix:
+
+```ts
+// editor-schema.ts
+import type { BindingMetadata } from "..."  // y-tiptap's internal type if exposed
+export function emptyBindingMetadata() {
+  return { mapping: new Map(), isOMark: new Map() }
+}
+```
+
+(If y-tiptap doesn't export `BindingMetadata`, hand-define it inline with
+a comment pointing at `node_modules/@tiptap/y-tiptap/dist/src/plugins/sync-plugin.d.ts`.)
+
+#### E.5-9 — Fix `MARK_SIGNALS` type
+In `packages/shared/src/editor/mark-registry.ts`:
+
+```ts
+// before
+export const MARK_SIGNALS: ReadonlySet<string> = new Set(MARK_SIGNAL_NAMES)
+// after
+export const MARK_SIGNALS: ReadonlySet<MarkSignal> = new Set(MARK_SIGNAL_NAMES)
+```
+
+Then update `resolveSignal` to drop the runtime cast that the broader
+type forced.
+
+### Low priority (defer if short on time)
+
+#### E.5-10 — Replace `as` casts at the snapshot boundary
+`yXmlFragmentToProsemirrorJSON(fragment) as JSONContent` and the
+`bbox: t.bbox as [number, number, number, number]` casts in token loading
+are technically boundary casts. PM's own validation catches the JSON shape
+issues; the bbox cast is more questionable. Optional but: define a small
+`TokenRowSchema` in `lib/collab/load-tokens.ts` and parse there.
+
+#### E.5-11 — Fix the test mock that forced the biome-ignore
+`apps/web/src/components/annotated-answer/__tests__/use-derived-annotations.test.ts`
+mocks PM's `Node` interface with only `forEach` (no `childCount` /
+`child(i)`). That's why `derive-annotations.ts` carries a
+`// biome-ignore lint/complexity/noForEach: PM Node.forEach is a traversal API`.
+
+If we move the test alongside the function in
+`packages/shared/src/editor/__tests__/` (which the verification section of
+this plan calls for), this is a chance to either:
+- Mock the full PM interface so we can use `for(let i; i<childCount...)`
+  in the production code, or
+- Use a real PM `Node` (built via `schema.nodeFromJSON`) instead of a
+  mock — much more faithful.
+
+#### E.5-12 — Drop unused `PageToken` fields in Lambda construction
+The Lambda-side PageToken construction always sets
+`answer_char_start: null, answer_char_end: null` because the alignment is
+recomputed on demand. Either:
+- Define a narrower `PageTokenForAlignment` type in shared (no char-range
+  fields) that `alignTokensToAnswer` accepts, or
+- Accept the noise and add a comment explaining why those fields are
+  always null on the Lambda side.
+
+### Acceptance for the cleanup pass
+
+- All items above completed (or explicitly deferred with a note)
+- `bunx turbo typecheck --filter='!@mcp-gcse/db'` clean
+- `bunx biome check` clean (the two pre-existing
+  `mcq-table-view.tsx` / `useSemanticElements` errors are not part of this
+  pass)
+- All ~220 unit tests still passing
+- `git diff --stat` shows mostly deletions + small refactors, no behavioural
+  changes
 
 ## Critical files
 

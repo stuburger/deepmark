@@ -1,15 +1,15 @@
-import { describe, expect, it } from "vitest"
 import {
 	type TextMark,
 	type TokenAlignment,
 	alignTokensToAnswer,
-	charRangeToTokens,
 	deriveTextMarks,
 	levenshtein,
 	normalizedDistance,
-	splitIntoSegments,
 	splitWithOffsets,
-} from "../token-alignment"
+} from "@mcp-gcse/shared"
+import { describe, expect, it } from "vitest"
+import { charRangeToTokens } from "../alignment/reverse"
+import { splitIntoSegments } from "../alignment/segments"
 import type { PageToken, StudentPaperAnnotation } from "../types"
 
 // ─── Helpers ────────────────────────────────────────────────────────────────

@@ -1,7 +1,6 @@
 "use client"
 
 import type {
-	PageToken,
 	StudentPaperAnnotation,
 	StudentPaperJobPayload,
 	TeacherOverride,
@@ -19,8 +18,6 @@ export function MarkingResults({
 	jobId,
 	data,
 	activeQuestionNumber,
-	annotations = [],
-	pageTokens,
 	overridesByQuestionId,
 	onOverrideChange,
 	onDerivedAnnotations,
@@ -29,8 +26,6 @@ export function MarkingResults({
 	jobId: string
 	data: StudentPaperJobPayload
 	activeQuestionNumber?: string | null
-	annotations?: StudentPaperAnnotation[]
-	pageTokens?: PageToken[]
 	overridesByQuestionId?: Map<string, TeacherOverride>
 	onOverrideChange?: (
 		questionId: string,
@@ -54,8 +49,6 @@ export function MarkingResults({
 			onAnswerSaved={(id, text) =>
 				setAnswers((prev) => ({ ...prev, [id]: text }))
 			}
-			annotations={annotations}
-			pageTokens={pageTokens}
 			overridesByQuestionId={overridesByQuestionId}
 			onOverrideChange={onOverrideChange}
 			onDerivedAnnotations={onDerivedAnnotations}

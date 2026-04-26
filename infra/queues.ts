@@ -53,14 +53,28 @@ export const studentPaperQueue = new sst.aws.Queue("StudentPaperQueue", {
 })
 
 // K-7: projection queue. Fires on Y.Doc snapshot writes from Hocuspocus
-// (yjs/${stage}:submission:${id}.bin) and rebuilds the AI annotation rows in
-// Neon idempotently. Only created on permanent stages — non-prod stages don't
-// run their own Hocuspocus and have no bucket to subscribe to.
-export const annotationProjectionQueue = isPermanentStage
-	? new sst.aws.Queue("AnnotationProjectionQueue", {
-			visibilityTimeout: "5 minutes",
-		})
-	: undefined
+// (yjs/${stage}:submission:${id}.bin) and projects the doc state onto PG —
+// `student_paper_annotations` rows, `GradingRun.grading_results` JSON, and
+// `TeacherOverride` rows. The doc is the source of truth for everything in
+// the editor; this Lambda is the only writer of the projected PG state.
+//
+// Created on:
+//   - `sst dev` (any stage)  → Lambda runs locally; queue + S3 notification
+//                              are real cloud resources on the dev stage's
+//                              own scansBucket. Necessary because grade
+//                              Lambda no longer writes `grading_results`
+//                              directly and override server actions no
+//                              longer write `TeacherOverride` directly —
+//                              both depend on this projection landing.
+//   - permanent stages       → standard Lambda deployment.
+//   - non-dev, non-permanent (PR preview) → skipped. PR previews share the
+//                              dev stage's collab + projection.
+export const annotationProjectionQueue =
+	$dev || isPermanentStage
+		? new sst.aws.Queue("AnnotationProjectionQueue", {
+				visibilityTimeout: "5 minutes",
+			})
+		: undefined
 
 scansBucket.notify({
 	notifications: [
@@ -208,7 +222,14 @@ studentPaperOcrQueue.subscribe({
 		scansBucket,
 		studentPaperQueue,
 		batchClassifyQueue,
+		// seedSkeleton + fillAnswerTexts open a HeadlessEditor against Hocuspocus
+		// to stream the document scaffolding + OCR text in real time.
+		collabServer,
+		collabServiceSecret,
 	],
+	environment: {
+		STAGE: $app.stage,
+	},
 	timeout: "10 minutes",
 	memory: "1 GB",
 })

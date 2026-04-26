@@ -6,6 +6,10 @@
 
 declare module "sst" {
   export interface Resource {
+    "AnnotationProjectionQueue": {
+      "type": "sst.aws.Queue"
+      "url": string
+    }
     "AnthropicApiKey": {
       "type": "sst.sst.Secret"
       "value": string
@@ -31,6 +35,10 @@ declare module "sst" {
       "url": string
     }
     "CloudVisionApiKey": {
+      "type": "sst.sst.Secret"
+      "value": string
+    }
+    "CollabServiceSecret": {
       "type": "sst.sst.Secret"
       "value": string
     }

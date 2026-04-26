@@ -2,6 +2,11 @@ import { db } from "@/db"
 import { annotateOneResult } from "@/lib/annotations/annotate-result"
 import type { AnnotationContext } from "@/lib/annotations/data-loading"
 import type { PendingAnnotation } from "@/lib/annotations/types"
+import {
+	type QuestionGradeAttrs,
+	setQuestionGrade,
+} from "@/lib/collab/editor-ops"
+import type { HeadlessEditor } from "@/lib/collab/headless-editor"
 import type {
 	ExamPaperWithSections,
 	MarkScheme,
@@ -9,11 +14,13 @@ import type {
 } from "@/lib/grading/question-list"
 import type { CancellationToken } from "@/lib/infra/cancellation"
 import { logger } from "@/lib/infra/logger"
+import { dispatchAnnotationsForQuestion } from "@/processors/student-paper-grade/annotations-to-editor"
 import { logGradingRunEvent } from "@mcp-gcse/db"
 import {
 	type LlmRunner,
 	type MarkerContext,
 	type MarkerOrchestrator,
+	type PageToken,
 	type QuestionWithMarkScheme,
 	parseMarkPointsFromPrisma,
 } from "@mcp-gcse/shared"
@@ -58,6 +65,16 @@ export type GradeAndAnnotateAllArgs = {
 	cancellation: CancellationToken
 	annotationContext: AnnotationContext
 	annotationLlm: LlmRunner
+	/**
+	 * Live editor session owned by the grade Lambda. Per-question annotation
+	 * marks are dispatched against this editor as soon as each question
+	 * finishes, so the teacher sees marks appear progressively. The grade
+	 * Lambda opens this editor once at handler start and closes it after all
+	 * questions complete — see `student-paper-grade.ts`.
+	 */
+	editor: HeadlessEditor
+	/** Per-question OCR tokens, preloaded once for the whole submission. */
+	tokensByQuestion: Map<string, PageToken[]>
 }
 
 export type GradeAndAnnotateAllOutput = {
@@ -88,6 +105,8 @@ export async function gradeAndAnnotateAll(
 		cancellation,
 		annotationContext,
 		annotationLlm,
+		editor,
+		tokensByQuestion,
 	} = args
 
 	// Pre-allocate slots to maintain question order during streaming updates.
@@ -95,24 +114,6 @@ export async function gradeAndAnnotateAll(
 		questionList.length,
 	).fill(undefined)
 	const annotationsByQuestion = new Map<string, PendingAnnotation[]>()
-
-	const writeIncremental = () => {
-		const completed = resultSlots.filter(
-			(r): r is GradingResult => r !== undefined,
-		)
-		db.gradingRun
-			.update({ where: { id: jobId }, data: { grading_results: completed } })
-			.catch((err) =>
-				logger.warn(
-					TAG,
-					"Non-fatal: failed to write incremental grading result",
-					{
-						jobId,
-						error: String(err),
-					},
-				),
-			)
-	}
 
 	await Promise.all(
 		questionList.map(async (qItem, index) => {
@@ -135,7 +136,19 @@ export async function gradeAndAnnotateAll(
 			})
 
 			resultSlots[index] = result
-			writeIncremental()
+
+			// Dispatch the full grade payload to the editor as soon as it's
+			// known. The doc is the source of truth for grade metadata
+			// (awarded score, WWW/EBI, feedback, level data, mark-points
+			// breakdown, etc.) — renderers read it directly via the
+			// NodeView, the projection Lambda mirrors it to
+			// `GradingRun.grading_results` JSON for non-realtime consumers
+			// (analytics, exports, batch listings). No direct PG write
+			// happens here — the projection picks up the change on the
+			// next Hocuspocus snapshot debounce (~2s).
+			editor.transact((view) =>
+				setQuestionGrade(view, result.question_id, gradingResultToAttrs(result)),
+			)
 
 			if (cancellation.isCancelled()) return
 
@@ -155,6 +168,18 @@ export async function gradeAndAnnotateAll(
 				jobId,
 			})
 			annotationsByQuestion.set(result.question_id, annotations)
+
+			// Dispatch this question's annotation marks to the editor as soon as
+			// they're computed — teacher sees marks fill in block-by-block as
+			// the parallel grade pass progresses, no batched end-of-run flush.
+			dispatchAnnotationsForQuestion({
+				editor,
+				jobId,
+				questionId: result.question_id,
+				answerText: result.student_answer,
+				tokens: tokensByQuestion.get(result.question_id) ?? [],
+				annotations,
+			})
 		}),
 	)
 
@@ -310,6 +335,29 @@ async function gradeOneQuestion({
 			mark_points_results: [],
 			mark_scheme_id: ms.id,
 		}
+	}
+}
+
+/**
+ * Project an in-memory `GradingResult` onto the `QuestionGradeAttrs`
+ * shape used by the doc. The two are deliberately field-for-field
+ * identical (just camelCased), but kept as separate types so the
+ * grade pipeline can evolve internally without dragging the editor
+ * schema with it.
+ */
+function gradingResultToAttrs(r: GradingResult): QuestionGradeAttrs {
+	return {
+		awardedScore: r.awarded_score,
+		markingMethod: r.marking_method,
+		llmReasoning: r.llm_reasoning,
+		feedbackSummary: r.feedback_summary,
+		whatWentWell: r.what_went_well ?? [],
+		evenBetterIf: r.even_better_if ?? [],
+		markPointsResults: r.mark_points_results,
+		levelAwarded: r.level_awarded ?? null,
+		whyNotNextLevel: r.why_not_next_level ?? null,
+		capApplied: r.cap_applied ?? null,
+		markSchemeId: r.mark_scheme_id,
 	}
 }
 

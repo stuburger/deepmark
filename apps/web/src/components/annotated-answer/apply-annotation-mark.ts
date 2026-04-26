@@ -128,6 +128,9 @@ export function applyAnnotationMark(
 	const mark = markType.create({
 		...baseAttrs,
 		annotationId,
+		// Tag every teacher-applied mark so the projection Lambda writes the
+		// row with source="teacher" rather than defaulting to "ai".
+		source: "teacher",
 	})
 
 	const tr = editor.state.tr.addMark(from, to, mark)

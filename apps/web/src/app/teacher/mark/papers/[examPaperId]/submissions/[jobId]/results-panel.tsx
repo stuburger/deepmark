@@ -3,7 +3,6 @@
 import { ScrollArea } from "@/components/ui/scroll-area"
 import type { MarkingPhase } from "@/lib/marking/stages/phase"
 import type {
-	PageToken,
 	StudentPaperAnnotation,
 	StudentPaperJobPayload,
 	TeacherOverride,
@@ -26,8 +25,6 @@ type SharedPanelProps = {
 	data: StudentPaperJobPayload
 	phase: MarkingPhase
 	activeQuestionNumber: string | null
-	annotations?: StudentPaperAnnotation[]
-	pageTokens?: PageToken[]
 	overridesByQuestionId?: Map<string, TeacherOverride>
 	onOverrideChange?: (
 		questionId: string,
@@ -42,8 +39,6 @@ export function ResultsPanel({
 	data,
 	phase,
 	activeQuestionNumber,
-	annotations = [],
-	pageTokens,
 	overridesByQuestionId,
 	onOverrideChange,
 	onDerivedAnnotations,
@@ -62,8 +57,6 @@ export function ResultsPanel({
 					jobId={jobId}
 					data={data}
 					activeQuestionNumber={activeQuestionNumber}
-					annotations={annotations}
-					pageTokens={pageTokens}
 					overridesByQuestionId={overridesByQuestionId}
 					onOverrideChange={onOverrideChange}
 					onDerivedAnnotations={onDerivedAnnotations}

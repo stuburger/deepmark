@@ -96,9 +96,12 @@ export function useSubmissionData({
 		staleTime: Number.POSITIVE_INFINITY,
 	})
 
-	// Annotations — fetched once on mount and re-fetched when annotation
-	// completes (see the effect below). Teacher edits update the cache
-	// directly via useAnnotationCacheSync, so no polling is needed.
+	// Annotations — server-projected rows, fetched once on mount and
+	// re-fetched when annotation completes (see the effect below). The cache
+	// holds only the projection Lambda's output. Editor-derived (anchored)
+	// annotations live in SubmissionView's local state and never write here;
+	// callers that need the merged "live editor + spatial-only server" view
+	// receive it from SubmissionView, not from this query.
 	const { data: annotations = [] } = useQuery<StudentPaperAnnotation[]>({
 		queryKey: queryKeys.jobAnnotations(jobId),
 		queryFn: async () => {

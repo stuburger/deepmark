@@ -78,6 +78,13 @@ export async function loadQuestionSeeds(
 							question_number: true,
 							text: true,
 							question_type: true,
+							points: true,
+							multiple_choice_options: true,
+							mark_schemes: {
+								select: { correct_option_labels: true },
+								orderBy: { created_at: "desc" },
+								take: 1,
+							},
 						},
 					},
 				},
@@ -88,31 +95,49 @@ export async function loadQuestionSeeds(
 	const seeds: QuestionSeed[] = []
 	for (const section of sections) {
 		for (const esq of section.exam_section_questions) {
-			const questionNumber = esq.question.question_number
+			const q = esq.question
+			const questionNumber = q.question_number
+			const isMcq = q.question_type === "multiple_choice"
+			const mcqAttrs = isMcq
+				? {
+						multiple_choice_options:
+							(q.multiple_choice_options as Array<{
+								option_label: string
+								option_text: string
+							}>) ?? [],
+						correct_option_labels:
+							q.mark_schemes[0]?.correct_option_labels ?? [],
+					}
+				: {}
+
 			if (!questionNumber) {
 				const fallback = String(seeds.length + 1)
 				logger.warn(
 					TAG,
 					"Question has no question_number — using positional fallback",
 					{
-						question_id: esq.question.id,
+						question_id: q.id,
 						exam_paper_id: examPaperId,
 						fallback_number: fallback,
 					},
 				)
 				seeds.push({
-					question_id: esq.question.id,
+					question_id: q.id,
 					question_number: fallback,
-					question_text: esq.question.text,
-					question_type: esq.question.question_type,
+					question_text: q.text,
+					question_type: q.question_type,
+					max_score: q.points ?? 0,
+					...mcqAttrs,
 				})
 				continue
 			}
 			seeds.push({
-				question_id: esq.question.id,
+				question_id: q.id,
 				question_number: questionNumber,
-				question_text: esq.question.text,
-				question_type: esq.question.question_type,
+				question_text: q.text,
+				question_type: q.question_type,
+				max_score: q.points ?? 0,
+				...mcqAttrs,
 			})
 		}
 	}

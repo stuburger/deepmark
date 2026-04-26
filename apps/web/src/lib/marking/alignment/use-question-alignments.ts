@@ -1,10 +1,13 @@
 "use client"
 
+import {
+	type TextMark,
+	type TokenAlignment,
+	alignTokensToAnswer,
+	deriveTextMarks,
+} from "@mcp-gcse/shared"
 import { useMemo } from "react"
 import type { GradingResult, PageToken, StudentPaperAnnotation } from "../types"
-import { alignTokensToAnswer } from "./align"
-import { deriveTextMarks } from "./marks"
-import type { TextMark, TokenAlignment } from "./types"
 
 export type QuestionAlignments = {
 	/** Per-question text marks derived from annotations + alignment */

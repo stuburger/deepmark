@@ -14,6 +14,7 @@ import {
 	type GradingResult,
 	type StudentPaperAnnotation,
 	deriveAnnotationsFromDoc,
+	deriveExaminerSummaryFromDoc,
 	deriveGradingResultsFromDoc,
 	deriveTeacherOverridesFromDoc,
 	parseDocumentName,
@@ -120,6 +121,7 @@ async function processRecord(rec: S3EventRecord): Promise<void> {
 	await Promise.all([
 		replaceAnnotations(submissionId, derived.annotations),
 		writeGradingResults(submissionId, derived.gradingResults),
+		writeExaminerSummary(submissionId, derived.examinerSummary),
 		replaceTeacherOverrides(submissionId, derived.teacherOverrides),
 	])
 
@@ -128,6 +130,7 @@ async function processRecord(rec: S3EventRecord): Promise<void> {
 		annotations: derived.annotations.length,
 		gradingResults: derived.gradingResults.length,
 		teacherOverrides: derived.teacherOverrides.length,
+		examinerSummary: derived.examinerSummary?.length ?? 0,
 	})
 }
 
@@ -135,6 +138,7 @@ type ProjectedSnapshot = {
 	annotations: StudentPaperAnnotation[]
 	gradingResults: GradingResult[]
 	teacherOverrides: DerivedTeacherOverride[]
+	examinerSummary: string | null
 }
 
 /**
@@ -154,6 +158,7 @@ function deriveSnapshot(bytes: Uint8Array): ProjectedSnapshot {
 				annotations: [],
 				gradingResults: [],
 				teacherOverrides: [],
+				examinerSummary: null,
 			}
 		}
 		const json = yXmlFragmentToProsemirrorJSON(fragment)
@@ -162,6 +167,7 @@ function deriveSnapshot(bytes: Uint8Array): ProjectedSnapshot {
 			annotations: deriveAnnotationsFromDoc(node),
 			gradingResults: deriveGradingResultsFromDoc(node),
 			teacherOverrides: deriveTeacherOverridesFromDoc(node),
+			examinerSummary: deriveExaminerSummaryFromDoc(node),
 		}
 	} finally {
 		doc.destroy()
@@ -266,8 +272,7 @@ async function replaceAnnotations(
 			inserts: plan.inserts.length,
 			updates: plan.updates.length,
 			deletes: plan.deleteIds.length,
-			unchanged:
-				existing.length - plan.deleteIds.length - plan.updates.length,
+			unchanged: existing.length - plan.deleteIds.length - plan.updates.length,
 		})
 	})
 }
@@ -300,6 +305,32 @@ async function writeGradingResults(
 }
 
 /**
+ * Mirror the doc's leading paragraph(s) onto `GradingRun.examiner_summary`.
+ * The grading Lambda seeds an initial AI summary on completion; this
+ * projection keeps the column current as the teacher edits the paragraph
+ * inline in the editor — without it, the PDF export keeps showing the
+ * original AI text.
+ *
+ * Same no-op-when-no-row guard as `writeGradingResults`.
+ */
+async function writeExaminerSummary(
+	submissionId: string,
+	examinerSummary: string | null,
+): Promise<void> {
+	const existing = await db.gradingRun.findUnique({
+		where: { id: submissionId },
+		select: { id: true, examiner_summary: true },
+	})
+	if (!existing) return
+	if (existing.examiner_summary === examinerSummary) return
+
+	await db.gradingRun.update({
+		where: { id: submissionId },
+		data: { examiner_summary: examinerSummary },
+	})
+}
+
+/**
  * Mirror the doc's per-question teacher overrides onto the
  * `TeacherOverride` table. The table has `@@unique([submission_id, question_id])`
  * so we drive a three-way diff: rows in PG missing from the doc are
@@ -318,9 +349,7 @@ async function replaceTeacherOverrides(
 	const projectable = derived.filter(
 		(d) => d.score_override != null && d.set_by != null,
 	)
-	const desiredByQuestion = new Map(
-		projectable.map((d) => [d.question_id, d]),
-	)
+	const desiredByQuestion = new Map(projectable.map((d) => [d.question_id, d]))
 
 	const existing = await db.teacherOverride.findMany({
 		where: { submission_id: submissionId },

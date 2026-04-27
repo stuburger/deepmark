@@ -25,6 +25,14 @@ import { scansBucket } from "./storage"
 
 export const web = new sst.aws.Nextjs("Web", {
 	path: "apps/web",
+	server: {
+		// Class PDF export renders react-pdf for every student in-process and
+		// uploads the result to S3. Defaults (20s / 1024 MB) are too tight for
+		// classes of 25-30+; this gives headroom while staying inside the 60s
+		// CloudFront cap.
+		timeout: "60 seconds",
+		memory: "3008 MB",
+	},
 	link: [
 		auth,
 		neonPostgres,

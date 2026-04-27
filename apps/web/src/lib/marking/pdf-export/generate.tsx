@@ -11,7 +11,9 @@ import { LegendPage } from "./legend-page"
 import { StudentSection } from "./student-section"
 import { type ClassExportMeta, paddingFor } from "./types"
 
-async function renderSectionBytes(page: ReactElement): Promise<Uint8Array> {
+export type RenderSection = (page: ReactElement) => Promise<Uint8Array>
+
+async function renderViaBlob(page: ReactElement): Promise<Uint8Array> {
 	const blob = await pdf(<Document>{page}</Document>).toBlob()
 	const arrayBuffer = await blob.arrayBuffer()
 	return new Uint8Array(arrayBuffer)
@@ -46,19 +48,29 @@ function padToBoundary(out: PDFDocument, multiple: number) {
 	addBlankPages(out, multiple - remainder)
 }
 
-export async function generateClassReport({
-	meta,
-	students,
-	annotationsBySubmission = {},
-	tokensBySubmission = {},
-	includeAnnotations = false,
-}: {
+export type ClassReportInput = {
 	meta: ClassExportMeta
 	students: StudentPaperResultPayload[]
 	annotationsBySubmission?: Record<string, StudentPaperAnnotation[]>
 	tokensBySubmission?: Record<string, PageToken[]>
 	includeAnnotations?: boolean
-}): Promise<Uint8Array> {
+}
+
+/**
+ * Shared orchestration for class report generation. The `renderSection`
+ * callback is the only environment-specific piece — browser uses
+ * `pdf().toBlob()`, Node uses `renderToBuffer`.
+ */
+export async function buildClassReport(
+	{
+		meta,
+		students,
+		annotationsBySubmission = {},
+		tokensBySubmission = {},
+		includeAnnotations = false,
+	}: ClassReportInput,
+	renderSection: RenderSection,
+): Promise<Uint8Array> {
 	const multiple = paddingFor(meta.printLayout)
 	const out = await PDFDocument.create()
 
@@ -66,7 +78,7 @@ export async function generateClassReport({
 		includeAnnotations &&
 		Object.values(annotationsBySubmission).some((list) => list.length > 0)
 
-	const coverBytes = await renderSectionBytes(
+	const coverBytes = await renderSection(
 		<CoverPage meta={meta} students={students} />,
 	)
 	await copyPagesInto(out, coverBytes)
@@ -85,7 +97,7 @@ export async function generateClassReport({
 			? (tokensBySubmission[submissionId] ?? [])
 			: []
 
-		const studentBytes = await renderSectionBytes(
+		const studentBytes = await renderSection(
 			<StudentSection
 				student={student}
 				studentIndex={i}
@@ -106,7 +118,7 @@ export async function generateClassReport({
 	}
 
 	if (hasAnyAnnotations) {
-		const legendBytes = await renderSectionBytes(
+		const legendBytes = await renderSection(
 			<LegendPage annotationsBySubmission={annotationsBySubmission} />,
 		)
 		await copyPagesInto(out, legendBytes)
@@ -128,7 +140,7 @@ export async function generateSingleStudentReport({
 }): Promise<Uint8Array> {
 	const out = await PDFDocument.create()
 
-	const studentBytes = await renderSectionBytes(
+	const studentBytes = await renderViaBlob(
 		<StudentSection
 			student={student}
 			studentIndex={0}
@@ -141,7 +153,7 @@ export async function generateSingleStudentReport({
 
 	if (includeAnnotations && annotations.length > 0) {
 		const submissionId = student.submission_id ?? "single"
-		const legendBytes = await renderSectionBytes(
+		const legendBytes = await renderViaBlob(
 			<LegendPage annotationsBySubmission={{ [submissionId]: annotations }} />,
 		)
 		await copyPagesInto(out, legendBytes)

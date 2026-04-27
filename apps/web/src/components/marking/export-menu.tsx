@@ -18,7 +18,7 @@ import {
 	triggerBlobDownload,
 } from "@/lib/marking/listing/csv"
 import { exportSubmissionsForPaper } from "@/lib/marking/listing/export"
-import { getStudentPapersForClass } from "@/lib/marking/submissions/queries"
+import { exportClassReport } from "@/lib/marking/pdf-export/export-action"
 import type { SubmissionHistoryItem } from "@/lib/marking/types"
 import { useMutation } from "@tanstack/react-query"
 import { ChevronDown, Download, FileText, Loader2 } from "lucide-react"
@@ -118,58 +118,28 @@ export function ExportMenu({
 				}
 			}
 
-			const fetched = await getStudentPapersForClass(paperId, ids, {
-				includeAnnotations: values.includeAnnotations,
-			})
-			if (!fetched.ok) return fetched
-			if (fetched.payloads.length === 0) {
-				return { ok: false as const, error: "No submissions returned" }
-			}
-
-			const { generateClassReport } = await import(
-				"@/lib/marking/pdf-export/generate"
-			)
-
-			const paperTitle = fetched.payloads[0]?.exam_paper_title ?? ""
-			const bytes = await generateClassReport({
-				meta: {
-					className: values.className,
-					teacherName: values.teacherName,
-					paperTitle,
-					generatedAt: new Date(),
-					printLayout: values.printLayout,
-				},
-				students: fetched.payloads,
-				annotationsBySubmission: fetched.annotationsBySubmission,
-				tokensBySubmission: fetched.tokensBySubmission,
-				includeAnnotations: values.includeAnnotations,
-			})
-
-			return {
-				ok: true as const,
-				bytes,
-				paperTitle,
+			return exportClassReport({
+				paperId,
+				submissionIds: ids,
 				className: values.className,
-				count: fetched.payloads.length,
-			}
+				teacherName: values.teacherName,
+				printLayout: values.printLayout,
+				includeAnnotations: values.includeAnnotations,
+			})
 		},
 		onSuccess: (result) => {
 			if (!result.ok) {
 				toast.error(result.error)
 				return
 			}
-			const date = new Date().toISOString().slice(0, 10)
-			const baseName = result.className
-				? slugify(result.className)
-				: slugify(result.paperTitle || "class-report")
-			const filename = `class-report-${baseName}-${date}.pdf`
-			const u8 = result.bytes
-			const ab = u8.buffer.slice(
-				u8.byteOffset,
-				u8.byteOffset + u8.byteLength,
-			) as ArrayBuffer
-			const blob = new Blob([ab], { type: "application/pdf" })
-			triggerBlobDownload(blob, filename, "application/pdf")
+			// Trigger the download via an anchor click — keeps the user on the
+			// page (window.location.href would navigate away momentarily).
+			const link = document.createElement("a")
+			link.href = result.url
+			link.download = result.filename
+			document.body.appendChild(link)
+			link.click()
+			document.body.removeChild(link)
 			setPdfDialogOpen(false)
 			toast.success(
 				`Exported ${result.count} submission${result.count !== 1 ? "s" : ""}`,

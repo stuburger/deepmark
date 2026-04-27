@@ -116,6 +116,37 @@ function readMcqResults(tableAttrs: Record<string, unknown>): McqRow[] {
 }
 
 /**
+ * Insert the AI examiner summary as a leading `paragraph` block. Idempotent
+ * via two guards:
+ *
+ *   1. If a leading paragraph already exists *with content* — assume the
+ *      teacher (or a previous run) already populated it and leave it alone.
+ *   2. If a leading paragraph exists but is empty — replace it.
+ *
+ * Otherwise inserts a new paragraph at position 0. Called from the grading
+ * Lambda once `generateExaminerSummary` has produced the text.
+ */
+export function insertExaminerSummary(view: EditorView, summary: string): void {
+	const trimmed = summary.trim()
+	if (trimmed.length === 0) return
+
+	const { state, dispatch } = view
+	const paragraphType = state.schema.nodes.paragraph
+	if (!paragraphType) return
+
+	const node = paragraphType.create(null, state.schema.text(trimmed))
+
+	const first = state.doc.firstChild
+	if (first?.type.name === "paragraph") {
+		if (first.textContent.trim().length > 0) return
+		dispatch(state.tr.replaceWith(0, first.nodeSize, node))
+		return
+	}
+
+	dispatch(state.tr.insert(0, node))
+}
+
+/**
  * Insert one `mcqTable` atom block carrying every MCQ on the paper. The
  * table's `results` attr is an array of `McqRow` entries — `McqTableView`
  * (in the web app) renders it as a compact grid of options + ticks. There

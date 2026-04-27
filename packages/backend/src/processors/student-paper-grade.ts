@@ -31,7 +31,11 @@ import {
 	parseSqsJobId,
 } from "@/lib/infra/sqs-job-runner"
 import { type GradingStatus, logGradingRunEvent } from "@mcp-gcse/db"
-import type { LlmRunner, MarkerOrchestrator } from "@mcp-gcse/shared"
+import {
+	type LlmRunner,
+	type MarkerOrchestrator,
+	insertExaminerSummary,
+} from "@mcp-gcse/shared"
 
 const TAG = "student-paper-grade"
 
@@ -170,10 +174,7 @@ async function gradeJob({
 	// the OCR Lambda entirely) gets the same code path as the original
 	// flow, no special-casing required.
 	const skeletons = buildSkeletonsFromQuestionList(questionList)
-	const perQuestion = buildPerQuestionAnswers(
-		answerMap,
-		tokensByQuestion,
-	)
+	const perQuestion = buildPerQuestionAnswers(answerMap, tokensByQuestion)
 
 	const { gradingResults, annotationsByQuestion } = await withHeadlessEditor(
 		jobId,
@@ -211,6 +212,16 @@ async function gradeJob({
 		subject: examPaper.subject,
 		runner: llm,
 	})
+
+	// Push the AI summary into the prosemirror doc as a leading paragraph so
+	// teachers see and can edit it inline alongside the per-question feedback.
+	// The DB column (`examiner_summary`) is still written below in
+	// `completeGradingJob` for non-realtime consumers (PDF export, etc.).
+	if (examinerSummary && !cancellation.isCancelled()) {
+		await withHeadlessEditor(jobId, "examiner-summary", (editor) =>
+			editor.transact((view) => insertExaminerSummary(view, examinerSummary)),
+		)
+	}
 
 	await completeGradingJob({
 		sub,
@@ -256,7 +267,6 @@ async function rejectJobMissingOcr(jobId: string): Promise<void> {
 		.catch(() => {})
 }
 
-
 /**
  * Convert the loaded `questionList` into the `QuestionSkeleton[]` shape
  * `dispatchExtractedDoc` consumes. Carries the MCQ-specific fields
@@ -283,10 +293,11 @@ function buildSkeletonsFromQuestionList(
 		questionText: q.question_text,
 		maxScore: q.question_obj.points,
 		questionType: q.question_obj.question_type,
-		options: (q.question_obj.multiple_choice_options as Array<{
-			option_label: string
-			option_text: string
-		}>) ?? [],
+		options:
+			(q.question_obj.multiple_choice_options as Array<{
+				option_label: string
+				option_text: string
+			}>) ?? [],
 		correctLabels: q.mark_scheme?.correct_option_labels ?? [],
 	}))
 }
@@ -298,7 +309,15 @@ function buildSkeletonsFromQuestionList(
  */
 function buildPerQuestionAnswers(
 	answerMap: Map<string, string>,
-	tokensByQuestion: Map<string, Awaited<ReturnType<typeof loadTokensByQuestion>> extends Map<string, infer T> ? T : never>,
+	tokensByQuestion: Map<
+		string,
+		Awaited<ReturnType<typeof loadTokensByQuestion>> extends Map<
+			string,
+			infer T
+		>
+			? T
+			: never
+	>,
 ): PerQuestionAnswer[] {
 	const out: PerQuestionAnswer[] = []
 	for (const [questionId, text] of answerMap) {

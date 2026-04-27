@@ -443,6 +443,7 @@ export function applyAnnotationMark(
 	view: EditorView,
 	questionId: string,
 	mark: AnnotationMarkSpec,
+	source: "ai" | "teacher" = "ai",
 ): void {
 	const { state, dispatch } = view
 	const block = findQuestionBlock(state.doc, questionId)
@@ -461,12 +462,14 @@ export function applyAnnotationMark(
 		state.tr.addMark(
 			block.start + mark.from,
 			block.start + mark.to,
-			// Lambda-applied marks are always source="ai". Set last so callers cannot
-			// accidentally tag a Lambda mark as "teacher" through `mark.attrs`.
+			// Source defaults to "ai" so existing Lambda call sites are unchanged
+			// (the migration script passes "teacher" for teacher-authored rows).
+			// Set after spreading mark.attrs so callers cannot override it via the
+			// attrs bag.
 			markType.create({
 				...mark.attrs,
 				sentiment: mark.sentiment,
-				source: "ai",
+				source,
 			}),
 		),
 	)

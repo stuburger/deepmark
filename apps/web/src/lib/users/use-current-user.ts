@@ -4,33 +4,60 @@ import { queryKeys } from "@/lib/query-keys"
 import { useQuery } from "@tanstack/react-query"
 import { type CurrentUserProfile, getCurrentUser } from "./queries"
 
-function hueForUserId(id: string): number {
+/**
+ * Curated palette of 6-digit hex collab colors. Distinct hues, friendly on
+ * white, and avoids pure red/yellow (those code as "error"/"warning" in the
+ * rest of the UI).
+ *
+ * Hex format is mandatory: y-tiptap's cursor plugin validates `user.color`
+ * with `^#[0-9a-fA-F]{6}$` and emits `console.warn("A user uses an
+ * unsupported color format", user)` every time decorations rebuild
+ * (i.e. on every awareness change). Non-hex colors trigger the warn loop,
+ * which blocks the main thread under DevTools and shows up as cursor
+ * flicker even without it.
+ */
+const PALETTE = [
+	"#3b82f6", // blue
+	"#10b981", // emerald
+	"#8b5cf6", // violet
+	"#ec4899", // pink
+	"#f59e0b", // amber
+	"#06b6d4", // cyan
+	"#ef4444", // red
+	"#84cc16", // lime
+	"#a855f7", // purple
+	"#14b8a6", // teal
+	"#f97316", // orange
+	"#6366f1", // indigo
+] as const
+
+function paletteIndexFor(id: string): number {
 	let hash = 0
 	for (let i = 0; i < id.length; i++) {
 		hash = (hash * 31 + id.charCodeAt(i)) | 0
 	}
-	return ((hash % 360) + 360) % 360
+	return Math.abs(hash) % PALETTE.length
 }
 
 /**
- * Deterministic HSL color from a userId. Stable across reloads, distinct
+ * Deterministic hex color from a userId. Stable across reloads, distinct
  * per user. Used as the awareness cursor color for collaborative editing.
  */
 export function colorForUserId(id: string): string {
-	return `hsl(${hueForUserId(id)} 70% 50%)`
+	return PALETTE[paletteIndexFor(id)] ?? PALETTE[0]
 }
 
 /**
- * Translucent variant of `colorForUserId` for selection highlights — opaque
- * enough to read against, light enough to show the underlying text.
- *
- * Why this exists: y-tiptap's default selectionRender appends a hex alpha
- * byte (`${color}70`) to the user color, which produces invalid CSS for
- * any non-hex color (HSL etc). Passing a pre-computed `hsl(... / α)` string
- * sidesteps that.
+ * Translucent variant of `colorForUserId` for selection highlights.
+ * Uses 8-digit hex (`#rrggbbaa`) so it's still valid CSS and still passes
+ * y-tiptap's color regex if it ever ends up in `user.color`.
  */
 export function selectionColorForUserId(id: string, alpha = 0.3): string {
-	return `hsl(${hueForUserId(id)} 70% 50% / ${alpha})`
+	const hex = PALETTE[paletteIndexFor(id)] ?? PALETTE[0]
+	const alphaByte = Math.round(alpha * 255)
+		.toString(16)
+		.padStart(2, "0")
+	return `${hex}${alphaByte}`
 }
 
 export type CursorUser = {

@@ -129,8 +129,10 @@
 	pointer-events: none;
 }
 
+/* Background-color is set inline by the custom selectionRender in
+   AnnotatedAnswerSheet using the user's pre-computed translucent HSL
+   variant — see `selectionColorForUserId`. */
 .collaboration-carets__selection {
-	mix-blend-mode: multiply;
 	pointer-events: none;
 }
 

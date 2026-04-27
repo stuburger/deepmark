@@ -153,6 +153,20 @@ export function AnnotatedAnswerSheet({
 							CollaborationCaret.configure({
 								provider,
 								user: cursorUser,
+								// y-tiptap's default selectionRender appends a hex alpha
+								// byte (`${color}70`) to user.color, which produces invalid
+								// CSS for HSL colors and the selection silently vanishes.
+								// We pre-compute a translucent variant in `useCurrentUser`
+								// (`selectionColor`) and emit it here as the background.
+								selectionRender: (user) => ({
+									class: "collaboration-carets__selection",
+									style: `background-color: ${
+										(user as { selectionColor?: string }).selectionColor ??
+										user.color
+									}`,
+									nodeName: "span",
+									"data-user": user.name,
+								}),
 							}),
 						]
 					: []),
@@ -195,6 +209,7 @@ export function AnnotatedAnswerSheet({
 					editor={editor}
 					actions={MARK_ACTIONS}
 					onMarkApplied={handleMarkApplied}
+					provider={provider}
 				/>
 
 				{/* Bubble menu — appears on selection */}

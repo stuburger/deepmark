@@ -7,6 +7,7 @@ export type CurrentUserProfile = {
 	id: string
 	name: string | null
 	email: string | null
+	avatar_url: string | null
 }
 
 export type GetCurrentUserResult =
@@ -24,7 +25,7 @@ export async function getCurrentUser(): Promise<GetCurrentUserResult> {
 
 	const row = await db.user.findUnique({
 		where: { id: session.userId },
-		select: { id: true, name: true, email: true },
+		select: { id: true, name: true, email: true, avatar_url: true },
 	})
 
 	if (!row) return { ok: false, error: "User not found" }

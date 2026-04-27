@@ -7,6 +7,7 @@ import {
 	TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
+import type { HocuspocusProvider } from "@hocuspocus/provider"
 import type { Editor } from "@tiptap/core"
 import { useEditorState } from "@tiptap/react"
 import {
@@ -27,7 +28,9 @@ import {
 	hasAnnotationMarkInSelection,
 	removeAllAnnotationMarks,
 } from "./apply-annotation-mark"
+import { CollaboratorAvatars } from "./collaborator-avatars"
 import type { MARK_ACTIONS } from "./mark-actions"
+import { useCollaborators } from "./use-collaborators"
 
 // ─── Icon maps ───────────────────────────────────────────────────────────────
 
@@ -53,10 +56,12 @@ export function AnnotationToolbar({
 	editor,
 	actions,
 	onMarkApplied,
+	provider,
 }: {
 	editor: Editor
 	actions: typeof MARK_ACTIONS
 	onMarkApplied?: (annotationId: string) => void
+	provider?: HocuspocusProvider | null
 }) {
 	const { hasSelection, annotationContextOk } = useEditorState({
 		editor,
@@ -66,6 +71,8 @@ export function AnnotationToolbar({
 			annotationContextOk: canApplyAnnotations(ctx.editor),
 		}),
 	})
+
+	const collaborators = useCollaborators(provider)
 
 	return (
 		<TooltipProvider delay={300}>
@@ -201,11 +208,18 @@ export function AnnotationToolbar({
 					<TooltipContent side="bottom">Remove all annotations</TooltipContent>
 				</Tooltip>
 
-				<div className="ml-auto text-[10px] text-muted-foreground hidden sm:block">
-					Select text, then press{" "}
-					<kbd className="rounded border bg-muted px-1 py-0.5 font-mono">1</kbd>
-					–
-					<kbd className="rounded border bg-muted px-1 py-0.5 font-mono">7</kbd>
+				<div className="ml-auto flex items-center gap-3">
+					<span className="text-[10px] text-muted-foreground hidden sm:block">
+						Select text, then press{" "}
+						<kbd className="rounded border bg-muted px-1 py-0.5 font-mono">
+							1
+						</kbd>
+						–
+						<kbd className="rounded border bg-muted px-1 py-0.5 font-mono">
+							7
+						</kbd>
+					</span>
+					<CollaboratorAvatars users={collaborators} />
 				</div>
 			</div>
 		</TooltipProvider>

@@ -109,6 +109,58 @@ function createEntry(submissionId: string): CacheEntry {
 				console.warn("[useYDoc] auth failed:", reason)
 			},
 		})
+
+		// Diagnostic logging — characterise the WS traffic. Subscribed
+		// AFTER construction so we only bind to HocuspocusProvider's
+		// event (which emits `{ event, message }`) — passing these via
+		// the config also hooks the inner HocuspocusProviderWebsocket
+		// whose "message" payload is a raw MessageEvent and crashes a
+		// destructuring handler.
+		const provider = entry.provider
+		const tag = submissionId.slice(-8)
+		provider.on(
+			"outgoingMessage",
+			(payload: { message?: { length?: number } }) => {
+				const bytes = payload.message?.length ?? 0
+				console.debug(`[ws→] doc=${tag} bytes=${bytes}`)
+			},
+		)
+		provider.on(
+			"message",
+			(payload: { event?: MessageEvent; message?: { length?: number } }) => {
+				const e = payload.event
+				const size =
+					e?.data instanceof ArrayBuffer
+						? e.data.byteLength
+						: typeof e?.data === "string"
+							? e.data.length
+							: (payload.message?.length ?? -1)
+				console.debug(`[ws←] doc=${tag} bytes=${size}`)
+			},
+		)
+
+		const localAwareness = provider.awareness
+		if (localAwareness) {
+			localAwareness.on(
+				"update",
+				(payload: {
+					added: number[]
+					updated: number[]
+					removed: number[]
+				}) => {
+					const { added, updated, removed } = payload
+					const counts = `+${added.length}/~${updated.length}/-${removed.length}`
+					const local = localAwareness.getLocalState() as {
+						cursor?: unknown
+						user?: { name?: string }
+					} | null
+					const cursor = local?.cursor != null ? "✓" : "✗"
+					console.debug(
+						`[awareness] doc=${tag} ${counts} self.cursor=${cursor}`,
+					)
+				},
+			)
+		}
 	}
 
 	return entry

@@ -2,6 +2,7 @@ import { Database } from "@hocuspocus/extension-database"
 import { Server } from "@hocuspocus/server"
 import { parseDocumentName } from "@mcp-gcse/shared/collab"
 import { AuthFailure, verifyOpenAuthToken } from "./auth"
+import { CollabLogger } from "./logger"
 import { loadSnapshot, saveSnapshot } from "./persistence"
 
 const port = Number(process.env.PORT ?? 1234)
@@ -40,6 +41,10 @@ const server = new Server({
 			fetch: ({ documentName }) => loadSnapshot(documentName),
 			store: ({ documentName, state }) => saveSnapshot(documentName, state),
 		}),
+		// Diagnostic logger — toggle off by removing this entry once we're
+		// done characterising the WS traffic. Verbose mode includes per-
+		// state user info: COLLAB_LOG=verbose
+		new CollabLogger(),
 	],
 })
 

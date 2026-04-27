@@ -69,7 +69,12 @@ export const collabServer = $dev
 		? new sst.aws.Service("HocuspocusServer", {
 				// biome-ignore lint/style/noNonNullAssertion: cluster is defined on permanent stages (see infra/shared.ts)
 				cluster: cluster!,
-				image: { context: "./packages/collab-server" },
+				// Build context is the monorepo root so Bun can resolve the
+				// `workspace:*` dep on @mcp-gcse/shared during `bun install`.
+				image: {
+					context: ".",
+					dockerfile: "packages/collab-server/Dockerfile",
+				},
 				link: [scansBucket, authUrlLink, collabServiceSecret],
 				loadBalancer: {
 					ports: [{ listen: "443/https", forward: `${COLLAB_PORT}/http` }],

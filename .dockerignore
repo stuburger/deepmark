@@ -1,0 +1,44 @@
+# The only Docker image in this repo is the Hocuspocus collab server
+# (packages/collab-server/Dockerfile). It synthesises a minimal root
+# package.json inside the image and only ever COPYs from packages/shared
+# and packages/collab-server, so everything else can stay out of the
+# build context.
+
+# Installed deps + build artifacts — re-installed/rebuilt inside the image.
+node_modules
+**/node_modules
+**/dist
+**/.turbo
+build
+apps/web/.next
+
+# Sibling apps/packages that the collab-server image doesn't touch.
+apps
+packages/backend
+packages/db
+packages/test-utils
+
+# VCS + editor cruft.
+.git
+.gitignore
+.vscode
+.idea
+.DS_Store
+
+# Loose docs / sample data sitting in the repo root.
+*.md
+*.pdf
+*.docx
+*.png
+sample-data
+y10_papers
+tmp
+
+# Tests / fixtures.
+**/__tests__
+**/tests
+**/*.test.ts
+**/*.spec.ts
+
+# Env files — secrets come from SST resources at runtime.
+.env*

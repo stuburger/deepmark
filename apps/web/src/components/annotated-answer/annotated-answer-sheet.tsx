@@ -27,7 +27,7 @@ import {
 	Underline,
 	X,
 } from "lucide-react"
-import { useCallback, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import type * as Y from "yjs"
 import "./annotation-marks.css"
 import { AnnotationShortcuts } from "./annotation-shortcuts"
@@ -178,14 +178,28 @@ export function AnnotatedAnswerSheet({
 				},
 			},
 		},
-		// Re-instantiate when the provider's awareness arrives (post-WS
-		// connect) or when the current user resolves — both are needed to
-		// register the CollaborationCursor extension. ydoc identity already
-		// triggers re-creation on submission switch. We key on
-		// `!!provider?.awareness` rather than `provider` itself so we don't
-		// rebuild the editor on every provider field change.
-		[ydoc, !!provider?.awareness, cursorUser?.name, cursorUser?.color],
+		// Re-instantiate ONLY when ydoc identity changes (submission switch),
+		// when the provider's awareness arrives (post-WS connect), or when
+		// the user query first resolves (so CollaborationCaret can mount).
+		// We deliberately do NOT depend on `cursorUser?.name` / `?.color`:
+		// React Query's referential identity for `data` can subtly flip
+		// between renders, which would recreate the Editor on every render
+		// and trigger a TipTap-internal storm where the cursor plugin's
+		// destroy/init each call `awareness.setLocalStateField`, broadcasting
+		// hundreds of awareness updates per second. Subsequent identity
+		// changes are pushed via `editor.commands.updateUser(...)` below.
+		[ydoc, !!provider?.awareness, !!cursorUser],
 	)
+
+	// Push user identity changes (name, color, image) directly into the
+	// awareness state. We bypass `editor.commands.updateUser(...)` because
+	// that command is only registered when the CollaborationCaret extension
+	// is loaded, which depends on init-time conditions; writing the field
+	// straight to awareness is the same single-line operation either way.
+	useEffect(() => {
+		if (!editor || !cursorUser || !provider?.awareness) return
+		provider.awareness.setLocalStateField("user", cursorUser)
+	}, [editor, cursorUser, provider])
 
 	// Stable callback ref — avoids re-subscribing the transaction listener
 	const stableOnDerived = useCallback(

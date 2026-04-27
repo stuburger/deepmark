@@ -339,13 +339,9 @@ export async function getStudentPaperJob(
 	return { ok: true, data: toJobPayload(sub) }
 }
 
-// Keep legacy alias for existing result page compatibility
-export const getStudentPaperResult = getStudentPaperJob
-
 /**
  * Fetches a student paper job while validating it belongs to the given exam paper.
- * Used by the new /papers/[examPaperId]/submissions/[jobId] route to provide
- * a security invariant that the job is from the expected paper context.
+ * Provides a security invariant that the job is from the expected paper context.
  */
 export async function getStudentPaperJobForPaper(
 	examPaperId: string,

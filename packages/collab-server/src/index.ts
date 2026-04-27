@@ -41,9 +41,8 @@ const server = new Server({
 			fetch: ({ documentName }) => loadSnapshot(documentName),
 			store: ({ documentName, state }) => saveSnapshot(documentName, state),
 		}),
-		// Diagnostic logger — toggle off by removing this entry once we're
-		// done characterising the WS traffic. Verbose mode includes per-
-		// state user info: COLLAB_LOG=verbose
+		// Connect/disconnect lifecycle logger. See logger.ts for why we
+		// don't use @hocuspocus/extension-logger.
 		new CollabLogger(),
 	],
 })

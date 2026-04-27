@@ -42,3 +42,7 @@ tmp
 
 # Env files — secrets come from SST resources at runtime.
 .env*
+
+
+# sst
+.sst

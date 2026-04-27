@@ -7,6 +7,7 @@ import {
 	ResizablePanelGroup,
 } from "@/components/ui/resizable"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { useIsMobile } from "@/hooks/use-mobile"
 import { useTeacherOverrides } from "@/lib/marking/overrides/hooks"
 import type { JobStages } from "@/lib/marking/stages/types"
 import type {
@@ -177,6 +178,14 @@ export function SubmissionView({
 	// writes target the same Y.Doc.
 	const docSubmissionId = initialData.submission_id ?? jobId
 
+	// Mount only one layout at a time. Tailwind `hidden md:flex` /
+	// `md:hidden` only toggles CSS visibility; both subtrees would otherwise
+	// stay mounted, both <ResultsPanel> instances would render their own
+	// TipTap editor, both editors would share a single awareness via
+	// useYDoc, and they'd fight over the `cursor` field — producing an
+	// infinite ping-pong of awareness updates and the WS-message storm.
+	const isMobile = useIsMobile()
+
 	return (
 		<DocOpsProvider submissionId={docSubmissionId}>
 			<div className="flex flex-col overflow-hidden h-full">
@@ -193,24 +202,64 @@ export function SubmissionView({
 				/>
 
 				{/* Mobile: scan/results tabs */}
-				<div className="flex-1 min-h-0 flex flex-col md:hidden">
-					<Tabs
-						value={mobileTab}
-						onValueChange={setMobileTab}
-						className="h-full flex flex-col overflow-hidden gap-0"
-					>
-						<TabsList
-							variant="line"
-							className="shrink-0 w-full justify-start rounded-none border-b px-4 h-9 gap-4"
+				{isMobile && (
+					<div className="flex-1 min-h-0 flex flex-col">
+						<Tabs
+							value={mobileTab}
+							onValueChange={setMobileTab}
+							className="h-full flex flex-col overflow-hidden gap-0"
 						>
-							<TabsTrigger value="scan">Scan</TabsTrigger>
-							<TabsTrigger value="results">Results</TabsTrigger>
-						</TabsList>
+							<TabsList
+								variant="line"
+								className="shrink-0 w-full justify-start rounded-none border-b px-4 h-9 gap-4"
+							>
+								<TabsTrigger value="scan">Scan</TabsTrigger>
+								<TabsTrigger value="results">Results</TabsTrigger>
+							</TabsList>
 
-						<TabsContent
-							value="scan"
-							className="flex-1 min-h-0 overflow-hidden m-0 p-0"
-						>
+							<TabsContent
+								value="scan"
+								className="flex-1 min-h-0 overflow-hidden m-0 p-0"
+							>
+								<ScanPanel
+									scanPages={scanPages}
+									pageTokens={pageTokens}
+									gradingResults={data.grading_results}
+									levelDescriptors={data.level_descriptors}
+									settings={settings}
+									toggle={toggle}
+									onGradedRegionClick={handleGradedRegionClick}
+									debugMode={debugMode}
+									annotations={annotations}
+									hasAnnotations={hasAnnotations}
+								/>
+							</TabsContent>
+
+							<TabsContent
+								value="results"
+								className="flex-1 min-h-0 overflow-hidden m-0"
+							>
+								<ResultsPanel
+									jobId={jobId}
+									data={data}
+									phase={phase}
+									activeQuestionNumber={activeQuestionNumber}
+									overridesByQuestionId={overridesByQuestionId}
+									onDerivedAnnotations={handleDerivedAnnotations}
+									onTokenHighlight={handleTokenHighlight}
+								/>
+							</TabsContent>
+						</Tabs>
+					</div>
+				)}
+
+				{/* Desktop: persistent split layout */}
+				{!isMobile && (
+					<ResizablePanelGroup
+						orientation="horizontal"
+						className="flex-1 min-h-0 flex"
+					>
+						<ResizablePanel defaultSize={20} minSize={15}>
 							<ScanPanel
 								scanPages={scanPages}
 								pageTokens={pageTokens}
@@ -222,13 +271,13 @@ export function SubmissionView({
 								debugMode={debugMode}
 								annotations={annotations}
 								hasAnnotations={hasAnnotations}
+								highlightedTokenIds={highlightedTokenIds}
 							/>
-						</TabsContent>
+						</ResizablePanel>
 
-						<TabsContent
-							value="results"
-							className="flex-1 min-h-0 overflow-hidden m-0"
-						>
+						<ResizableHandle withHandle />
+
+						<ResizablePanel defaultSize={80} minSize={50}>
 							<ResultsPanel
 								jobId={jobId}
 								data={data}
@@ -238,45 +287,9 @@ export function SubmissionView({
 								onDerivedAnnotations={handleDerivedAnnotations}
 								onTokenHighlight={handleTokenHighlight}
 							/>
-						</TabsContent>
-					</Tabs>
-				</div>
-
-				{/* Desktop: persistent split layout */}
-				<ResizablePanelGroup
-					orientation="horizontal"
-					className="flex-1 min-h-0 hidden md:flex"
-				>
-					<ResizablePanel defaultSize={20} minSize={15}>
-						<ScanPanel
-							scanPages={scanPages}
-							pageTokens={pageTokens}
-							gradingResults={data.grading_results}
-							levelDescriptors={data.level_descriptors}
-							settings={settings}
-							toggle={toggle}
-							onGradedRegionClick={handleGradedRegionClick}
-							debugMode={debugMode}
-							annotations={annotations}
-							hasAnnotations={hasAnnotations}
-							highlightedTokenIds={highlightedTokenIds}
-						/>
-					</ResizablePanel>
-
-					<ResizableHandle withHandle />
-
-					<ResizablePanel defaultSize={80} minSize={50}>
-						<ResultsPanel
-							jobId={jobId}
-							data={data}
-							phase={phase}
-							activeQuestionNumber={activeQuestionNumber}
-							overridesByQuestionId={overridesByQuestionId}
-							onDerivedAnnotations={handleDerivedAnnotations}
-							onTokenHighlight={handleTokenHighlight}
-						/>
-					</ResizablePanel>
-				</ResizablePanelGroup>
+						</ResizablePanel>
+					</ResizablePanelGroup>
+				)}
 
 				<EventLog events={data.job_events} isPolling={!isTerminal} />
 			</div>

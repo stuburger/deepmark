@@ -59,8 +59,27 @@ type CacheEntry = {
 const MAX_IDLE = 3
 const IDLE_GRACE_MS = 30_000
 
-const cache = new Map<string, CacheEntry>()
-const idleOrder: string[] = []
+// Persist on globalThis so the cache survives Next.js Fast Refresh module
+// re-evaluation. Without this, HMR creates a fresh `cache` Map on every save:
+// old components' `release()` calls hit the new (empty) cache, refCounts stay
+// stuck at >0 in the orphaned old map, and old HocuspocusProviders never get
+// destroyed — they linger as a second "client" on the same submission and
+// produce a self-amplifying awareness echo loop.
+type CacheStore = {
+	cache: Map<string, CacheEntry>
+	idleOrder: string[]
+}
+const CACHE_KEY = "__deepmark_useYDoc_cache__"
+const globalStore = globalThis as unknown as Record<string, CacheStore>
+if (!globalStore[CACHE_KEY]) {
+	globalStore[CACHE_KEY] = {
+		cache: new Map<string, CacheEntry>(),
+		idleOrder: [],
+	}
+}
+const store = globalStore[CACHE_KEY]
+const cache = store.cache
+const idleOrder = store.idleOrder
 
 function notifyListeners(entry: CacheEntry): void {
 	for (const l of entry.listeners) l()
@@ -109,67 +128,6 @@ function createEntry(submissionId: string): CacheEntry {
 				console.warn("[useYDoc] auth failed:", reason)
 			},
 		})
-
-		// Diagnostic logging — characterise the WS traffic. Subscribed
-		// AFTER construction so we only bind to HocuspocusProvider's
-		// event (which emits `{ event, message }`) — passing these via
-		// the config also hooks the inner HocuspocusProviderWebsocket
-		// whose "message" payload is a raw MessageEvent and crashes a
-		// destructuring handler.
-		const provider = entry.provider
-		const tag = submissionId.slice(-8)
-		provider.on(
-			"outgoingMessage",
-			(payload: { message?: { length?: number } }) => {
-				const bytes = payload.message?.length ?? 0
-				console.debug(`[ws→] doc=${tag} bytes=${bytes}`)
-			},
-		)
-		provider.on(
-			"message",
-			(payload: { event?: MessageEvent; message?: { length?: number } }) => {
-				const e = payload.event
-				const size =
-					e?.data instanceof ArrayBuffer
-						? e.data.byteLength
-						: typeof e?.data === "string"
-							? e.data.length
-							: (payload.message?.length ?? -1)
-				console.debug(`[ws←] doc=${tag} bytes=${size}`)
-			},
-		)
-
-		const localAwareness = provider.awareness
-		if (localAwareness) {
-			localAwareness.on(
-				"update",
-				(
-					payload: {
-						added: number[]
-						updated: number[]
-						removed: number[]
-					},
-					origin: unknown,
-				) => {
-					const { added, updated, removed } = payload
-					const selfId = localAwareness.clientID
-					const allIds = [...added, ...updated, ...removed]
-					const which = allIds
-						.map((id) => (id === selfId ? `${id}(SELF)` : `${id}`))
-						.join(",")
-					const counts = `+${added.length}/~${updated.length}/-${removed.length}`
-					const local = localAwareness.getLocalState() as {
-						cursor?: unknown
-						user?: { name?: string }
-					} | null
-					const cursor = local?.cursor != null ? "✓" : "✗"
-					const originLabel = origin === "local" ? "LOCAL" : "REMOTE"
-					console.debug(
-						`[awareness] doc=${tag} ${counts} clients=[${which}] origin=${originLabel} self.cursor=${cursor}`,
-					)
-				},
-			)
-		}
 	}
 
 	return entry

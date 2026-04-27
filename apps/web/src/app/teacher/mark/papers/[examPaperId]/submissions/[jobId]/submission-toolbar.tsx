@@ -1,5 +1,8 @@
 "use client"
 
+import { CollaboratorAvatars } from "@/components/annotated-answer/collaborator-avatars"
+import { useCollaborators } from "@/components/annotated-answer/use-collaborators"
+import { useYDoc } from "@/components/annotated-answer/use-y-doc"
 import {
 	Tooltip,
 	TooltipContent,
@@ -48,6 +51,14 @@ export function SubmissionToolbar({
 	annotations?: StudentPaperAnnotation[]
 	pageTokens?: PageToken[]
 }) {
+	// Same docKey as grading-results-panel — useYDoc's module-scope cache
+	// reference-counts, so this doesn't open a second WebSocket. The provider
+	// is null while indexeddb-only mode is active or before the cache entry
+	// initialises; useCollaborators tolerates that and returns [].
+	const docKey = data.submission_id ?? jobId
+	const { provider } = useYDoc(docKey)
+	const collaborators = useCollaborators(provider)
+
 	return (
 		<TooltipProvider>
 			{/* ── Row 1: Context / breadcrumb ─────────────────────────────────── */}
@@ -98,9 +109,9 @@ export function SubmissionToolbar({
 					</span>
 				)}
 
-				{onClose && (
-					<>
-						<div className="flex-1" />
+				<div className="ml-auto flex items-center gap-3">
+					<CollaboratorAvatars users={collaborators} />
+					{onClose && (
 						<Tooltip>
 							<TooltipTrigger
 								render={
@@ -118,8 +129,8 @@ export function SubmissionToolbar({
 								Close
 							</TooltipContent>
 						</Tooltip>
-					</>
-				)}
+					)}
+				</div>
 			</div>
 
 			{/* ── Row 2: Job-level controls ────────────────────────────────────── */}

@@ -209,7 +209,6 @@ export function AnnotatedAnswerSheet({
 					editor={editor}
 					actions={MARK_ACTIONS}
 					onMarkApplied={handleMarkApplied}
-					provider={provider}
 				/>
 
 				{/* Bubble menu — appears on selection */}

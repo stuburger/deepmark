@@ -10,10 +10,16 @@
  *     bun packages/backend/scripts/migrate-yjs-snapshots.ts [flags]
  *
  * Flags:
- *   --limit N            cap iterations (smoke testing)
- *   --submission-id ID   process exactly one submission
- *   --dry-run            build doc but skip the S3 PUT
- *   --force              overwrite an existing snapshot (off by default)
+ *   --limit N             cap iterations (smoke testing)
+ *   --submission-id ID    process exactly one submission
+ *   --exam-paper-id ID    process every (non-superseded, completed-grading)
+ *                         submission belonging to this exam paper
+ *   --include-superseded  also migrate superseded versions of submissions
+ *                         (off by default — superseded rows are normally
+ *                         hidden from the UI, but their docs may still be
+ *                         opened directly via deep links / version nav)
+ *   --dry-run             build doc but skip the S3 PUT
+ *   --force               overwrite an existing snapshot (off by default)
  *
  * The Y.Doc is built locally — no Hocuspocus connection. createHeadlessView
  * binds a real PM EditorView to a bare Y.Doc and ySyncPlugin observes each
@@ -52,6 +58,8 @@ import * as Y from "yjs"
 type Flags = {
 	limit?: number
 	submissionId?: string
+	examPaperId?: string
+	includeSuperseded: boolean
 	dryRun: boolean
 	force: boolean
 }
@@ -59,6 +67,8 @@ type Flags = {
 function parseFlags(argv: string[]): Flags {
 	let limit: number | undefined
 	let submissionId: string | undefined
+	let examPaperId: string | undefined
+	let includeSuperseded = false
 	let dryRun = false
 	let force = false
 	for (let i = 0; i < argv.length; i++) {
@@ -71,6 +81,10 @@ function parseFlags(argv: string[]): Flags {
 			}
 		} else if (a === "--submission-id") {
 			submissionId = argv[++i]
+		} else if (a === "--exam-paper-id") {
+			examPaperId = argv[++i]
+		} else if (a === "--include-superseded") {
+			includeSuperseded = true
 		} else if (a === "--dry-run") {
 			dryRun = true
 		} else if (a === "--force") {
@@ -79,7 +93,10 @@ function parseFlags(argv: string[]): Flags {
 			throw new Error(`Unknown flag: ${a}`)
 		}
 	}
-	return { limit, submissionId, dryRun, force }
+	if (submissionId && examPaperId) {
+		throw new Error("--submission-id and --exam-paper-id are mutually exclusive")
+	}
+	return { limit, submissionId, examPaperId, includeSuperseded, dryRun, force }
 }
 
 const flags = parseFlags(process.argv.slice(2))
@@ -141,8 +158,9 @@ async function loadSubmissions() {
 	}
 	return db.studentSubmission.findMany({
 		where: {
-			superseded_at: null,
+			...(flags.includeSuperseded ? {} : { superseded_at: null }),
 			grading_runs: { some: { status: "complete" } },
+			...(flags.examPaperId ? { exam_paper_id: flags.examPaperId } : {}),
 		},
 		take: flags.limit,
 		orderBy: { created_at: "asc" },
@@ -216,14 +234,23 @@ type ExtractedAnswer = { question_id: string; answer_text: string }
 async function loadExtractedAnswers(
 	submissionId: string,
 ): Promise<ExtractedAnswer[]> {
-	const ocr = await db.ocrRun.findFirst({
-		where: { submission_id: submissionId, status: "complete" },
-		orderBy: { completed_at: "desc" },
+	// Don't gate on OCR status — a handful of legacy runs were marked "failed"
+	// after the fact even though `extracted_answers_raw` is fully populated
+	// (and grading later succeeded against it). Take the most recent run
+	// with a non-empty `answers` array.
+	const ocrRuns = await db.ocrRun.findMany({
+		where: { submission_id: submissionId },
+		orderBy: { created_at: "desc" },
 		select: { extracted_answers_raw: true },
 	})
-	if (!ocr?.extracted_answers_raw) return []
-	const raw = ocr.extracted_answers_raw as { answers?: ExtractedAnswer[] }
-	return raw.answers ?? []
+	for (const run of ocrRuns) {
+		const raw = run.extracted_answers_raw as
+			| { answers?: ExtractedAnswer[] }
+			| null
+		const answers = raw?.answers
+		if (answers && answers.length > 0) return answers
+	}
+	return []
 }
 
 // `grading_runs.grading_results` snake_case row shape — see GradingResult in
@@ -467,7 +494,10 @@ async function buildSnapshot(
 async function main(): Promise<void> {
 	console.log(
 		`[migrate] stage=${STAGE} dry-run=${flags.dryRun} force=${flags.force} ` +
-			`limit=${flags.limit ?? "(none)"} submission-id=${flags.submissionId ?? "(all)"}`,
+			`include-superseded=${flags.includeSuperseded} ` +
+			`limit=${flags.limit ?? "(none)"} ` +
+			`submission-id=${flags.submissionId ?? "(none)"} ` +
+			`exam-paper-id=${flags.examPaperId ?? "(none)"}`,
 	)
 
 	const submissions = await loadSubmissions()

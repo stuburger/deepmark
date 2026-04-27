@@ -70,9 +70,11 @@ export class CollabLogger {
 		// This fires on every cursor move + heartbeat from any peer. The
 		// message rate here IS the per-second WS traffic the user is seeing.
 		const counts = `+${data.added.length}/~${data.updated.length}/-${data.removed.length}`
+		const allIds = [...data.added, ...data.updated, ...data.removed]
+		const ids = allIds.join(",")
 		const summary = verbose ? ` states=[${summariseStates(data.states)}]` : ""
 		console.log(
-			`[collab][awareness] doc=${shortDoc(data.documentName)} ${counts}${summary}`,
+			`[collab][awareness] doc=${shortDoc(data.documentName)} ${counts} clients=[${ids}]${summary}`,
 		)
 	}
 }

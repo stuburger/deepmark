@@ -143,20 +143,29 @@ function createEntry(submissionId: string): CacheEntry {
 		if (localAwareness) {
 			localAwareness.on(
 				"update",
-				(payload: {
-					added: number[]
-					updated: number[]
-					removed: number[]
-				}) => {
+				(
+					payload: {
+						added: number[]
+						updated: number[]
+						removed: number[]
+					},
+					origin: unknown,
+				) => {
 					const { added, updated, removed } = payload
+					const selfId = localAwareness.clientID
+					const allIds = [...added, ...updated, ...removed]
+					const which = allIds
+						.map((id) => (id === selfId ? `${id}(SELF)` : `${id}`))
+						.join(",")
 					const counts = `+${added.length}/~${updated.length}/-${removed.length}`
 					const local = localAwareness.getLocalState() as {
 						cursor?: unknown
 						user?: { name?: string }
 					} | null
 					const cursor = local?.cursor != null ? "✓" : "✗"
+					const originLabel = origin === "local" ? "LOCAL" : "REMOTE"
 					console.debug(
-						`[awareness] doc=${tag} ${counts} self.cursor=${cursor}`,
+						`[awareness] doc=${tag} ${counts} clients=[${which}] origin=${originLabel} self.cursor=${cursor}`,
 					)
 				},
 			)

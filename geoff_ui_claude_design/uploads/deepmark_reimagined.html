@@ -1,0 +1,484 @@
+
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=DM+Mono:wght@300;400&family=Playfair+Display:ital,wght@0,400;1,300&display=swap');
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  .root {
+    font-family: 'Inter', sans-serif;
+    height: 640px;
+    position: relative;
+    overflow: hidden;
+    background: #EDEAE4;
+  }
+
+  /* Background */
+  .bg {
+    position: absolute; inset: 0;
+    background-image: url('https://i.ibb.co/JZywPCj/fxk-Wpo.jpg');
+    background-size: cover; background-position: center; z-index: 0;
+    opacity: 0.18;
+  }
+
+  .bg-grain {
+    position: absolute; inset: 0; z-index: 1; pointer-events: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23g)' opacity='0.06'/%3E%3C/svg%3E");
+  }
+
+  /* ── TOP BAR ── */
+  .topbar {
+    position: absolute; z-index: 30;
+    top: 0; left: 0; right: 0;
+    height: 52px;
+    display: flex; align-items: center;
+    justify-content: space-between;
+    padding: 0 32px;
+    background: rgba(74,85,104,0.96);
+    backdrop-filter: blur(12px);
+    box-shadow: 0 2px 20px rgba(0,0,0,0.15);
+  }
+
+  .topbar-left {
+    display: flex; align-items: center; gap: 28px;
+  }
+
+  .brand {
+    display: flex; align-items: center; gap: 10px;
+  }
+
+  .brand-mark {
+    width: 28px; height: 28px; border-radius: 7px;
+    background: #6B4FA0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; color: white;
+    letter-spacing: 0.02em;
+  }
+
+  .brand-name {
+    font-size: 13px; font-weight: 600;
+    color: rgba(255,255,255,0.88);
+    letter-spacing: 0.05em; text-transform: uppercase;
+  }
+
+  /* Top nav links */
+  .topnav {
+    display: flex; align-items: center; gap: 4px;
+  }
+
+  .topnav-item {
+    padding: 6px 12px; border-radius: 6px;
+    font-size: 12px; color: rgba(255,255,255,0.48);
+    cursor: pointer; transition: all 0.15s;
+    white-space: nowrap;
+  }
+
+  .topnav-item:hover { color: rgba(255,255,255,0.75); background: rgba(255,255,255,0.07); }
+  .topnav-item.active { color: white; background: rgba(255,255,255,0.1); }
+
+  /* Top right — status + avatar */
+  .topbar-right {
+    display: flex; align-items: center; gap: 20px;
+  }
+
+  .topbar-status {
+    display: flex; align-items: center; gap: 16px;
+  }
+
+  .tstat {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px; color: rgba(255,255,255,0.35);
+    display: flex; align-items: center; gap: 5px;
+  }
+
+  .tstat-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+  }
+
+  .tstat-dot.purple { background: #9B79D4; box-shadow: 0 0 6px rgba(155,121,212,0.6); }
+  .tstat-dot.slate { background: rgba(255,255,255,0.25); }
+
+  .tstat span { color: rgba(255,255,255,0.7); }
+
+  .topbar-avatar {
+    width: 30px; height: 30px; border-radius: 50%;
+    background: #6B4FA0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; font-weight: 700; color: white;
+    cursor: pointer;
+    border: 2px solid rgba(255,255,255,0.15);
+  }
+
+  /* ── MAIN CANVAS ── */
+  .canvas {
+    position: absolute;
+    top: 52px; left: 0; right: 0; bottom: 0;
+    z-index: 10;
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-rows: auto 1fr;
+    gap: 0;
+    padding: 40px 40px 32px;
+    align-content: start;
+  }
+
+  /* ── GREETING — full width, left ── */
+  .greeting-zone {
+    grid-column: 1 / 3;
+    grid-row: 1;
+    padding-bottom: 32px;
+  }
+
+  .greeting-eyebrow {
+    font-size: 11px; color: rgba(0,0,0,0.3);
+    letter-spacing: 0.1em; text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+
+  .greeting {
+    font-family: 'Playfair Display', Georgia, serif;
+    font-size: 32px; font-weight: 400; font-style: italic;
+    color: #2D3748;
+    letter-spacing: -0.01em; line-height: 1.1;
+  }
+
+  .greeting-sub {
+    font-size: 12px; color: rgba(0,0,0,0.32);
+    margin-top: 8px; font-weight: 400;
+    line-height: 1.6;
+  }
+
+  .greeting-sub span {
+    color: #6B4FA0; font-weight: 500;
+  }
+
+  /* ── QUICK ACTIONS — right of greeting ── */
+  .quick-zone {
+    grid-column: 3;
+    grid-row: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    padding-bottom: 32px;
+    padding-left: 24px;
+    gap: 8px;
+  }
+
+  .quick-label {
+    font-size: 9px; font-weight: 600;
+    color: rgba(0,0,0,0.22); text-transform: uppercase;
+    letter-spacing: 0.12em; margin-bottom: 2px;
+  }
+
+  .quick-btn {
+    height: 36px;
+    background: rgba(255,255,255,0.85);
+    border: 1px solid rgba(0,0,0,0.08);
+    border-radius: 6px;
+    display: flex; align-items: center; gap: 10px;
+    padding: 0 14px;
+    cursor: pointer;
+    font-size: 12px; font-weight: 500; color: #1a1a1a;
+    box-shadow: 2px 3px 12px rgba(0,0,0,0.1), 1px 2px 4px rgba(0,0,0,0.06);
+    transition: transform 0.15s, box-shadow 0.15s;
+    white-space: nowrap;
+  }
+
+  .quick-btn:hover {
+    transform: translate(-1px,-1px);
+    box-shadow: 3px 4px 16px rgba(0,0,0,0.14);
+  }
+
+  .quick-btn.primary {
+    background: #6B4FA0; border-color: #5A3D8A;
+    color: white;
+    box-shadow: 3px 4px 16px rgba(107,79,160,0.35), 1px 2px 6px rgba(107,79,160,0.2);
+  }
+
+  .quick-btn.primary:hover {
+    box-shadow: 4px 5px 20px rgba(107,79,160,0.45);
+  }
+
+  .quick-btn-icon {
+    width: 14px; height: 14px; flex-shrink: 0;
+    stroke: currentColor; fill: none; stroke-width: 1.5; opacity: 0.7;
+  }
+
+  .quick-btn.primary .quick-btn-icon { opacity: 0.8; }
+
+  /* ── RECENT PAPERS — full width below ── */
+  .recent-zone {
+    grid-column: 1 / 4;
+    grid-row: 2;
+    display: flex; flex-direction: column;
+  }
+
+  .recent-header {
+    display: flex; justify-content: space-between; align-items: baseline;
+    margin-bottom: 14px;
+  }
+
+  .recent-title {
+    font-size: 11px; font-weight: 600;
+    color: rgba(0,0,0,0.28); text-transform: uppercase; letter-spacing: 0.12em;
+  }
+
+  .recent-more {
+    font-size: 11px; color: rgba(0,0,0,0.26);
+    cursor: pointer; border-bottom: 1px solid rgba(0,0,0,0.12);
+    padding-bottom: 1px;
+  }
+
+  /* Horizontal scrolling paper cards */
+  .papers-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+  }
+
+  .paper-card {
+    background: rgba(255,255,255,0.9);
+    border: 1px solid rgba(0,0,0,0.07);
+    border-radius: 8px;
+    padding: 0;
+    cursor: pointer;
+    transition: transform 0.18s, box-shadow 0.18s;
+    overflow: hidden;
+    box-shadow: 3px 5px 18px rgba(0,0,0,0.1), 1px 2px 5px rgba(0,0,0,0.06);
+  }
+
+  .paper-card:hover {
+    transform: translate(-1px,-2px);
+    box-shadow: 4px 7px 24px rgba(0,0,0,0.14), 2px 3px 8px rgba(0,0,0,0.08);
+  }
+
+  /* Colour strip top of each card */
+  .card-strip {
+    height: 3px; width: 100%;
+  }
+
+  .card-strip.done { background: #6B4FA0; }
+  .card-strip.review { background: #4A5568; }
+  .card-strip.marking { background: #9B79D4; animation: pulse-strip 2s ease-in-out infinite; }
+
+  @keyframes pulse-strip {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+
+  .card-body { padding: 12px 14px 12px; }
+
+  .card-subject {
+    font-size: 9px; font-weight: 600; color: rgba(0,0,0,0.28);
+    text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 4px;
+  }
+
+  .card-name {
+    font-size: 13px; font-weight: 500; color: #1a1a1a;
+    margin-bottom: 10px; line-height: 1.3;
+  }
+
+  .card-foot {
+    display: flex; justify-content: space-between; align-items: center;
+  }
+
+  .card-count {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px; color: rgba(0,0,0,0.27);
+  }
+
+  .card-badge {
+    font-size: 9px; font-weight: 600;
+    padding: 2px 8px; border-radius: 3px;
+    text-transform: uppercase; letter-spacing: 0.06em;
+  }
+
+  .card-badge.done { background: rgba(107,79,160,0.1); color: #6B4FA0; }
+  .card-badge.review { background: rgba(74,85,104,0.1); color: #4A5568; }
+  .card-badge.marking {
+    background: rgba(155,121,212,0.15); color: #6B4FA0;
+    animation: pulse-badge 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse-badge {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+  }
+
+  /* ── BOTTOM BAR — subtle, grounding ── */
+  .bottombar {
+    position: absolute; z-index: 20;
+    bottom: 0; left: 0; right: 0;
+    height: 36px;
+    display: flex; align-items: center;
+    justify-content: space-between;
+    padding: 0 40px;
+    border-top: 1px solid rgba(0,0,0,0.06);
+    background: rgba(244,242,238,0.7);
+  }
+
+  .bottombar-left {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px; color: rgba(0,0,0,0.25);
+    display: flex; align-items: center; gap: 16px;
+  }
+
+  .bb-sep { color: rgba(0,0,0,0.15); }
+
+  .bottombar-right {
+    font-size: 10px; color: rgba(0,0,0,0.2);
+    display: flex; align-items: center; gap: 4px;
+  }
+
+  .bb-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: rgba(107,79,160,0.4);
+    box-shadow: 0 0 5px rgba(107,79,160,0.4);
+    animation: pulse-dot 2.5s ease-in-out infinite;
+  }
+
+  @keyframes pulse-dot {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(0.8); }
+  }
+</style>
+
+<h2 class="sr-only">DeepMark reimagined — horizontal top nav, italic serif greeting, vertical action buttons, animated status</h2>
+
+<div class="root">
+  <div class="bg"></div>
+  <div class="bg-grain"></div>
+
+  <!-- TOP BAR -->
+  <div class="topbar">
+    <div class="topbar-left">
+      <div class="brand">
+        <div class="brand-mark">DM</div>
+        <div class="brand-name">DeepMark</div>
+      </div>
+      <nav class="topnav">
+        <div class="topnav-item active">Dashboard</div>
+        <div class="topnav-item">Papers</div>
+        <div class="topnav-item">Results</div>
+        <div class="topnav-item">Reports</div>
+        <div class="topnav-item">DeepMark AI</div>
+      </nav>
+    </div>
+    <div class="topbar-right">
+      <div class="topbar-status">
+        <div class="tstat">
+          <div class="tstat-dot purple"></div>
+          <span>1</span> marking
+        </div>
+        <div class="tstat">
+          <div class="tstat-dot slate"></div>
+          <span>3</span> to review
+        </div>
+      </div>
+      <div class="topbar-avatar">SH</div>
+    </div>
+  </div>
+
+  <!-- MAIN CANVAS -->
+  <div class="canvas">
+
+    <!-- Greeting -->
+    <div class="greeting-zone">
+      <div class="greeting-eyebrow">Sunday, 27 April 2025</div>
+      <div class="greeting">Good morning, Sarah.</div>
+      <div class="greeting-sub">
+        You have <span>3 papers</span> pending your review and <span>1 set</span> currently being marked.
+      </div>
+    </div>
+
+    <!-- Quick actions — vertical stack, right aligned -->
+    <div class="quick-zone">
+      <div class="quick-label">Actions</div>
+      <div class="quick-btn primary" onclick="sendPrompt('Now design the Mark New Paper flow — naming step, upload, loading animation with time estimate, and snap transition into paper preview')">
+        <svg class="quick-btn-icon" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Mark new paper
+      </div>
+      <div class="quick-btn">
+        <svg class="quick-btn-icon" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        Resume marking
+      </div>
+      <div class="quick-btn">
+        <svg class="quick-btn-icon" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        Talk to DeepMark
+      </div>
+    </div>
+
+    <!-- Recent papers -->
+    <div class="recent-zone">
+      <div class="recent-header">
+        <div class="recent-title">Recent papers</div>
+        <div class="recent-more">View all</div>
+      </div>
+      <div class="papers-row">
+        <div class="paper-card">
+          <div class="card-strip marking"></div>
+          <div class="card-body">
+            <div class="card-subject">Biology A2</div>
+            <div class="card-name">Paper 1 — June 2024</div>
+            <div class="card-foot"><span class="card-count">28 scripts</span><span class="card-badge marking">Marking…</span></div>
+          </div>
+        </div>
+        <div class="paper-card">
+          <div class="card-strip review"></div>
+          <div class="card-body">
+            <div class="card-subject">Chemistry AS</div>
+            <div class="card-name">Periodic Table Unit</div>
+            <div class="card-foot"><span class="card-count">31 scripts</span><span class="card-badge review">Review needed</span></div>
+          </div>
+        </div>
+        <div class="paper-card">
+          <div class="card-strip review"></div>
+          <div class="card-body">
+            <div class="card-subject">Chemistry A2</div>
+            <div class="card-name">Organic Chemistry Mock</div>
+            <div class="card-foot"><span class="card-count">22 scripts</span><span class="card-badge review">Review needed</span></div>
+          </div>
+        </div>
+        <div class="paper-card">
+          <div class="card-strip done"></div>
+          <div class="card-body">
+            <div class="card-subject">Physics A2</div>
+            <div class="card-name">Paper 2 — Mock exam</div>
+            <div class="card-foot"><span class="card-count">24 scripts</span><span class="card-badge done">Complete</span></div>
+          </div>
+        </div>
+        <div class="paper-card">
+          <div class="card-strip done"></div>
+          <div class="card-body">
+            <div class="card-subject">Biology AS</div>
+            <div class="card-name">Cell Biology — Term 2</div>
+            <div class="card-foot"><span class="card-count">19 scripts</span><span class="card-badge done">Complete</span></div>
+          </div>
+        </div>
+        <div class="paper-card">
+          <div class="card-strip done"></div>
+          <div class="card-body">
+            <div class="card-subject">Physics AS</div>
+            <div class="card-name">Waves & Optics — Dec 2024</div>
+            <div class="card-foot"><span class="card-count">26 scripts</span><span class="card-badge done">Complete</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- BOTTOM BAR -->
+  <div class="bottombar">
+    <div class="bottombar-left">
+      <span>142 papers marked</span>
+      <span class="bb-sep">·</span>
+      <span>6 active sets</span>
+      <span class="bb-sep">·</span>
+      <span>Last session 2 days ago</span>
+    </div>
+    <div class="bottombar-right">
+      <div class="bb-dot"></div>
+      DeepMark AI active
+    </div>
+  </div>
+
+</div>

@@ -13,16 +13,27 @@ import {
 	TooltipProvider,
 	TooltipTrigger,
 } from "@/components/ui/tooltip"
+import { UngradedBadge } from "@/components/ungraded-badge"
+import type { ResolvedOverride } from "@/lib/marking/overrides/resolve"
 import { cn } from "@/lib/utils"
 import { Pencil, RotateCcw } from "lucide-react"
 import { type ReactNode, useEffect, useRef, useState } from "react"
 
-type Override = { score_override: number; reason: string | null } | null
-
 type Props = {
-	aiScore: number
+	/**
+	 * AI's awarded score. `null` while grading is still in progress for this
+	 * question — the badge renders `?/N` (white bg, black border) instead of
+	 * `0/N` so a "not graded yet" state isn't visually confused with a real zero.
+	 */
+	aiScore: number | null
 	maxScore: number
-	override: Override
+	/**
+	 * The resolved override (doc-wins-over-PG) for this question, or `null`
+	 * when accepting the AI's score. The editor only reads `score_override`
+	 * and `reason`; `feedback_override` is preserved by the caller's `onSave`
+	 * if needed (separate `FeedbackOverrideEditor` writes it).
+	 */
+	override: ResolvedOverride | null
 	onSave: (score: number, reason: string | null) => void
 	onReset: () => void
 	/**
@@ -31,7 +42,7 @@ type Props = {
 	 * If omitted, renders the default pill badge with a tooltip when overridden.
 	 */
 	renderDisplay?: (args: {
-		effectiveScore: number
+		effectiveScore: number | null
 		isOverridden: boolean
 	}) => ReactNode
 }
@@ -57,14 +68,14 @@ export function ScoreOverrideEditor({
 	const isOverridden = override !== null
 
 	const [open, setOpen] = useState(false)
-	const [score, setScore] = useState(effectiveScore)
+	const [score, setScore] = useState(effectiveScore ?? 0)
 	const inputRef = useRef<HTMLInputElement>(null)
 	const skipCommitRef = useRef(false)
 
 	// Keep the input value in sync when the external score changes (e.g.
 	// optimistic mutation landed, or AI re-grade).
 	useEffect(() => {
-		setScore(override?.score_override ?? aiScore)
+		setScore(override?.score_override ?? aiScore ?? 0)
 	}, [override?.score_override, aiScore])
 
 	// Auto-select the number when the popover opens so typing replaces it.
@@ -98,20 +109,30 @@ export function ScoreOverrideEditor({
 		setOpen(false)
 	}
 
-	const displayNode = renderDisplay ? (
-		renderDisplay({ effectiveScore, isOverridden })
-	) : (
-		<DefaultBadge
-			effectiveScore={effectiveScore}
-			maxScore={maxScore}
-			override={override}
-			aiScore={aiScore}
-		/>
-	)
+	let displayNode: ReactNode
+	if (renderDisplay) {
+		displayNode = renderDisplay({ effectiveScore, isOverridden })
+	} else if (effectiveScore === null) {
+		displayNode = <UngradedBadge maxScore={maxScore} />
+	} else {
+		displayNode = (
+			<DefaultBadge
+				effectiveScore={effectiveScore}
+				maxScore={maxScore}
+				override={override}
+				aiScore={aiScore ?? 0}
+			/>
+		)
+	}
 
 	return (
 		<Popover open={open} onOpenChange={handleOpenChange}>
+			{/* nativeButton={false} — the trigger is a <span> on purpose so the
+			    badge can nest inside other clickable rows (e.g. MCQ rows) without
+			    forming an invalid <button>-in-<button>. We accept the loss of
+			    native button semantics; keyboard activation is wired manually. */}
 			<PopoverTrigger
+				nativeButton={false}
 				render={
 					<span
 						role="button"
@@ -153,7 +174,7 @@ export function ScoreOverrideEditor({
 							if (e.key === "Escape") {
 								e.preventDefault()
 								skipCommitRef.current = true
-								setScore(effectiveScore)
+								setScore(effectiveScore ?? 0)
 								setOpen(false)
 							}
 						}}
@@ -185,7 +206,7 @@ function DefaultBadge({
 }: {
 	effectiveScore: number
 	maxScore: number
-	override: Override
+	override: ResolvedOverride | null
 	aiScore: number
 }) {
 	const pct = maxScore > 0 ? effectiveScore / maxScore : 0

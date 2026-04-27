@@ -1,13 +1,14 @@
-import { deriveAnnotationsFromDoc } from "@mcp-gcse/shared"
+import {
+	DOC_FRAGMENT_NAME,
+	applyAnnotationMark,
+	applyOcrTokenMarks,
+	deriveAnnotationsFromDoc,
+	insertQuestionBlock,
+	setAnswerText,
+} from "@mcp-gcse/shared"
 import { yXmlFragmentToProsemirrorJSON } from "@tiptap/y-tiptap"
 import { afterEach, describe, expect, it } from "vitest"
 import { getEditorSchema } from "../../src/lib/collab/editor-schema"
-import {
-	applyAnnotationMark,
-	applyOcrTokenMarks,
-	insertQuestionBlock,
-	setAnswerText,
-} from "../../src/lib/collab/editor-ops"
 import { createTestEditor } from "./helpers/test-editor"
 
 const editors: Array<{ cleanup: () => void }> = []
@@ -99,7 +100,7 @@ describe("fragment round-trip via deriveAnnotationsFromDoc", () => {
 			},
 		})
 
-		const json = yXmlFragmentToProsemirrorJSON(doc.getXmlFragment("doc"))
+		const json = yXmlFragmentToProsemirrorJSON(doc.getXmlFragment(DOC_FRAGMENT_NAME))
 		const pmDoc = schema.nodeFromJSON(json)
 		const annotations = deriveAnnotationsFromDoc(pmDoc)
 
@@ -167,14 +168,14 @@ describe("fragment round-trip via deriveAnnotationsFromDoc", () => {
 		seed()
 		const first = deriveAnnotationsFromDoc(
 			schema.nodeFromJSON(
-				yXmlFragmentToProsemirrorJSON(doc.getXmlFragment("doc")),
+				yXmlFragmentToProsemirrorJSON(doc.getXmlFragment(DOC_FRAGMENT_NAME)),
 			),
 		)
 
 		seed()
 		const second = deriveAnnotationsFromDoc(
 			schema.nodeFromJSON(
-				yXmlFragmentToProsemirrorJSON(doc.getXmlFragment("doc")),
+				yXmlFragmentToProsemirrorJSON(doc.getXmlFragment(DOC_FRAGMENT_NAME)),
 			),
 		)
 

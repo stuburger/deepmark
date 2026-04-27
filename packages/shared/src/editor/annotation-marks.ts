@@ -172,18 +172,17 @@ export const ChainMark = Mark.create({
 		return [{ tag: 'span[data-mark-type="chain"]' }]
 	},
 	renderHTML({ HTMLAttributes }) {
-		const ct = HTMLAttributes.chainType as string
-		const bgClass =
-			ct === "evaluation"
-				? "bg-amber-100/40 dark:bg-amber-900/20"
-				: ct === "judgement"
-					? "bg-violet-100/40 dark:bg-violet-900/20"
-					: "bg-blue-100/40 dark:bg-blue-900/20"
+		// `data-chain-type` drives the visual via CSS variables in
+		// `apps/web/src/components/annotated-answer/annotation-marks.css`.
+		// Don't switch back to Tailwind classes here — Tailwind v4 only scans
+		// apps/web, so any class string set in this shared package would be
+		// stripped from the bundle and chain marks would render invisibly.
+		const ct = (HTMLAttributes.chainType as string) || "reasoning"
 		return [
 			"span",
 			mergeAttributes(HTMLAttributes, {
 				"data-mark-type": "chain",
-				class: bgClass,
+				"data-chain-type": ct,
 				title: HTMLAttributes.phrase ?? undefined,
 			}),
 			0,

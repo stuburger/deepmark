@@ -1,12 +1,13 @@
 "use client"
 
-import type {
-	GradingResult,
-	TeacherOverride,
-	UpsertTeacherOverrideInput,
-} from "@/lib/marking/types"
+import type { GradingResult, TeacherOverride } from "@/lib/marking/types"
 import { createContext, useContext } from "react"
 
+/**
+ * Read-side state for NodeViews. Doc-mutating operations live in
+ * `DocOpsContext` (see `doc-ops-context.tsx`); this context is purely
+ * "current grading state" — no callbacks.
+ */
 export type GradingDataContextValue = {
 	gradingResults: Map<string, GradingResult>
 	answers: Record<string, string>
@@ -14,10 +15,6 @@ export type GradingDataContextValue = {
 	activeQuestionNumber: string | null
 	jobId: string
 	onAnswerSaved: (questionId: string, text: string) => void
-	onOverrideChange: (
-		questionId: string,
-		input: UpsertTeacherOverrideInput | null,
-	) => void
 }
 
 const GradingDataContext = createContext<GradingDataContextValue | null>(null)

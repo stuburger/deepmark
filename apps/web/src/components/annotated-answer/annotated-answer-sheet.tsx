@@ -1,10 +1,13 @@
 "use client"
 
 import type { StudentPaperAnnotation } from "@/lib/marking/types"
+import { useCurrentUser } from "@/lib/users/use-current-user"
 import { cn } from "@/lib/utils"
+import type { HocuspocusProvider } from "@hocuspocus/provider"
 import { OcrTokenMark, ParagraphNode, annotationMarks } from "@mcp-gcse/shared"
 import BoldExtension from "@tiptap/extension-bold"
 import Collaboration from "@tiptap/extension-collaboration"
+import CollaborationCaret from "@tiptap/extension-collaboration-caret"
 import Document from "@tiptap/extension-document"
 import HardBreak from "@tiptap/extension-hard-break"
 import ItalicExtension from "@tiptap/extension-italic"
@@ -74,13 +77,21 @@ const BUBBLE_ERASER = <Eraser className="h-3.5 w-3.5" />
  */
 export function AnnotatedAnswerSheet({
 	ydoc,
+	provider,
 	onDerivedAnnotations,
 	onTokenHighlight,
 }: {
 	ydoc: Y.Doc
+	/**
+	 * HocuspocusProvider for awareness — `null` in `indexeddb-only` mode
+	 * (see `useYDoc` rollback flag), in which case CollaborationCursor is
+	 * skipped and the editor is single-user.
+	 */
+	provider?: HocuspocusProvider | null
 	onDerivedAnnotations?: (annotations: StudentPaperAnnotation[]) => void
 	onTokenHighlight?: (tokenIds: string[] | null) => void
 }) {
+	const { cursorUser } = useCurrentUser()
 	// Active annotation card state — driven by cursor position, sidebar clicks,
 	// or mark application.
 	const [activeAnnotationId, setActiveAnnotationId] = useState<string | null>(
@@ -125,6 +136,26 @@ export function AnnotatedAnswerSheet({
 				}),
 				InsertParagraphPlugin,
 				Collaboration.configure({ document: ydoc, field: "doc" }),
+				// Caret + selection highlight for other connected teachers.
+				// Note: in TipTap 3.x this extension was renamed from
+				// `extension-collaboration-cursor` (which used the upstream
+				// y-prosemirror ySyncPluginKey and is now incompatible with
+				// the @tiptap/y-tiptap fork that Collaboration v3.22 ships).
+				// Skipped when:
+				//   - no HocuspocusProvider (indexeddb-only kill switch), OR
+				//   - the provider exists but its awareness is null (the field
+				//     is `Awareness | null` mid-setup — passing it through
+				//     causes the cursor plugin to crash on awareness.doc), OR
+				//   - the current user query hasn't resolved yet.
+				// The editor's deps array re-runs when any of these arrive.
+				...(provider?.awareness && cursorUser
+					? [
+							CollaborationCaret.configure({
+								provider,
+								user: cursorUser,
+							}),
+						]
+					: []),
 			],
 			editorProps: {
 				attributes: {
@@ -133,7 +164,13 @@ export function AnnotatedAnswerSheet({
 				},
 			},
 		},
-		[ydoc],
+		// Re-instantiate when the provider's awareness arrives (post-WS
+		// connect) or when the current user resolves — both are needed to
+		// register the CollaborationCursor extension. ydoc identity already
+		// triggers re-creation on submission switch. We key on
+		// `!!provider?.awareness` rather than `provider` itself so we don't
+		// rebuild the editor on every provider field change.
+		[ydoc, !!provider?.awareness, cursorUser?.name, cursorUser?.color],
 	)
 
 	// Stable callback ref — avoids re-subscribing the transaction listener

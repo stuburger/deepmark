@@ -63,6 +63,9 @@ type Props = {
 	onMarkClick?: (questionId: string) => void
 	/** Token IDs to highlight (from PM selection/annotation → scan). */
 	highlightedTokenIds?: Set<string> | null
+	/** When false, the zoom +/-/reset buttons are hidden. Panning is always
+	 * disabled — the scan is treated as a passive preview. */
+	showZoomControls?: boolean
 }
 
 export function BoundingBoxViewer({
@@ -80,6 +83,7 @@ export function BoundingBoxViewer({
 	showChains = false,
 	onMarkClick,
 	highlightedTokenIds,
+	showZoomControls = false,
 }: Props) {
 	const [imageDims, setImageDims] = useState<{ w: number; h: number } | null>(
 		null,
@@ -136,38 +140,42 @@ export function BoundingBoxViewer({
 				wheel={TRANSFORM_WHEEL}
 				pinch={TRANSFORM_PINCH}
 				doubleClick={TRANSFORM_DOUBLE_CLICK}
+				panning={{ disabled: true }}
 				limitToBounds={false}
 			>
 				{({ zoomIn, zoomOut, resetTransform }) => (
 					<>
-						{/* Zoom controls */}
-						<div className="flex items-center justify-end gap-1 pb-1">
-							<button
-								type="button"
-								onClick={() => zoomOut(0.5)}
-								className="flex h-7 w-7 items-center justify-center rounded border bg-background text-muted-foreground transition-colors hover:bg-muted"
-								aria-label="Zoom out"
-							>
-								<Minus className="h-3.5 w-3.5" />
-							</button>
-							<button
-								type="button"
-								onClick={() => resetTransform()}
-								className="flex h-7 w-7 items-center justify-center rounded border bg-background text-muted-foreground transition-colors hover:bg-muted"
-								aria-label="Reset zoom"
-								title="Reset zoom (or double-click the image)"
-							>
-								<RotateCcw className="h-3.5 w-3.5" />
-							</button>
-							<button
-								type="button"
-								onClick={() => zoomIn(0.5)}
-								className="flex h-7 w-7 items-center justify-center rounded border bg-background text-muted-foreground transition-colors hover:bg-muted"
-								aria-label="Zoom in"
-							>
-								<Plus className="h-3.5 w-3.5" />
-							</button>
-						</div>
+						{/* Zoom controls — hidden by default, gated on the parent
+						    toolbar's "show zoom controls" toggle. */}
+						{showZoomControls && (
+							<div className="flex items-center justify-end gap-1 pb-1">
+								<button
+									type="button"
+									onClick={() => zoomOut(0.5)}
+									className="flex h-7 w-7 items-center justify-center rounded border bg-background text-muted-foreground transition-colors hover:bg-muted"
+									aria-label="Zoom out"
+								>
+									<Minus className="h-3.5 w-3.5" />
+								</button>
+								<button
+									type="button"
+									onClick={() => resetTransform()}
+									className="flex h-7 w-7 items-center justify-center rounded border bg-background text-muted-foreground transition-colors hover:bg-muted"
+									aria-label="Reset zoom"
+									title="Reset zoom (or double-click the image)"
+								>
+									<RotateCcw className="h-3.5 w-3.5" />
+								</button>
+								<button
+									type="button"
+									onClick={() => zoomIn(0.5)}
+									className="flex h-7 w-7 items-center justify-center rounded border bg-background text-muted-foreground transition-colors hover:bg-muted"
+									aria-label="Zoom in"
+								>
+									<Plus className="h-3.5 w-3.5" />
+								</button>
+							</div>
+						)}
 
 						<TransformComponent
 							wrapperStyle={{
@@ -177,7 +185,7 @@ export function BoundingBoxViewer({
 							}}
 							contentStyle={{ width: "100%" }}
 						>
-							<div className="relative w-full overflow-visible rounded-lg border bg-muted cursor-grab active:cursor-grabbing">
+							<div className="relative w-full overflow-visible rounded-lg border bg-muted">
 								{/* eslint-disable-next-line @next/next/no-img-element -- presigned S3 URL */}
 								<img
 									ref={imageRef}

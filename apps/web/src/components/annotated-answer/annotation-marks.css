@@ -2,24 +2,136 @@
    (e.g. when the annotation card's textarea steals focus) */
 .ProseMirror::selection,
 .ProseMirror *::selection {
-	background: rgb(59 130 246 / 0.25);
+	background: var(--mark-selection-bg);
 }
 
-/* Tick/cross trailing symbols via ::after pseudo-elements */
-span[data-mark-type="tick"]::after {
+/* ─── Editor mark visuals ──────────────────────────────────────────────────
+   Inside .ProseMirror we render annotations as traditional examiner
+   highlights — flat colored backgrounds with zero border radius. The scan
+   viewer is a separate decoration layer (bbox overlays on page images), so
+   the underline/circle visuals there are unaffected by these rules.
+
+   Colour values live in `globals.css` as `--mark-*` variables — single
+   source of truth for editor + scan + dark mode. The Tailwind classes set
+   by `renderHTML` in packages/shared/src/editor/annotation-marks.ts are
+   not in the bundle (Tailwind v4 only scans apps/web), so these rules
+   are what actually paint the marks.
+*/
+
+/* Tick — green highlight + trailing ✓ */
+.ProseMirror span[data-mark-type="tick"] {
+	background-color: var(--mark-tick-bg);
+	text-decoration: none !important;
+	border-radius: 0;
+	padding: 0 1px;
+}
+.ProseMirror span[data-mark-type="tick"]::after {
 	content: "✓";
-	color: #22c55e;
+	color: var(--mark-tick-glyph);
 	font-weight: 700;
 	font-size: 0.75em;
 	margin-left: 2px;
 }
 
-span[data-mark-type="cross"]::after {
+/* Cross — red highlight + trailing ✗ */
+.ProseMirror span[data-mark-type="cross"] {
+	background-color: var(--mark-cross-bg);
+	text-decoration: none !important;
+	border-radius: 0;
+	padding: 0 1px;
+}
+.ProseMirror span[data-mark-type="cross"]::after {
 	content: "✗";
-	color: #ef4444;
+	color: var(--mark-cross-glyph);
 	font-weight: 700;
 	font-size: 0.75em;
 	margin-left: 2px;
+}
+
+/* Circle — flat orange highlight, no border, no radius */
+.ProseMirror span[data-mark-type="circle"] {
+	background-color: var(--mark-circle-bg);
+	box-shadow: none !important;
+	--tw-ring-shadow: 0 0 #0000;
+	--tw-ring-offset-shadow: 0 0 #0000;
+	border-radius: 0 !important;
+	padding: 0 1px;
+}
+
+/* Box — keep as a thin purple ring with no rounding (purely defensive,
+   in case Tailwind's ring utilities are absent from the bundle) */
+.ProseMirror span[data-mark-type="box"] {
+	box-shadow: inset 0 0 0 1px var(--mark-box-ring);
+	border-radius: 0;
+	padding: 0 1px;
+}
+
+/* Underline — explicit colour so it doesn't fall back to black */
+.ProseMirror span[data-mark-type="underline"] {
+	text-decoration-line: underline;
+	text-decoration-style: solid;
+	text-decoration-color: var(--mark-underline);
+	text-decoration-thickness: 2px;
+	text-underline-offset: 2px;
+}
+
+/* Double underline — explicit colour + double style */
+.ProseMirror span[data-mark-type="double_underline"] {
+	text-decoration-line: underline;
+	text-decoration-style: double;
+	text-decoration-color: var(--mark-double-underline);
+	text-decoration-thickness: 2px;
+	text-underline-offset: 3px;
+}
+
+/* Chain marks — soft tinted backgrounds keyed on the `data-chain-type`
+   attr emitted by `ChainMark.renderHTML` in
+   `packages/shared/src/editor/annotation-marks.ts`. */
+.ProseMirror span[data-mark-type="chain"][data-chain-type="evaluation"] {
+	background-color: var(--mark-chain-evaluation-bg);
+}
+.ProseMirror span[data-mark-type="chain"][data-chain-type="judgement"] {
+	background-color: var(--mark-chain-judgement-bg);
+}
+.ProseMirror span[data-mark-type="chain"][data-chain-type="reasoning"],
+.ProseMirror span[data-mark-type="chain"]:not([data-chain-type]) {
+	background-color: var(--mark-chain-reasoning-bg);
+}
+
+/* ─── Collaboration cursors ────────────────────────────────────────────────
+   Per-user caret + name label rendered by `@tiptap/extension-collaboration-caret`.
+   The extension sets the border / background colors inline from the user's
+   awareness state; everything else lives here.
+*/
+
+.collaboration-carets__caret {
+	position: relative;
+	margin-left: -1px;
+	margin-right: -1px;
+	border-left: 1px solid;
+	border-right: 1px solid;
+	word-break: normal;
+	pointer-events: none;
+}
+
+.collaboration-carets__label {
+	position: absolute;
+	top: -1.4em;
+	left: -1px;
+	font-size: 10px;
+	font-weight: 600;
+	line-height: 1;
+	user-select: none;
+	white-space: nowrap;
+	padding: 2px 4px;
+	border-radius: 3px 3px 3px 0;
+	color: white;
+	pointer-events: none;
+}
+
+.collaboration-carets__selection {
+	mix-blend-mode: multiply;
+	pointer-events: none;
 }
 
 /* When annotation marks overlap on the same span, ProseMirror nests their

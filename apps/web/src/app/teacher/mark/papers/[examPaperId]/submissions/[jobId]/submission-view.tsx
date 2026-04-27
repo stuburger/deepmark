@@ -1,31 +1,29 @@
 "use client"
 
+import { DocOpsProvider } from "@/components/annotated-answer/doc-ops-provider"
 import {
 	ResizableHandle,
 	ResizablePanel,
 	ResizablePanelGroup,
 } from "@/components/ui/resizable"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { useTeacherOverrides } from "@/lib/marking/overrides/hooks"
 import type { JobStages } from "@/lib/marking/stages/types"
 import type {
 	PageToken,
 	ScanPage,
 	StudentPaperAnnotation,
 	StudentPaperJobPayload,
-	UpsertTeacherOverrideInput,
 } from "@/lib/marking/types"
 import { parseAsString, useQueryState } from "nuqs"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { EventLog } from "./event-log"
 import { useScrollToQuestion } from "./hooks/use-scroll-to-question"
 import { useSubmissionData } from "./hooks/use-submission-data"
-import {
-	useTeacherOverrideMutations,
-	useTeacherOverrides,
-} from "./hooks/use-teacher-overrides"
 import { ResultsPanel } from "./results-panel"
 import { ScanPanel } from "./scan-panel"
 import { SubmissionToolbar } from "./submission-toolbar"
+import { useScanViewSettings } from "./use-scan-view-settings"
 
 export function SubmissionView({
 	examPaperId,
@@ -72,9 +70,16 @@ export function SubmissionView({
 	// After the editor has produced a derivation, it's authoritative for
 	// anchored marks — server projection only feeds spatial-only marks
 	// (MCQ / deterministic, no anchor tokens) which never live in the doc.
-	const [editorAnnotations, setEditorAnnotations] = useState<
-		StudentPaperAnnotation[] | null
-	>(null)
+	//
+	// State is tagged with the jobId it was derived for, so switching
+	// submissions auto-invalidates the prior derivation without an explicit
+	// clear-effect. See https://react.dev/learn/you-might-not-need-an-effect.
+	const [derived, setDerived] = useState<{
+		jobId: string
+		annotations: StudentPaperAnnotation[]
+	} | null>(null)
+	const editorAnnotations =
+		derived?.jobId === jobId ? derived.annotations : null
 
 	const annotations = useMemo<StudentPaperAnnotation[]>(() => {
 		const spatialOnly = serverAnnotations.filter(
@@ -88,17 +93,33 @@ export function SubmissionView({
 		return [...anchored, ...spatialOnly]
 	}, [editorAnnotations, serverAnnotations])
 
-	const [showOcr, setShowOcr] = useState(false)
-	const [showRegions, setShowRegions] = useState(true)
-	const [showMarks, setShowMarks] = useState(false)
-	const [showChains, setShowChains] = useState(false)
+	// Focus mode (default) treats the scan as a passive preview: clicking an
+	// annotation or moving the editor cursor does NOT highlight individual
+	// words on the scan. Inspect mode opts back into word-level linking for
+	// debugging / OCR review. Some teachers find word-level flicker
+	// distracting at normal marking speed.
+	const { settings, toggle, set } = useScanViewSettings()
+	const inspectMode = settings.viewMode === "inspect"
 
-	// Hover word linking — bidirectional between scan and PM editor
+	// Hover word linking — bidirectional between scan and PM editor.
+	// In focus mode we throw away highlight events at the boundary so the
+	// scan remains static.
 	const [highlightedTokenIds, setHighlightedTokenIds] =
 		useState<Set<string> | null>(null)
-	const handleTokenHighlight = useCallback((tokenIds: string[] | null) => {
-		setHighlightedTokenIds(tokenIds ? new Set(tokenIds) : null)
-	}, [])
+	const handleTokenHighlight = useCallback(
+		(tokenIds: string[] | null) => {
+			if (!inspectMode) {
+				setHighlightedTokenIds(null)
+				return
+			}
+			setHighlightedTokenIds(tokenIds ? new Set(tokenIds) : null)
+		},
+		[inspectMode],
+	)
+	// Clear lingering highlights when the user flips back to focus mode.
+	useEffect(() => {
+		if (!inspectMode) setHighlightedTokenIds(null)
+	}, [inspectMode])
 
 	const [activeQuestionNumber, setActiveQuestionNumber] = useQueryState(
 		"question",
@@ -122,23 +143,11 @@ export function SubmissionView({
 		[scrollToQuestion],
 	)
 
-	// Teacher overrides
+	// Teacher overrides — read-side only. Write ops live in DocOpsProvider
+	// (consumed by NodeViews via `useDocOps()` so we don't drill callbacks
+	// through ResultsPanel → MarkingResults → GradingResultsPanel).
 	const { overridesByQuestionId } = useTeacherOverrides(
 		initialData.submission_id,
-	)
-	const { upsertOverride, deleteOverride } = useTeacherOverrideMutations(
-		initialData.submission_id,
-	)
-
-	const handleOverrideChange = useCallback(
-		(questionId: string, input: UpsertTeacherOverrideInput | null) => {
-			if (input === null) {
-				deleteOverride(questionId)
-			} else {
-				upsertOverride({ questionId, input })
-			}
-		},
-		[upsertOverride, deleteOverride],
 	)
 
 	const hasAnnotations =
@@ -149,141 +158,128 @@ export function SubmissionView({
 	useEffect(() => {
 		if (annotations.length > 0 && !annotationsLoadedRef.current) {
 			annotationsLoadedRef.current = true
-			setShowMarks(true)
+			set({ showMarks: true })
 		}
-	}, [annotations])
+	}, [annotations, set])
 
 	// Editor transactions → local state, fanned out to ScanPanel and
 	// SubmissionToolbar via the merged `annotations` above. The Y.Doc (via
 	// Hocuspocus + IndexedDB) is the persistence layer; the React Query cache
 	// is reserved for server-projected state and never written by the editor.
 	const handleDerivedAnnotations = useCallback(
-		(derived: StudentPaperAnnotation[]) => setEditorAnnotations(derived),
-		[],
+		(annotations: StudentPaperAnnotation[]) =>
+			setDerived({ jobId, annotations }),
+		[jobId],
 	)
 
-	// Drop the previous editor's derivation when the submission switches —
-	// otherwise ScanPanel briefly shows stale anchored marks until the new
-	// editor mounts and re-derives.
-	useEffect(() => {
-		setEditorAnnotations(null)
-	}, [jobId])
+	// Fallback to jobId for legacy submissions that predate the Submission
+	// model — matches the docKey convention in grading-results-panel.tsx so
+	// writes target the same Y.Doc.
+	const docSubmissionId = initialData.submission_id ?? jobId
 
 	return (
-		<div className="flex flex-col overflow-hidden h-full">
-			<SubmissionToolbar
-				examPaperId={examPaperId}
-				jobId={jobId}
-				data={data}
-				phase={phase}
-				onNavigateToJob={onNavigateToJob}
-				onVersionChange={onVersionChange}
-				onClose={onClose}
-				annotations={annotations}
-				pageTokens={pageTokens}
-			/>
+		<DocOpsProvider submissionId={docSubmissionId}>
+			<div className="flex flex-col overflow-hidden h-full">
+				<SubmissionToolbar
+					examPaperId={examPaperId}
+					jobId={jobId}
+					data={data}
+					phase={phase}
+					onNavigateToJob={onNavigateToJob}
+					onVersionChange={onVersionChange}
+					onClose={onClose}
+					annotations={annotations}
+					pageTokens={pageTokens}
+				/>
 
-			{/* Mobile: scan/results tabs */}
-			<div className="flex-1 min-h-0 flex flex-col md:hidden">
-				<Tabs
-					value={mobileTab}
-					onValueChange={setMobileTab}
-					className="h-full flex flex-col overflow-hidden gap-0"
+				{/* Mobile: scan/results tabs */}
+				<div className="flex-1 min-h-0 flex flex-col md:hidden">
+					<Tabs
+						value={mobileTab}
+						onValueChange={setMobileTab}
+						className="h-full flex flex-col overflow-hidden gap-0"
+					>
+						<TabsList
+							variant="line"
+							className="shrink-0 w-full justify-start rounded-none border-b px-4 h-9 gap-4"
+						>
+							<TabsTrigger value="scan">Scan</TabsTrigger>
+							<TabsTrigger value="results">Results</TabsTrigger>
+						</TabsList>
+
+						<TabsContent
+							value="scan"
+							className="flex-1 min-h-0 overflow-hidden m-0 p-0"
+						>
+							<ScanPanel
+								scanPages={scanPages}
+								pageTokens={pageTokens}
+								gradingResults={data.grading_results}
+								levelDescriptors={data.level_descriptors}
+								settings={settings}
+								toggle={toggle}
+								onGradedRegionClick={handleGradedRegionClick}
+								debugMode={debugMode}
+								annotations={annotations}
+								hasAnnotations={hasAnnotations}
+							/>
+						</TabsContent>
+
+						<TabsContent
+							value="results"
+							className="flex-1 min-h-0 overflow-hidden m-0"
+						>
+							<ResultsPanel
+								jobId={jobId}
+								data={data}
+								phase={phase}
+								activeQuestionNumber={activeQuestionNumber}
+								overridesByQuestionId={overridesByQuestionId}
+								onDerivedAnnotations={handleDerivedAnnotations}
+								onTokenHighlight={handleTokenHighlight}
+							/>
+						</TabsContent>
+					</Tabs>
+				</div>
+
+				{/* Desktop: persistent split layout */}
+				<ResizablePanelGroup
+					orientation="horizontal"
+					className="flex-1 min-h-0 hidden md:flex"
 				>
-					<TabsList
-						variant="line"
-						className="shrink-0 w-full justify-start rounded-none border-b px-4 h-9 gap-4"
-					>
-						<TabsTrigger value="scan">Scan</TabsTrigger>
-						<TabsTrigger value="results">Results</TabsTrigger>
-					</TabsList>
-
-					<TabsContent
-						value="scan"
-						className="flex-1 min-h-0 overflow-hidden m-0 p-0"
-					>
+					<ResizablePanel defaultSize={20} minSize={15}>
 						<ScanPanel
 							scanPages={scanPages}
 							pageTokens={pageTokens}
 							gradingResults={data.grading_results}
 							levelDescriptors={data.level_descriptors}
-							showOcr={showOcr}
-							showRegions={showRegions}
-							onToggleOcr={() => setShowOcr((v) => !v)}
-							onToggleRegions={() => setShowRegions((v) => !v)}
+							settings={settings}
+							toggle={toggle}
 							onGradedRegionClick={handleGradedRegionClick}
 							debugMode={debugMode}
 							annotations={annotations}
-							showMarks={showMarks}
-							showChains={showChains}
-							onToggleMarks={() => setShowMarks((v) => !v)}
-							onToggleChains={() => setShowChains((v) => !v)}
 							hasAnnotations={hasAnnotations}
+							highlightedTokenIds={highlightedTokenIds}
 						/>
-					</TabsContent>
+					</ResizablePanel>
 
-					<TabsContent
-						value="results"
-						className="flex-1 min-h-0 overflow-hidden m-0"
-					>
+					<ResizableHandle withHandle />
+
+					<ResizablePanel defaultSize={80} minSize={50}>
 						<ResultsPanel
 							jobId={jobId}
 							data={data}
 							phase={phase}
 							activeQuestionNumber={activeQuestionNumber}
 							overridesByQuestionId={overridesByQuestionId}
-							onOverrideChange={handleOverrideChange}
 							onDerivedAnnotations={handleDerivedAnnotations}
 							onTokenHighlight={handleTokenHighlight}
 						/>
-					</TabsContent>
-				</Tabs>
+					</ResizablePanel>
+				</ResizablePanelGroup>
+
+				<EventLog events={data.job_events} isPolling={!isTerminal} />
 			</div>
-
-			{/* Desktop: persistent split layout */}
-			<ResizablePanelGroup
-				orientation="horizontal"
-				className="flex-1 min-h-0 hidden md:flex"
-			>
-				<ResizablePanel defaultSize={30} minSize={20}>
-					<ScanPanel
-						scanPages={scanPages}
-						pageTokens={pageTokens}
-						gradingResults={data.grading_results}
-						levelDescriptors={data.level_descriptors}
-						showOcr={showOcr}
-						showRegions={showRegions}
-						onToggleOcr={() => setShowOcr((v) => !v)}
-						onToggleRegions={() => setShowRegions((v) => !v)}
-						onGradedRegionClick={handleGradedRegionClick}
-						debugMode={debugMode}
-						annotations={annotations}
-						showMarks={showMarks}
-						showChains={showChains}
-						onToggleMarks={() => setShowMarks((v) => !v)}
-						onToggleChains={() => setShowChains((v) => !v)}
-						hasAnnotations={hasAnnotations}
-						highlightedTokenIds={highlightedTokenIds}
-					/>
-				</ResizablePanel>
-
-				<ResizableHandle withHandle />
-
-				<ResizablePanel defaultSize={70} minSize={40}>
-					<ResultsPanel
-						jobId={jobId}
-						data={data}
-						phase={phase}
-						activeQuestionNumber={activeQuestionNumber}
-						overridesByQuestionId={overridesByQuestionId}
-						onOverrideChange={handleOverrideChange}
-						onDerivedAnnotations={handleDerivedAnnotations}
-						onTokenHighlight={handleTokenHighlight}
-					/>
-				</ResizablePanel>
-			</ResizablePanelGroup>
-
-			<EventLog events={data.job_events} isPolling={!isTerminal} />
-		</div>
+		</DocOpsProvider>
 	)
 }

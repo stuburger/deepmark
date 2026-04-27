@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DeepMark — Dashboard</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=DM+Mono:wght@300;400&family=Playfair+Display:wght@400&family=Montserrat:wght@600;700&display=swap');
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    width: 100%; height: 100%;
+    font-family: 'Inter', sans-serif;
+    overflow: hidden;
+  }
+
+  /* ── ROOT — now full-viewport with texture ── */
+  .root {
+    width: 100%; height: 100%;
+    position: relative; overflow: hidden;
+    background-image: url('preview.jpg');
+    background-size: cover;
+    background-position: center;
+  }
+
+  /* Very subtle darkening veil so white panels pop */
+  .root::after {
+    content: '';
+    position: absolute; inset: 0;
+    background: rgba(0,0,0,0.08);
+    pointer-events: none; z-index: 0;
+  }
+
+  /* ── BLUR OVERLAY ── */
+  .blur-overlay {
+    position: absolute; inset: 0; z-index: 50;
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    background: rgba(0,0,0,0.18);
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.28s ease;
+  }
+  .blur-overlay.open { opacity: 1; pointer-events: all; }
+
+  /* ── SIDEBAR ── */
+  .sidebar {
+    position: absolute; z-index: 100;
+    left: 0; top: 0; bottom: 0;
+    width: 160px;
+    background: white;
+    display: flex; flex-direction: column;
+    padding: 28px 0 24px;
+    transform: translateX(-100%);
+    transition: transform 0.3s cubic-bezier(0.4,0,0.2,1);
+    box-shadow: 6px 0 40px rgba(0,0,0,0.18), 2px 0 12px rgba(0,0,0,0.1);
+    border-right: 1px solid rgba(0,0,0,0.06);
+  }
+  .sidebar.open { transform: translateX(0); }
+
+  .sb-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 18px 24px;
+    border-bottom: 1px solid rgba(0,0,0,0.06);
+    margin-bottom: 12px;
+  }
+
+  .sb-wordmark {
+    font-family: 'Montserrat', sans-serif;
+    font-size: 15px; font-weight: 700;
+    color: #2D3748; letter-spacing: 0.01em;
+  }
+  .sb-wordmark span { color: #6B4FA0; }
+
+  .sb-close {
+    width: 26px; height: 26px; border-radius: 5px;
+    display: flex; align-items: center; justify-content: center;
+    color: rgba(0,0,0,0.3); cursor: pointer; font-size: 15px;
+    transition: background 0.14s, color 0.14s; flex-shrink: 0;
+  }
+  .sb-close:hover { background: rgba(0,0,0,0.06); color: rgba(0,0,0,0.6); }
+
+  .sb-section {
+    font-size: 9px; font-weight: 600; color: rgba(0,0,0,0.22);
+    text-transform: uppercase; letter-spacing: 0.14em;
+    padding: 0 18px; margin: 10px 0 4px;
+  }
+
+  .sb-nav { display: flex; flex-direction: column; gap: 1px; padding: 0 10px; flex: 1; }
+
+  .sb-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 10px; border-radius: 7px;
+    cursor: pointer; transition: all 0.13s;
+    font-size: 12px; color: rgba(0,0,0,0.45); white-space: nowrap;
+  }
+  .sb-item:hover { background: rgba(0,0,0,0.04); color: rgba(0,0,0,0.7); }
+  .sb-item.active { background: rgba(107,79,160,0.1); color: #6B4FA0; font-weight: 600; }
+
+  .sb-icon {
+    width: 18px; height: 18px; flex-shrink: 0;
+    stroke: currentColor; fill: none; stroke-width: 1.5; opacity: 0.8;
+  }
+  .sb-item.active .sb-icon { opacity: 1; }
+
+  .sb-footer {
+    margin-top: auto; padding: 16px 18px 0;
+    border-top: 1px solid rgba(0,0,0,0.06);
+    display: flex; align-items: center; gap: 10px; cursor: pointer;
+  }
+  .sb-av {
+    width: 28px; height: 28px; border-radius: 50%;
+    background: #6B4FA0; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; font-weight: 700; color: white;
+  }
+  .sb-av-name { font-size: 11px; font-weight: 500; color: #2D3748; }
+  .sb-av-role { font-size: 10px; color: rgba(0,0,0,0.32); margin-top: 1px; }
+
+  /* ── HAMBURGER ── */
+  .hamburger {
+    position: absolute; z-index: 40;
+    top: 24px; left: 36px;
+    display: flex; flex-direction: column;
+    gap: 5px; cursor: pointer;
+    padding: 6px; border-radius: 6px;
+    transition: background 0.15s;
+  }
+  .hamburger:hover { background: rgba(0,0,0,0.07); }
+  .hb { display: block; height: 1.5px; background: #4A5568; border-radius: 2px; }
+  .hb:nth-child(1) { width: 20px; }
+  .hb:nth-child(2) { width: 13px; }
+  .hb:nth-child(3) { width: 20px; }
+
+  /* ── MAIN CANVAS ── */
+  .canvas {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    z-index: 10;
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-rows: auto 1fr auto;
+    padding: 52px 40px 0 40px;
+    align-content: start;
+  }
+
+  .greeting-zone {
+    grid-column: 1 / 3; grid-row: 1;
+    padding-bottom: 28px; padding-top: 16px;
+  }
+
+  .greeting-eyebrow {
+    font-size: 11px; color: rgba(0,0,0,0.38);
+    letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 8px;
+  }
+
+  .greeting {
+    font-family: 'Playfair Display', Georgia, serif;
+    font-size: 32px; font-weight: 400;
+    color: #2D3748; letter-spacing: -0.01em; line-height: 1.1;
+    margin-bottom: 14px; overflow: hidden;
+  }
+
+  .greeting-text {
+    display: inline-block;
+    clip-path: inset(0 100% 0 0);
+    animation: inkReveal 1.4s cubic-bezier(0.22, 1, 0.36, 1) 0.2s forwards;
+  }
+
+  @keyframes inkReveal {
+    0%   { clip-path: inset(0 100% 0 0); opacity: 0.7; }
+    20%  { opacity: 1; }
+    100% { clip-path: inset(0 0% 0 0); }
+  }
+
+  .greeting-stats { display: flex; flex-direction: column; gap: 3px; }
+  .stat-row { font-size: 12px; color: rgba(0,0,0,0.42); line-height: 1.7; }
+  .stat-row span { color: #6B4FA0; font-weight: 500; }
+
+  /* ── QUICK ACTIONS — white panel ── */
+  .quick-zone {
+    grid-column: 3; grid-row: 1;
+    display: flex; flex-direction: column;
+    justify-content: flex-end;
+    padding-bottom: 28px; padding-left: 24px; padding-top: 16px;
+    gap: 8px;
+  }
+
+  .quick-label {
+    font-size: 9px; font-weight: 600;
+    color: rgba(0,0,0,0.28); text-transform: uppercase;
+    letter-spacing: 0.12em; margin-bottom: 2px;
+  }
+
+  .quick-btn {
+    height: 40px;
+    background: white;
+    border: 1px solid rgba(0,0,0,0.09);
+    border-radius: 5px;
+    display: flex; align-items: center; gap: 10px;
+    padding: 0 16px; cursor: pointer;
+    font-size: 13px; font-weight: 500; color: #1a1a1a;
+    box-shadow: 3px 3px 0px rgba(0,0,0,0.14), 2px 2px 5px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
+    transition: transform 0.14s, box-shadow 0.14s;
+    white-space: nowrap;
+  }
+  .quick-btn:hover {
+    transform: translate(-1px,-1px);
+    box-shadow: 4px 4px 0px rgba(0,0,0,0.16), 3px 3px 7px rgba(0,0,0,0.14);
+  }
+  .quick-btn.primary {
+    background: #6B4FA0; border-color: #5A3D8A; color: white;
+    box-shadow: 3px 3px 0px rgba(40,15,90,0.4), 2px 2px 5px rgba(107,79,160,0.3), 0 1px 3px rgba(107,79,160,0.2);
+  }
+  .quick-btn.primary:hover {
+    box-shadow: 4px 4px 0px rgba(40,15,90,0.42), 3px 3px 7px rgba(107,79,160,0.35);
+  }
+  .quick-btn-icon { width: 14px; height: 14px; flex-shrink: 0; stroke: currentColor; fill: none; stroke-width: 1.5; opacity: 0.7; }
+  .quick-btn.primary .quick-btn-icon { opacity: 0.85; }
+
+  /* ── RECENT PAPERS ── */
+  .recent-zone { grid-column: 1 / 4; grid-row: 2; display: flex; flex-direction: column; }
+  .recent-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 14px; }
+  .recent-title { font-size: 10px; font-weight: 600; color: rgba(0,0,0,0.32); text-transform: uppercase; letter-spacing: 0.14em; }
+  .recent-more { font-size: 11px; color: rgba(0,0,0,0.28); cursor: pointer; border-bottom: 1px solid rgba(0,0,0,0.14); padding-bottom: 1px; }
+
+  .papers-row { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; }
+
+  /* ── PAPER CARD — white, lifted ── */
+  .paper-card {
+    background: white;
+    border: 1px solid rgba(0,0,0,0.07);
+    border-radius: 5px;
+    overflow: hidden; cursor: pointer;
+    box-shadow:
+      3px 3px 0px rgba(0,0,0,0.12),
+      2px 2px 6px rgba(0,0,0,0.10),
+      0 1px 3px rgba(0,0,0,0.07);
+    transition: transform 0.16s, box-shadow 0.16s;
+  }
+  .paper-card:hover {
+    transform: translate(-1px,-1px);
+    box-shadow:
+      4px 4px 0px rgba(0,0,0,0.14),
+      3px 3px 9px rgba(0,0,0,0.12);
+  }
+
+  .card-body { padding: 14px 16px 13px; }
+  .card-subject { font-size: 9px; font-weight: 600; color: rgba(0,0,0,0.26); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 4px; }
+  .card-name { font-size: 13px; font-weight: 500; color: #1a1a1a; margin-bottom: 11px; line-height: 1.3; }
+  .card-foot { display: flex; justify-content: space-between; align-items: center; }
+  .card-count { font-family: 'DM Mono', monospace; font-size: 10px; color: rgba(0,0,0,0.25); }
+
+  .card-badge { font-size: 9px; font-weight: 600; padding: 2px 8px; border-radius: 3px; text-transform: uppercase; letter-spacing: 0.06em; }
+  .card-badge.done    { background: rgba(107,79,160,0.08); color: #6B4FA0; }
+  .card-badge.review  { background: rgba(74,85,104,0.08); color: #4A5568; }
+  .card-badge.marking { background: rgba(107,79,160,0.12); color: #6B4FA0; animation: badgePulse 2s ease-in-out infinite; }
+
+  @keyframes badgePulse { 0%,100%{opacity:1} 50%{opacity:0.55} }
+
+  /* ── FOOTER ── */
+  .footer-zone {
+    grid-column: 1 / 4; grid-row: 3;
+    padding: 14px 0 18px;
+    border-top: 1px solid rgba(0,0,0,0.08);
+    margin-top: 16px;
+  }
+  .footer-text { font-size: 10px; color: rgba(0,0,0,0.22); font-weight: 300; letter-spacing: 0.03em; }
+</style>
+</head>
+<body>
+<div class="root" id="root">
+
+  <!-- Blur overlay — click to close -->
+  <div class="blur-overlay" id="blurOverlay" onclick="closeSidebar()"></div>
+
+  <!-- WHITE SIDEBAR -->
+  <div class="sidebar" id="sidebar">
+    <div class="sb-header">
+      <div class="sb-wordmark">Deep<span>Mark</span></div>
+      <div class="sb-close" onclick="closeSidebar()">✕</div>
+    </div>
+    <div class="sb-nav">
+      <div class="sb-section">Workspace</div>
+      <div class="sb-item active">
+        <svg class="sb-icon" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+        Dashboard
+      </div>
+      <div class="sb-item">
+        <svg class="sb-icon" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        All papers
+      </div>
+      <div class="sb-item">
+        <svg class="sb-icon" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        Results
+      </div>
+      <div class="sb-item">
+        <svg class="sb-icon" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+        Reports
+      </div>
+      <div class="sb-section">Tools</div>
+      <div class="sb-item">
+        <svg class="sb-icon" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        DeepMark AI
+      </div>
+      <div class="sb-item">
+        <svg class="sb-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
+        Settings
+      </div>
+    </div>
+    <div class="sb-footer">
+      <div class="sb-av">SH</div>
+      <div>
+        <div class="sb-av-name">Sarah Hughes</div>
+        <div class="sb-av-role">Head of Science</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- HAMBURGER -->
+  <div class="hamburger" onclick="openSidebar()">
+    <span class="hb"></span><span class="hb"></span><span class="hb"></span>
+  </div>
+
+  <!-- MAIN CANVAS -->
+  <div class="canvas">
+    <div class="greeting-zone">
+      <div class="greeting-eyebrow">Sunday, 27 April 2025</div>
+      <div class="greeting"><span class="greeting-text">Good morning, Sarah.</span></div>
+      <div class="greeting-stats">
+        <div class="stat-row"><span>2</span> papers pending your review</div>
+        <div class="stat-row"><span>1</span> set currently being marked</div>
+        <div class="stat-row"><span>146</span> papers marked to date</div>
+      </div>
+    </div>
+
+    <div class="quick-zone">
+      <div class="quick-label">Actions</div>
+      <div class="quick-btn primary">
+        <svg class="quick-btn-icon" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Mark new paper
+      </div>
+      <div class="quick-btn">
+        <svg class="quick-btn-icon" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        Resume marking
+      </div>
+      <div class="quick-btn">
+        <svg class="quick-btn-icon" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        Talk to DeepMark
+      </div>
+    </div>
+
+    <div class="recent-zone">
+      <div class="recent-header">
+        <div class="recent-title">Recent papers</div>
+        <div class="recent-more">View all</div>
+      </div>
+      <div class="papers-row">
+        <div class="paper-card"><div class="card-body"><div class="card-subject">Biology A2</div><div class="card-name">Paper 1 — June 2024</div><div class="card-foot"><span class="card-count">28 scripts</span><span class="card-badge marking">Marking…</span></div></div></div>
+        <div class="paper-card"><div class="card-body"><div class="card-subject">Chemistry AS</div><div class="card-name">Periodic Table Unit</div><div class="card-foot"><span class="card-count">31 scripts</span><span class="card-badge review">Review needed</span></div></div></div>
+        <div class="paper-card"><div class="card-body"><div class="card-subject">Chemistry A2</div><div class="card-name">Organic Chemistry Mock</div><div class="card-foot"><span class="card-count">22 scripts</span><span class="card-badge review">Review needed</span></div></div></div>
+        <div class="paper-card"><div class="card-body"><div class="card-subject">Physics A2</div><div class="card-name">Paper 2 — Mock exam</div><div class="card-foot"><span class="card-count">24 scripts</span><span class="card-badge done">Complete</span></div></div></div>
+        <div class="paper-card"><div class="card-body"><div class="card-subject">Biology AS</div><div class="card-name">Cell Biology — Term 2</div><div class="card-foot"><span class="card-count">19 scripts</span><span class="card-badge done">Complete</span></div></div></div>
+        <div class="paper-card"><div class="card-body"><div class="card-subject">Physics AS</div><div class="card-name">Waves &amp; Optics — Dec 2024</div><div class="card-foot"><span class="card-count">26 scripts</span><span class="card-badge done">Complete</span></div></div></div>
+      </div>
+    </div>
+
+    <div class="footer-zone">
+      <div class="footer-text">© DeepMark Ltd 2026</div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  function openSidebar() {
+    document.getElementById('sidebar').classList.add('open');
+    document.getElementById('blurOverlay').classList.add('open');
+  }
+  function closeSidebar() {
+    document.getElementById('sidebar').classList.remove('open');
+    document.getElementById('blurOverlay').classList.remove('open');
+  }
+</script>
+</body>
+</html>

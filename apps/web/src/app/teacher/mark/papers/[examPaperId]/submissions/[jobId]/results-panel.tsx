@@ -6,7 +6,6 @@ import type {
 	StudentPaperAnnotation,
 	StudentPaperJobPayload,
 	TeacherOverride,
-	UpsertTeacherOverrideInput,
 } from "@/lib/marking/types"
 import { CancelledPanel } from "./cancelled"
 import { FailedPanel } from "./failed"
@@ -26,10 +25,6 @@ type SharedPanelProps = {
 	phase: MarkingPhase
 	activeQuestionNumber: string | null
 	overridesByQuestionId?: Map<string, TeacherOverride>
-	onOverrideChange?: (
-		questionId: string,
-		input: UpsertTeacherOverrideInput | null,
-	) => void
 	onDerivedAnnotations?: (annotations: StudentPaperAnnotation[]) => void
 	onTokenHighlight?: (tokenIds: string[] | null) => void
 }
@@ -40,7 +35,6 @@ export function ResultsPanel({
 	phase,
 	activeQuestionNumber,
 	overridesByQuestionId,
-	onOverrideChange,
 	onDerivedAnnotations,
 	onTokenHighlight,
 }: SharedPanelProps) {
@@ -58,7 +52,6 @@ export function ResultsPanel({
 					data={data}
 					activeQuestionNumber={activeQuestionNumber}
 					overridesByQuestionId={overridesByQuestionId}
-					onOverrideChange={onOverrideChange}
 					onDerivedAnnotations={onDerivedAnnotations}
 					onTokenHighlight={onTokenHighlight}
 				/>

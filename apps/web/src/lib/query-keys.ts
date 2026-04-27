@@ -21,4 +21,6 @@ export const queryKeys = {
 		["submissionFeedback", submissionId] as const,
 	// ─── Batch ingestion ───────────────────────────────────────────────────────
 	activeBatch: (paperId: string) => ["activeBatch", paperId] as const,
+	// ─── Auth / current user ───────────────────────────────────────────────────
+	currentUser: () => ["currentUser"] as const,
 }

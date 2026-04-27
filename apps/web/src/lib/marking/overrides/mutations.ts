@@ -1,15 +1,20 @@
 "use server"
 
+import { withSubmissionEditor } from "@/lib/collab/headless-edit"
 import {
-	dispatchTeacherOverride,
-	withSubmissionEditor,
-} from "@/lib/collab/headless-edit"
+	setQuestionFeedbackBullets,
+	setTeacherOverride,
+} from "@mcp-gcse/shared"
 import { auth } from "../../auth"
 import type {
 	DeleteTeacherOverrideResult,
 	UpsertTeacherOverrideInput,
 	UpsertTeacherOverrideResult,
 } from "../types"
+
+export type SaveFeedbackBulletsResult =
+	| { ok: true }
+	| { ok: false; error: string }
 
 /**
  * Write a teacher score / feedback override for one question of a
@@ -42,7 +47,7 @@ export async function upsertTeacherOverride(
 
 	try {
 		await withSubmissionEditor(submissionId, (view) =>
-			dispatchTeacherOverride(
+			setTeacherOverride(
 				view,
 				questionId,
 				{
@@ -82,6 +87,36 @@ export async function upsertTeacherOverride(
 }
 
 /**
+ * Replace the WWW (`whatWentWell`) and / or EBI (`evenBetterIf`) bullet
+ * lists on a question's `questionAnswer` block. The teacher's edits become
+ * the source of truth — there is no separate `*_override` field. AI grades
+ * only re-write these via `setQuestionGrade`, which runs at original-grade
+ * and re-grade time; re-grades create a new submission so teacher edits
+ * on the prior submission are never clobbered.
+ */
+export async function saveQuestionFeedbackBullets(
+	submissionId: string,
+	questionId: string,
+	patch: { whatWentWell?: string[]; evenBetterIf?: string[] },
+): Promise<SaveFeedbackBulletsResult> {
+	const session = await auth()
+	if (!session) return { ok: false, error: "Not authenticated" }
+
+	try {
+		await withSubmissionEditor(submissionId, (view) =>
+			setQuestionFeedbackBullets(view, questionId, patch),
+		)
+	} catch (err) {
+		return {
+			ok: false,
+			error: err instanceof Error ? err.message : String(err),
+		}
+	}
+
+	return { ok: true }
+}
+
+/**
  * Clear a teacher override. Dispatches `null` for both override attrs
  * onto the doc; the projection picks up the missing entry and deletes
  * the corresponding `TeacherOverride` row on the next snapshot.
@@ -95,7 +130,7 @@ export async function deleteTeacherOverride(
 
 	try {
 		await withSubmissionEditor(submissionId, (view) =>
-			dispatchTeacherOverride(view, questionId, null, null),
+			setTeacherOverride(view, questionId, null, null),
 		)
 	} catch (err) {
 		return {

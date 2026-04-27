@@ -1,0 +1,1222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DeepMark — Full Prototype</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=DM+Mono:wght@300;400&family=Playfair+Display:wght@400&family=Montserrat:wght@600;700&display=swap');
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{width:100%;height:100%;overflow:hidden;font-family:'Inter',sans-serif;}
+
+#bg{position:fixed;inset:0;z-index:0;background:url('bg-paper.jpg') center/cover;}
+#dim{position:fixed;inset:0;z-index:1;background:rgba(0,0,0,0.22);opacity:0;pointer-events:none;transition:opacity 0.3s ease;}
+#dim.on{opacity:1;}
+
+/* All screens: centred column, texture bleeds full width behind */
+.screen{position:fixed;inset:0;z-index:10;display:none;align-items:center;justify-content:center;}
+.screen.active{display:flex;animation:snapFwd 0.55s cubic-bezier(0.22,1,0.36,1) both;}
+.screen.full{align-items:center;justify-content:center;overflow-y:auto;}
+
+@keyframes snapFwd{
+  0%{opacity:0;transform:scale(0.82);}
+  60%{opacity:1;}
+  85%{transform:scale(1.015);}
+  100%{opacity:1;transform:scale(1);}
+}
+
+/* ── SHARED TILES ── */
+.tile{background:white;border:1px solid rgba(0,0,0,0.08);border-radius:10px;box-shadow:0 20px 60px rgba(0,0,0,0.22),0 6px 20px rgba(0,0,0,0.13);overflow:hidden;}
+.tile-hd{padding:18px 22px 14px;border-bottom:1px solid rgba(0,0,0,0.07);display:flex;align-items:flex-start;justify-content:space-between;}
+.tile-title{font-size:13px;font-weight:600;color:#2D3748;}
+.tile-sub{font-size:11px;color:rgba(0,0,0,0.36);margin-top:2px;}
+.tile-badge{font-size:10px;font-weight:500;color:rgba(107,79,160,0.75);background:rgba(107,79,160,0.09);padding:2px 8px;border-radius:10px;white-space:nowrap;}
+.tile-ft{padding:12px 22px 14px;border-top:1px solid rgba(0,0,0,0.07);display:flex;align-items:center;justify-content:flex-end;gap:8px;}
+.x-btn{width:24px;height:24px;border-radius:5px;display:flex;align-items:center;justify-content:center;color:rgba(0,0,0,0.3);cursor:pointer;font-size:14px;transition:background 0.13s;flex-shrink:0;}
+.x-btn:hover{background:rgba(0,0,0,0.06);}
+
+.btn-p{height:34px;padding:0 18px;border-radius:5px;border:none;background:#6B4FA0;color:white;font-size:12px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;box-shadow:2px 2px 8px rgba(107,79,160,0.3);transition:background 0.13s,transform 0.13s;}
+.btn-p:hover{background:#5A3D8A;transform:translateY(-1px);}
+.btn-p.lg{height:36px;padding:0 24px;font-size:13px;box-shadow:3px 3px 0 rgba(40,15,90,0.35),2px 2px 8px rgba(107,79,160,0.3);}
+.btn-s{height:34px;padding:0 16px;border-radius:5px;border:1px solid rgba(0,0,0,0.1);background:transparent;font-size:12px;font-weight:500;color:rgba(0,0,0,0.5);cursor:pointer;font-family:'Inter',sans-serif;transition:background 0.13s;}
+.btn-s:hover{background:rgba(0,0,0,0.04);}
+
+/* Loader */
+.ldr-wrap{width:80px;height:80px;margin:0 auto 24px;position:relative;}
+.ldr-ring{width:80px;height:80px;border-radius:50%;border:2px solid rgba(107,79,160,0.12);position:absolute;inset:0;}
+.ldr-arc{width:80px;height:80px;border-radius:50%;border:2.5px solid transparent;border-top-color:#6B4FA0;border-right-color:rgba(107,79,160,0.4);position:absolute;inset:0;animation:spin 1.2s linear infinite;}
+.ldr-dot{width:12px;height:12px;border-radius:50%;background:#6B4FA0;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);animation:dpulse 1.2s ease-in-out infinite;}
+.ldr-p{width:5px;height:5px;border-radius:50%;background:#9B79D4;position:absolute;top:50%;left:50%;transform-origin:0 0;animation:orbit 1.8s linear infinite;}
+.ldr-p:nth-child(3){background:rgba(107,79,160,0.5);animation-delay:-0.6s;width:4px;height:4px;}
+.ldr-p:nth-child(4){background:rgba(107,79,160,0.3);animation-delay:-1.2s;width:3px;height:3px;}
+@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+@keyframes dpulse{0%,100%{transform:translate(-50%,-50%) scale(1);opacity:1}50%{transform:translate(-50%,-50%) scale(0.7);opacity:0.6}}
+@keyframes orbit{from{transform:translate(-50%,-50%) rotate(0deg) translateX(32px)}to{transform:translate(-50%,-50%) rotate(360deg) translateX(32px)}}
+.ldr-tile{width:320px;text-align:center;padding:40px 32px 36px;}
+.ldr-title{font-size:15px;font-weight:600;color:#2D3748;margin-bottom:6px;}
+.ldr-status{font-size:12px;color:rgba(0,0,0,0.45);margin-bottom:20px;min-height:18px;transition:opacity 0.2s ease;}
+.ldr-bar-wrap{height:3px;background:rgba(107,79,160,0.1);border-radius:2px;overflow:hidden;margin-bottom:14px;}
+.ldr-bar{height:100%;width:0%;background:linear-gradient(90deg,#6B4FA0,#9B79D4);border-radius:2px;transition:width 0.4s ease;}
+.ldr-est{font-family:'DM Mono',monospace;font-size:10px;color:rgba(0,0,0,0.3);}
+.ldr-est span{color:#6B4FA0;font-weight:500;}
+.ldr-note{font-size:11px;color:rgba(0,0,0,0.3);margin-top:14px;line-height:1.5;}
+
+/* ── DASHBOARD ── */
+.db-root{width:100%;height:100%;position:relative;display:flex;align-items:center;justify-content:center;}
+.db-inner{width:100%;max-width:900px;display:grid;grid-template-columns:1fr 1fr 1fr;grid-template-rows:auto 1fr auto;padding:40px 40px 32px;align-content:start;border:1px solid rgba(0,0,0,0.1);border-radius:10px;}
+.blur-ov{position:fixed;inset:0;z-index:50;backdrop-filter:blur(6px);background:rgba(0,0,0,0.18);opacity:0;pointer-events:none;transition:opacity 0.28s ease;}
+.blur-ov.open{opacity:1;pointer-events:all;}
+.sidebar{position:fixed;z-index:100;left:0;top:0;bottom:0;width:192px;background:white;display:flex;flex-direction:column;padding:28px 0 24px;transform:translateX(-100%);transition:transform 0.3s cubic-bezier(0.4,0,0.2,1);box-shadow:6px 0 40px rgba(0,0,0,0.18);border-right:1px solid rgba(0,0,0,0.06);}
+.sidebar.open{transform:translateX(0);}
+.sb-hd{display:flex;align-items:center;justify-content:space-between;padding:0 18px 24px;border-bottom:1px solid rgba(0,0,0,0.06);margin-bottom:12px;}
+.sb-wm{font-family:'Montserrat',sans-serif;font-size:15px;font-weight:700;color:#2D3748;}
+.sb-wm span{color:#6B4FA0;}
+.sb-nav{display:flex;flex-direction:column;gap:1px;padding:0 10px;flex:1;}
+.sb-sect{font-size:9px;font-weight:600;color:rgba(0,0,0,0.22);text-transform:uppercase;letter-spacing:0.14em;padding:0 8px;margin:10px 0 4px;}
+.sb-item{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:7px;cursor:pointer;transition:all 0.13s;font-size:12px;color:rgba(0,0,0,0.45);}
+.sb-item:hover{background:rgba(0,0,0,0.04);color:rgba(0,0,0,0.7);}
+.sb-item.active{background:rgba(107,79,160,0.1);color:#6B4FA0;font-weight:600;}
+.sb-icon{width:18px;height:18px;flex-shrink:0;stroke:currentColor;fill:none;stroke-width:1.5;opacity:0.8;}
+.sb-ft{margin-top:auto;padding:16px 18px 0;border-top:1px solid rgba(0,0,0,0.06);display:flex;align-items:center;gap:10px;}
+.sb-av{width:28px;height:28px;border-radius:50%;background:#6B4FA0;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:white;}
+.hb-wrap{position:fixed;z-index:40;top:24px;left:36px;display:flex;flex-direction:column;gap:5px;cursor:pointer;padding:6px;border-radius:6px;transition:background 0.15s;}
+.hb-wrap:hover{background:rgba(0,0,0,0.07);}
+.hb{display:block;height:1.5px;background:#4A5568;border-radius:2px;}
+.hb:nth-child(1){width:20px;}.hb:nth-child(2){width:13px;}.hb:nth-child(3){width:20px;}
+.greet-zone{grid-column:1/3;grid-row:1;padding-bottom:28px;padding-top:16px;}
+.greet-text{display:inline-block;clip-path:inset(0 100% 0 0);animation:inkR 1.4s cubic-bezier(0.22,1,0.36,1) 0.2s forwards;}
+@keyframes inkR{0%{clip-path:inset(0 100% 0 0);opacity:0.7}20%{opacity:1}100%{clip-path:inset(0 0% 0 0)}}
+.greet-eyebrow{font-size:11px;color:rgba(0,0,0,0.38);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:8px;}
+.greet{font-family:'Playfair Display',Georgia,serif;font-size:32px;font-weight:400;color:#2D3748;letter-spacing:-0.01em;line-height:1.1;margin-bottom:14px;}
+.greet-text{display:inline-block;clip-path:inset(0 100% 0 0);animation:inkR 1.4s cubic-bezier(0.22,1,0.36,1) 0.2s forwards;}
+@keyframes inkR{0%{clip-path:inset(0 100% 0 0);opacity:0.7}20%{opacity:1}100%{clip-path:inset(0 0% 0 0)}}
+.stat-row{font-size:12px;color:rgba(0,0,0,0.42);line-height:1.7;}
+.stat-row span{color:#6B4FA0;font-weight:500;}
+.quick-zone{grid-column:3;grid-row:1;display:flex;flex-direction:column;justify-content:flex-end;padding-bottom:28px;padding-left:24px;padding-top:16px;gap:8px;}
+.ql{font-size:9px;font-weight:600;color:rgba(0,0,0,0.28);text-transform:uppercase;letter-spacing:0.12em;margin-bottom:2px;}
+.qbtn{height:40px;background:white;border:1px solid rgba(0,0,0,0.09);border-radius:5px;display:flex;align-items:center;gap:10px;padding:0 16px;cursor:pointer;font-size:13px;font-weight:500;color:#1a1a1a;box-shadow:3px 3px 0 rgba(0,0,0,0.14),2px 2px 5px rgba(0,0,0,0.12);transition:transform 0.14s,box-shadow 0.14s;white-space:nowrap;}
+.qbtn:hover{transform:translate(-1px,-1px);box-shadow:4px 4px 0 rgba(0,0,0,0.16),3px 3px 7px rgba(0,0,0,0.14);}
+.qbtn.pr{background:#6B4FA0;border-color:#5A3D8A;color:white;box-shadow:3px 3px 0 rgba(40,15,90,0.4),2px 2px 5px rgba(107,79,160,0.3);}
+.qbtn.pr:hover{box-shadow:4px 4px 0 rgba(40,15,90,0.42),3px 3px 7px rgba(107,79,160,0.35);}
+.qi{width:14px;height:14px;flex-shrink:0;stroke:currentColor;fill:none;stroke-width:1.5;opacity:0.75;}
+.recent-zone{grid-column:1/4;grid-row:2;display:flex;flex-direction:column;}
+.rh{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:14px;}
+.rt{font-size:10px;font-weight:600;color:rgba(0,0,0,0.32);text-transform:uppercase;letter-spacing:0.14em;}
+.rm{font-size:11px;color:rgba(0,0,0,0.28);cursor:pointer;border-bottom:1px solid rgba(0,0,0,0.14);padding-bottom:1px;}
+.papers-row{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
+.paper-card{background:white;border:1px solid rgba(0,0,0,0.07);border-radius:5px;overflow:hidden;cursor:pointer;box-shadow:3px 3px 0 rgba(0,0,0,0.12),2px 2px 6px rgba(0,0,0,0.10);transition:transform 0.16s,box-shadow 0.16s;}
+.paper-card:hover{transform:translate(-1px,-1px);box-shadow:4px 4px 0 rgba(0,0,0,0.14),3px 3px 9px rgba(0,0,0,0.12);}
+.card-body{padding:14px 16px 13px;}
+.card-subject{font-size:9px;font-weight:600;color:rgba(0,0,0,0.26);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:4px;}
+.card-name{font-size:13px;font-weight:500;color:#1a1a1a;margin-bottom:11px;line-height:1.3;}
+.card-foot{display:flex;justify-content:space-between;align-items:center;}
+.card-count{font-family:'DM Mono',monospace;font-size:10px;color:rgba(0,0,0,0.25);}
+.card-badge{font-size:9px;font-weight:600;padding:2px 8px;border-radius:3px;text-transform:uppercase;letter-spacing:0.06em;}
+.card-badge.done{background:rgba(107,79,160,0.08);color:#6B4FA0;}
+.card-badge.review{background:rgba(74,85,104,0.08);color:#4A5568;}
+.card-badge.marking{background:rgba(107,79,160,0.12);color:#6B4FA0;animation:bp 2s ease-in-out infinite;}
+@keyframes bp{0%,100%{opacity:1}50%{opacity:0.55}}
+.footer-zone{grid-column:1/4;grid-row:3;padding:14px 0 18px;border-top:1px solid rgba(0,0,0,0.08);margin-top:16px;}
+.footer-text{font-size:10px;color:rgba(0,0,0,0.22);font-weight:300;}
+
+/* ── UPLOAD ── */
+.up-body{padding:18px 22px;}
+.field-label{font-size:10px;font-weight:600;color:rgba(0,0,0,0.45);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:6px;}
+.field-input{width:100%;height:38px;background:#f7f7f7;border:1px solid rgba(0,0,0,0.1);border-radius:6px;padding:0 12px;font-size:13px;color:#2D3748;font-family:'Inter',sans-serif;outline:none;transition:border-color 0.14s;margin-bottom:16px;}
+.field-input:focus{border-color:#6B4FA0;}
+.field-input::placeholder{color:rgba(0,0,0,0.28);}
+.upload-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;}
+.upload-zone{border:1.5px dashed rgba(0,0,0,0.15);border-radius:8px;padding:18px 12px;text-align:center;cursor:pointer;transition:border-color 0.15s,background 0.15s;}
+.upload-zone:hover{border-color:#6B4FA0;background:rgba(107,79,160,0.03);}
+.up-icon{width:28px;height:28px;margin:0 auto 8px;stroke:rgba(0,0,0,0.25);fill:none;stroke-width:1.5;}
+.upload-zone:hover .up-icon{stroke:#6B4FA0;}
+.up-label{font-size:11px;font-weight:600;color:rgba(0,0,0,0.45);margin-bottom:2px;}
+.up-sub{font-size:10px;color:rgba(0,0,0,0.3);}
+/* ── GRADE BOUNDARIES POPOVER ── */
+.gb-wrap{position:relative;}
+.gb-popover{position:absolute;z-index:50;left:0;top:calc(100% + 8px);background:white;border:1px solid rgba(0,0,0,0.1);border-radius:10px;width:200px;padding:14px 14px 10px;box-shadow:0 12px 40px rgba(0,0,0,0.15),0 4px 12px rgba(0,0,0,0.1);display:none;}
+.gb-popover.open{display:block;}
+.gb-pop-title{font-size:10px;font-weight:600;color:rgba(0,0,0,0.45);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;}
+.gb-pop-close{cursor:pointer;color:rgba(0,0,0,0.3);font-size:13px;}
+.gb-pop-close:hover{color:rgba(0,0,0,0.6);}
+.gb-row{display:flex;align-items:center;gap:8px;margin-bottom:6px;}
+.gb-grade{font-size:11px;font-weight:600;color:#6B4FA0;width:20px;text-align:center;flex-shrink:0;}
+.gb-input{flex:1;height:28px;background:#f7f7f7;border:1px solid rgba(0,0,0,0.1);border-radius:5px;padding:0 8px;font-size:11px;font-family:'DM Mono',monospace;color:#2D3748;outline:none;}
+.gb-input:focus{border-color:#6B4FA0;}
+.gb-unit{font-size:10px;color:rgba(0,0,0,0.35);width:14px;}
+
+.gb-btn{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:500;color:#6B4FA0;cursor:pointer;padding:8px 12px;border:1px solid rgba(107,79,160,0.25);border-radius:6px;width:fit-content;transition:background 0.14s;margin-bottom:4px;}
+.gb-btn:hover{background:rgba(107,79,160,0.05);}
+.ct-body{padding:18px 22px;display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.ct-card{border:1.5px solid rgba(107,79,160,0.35);border-radius:8px;padding:14px 16px;background:rgba(107,79,160,0.03);}
+.ct-chk{width:18px;height:18px;border-radius:50%;background:#6B4FA0;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.ct-chk svg{width:10px;height:10px;stroke:white;fill:none;stroke-width:2.5;}
+.ct-ch{display:flex;align-items:center;gap:8px;margin-bottom:4px;}
+.ct-cn{font-size:13px;font-weight:600;color:#2D3748;}
+.ct-cd{font-size:11px;color:rgba(0,0,0,0.45);margin-bottom:12px;line-height:1.4;}
+.ct-cf{display:flex;align-items:center;justify-content:space-between;}
+.ct-acq{font-size:11px;font-weight:600;color:#6B4FA0;}
+.ct-view{display:flex;align-items:center;gap:5px;font-size:11px;font-weight:500;color:rgba(0,0,0,0.5);cursor:pointer;padding:4px 8px;border-radius:5px;border:1px solid rgba(0,0,0,0.1);transition:background 0.13s;}
+.ct-view:hover{background:rgba(0,0,0,0.04);}
+.ct-view svg{width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:1.5;}
+.ct-note{font-size:11px;color:rgba(0,0,0,0.35);}
+
+/* ── PAPER PREVIEW ── */
+.pv-tile{width:min(620px,90vw);max-height:86vh;display:flex;flex-direction:column;}
+.pv-hd{padding:16px 20px;border-bottom:1px solid rgba(0,0,0,0.07);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+.pv-tabs{display:flex;gap:4px;background:#f4f4f4;border-radius:7px;padding:3px;}
+.pv-tab{padding:5px 14px;border-radius:5px;font-size:11px;font-weight:500;color:rgba(0,0,0,0.45);cursor:pointer;transition:all 0.15s;}
+.pv-tab.active{background:white;color:#6B4FA0;box-shadow:0 1px 4px rgba(0,0,0,0.1);}
+.pv-body{flex:1;overflow-y:auto;background:white;}
+.pv-body::-webkit-scrollbar{width:5px;}
+.pv-body::-webkit-scrollbar-thumb{background:rgba(0,0,0,0.15);border-radius:3px;}
+.paper-doc{padding:24px 28px;}
+.p-board{text-align:center;font-size:10px;font-weight:600;color:rgba(0,0,0,0.35);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:4px;}
+.p-title{text-align:center;font-size:18px;font-weight:700;color:#1a1a1a;margin-bottom:4px;}
+.p-sub{text-align:center;font-size:12px;color:rgba(0,0,0,0.45);margin-bottom:14px;}
+.p-meta{display:flex;justify-content:space-between;padding:8px 0;border-top:1px solid rgba(0,0,0,0.1);border-bottom:1px solid rgba(0,0,0,0.1);margin-bottom:18px;font-size:11px;color:rgba(0,0,0,0.45);}
+.sec-label{font-size:10px;font-weight:700;color:rgba(0,0,0,0.35);text-transform:uppercase;letter-spacing:0.1em;padding-bottom:6px;border-bottom:1px solid rgba(0,0,0,0.1);margin-bottom:14px;}
+.question{padding-bottom:14px;border-bottom:1px solid rgba(107,79,160,0.12);margin-bottom:14px;}
+.q-row{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;}
+.q-num{font-size:13px;font-weight:700;color:#1a1a1a;min-width:36px;}
+.q-text{font-size:13px;color:#1a1a1a;flex:1;line-height:1.5;}
+.q-marks{font-size:11px;color:rgba(0,0,0,0.4);font-weight:500;white-space:nowrap;margin-left:12px;}
+.q-ans-box{margin-left:36px;margin-top:8px;border:1px solid rgba(107,79,160,0.18);border-radius:4px;height:48px;background:rgba(107,79,160,0.02);}
+.pv-ft{padding:12px 20px;border-top:1px solid rgba(0,0,0,0.07);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+.pv-info{font-size:11px;color:rgba(0,0,0,0.35);}
+
+/* ── UPLOAD SCRIPTS ── */
+.ut-body{padding:16px 22px;display:flex;flex-direction:column;gap:8px;}
+.ut-opt{border:1.5px solid rgba(107,79,160,0.22);border-radius:8px;padding:14px 16px;cursor:pointer;transition:border-color 0.15s,background 0.15s;display:flex;align-items:flex-start;gap:12px;}
+.ut-opt:hover{border-color:rgba(107,79,160,0.5);background:rgba(107,79,160,0.03);}
+.ut-opt.sel{border-color:#6B4FA0;background:rgba(107,79,160,0.06);box-shadow:0 0 0 3px rgba(107,79,160,0.1);}
+.ut-oi{width:30px;height:30px;border-radius:7px;background:rgba(107,79,160,0.08);display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.ut-oi svg{width:15px;height:15px;stroke:#6B4FA0;fill:none;stroke-width:1.5;}
+.ut-ol{font-size:13px;font-weight:600;color:#2D3748;margin-bottom:2px;}
+.ut-os{font-size:11px;color:rgba(0,0,0,0.45);line-height:1.4;}
+.btn-extract{height:34px;padding:0 18px;border-radius:5px;border:none;background:#6B4FA0;color:white;font-size:12px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;box-shadow:2px 2px 8px rgba(107,79,160,0.3);opacity:0;pointer-events:none;transition:opacity 0.2s;}
+.btn-extract.vis{opacity:1;pointer-events:all;}
+.ut-hint{font-size:11px;color:rgba(0,0,0,0.35);}
+
+/* ── SCRIPT REVIEW ── */
+.rv-tile{width:min(700px,92vw);max-height:86vh;display:flex;flex-direction:column;}
+.rv-hd-r{display:flex;align-items:center;gap:8px;flex-shrink:0;}
+.hw-tog{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:500;color:rgba(0,0,0,0.5);cursor:pointer;padding:6px 10px;border:1px solid rgba(0,0,0,0.1);border-radius:6px;transition:all 0.14s;white-space:nowrap;}
+.hw-tog:hover{background:rgba(0,0,0,0.03);}
+.hw-tog.active{border-color:rgba(107,79,160,0.45);color:#6B4FA0;background:rgba(107,79,160,0.05);}
+.hw-tog svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:1.5;}
+.btn-ra{height:32px;padding:0 14px;border-radius:5px;border:none;background:#6B4FA0;color:white;font-size:11px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;box-shadow:2px 2px 6px rgba(107,79,160,0.3);}
+.rv-body{flex:1;display:flex;overflow:hidden;}
+.rv-list{flex:1;overflow-y:auto;padding:10px 14px;border-right:1px solid rgba(0,0,0,0.06);min-width:0;}
+.rv-list::-webkit-scrollbar{width:4px;}
+.rv-list::-webkit-scrollbar-thumb{background:rgba(107,79,160,0.18);border-radius:2px;}
+.rv-item{display:flex;align-items:center;gap:8px;padding:8px 10px;margin-bottom:5px;border:1.5px solid rgba(107,79,160,0.18);border-radius:7px;background:white;transition:border-color 0.13s;}
+.rv-item:hover{border-color:rgba(107,79,160,0.35);}
+.rv-num{font-family:'DM Mono',monospace;font-size:10px;color:rgba(0,0,0,0.28);width:16px;flex-shrink:0;}
+.rv-nm{flex:1;font-size:12px;font-weight:500;color:#2D3748;}
+.rv-pg{font-family:'DM Mono',monospace;font-size:10px;color:rgba(107,79,160,0.65);background:rgba(107,79,160,0.07);padding:2px 7px;border-radius:4px;white-space:nowrap;flex-shrink:0;}
+.rv-del{font-size:10px;color:rgba(0,0,0,0.28);cursor:pointer;padding:3px 6px;border-radius:4px;transition:all 0.12s;}
+.rv-del:hover{background:rgba(220,50,50,0.08);color:rgba(200,40,40,0.7);}
+.rv-thumbs{width:196px;flex-shrink:0;overflow-y:auto;padding:10px 8px;display:grid;grid-template-columns:1fr 1fr;gap:6px;align-content:start;}
+.s-thumb{background:white;border:1.5px solid rgba(107,79,160,0.22);border-radius:5px;padding:5px;cursor:pointer;transition:border-color 0.13s;}
+.s-thumb:hover{border-color:#6B4FA0;}
+.st-nm{font-size:5px;font-weight:600;color:rgba(107,79,160,0.7);text-align:center;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.st-pg{background:white;border:1px solid rgba(0,0,0,0.09);border-radius:2px;padding:4px 3px;margin-bottom:3px;}
+.st-aqa{font-size:4px;font-weight:900;color:#1a1a1a;margin-bottom:1.5px;}
+.st-hb{height:4px;border:0.5px solid rgba(0,0,0,0.18);border-radius:1px;margin-bottom:2px;}
+.st-ln{height:1px;border-radius:0.5px;margin-bottom:1.5px;}
+.st-ln.t{background:rgba(0,0,0,0.12);}
+.st-ln.h{background:rgba(20,20,20,0.32);}
+.st-pc{font-size:4.5px;color:rgba(107,79,160,0.55);text-align:center;margin-top:3px;font-family:'DM Mono',monospace;}
+.rv-ft{padding:12px 20px;border-top:1px solid rgba(0,0,0,0.07);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+.rv-ct{font-size:11px;color:rgba(0,0,0,0.35);}
+.rv-ct span{color:#6B4FA0;font-weight:600;}
+.btn-start{height:36px;padding:0 22px;border-radius:5px;border:none;background:#6B4FA0;color:white;font-size:13px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;box-shadow:3px 3px 0 rgba(40,15,90,0.35),2px 2px 8px rgba(107,79,160,0.3);transition:background 0.13s,transform 0.13s;}
+.btn-start:hover{background:#5A3D8A;transform:translateY(-1px);}
+
+/* ── SUBMITTED ── */
+.sub-tile{background:white;border:1px solid rgba(107,79,160,0.2);border-radius:10px;box-shadow:0 20px 60px rgba(0,0,0,0.22),0 6px 20px rgba(0,0,0,0.13);padding:52px 60px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:18px;max-width:420px;}
+.plane-ic{width:52px;height:52px;border-radius:50%;background:rgba(107,79,160,0.08);border:2px solid rgba(107,79,160,0.25);display:flex;align-items:center;justify-content:center;}
+.plane-ic svg{width:24px;height:24px;stroke:#6B4FA0;fill:none;stroke-width:1.8;}
+.sub-ttl{font-size:20px;font-weight:600;color:#2D3748;line-height:1.25;}
+.sub-nt{display:flex;flex-direction:column;gap:5px;}
+.note-ln{font-size:13px;color:rgba(0,0,0,0.5);line-height:1.5;}
+.note-ln.hi{font-weight:600;color:#6B4FA0;font-size:14px;}
+.sub-bw{width:140px;height:2px;background:rgba(107,79,160,0.12);border-radius:2px;overflow:hidden;}
+.sub-b{height:100%;width:0%;background:#6B4FA0;border-radius:2px;transition:width 4s linear;}
+
+/* ── MARKING DASHBOARD ── */
+.mk-tile{width:min(700px,92vw);height:min(560px,86vh);display:flex;flex-direction:column;}
+.mini-ldr{width:22px;height:22px;position:relative;flex-shrink:0;}
+.ml-ring{width:22px;height:22px;border-radius:50%;border:1.5px solid rgba(107,79,160,0.15);position:absolute;inset:0;}
+.ml-arc{width:22px;height:22px;border-radius:50%;border:2px solid transparent;border-top-color:#6B4FA0;border-right-color:rgba(107,79,160,0.35);position:absolute;inset:0;animation:spin 1.1s linear infinite;}
+.ml-dot{width:5px;height:5px;border-radius:50%;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:#6B4FA0;animation:dpulse 2s ease-in-out infinite;}
+.mk-sl{font-size:11px;font-weight:500;color:#6B4FA0;margin-left:8px;animation:lp 2s ease-in-out infinite;}
+@keyframes lp{0%,100%{opacity:1}50%{opacity:0.6}}
+.mk-body{flex:1;display:flex;overflow:hidden;}
+.mk-queue{width:230px;flex-shrink:0;border-right:1px solid rgba(0,0,0,0.06);overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:5px;}
+.mk-queue::-webkit-scrollbar{width:3px;}
+.mk-queue::-webkit-scrollbar-thumb{background:rgba(107,79,160,0.15);border-radius:2px;}
+.qi-item{border:1.5px solid rgba(107,79,160,0.15);border-radius:8px;padding:8px 10px;background:white;transition:all 0.3s;}
+.qi-item.active{border-color:rgba(107,79,160,0.5);background:rgba(107,79,160,0.04);}
+.qi-item.done{border-color:rgba(107,79,160,0.18);opacity:0.65;}
+.qi-item.waiting{opacity:0.38;}
+.qi-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;}
+.qi-nm{font-size:11.5px;font-weight:600;color:#2D3748;}
+.qi-sc{font-size:11px;font-weight:600;color:#6B4FA0;}
+.qi-st{font-size:10px;font-weight:500;display:flex;align-items:center;gap:4px;margin-bottom:5px;}
+.qi-st.marking{color:#6B4FA0;}
+.qi-st.done2{color:rgba(0,0,0,0.32);}
+.qi-st.waiting2{color:rgba(0,0,0,0.22);}
+.qi-sd{width:5px;height:5px;border-radius:50%;}
+.qi-st.marking .qi-sd{background:#6B4FA0;animation:dpulse 2s ease-in-out infinite;}
+.qi-st.done2 .qi-sd{background:rgba(107,79,160,0.35);}
+.qi-st.waiting2 .qi-sd{background:rgba(0,0,0,0.18);}
+.qi-bw{height:2.5px;background:rgba(107,79,160,0.1);border-radius:2px;overflow:hidden;}
+.qi-b{height:100%;border-radius:2px;background:linear-gradient(90deg,#6B4FA0,#9B79D4);transition:width 0.5s ease;}
+.mk-right{flex:1;display:flex;flex-direction:column;padding:10px 12px;gap:8px;overflow:hidden;}
+.mk-metrics{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;flex-shrink:0;}
+.met-card{background:#f7f7f7;border:1px solid rgba(107,79,160,0.15);border-radius:8px;padding:9px 12px;}
+.met-lbl{font-size:9px;font-weight:600;color:rgba(0,0,0,0.3);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:4px;}
+.met-val{font-size:20px;font-weight:300;color:#6B4FA0;line-height:1;letter-spacing:-0.02em;}
+.met-dn{font-size:12px;color:rgba(0,0,0,0.28);font-weight:400;}
+.met-sub{font-size:9px;color:rgba(0,0,0,0.25);margin-top:3px;}
+.intel-win{flex:1;border-radius:8px;overflow:hidden;background:#1A1628;border:1px solid rgba(107,79,160,0.28);display:flex;flex-direction:column;min-height:0;}
+.intel-hd{padding:7px 12px;border-bottom:1px solid rgba(107,79,160,0.18);display:flex;align-items:center;gap:7px;flex-shrink:0;background:rgba(107,79,160,0.06);}
+.intel-lbl{font-size:9px;font-weight:600;color:rgba(107,79,160,0.65);text-transform:uppercase;letter-spacing:0.14em;}
+.intel-fw{flex:1;overflow:hidden;position:relative;min-height:0;}
+.intel-fw::before{content:'';position:absolute;left:0;right:0;top:0;height:33%;background:linear-gradient(to top,transparent 0%,#1A1628 100%);pointer-events:none;z-index:2;}
+.intel-feed{padding:10px 14px 8px;overflow-y:auto;height:100%;display:flex;flex-direction:column;gap:1px;}
+.intel-feed::-webkit-scrollbar{width:0;}
+.fl{font-size:11px;line-height:1.65;min-height:18px;white-space:pre-wrap;word-break:break-word;}
+.fc-dim{color:rgba(255,255,255,0.22);}
+.fc-mid{color:rgba(255,255,255,0.52);}
+.fc-head{color:#9B79D4;font-weight:600;font-size:10px;letter-spacing:0.05em;}
+.fc-green{color:#7DD4A8;}
+.fc-amber{color:#F0C87D;}
+.fc-blue{color:#7DB8D4;}
+.fc-purple{color:#C4A8F0;font-weight:500;}
+.mk-ft{padding:9px 20px;border-top:1px solid rgba(0,0,0,0.06);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+.mk-ft-note{font-size:10px;color:rgba(0,0,0,0.35);}
+
+/* ── MARKING COMPLETE ── */
+.mc-tile{background:white;border:1px solid rgba(107,79,160,0.2);border-radius:10px;box-shadow:0 20px 60px rgba(0,0,0,0.22),0 6px 20px rgba(0,0,0,0.13);padding:52px 60px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:18px;max-width:380px;}
+.mc-tick{width:64px;height:64px;border-radius:50%;background:rgba(107,79,160,0.08);border:2px solid rgba(107,79,160,0.3);display:flex;align-items:center;justify-content:center;animation:popIn 0.4s cubic-bezier(0.22,1,0.36,1) forwards;}
+@keyframes popIn{0%{transform:scale(0.5);opacity:0}100%{transform:scale(1);opacity:1}}
+.mc-tick svg{width:32px;height:32px;stroke:#6B4FA0;fill:none;stroke-width:2.5;}
+.mc-ttl{font-size:22px;font-weight:600;color:#2D3748;letter-spacing:-0.01em;}
+.mc-sub{font-size:13px;color:rgba(0,0,0,0.45);line-height:1.5;}
+.mc-stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;width:100%;}
+.mc-stat{text-align:center;}
+.mc-sv{font-size:24px;font-weight:300;color:#6B4FA0;letter-spacing:-0.02em;line-height:1;}
+.mc-sl{font-size:10px;color:rgba(0,0,0,0.35);margin-top:3px;font-weight:500;}
+
+/* ── RESULTS ── */
+.rl-tile{width:min(680px,92vw);max-height:86vh;display:flex;flex-direction:column;}
+.rl-hd-r{display:flex;align-items:center;gap:8px;flex-shrink:0;}
+.rl-exp{display:flex;align-items:center;gap:5px;font-size:11px;color:rgba(0,0,0,0.5);cursor:pointer;padding:5px 10px;border:1px solid rgba(0,0,0,0.1);border-radius:6px;transition:background 0.13s;white-space:nowrap;}
+.rl-exp:hover{background:rgba(0,0,0,0.04);}
+.rl-exp svg{width:11px;height:11px;stroke:currentColor;fill:none;stroke-width:1.5;}
+.rl-th{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;padding:7px 20px;flex-shrink:0;border-bottom:1px solid rgba(0,0,0,0.07);}
+.th{font-size:10px;font-weight:600;color:rgba(0,0,0,0.28);text-transform:uppercase;letter-spacing:0.08em;}
+.th.c{text-align:center;}
+.th.r{text-align:right;}
+.rl-body{flex:1;overflow-y:auto;}
+.rl-body::-webkit-scrollbar{width:4px;}
+.rl-body::-webkit-scrollbar-thumb{background:rgba(107,79,160,0.15);border-radius:2px;}
+.rl-row{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;padding:8px 20px 6px;border-bottom:1px solid rgba(0,0,0,0.05);align-items:center;transition:background 0.12s;cursor:pointer;}
+.rl-row:hover{background:rgba(107,79,160,0.03);}
+.rl-nc{display:flex;flex-direction:column;gap:4px;padding-right:12px;}
+.rl-nm{font-size:12px;font-weight:500;color:#2D3748;}
+.pb-wrap{height:2.5px;background:rgba(0,0,0,0.07);border-radius:2px;overflow:hidden;}
+.pb{height:100%;border-radius:2px;}
+.pb.high{background:#5BAB82;}.pb.mid-high{background:#8BBF6A;}.pb.mid{background:#C4B84A;}.pb.mid-low{background:#C4883A;}.pb.low{background:#C04444;}
+.sc,.gc{display:flex;justify-content:center;}
+.sb,.gb{font-size:10px;font-weight:500;padding:3px 9px;border-radius:4px;white-space:nowrap;}
+.sb.high,.gb.high{background:rgba(91,171,130,0.14);color:#2E7A54;}
+.sb.mid-high,.gb.mid-high{background:rgba(139,191,106,0.14);color:#4A7A1E;}
+.sb.mid,.gb.mid{background:rgba(196,184,74,0.14);color:#7A6E10;}
+.sb.mid-low,.gb.mid-low{background:rgba(196,136,58,0.14);color:#8A5010;}
+.sb.low,.gb.low{background:rgba(192,68,68,0.13);color:#8A1E1E;}
+.ac{display:flex;justify-content:flex-end;align-items:center;gap:6px;}
+.btn-rv{height:24px;padding:0 10px;border-radius:5px;border:none;background:#6B7280;color:white;font-size:11px;font-weight:400;cursor:pointer;font-family:'Inter',sans-serif;transition:background 0.13s;white-space:nowrap;}
+.btn-rv:hover{background:#4B5563;}
+.btn-cfmd{height:24px;padding:0 10px;border-radius:5px;border:1px solid rgba(91,171,130,0.3);background:rgba(91,171,130,0.08);font-size:11px;font-weight:400;color:#3D8A62;cursor:default;font-family:'Inter',sans-serif;white-space:nowrap;}
+.rl-ft{padding:12px 18px;border-top:1px solid rgba(0,0,0,0.07);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+.rl-cc{font-size:11px;color:rgba(0,0,0,0.35);}
+.rl-cc span{color:#6B4FA0;font-weight:600;}
+.btn-br{height:36px;padding:0 22px;border-radius:5px;border:none;background:#6B4FA0;color:white;font-size:13px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;box-shadow:3px 3px 0 rgba(40,15,90,0.35),2px 2px 8px rgba(107,79,160,0.3);transition:background 0.13s,transform 0.13s;}
+.btn-br:hover{background:#5A3D8A;transform:translateY(-1px);}
+
+/* ── VIEWER ── */
+.vw-tile{width:min(780px,96vw);height:min(590px,88vh);display:flex;flex-direction:column;}
+.vw-tb{padding:11px 16px;border-bottom:1px solid rgba(0,0,0,0.07);display:flex;align-items:center;gap:10px;flex-shrink:0;}
+.vw-stu{font-size:13px;font-weight:600;color:#2D3748;}
+.vw-sc,.vw-gr{font-size:11px;font-weight:500;padding:3px 9px;border-radius:4px;}
+.vw-tbr{margin-left:auto;display:flex;align-items:center;gap:8px;}
+.vw-prog{font-size:10px;color:rgba(0,0,0,0.3);white-space:nowrap;}
+.vw-xb{width:26px;height:26px;border-radius:5px;border:1px solid rgba(0,0,0,0.1);background:transparent;display:flex;align-items:center;justify-content:center;cursor:pointer;color:rgba(0,0,0,0.45);font-size:13px;}
+.vw-body{flex:1;display:flex;overflow:hidden;}
+.vw-pages{width:100px;flex-shrink:0;border-right:1px solid rgba(0,0,0,0.07);overflow-y:auto;padding:8px 6px;display:flex;flex-direction:column;gap:5px;background:#f7f7f7;}
+.pm{background:white;border:1.5px solid rgba(0,0,0,0.1);border-radius:4px;padding:5px 4px;cursor:pointer;transition:border-color 0.13s;}
+.pm:hover,.pm.active{border-color:#6B4FA0;}
+.pm-lbl{font-size:6px;color:rgba(0,0,0,0.3);margin-bottom:2px;font-family:'DM Mono',monospace;}
+.pm-ln{height:1.5px;border-radius:0.5px;margin-bottom:2px;background:rgba(0,0,0,0.11);}
+.pm-ln.hw{background:rgba(0,0,0,0.32);height:2px;}
+.vw-main{flex:1;overflow-y:auto;padding:0 20px 20px;}
+.vw-main::-webkit-scrollbar{width:4px;}
+.ftb{position:sticky;top:0;z-index:30;display:flex;align-items:center;gap:3px;background:rgba(55,65,81,0.75);backdrop-filter:blur(10px);border-radius:10px;padding:5px 8px;box-shadow:0 4px 20px rgba(0,0,0,0.15);margin:12px auto 16px;width:fit-content;border:1px solid rgba(255,255,255,0.1);}
+.ftb-sep{width:1px;height:16px;background:rgba(255,255,255,0.12);margin:0 3px;}
+.ftb-btn{width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:rgba(255,255,255,0.6);font-size:11px;font-weight:600;transition:background 0.13s;}
+.ftb-btn:hover{background:rgba(255,255,255,0.12);color:rgba(255,255,255,0.95);}
+.ftb-btn.on{background:rgba(107,79,160,0.6);color:white;}
+.ftb-btn svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:1.5;}
+.ftb-hint{font-size:9px;color:rgba(255,255,255,0.3);padding:0 5px;white-space:nowrap;}
+.pc{display:flex;flex-direction:column;gap:16px;}
+.ai-sum{background:rgba(107,79,160,0.04);border:1px solid rgba(107,79,160,0.14);border-radius:8px;padding:12px 16px;}
+.ai-lbl{font-size:9px;font-weight:600;color:rgba(107,79,160,0.55);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:6px;}
+.ai-txt{font-size:12px;color:rgba(0,0,0,0.55);line-height:1.65;}
+.s-div{font-size:10px;font-weight:700;color:rgba(0,0,0,0.28);text-transform:uppercase;letter-spacing:0.12em;border-bottom:1px solid rgba(0,0,0,0.07);padding-bottom:5px;}
+.qb{display:flex;flex-direction:column;gap:7px;}
+.qh{display:flex;align-items:flex-start;gap:8px;}
+.ql2{font-size:10px;font-weight:600;color:rgba(0,0,0,0.35);flex-shrink:0;padding-top:1px;}
+.qt2{font-size:12px;font-weight:500;color:#2D3748;flex:1;line-height:1.4;}
+.qsp{font-size:11px;font-weight:700;padding:3px 11px;border-radius:20px;flex-shrink:0;}
+.qsp.full{background:#5BAB82;color:white;}
+.qsp.part{background:#C4883A;color:white;}
+.qresp{background:rgba(0,0,0,0.02);border-left:3px solid rgba(107,79,160,0.18);border-radius:0 5px 5px 0;padding:8px 12px;font-size:11.5px;color:rgba(0,0,0,0.55);line-height:1.65;font-style:italic;}
+.qtags{display:flex;gap:6px;flex-wrap:wrap;}
+.tag{font-size:10px;font-weight:500;padding:2px 7px;border-radius:4px;}
+.tag.ao1{background:rgba(74,144,196,0.1);color:#2E6FA0;}
+.tag.ao2{background:rgba(107,79,160,0.09);color:#6B4FA0;}
+.tag.ao3{background:rgba(91,171,130,0.1);color:#3D7A5C;}
+.tag.tick{background:rgba(91,171,130,0.1);color:#3D7A5C;}
+.tag.warn{background:rgba(196,136,58,0.1);color:#7A4A10;}
+.qnote{font-size:11px;color:rgba(0,0,0,0.4);line-height:1.6;font-style:italic;}
+.vw-ft{padding:11px 16px;border-top:1px solid rgba(0,0,0,0.07);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+.vw-nav{display:flex;gap:6px;}
+.btn-nav{height:32px;padding:0 14px;border-radius:5px;border:1px solid rgba(0,0,0,0.1);background:transparent;font-size:11px;color:rgba(0,0,0,0.5);cursor:pointer;font-family:'Inter',sans-serif;transition:background 0.13s;}
+.btn-nav:hover{background:rgba(0,0,0,0.04);}
+.btn-cm{height:36px;padding:0 24px;border-radius:6px;border:none;background:#6B4FA0;color:white;font-size:13px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;box-shadow:3px 3px 0 rgba(40,15,90,0.35),2px 2px 10px rgba(107,79,160,0.3);transition:background 0.13s,transform 0.13s;}
+.btn-cm:hover{background:#5A3D8A;transform:translateY(-1px);}
+
+/* ── ALL CONFIRMED ── */
+.conf-tile{background:white;border:1px solid rgba(107,79,160,0.2);border-radius:10px;box-shadow:0 20px 60px rgba(0,0,0,0.22),0 6px 20px rgba(0,0,0,0.13);width:340px;display:flex;flex-direction:column;align-items:center;padding:32px 28px 24px;text-align:center;}
+.big-tick{width:64px;height:64px;border-radius:50%;background:rgba(107,79,160,0.08);border:2px solid rgba(107,79,160,0.3);display:flex;align-items:center;justify-content:center;margin-bottom:16px;animation:popIn 0.4s cubic-bezier(0.22,1,0.36,1) forwards;}
+.big-tick svg{width:32px;height:32px;stroke:#6B4FA0;fill:none;stroke-width:2.5;}
+.dl-opts{width:100%;display:flex;flex-direction:column;gap:7px;margin:12px 0 16px;}
+.dl-opt{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border:1.5px solid rgba(107,79,160,0.18);border-radius:8px;cursor:pointer;transition:border-color 0.14s,background 0.14s;width:100%;}
+.dl-opt:hover{border-color:rgba(107,79,160,0.45);background:rgba(107,79,160,0.03);}
+.dl-ol{display:flex;align-items:center;gap:10px;}
+.dl-oi{width:26px;height:26px;border-radius:6px;background:rgba(107,79,160,0.08);display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.dl-oi svg{width:13px;height:13px;stroke:#6B4FA0;fill:none;stroke-width:1.5;}
+.dl-ln{font-size:13px;font-weight:500;color:#2D3748;}
+.dl-ls{font-size:10px;color:rgba(0,0,0,0.35);margin-top:1px;}
+.dl-arr{color:rgba(107,79,160,0.4);font-size:14px;}
+.btn-dn-sm{height:30px;padding:0 16px;border-radius:5px;border:1px solid rgba(0,0,0,0.1);background:transparent;font-size:11px;color:rgba(0,0,0,0.4);cursor:pointer;font-family:'Inter',sans-serif;}
+
+/* ── DOWNLOAD ── */
+.dlfmt-tile{background:white;border:1px solid rgba(107,79,160,0.2);border-radius:10px;box-shadow:0 20px 60px rgba(0,0,0,0.22),0 6px 20px rgba(0,0,0,0.13);width:360px;display:flex;flex-direction:column;overflow:hidden;}
+.fmt-ops{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.fmt-op{border:1.5px solid rgba(107,79,160,0.2);border-radius:7px;padding:9px 12px;cursor:pointer;transition:all 0.13s;text-align:center;}
+.fmt-op:hover{border-color:rgba(107,79,160,0.45);background:rgba(107,79,160,0.03);}
+.fmt-op.sel{border-color:#6B4FA0;background:rgba(107,79,160,0.06);}
+.fmt-nm{font-size:12px;font-weight:500;color:#2D3748;margin-bottom:1px;}
+.fmt-ds{font-size:10px;color:rgba(0,0,0,0.35);}
+.cb-row{display:flex;align-items:center;gap:10px;padding:9px 13px;border:1.5px solid rgba(107,79,160,0.18);border-radius:7px;cursor:pointer;}
+.cb-bx{width:15px;height:15px;border-radius:3px;flex-shrink:0;background:#6B4FA0;border:2px solid #6B4FA0;display:flex;align-items:center;justify-content:center;transition:all 0.13s;}
+.cb-bx.unc{background:transparent;border-color:rgba(0,0,0,0.2);}
+.cb-bx svg{width:8px;height:8px;stroke:white;fill:none;stroke-width:2.5;}
+.cb-lbl{font-size:12px;font-weight:500;color:#2D3748;}
+.cb-ds{font-size:10px;color:rgba(0,0,0,0.35);margin-top:1px;}
+.btn-dl{height:34px;padding:0 18px;border-radius:5px;border:none;background:#6B4FA0;color:white;font-size:12px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;box-shadow:2px 2px 8px rgba(107,79,160,0.3);display:flex;align-items:center;gap:6px;transition:background 0.13s;}
+.btn-dl:hover{background:#5A3D8A;}
+.btn-dl svg{width:13px;height:13px;stroke:white;fill:none;stroke-width:2;}
+</style>
+</head>
+<body>
+<div id="bg"></div>
+<div id="dim"></div>
+
+<!-- ═══════════════════════════════════════ S1: DASHBOARD ═══ -->
+<div class="screen full active" id="s-dashboard" data-screen-label="01 Dashboard">
+  <div class="db-root">
+    <div class="blur-ov" id="db-blur" onclick="closeSB()"></div>
+    <div class="sidebar" id="db-sb">
+      <div class="sb-hd">
+        <div class="sb-wm">Deep<span>Mark</span></div>
+        <div class="x-btn" onclick="closeSB()">✕</div>
+      </div>
+      <div class="sb-nav">
+        <div class="sb-sect">Workspace</div>
+        <div class="sb-item active"><svg class="sb-icon" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>Dashboard</div>
+        <div class="sb-item"><svg class="sb-icon" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>All papers</div>
+        <div class="sb-item"><svg class="sb-icon" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>Results</div>
+        <div class="sb-item"><svg class="sb-icon" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>Reports</div>
+        <div class="sb-sect">Tools</div>
+        <div class="sb-item"><svg class="sb-icon" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>DeepMark AI</div>
+        <div class="sb-item"><svg class="sb-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>Settings</div>
+      </div>
+      <div class="sb-ft"><div class="sb-av">SH</div><div><div style="font-size:11px;font-weight:500;color:#2D3748;">Sarah Hughes</div><div style="font-size:10px;color:rgba(0,0,0,0.32);margin-top:1px;">Head of Science</div></div></div>
+    </div>
+    <div class="hb-wrap" onclick="openSB()"><span class="hb"></span><span class="hb"></span><span class="hb"></span></div>
+    <!-- centered inner container -->
+    <div class="db-inner" style="opacity: 10; border-style: solid; border-radius: 15px; border-color: rgb(162, 0, 205); border-width: 1px">
+      <div class="greet-zone">
+        <div class="greet-eyebrow">Sunday, 27 April 2025</div>
+        <div class="greet"><span class="greet-text" style="font-family: Georgia; font-size: 35px">Good morning, Sarah.</span></div>
+        <div><div class="stat-row"><span>2</span> papers pending your review</div><div class="stat-row"><span>1</span> set currently being marked</div><div class="stat-row"><span>146</span> papers marked to date</div></div>
+      </div>
+      <div class="quick-zone">
+        <div class="ql">Actions</div>
+        <div class="qbtn pr" onclick="snapTo('s-upload')"><svg class="qi" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Mark new paper</div>
+        <div class="qbtn"><svg class="qi" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>Resume marking</div>
+        <div class="qbtn"><svg class="qi" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>Talk to DeepMark</div>
+      </div>
+      <div class="recent-zone">
+        <div class="rh"><div class="rt">Recent papers</div><div class="rm">View all</div></div>
+        <div class="papers-row">
+          <div class="paper-card"><div class="card-body"><div class="card-subject">Biology A2</div><div class="card-name">Paper 1 — June 2024</div><div class="card-foot"><span class="card-count">28 scripts</span><span class="card-badge marking">Marking…</span></div></div></div>
+          <div class="paper-card"><div class="card-body"><div class="card-subject">Chemistry AS</div><div class="card-name">Periodic Table Unit</div><div class="card-foot"><span class="card-count">31 scripts</span><span class="card-badge review">Review needed</span></div></div></div>
+          <div class="paper-card"><div class="card-body"><div class="card-subject">Chemistry A2</div><div class="card-name">Organic Chemistry Mock</div><div class="card-foot"><span class="card-count">22 scripts</span><span class="card-badge review">Review needed</span></div></div></div>
+          <div class="paper-card"><div class="card-body"><div class="card-subject">Physics A2</div><div class="card-name">Paper 2 — Mock exam</div><div class="card-foot"><span class="card-count">24 scripts</span><span class="card-badge done">Complete</span></div></div></div>
+          <div class="paper-card"><div class="card-body"><div class="card-subject">Biology AS</div><div class="card-name">Cell Biology — Term 2</div><div class="card-foot"><span class="card-count">19 scripts</span><span class="card-badge done">Complete</span></div></div></div>
+          <div class="paper-card"><div class="card-body"><div class="card-subject">Physics AS</div><div class="card-name">Waves &amp; Optics — Dec 2024</div><div class="card-foot"><span class="card-count">26 scripts</span><span class="card-badge done">Complete</span></div></div></div>
+        </div>
+      </div>
+      <div class="footer-zone"><div class="footer-text">© DeepMark Ltd 2026</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════ S2: UPLOAD ═══ -->
+<div class="screen" id="s-upload" data-screen-label="02 Upload">
+  <div class="tile" style="width:460px;">
+    <div class="tile-hd"><div><div class="tile-title">Mark new paper</div><div class="tile-sub">Upload question paper and mark scheme to begin</div></div><span class="tile-badge">Step 1 of 2</span></div>
+    <div class="up-body">
+      <div class="field-label">Class name</div>
+      <input class="field-input" type="text" placeholder="e.g. Biology A2 — June 2025" id="classInput"/>
+      <div class="upload-row">
+        <div><div class="field-label">Question paper</div>
+          <div class="upload-zone"><svg class="up-icon" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg><div class="up-label">Upload PDF</div><div class="up-sub">Drag &amp; drop or click</div></div>
+        </div>
+        <div><div class="field-label">Mark scheme</div>
+          <div class="upload-zone"><svg class="up-icon" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg><div class="up-label">Upload PDF</div><div class="up-sub">Drag &amp; drop or click</div></div>
+        </div>
+      </div>
+      <div class="gb-wrap">
+        <div class="gb-btn" onclick="toggleGB()">
+          <svg style="width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.5;" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+          Set grade boundaries
+        </div>
+        <div class="gb-popover" id="gb-popover">
+          <div class="gb-pop-title">Grade boundaries<span class="gb-pop-close" onclick="toggleGB()">✕</span></div>
+          <div class="gb-row"><span class="gb-grade">9</span><input class="gb-input" value="90"/><span class="gb-unit">%</span></div>
+          <div class="gb-row"><span class="gb-grade">8</span><input class="gb-input" value="80"/><span class="gb-unit">%</span></div>
+          <div class="gb-row"><span class="gb-grade">7</span><input class="gb-input" value="70"/><span class="gb-unit">%</span></div>
+          <div class="gb-row"><span class="gb-grade">6</span><input class="gb-input" value="60"/><span class="gb-unit">%</span></div>
+          <div class="gb-row"><span class="gb-grade">5</span><input class="gb-input" value="50"/><span class="gb-unit">%</span></div>
+          <div class="gb-row"><span class="gb-grade">4</span><input class="gb-input" value="40"/><span class="gb-unit">%</span></div>
+          <div class="gb-row"><span class="gb-grade">3</span><input class="gb-input" value="30"/><span class="gb-unit">%</span></div>
+          <div class="gb-row"><span class="gb-grade">2</span><input class="gb-input" value="20"/><span class="gb-unit">%</span></div>
+          <div class="gb-row"><span class="gb-grade">1</span><input class="gb-input" value="10"/><span class="gb-unit">%</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="tile-ft"><button class="btn-s" onclick="snapTo('s-dashboard')">Cancel</button><button class="btn-p" onclick="goUploadLoad()">Upload &amp; continue →</button></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════ S3: UPLOAD LOADING ═══ -->
+<div class="screen" id="s-upload-loading" data-screen-label="03 Processing">
+  <div class="tile ldr-tile">
+    <div class="ldr-wrap"><div class="ldr-ring"></div><div class="ldr-arc"></div><div class="ldr-dot"></div><div class="ldr-p"></div><div class="ldr-p"></div><div class="ldr-p"></div></div>
+    <div class="ldr-title">Processing your paper</div>
+    <div class="ldr-status" id="ul-status">Extracting document structure…</div>
+    <div class="ldr-bar-wrap"><div class="ldr-bar" id="ul-bar"></div></div>
+    <div class="ldr-est">Estimated time: <span id="ul-est">~45 seconds</span></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════ S4: EXTRACTION CONFIRM ═══ -->
+<div class="screen" id="s-extraction-confirm" data-screen-label="04 Extraction Confirmed">
+  <div class="tile" style="width:500px;">
+    <div class="tile-hd"><div><div class="tile-title">Biology A2 — June 2025</div><div class="tile-sub">Both documents successfully extracted</div></div></div>
+    <div class="ct-body">
+      <div class="ct-card"><div class="ct-ch"><div class="ct-chk"><svg viewBox="0 0 12 12"><polyline points="2,6 5,9 10,3"/></svg></div><div class="ct-cn">Question Paper</div></div><div class="ct-cd">15 questions extracted across 2 sections. 43 total marks.</div><div class="ct-cf"><div class="ct-acq">Acquired</div><div class="ct-view" onclick="snapTo('s-paper-preview')"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>View</div></div></div>
+      <div class="ct-card"><div class="ct-ch"><div class="ct-chk"><svg viewBox="0 0 12 12"><polyline points="2,6 5,9 10,3"/></svg></div><div class="ct-cn">Mark Scheme</div></div><div class="ct-cd">Mark scheme criteria mapped to all 15 questions successfully.</div><div class="ct-cf"><div class="ct-acq">Acquired</div><div class="ct-view"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>View</div></div></div>
+    </div>
+    <div class="tile-ft"><div class="ct-note">Automatically previewing question paper…</div><button class="btn-p" onclick="snapTo('s-paper-preview')">Preview paper →</button></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════ S5: PAPER PREVIEW ═══ -->
+<div class="screen" id="s-paper-preview" data-screen-label="05 Paper Preview">
+  <div class="tile pv-tile">
+    <div class="pv-hd"><div><div class="tile-title">Biology A2 — June 2025</div><div style="font-size:11px;color:rgba(0,0,0,0.35);margin-top:1px;">15 questions · 43 marks · 50 minutes</div></div>
+      <div class="pv-tabs"><div class="pv-tab active" id="tab-qp" onclick="pvTab('qp')">Question Paper</div><div class="pv-tab" id="tab-ms" onclick="pvTab('ms')">Mark Scheme</div></div>
+    </div>
+    <div class="pv-body" id="pv-body">
+      <div id="pv-qp" class="paper-doc">
+        <div class="p-board">AQA</div><div class="p-title">Biology A2 — June 2025</div><div class="p-sub">Biology · 2025</div>
+        <div class="p-meta"><span>⏱ 50 minutes</span><span>Total marks: 43</span><span>15 questions</span></div>
+        <div class="sec-label">Section A</div>
+        <div class="question"><div class="q-row"><div class="q-num">01.1</div><div class="q-text">Which of the following is a function of the cell membrane?</div><div class="q-marks">[1 mark]</div></div></div>
+        <div class="question"><div class="q-row"><div class="q-num">01.2</div><div class="q-text">Which of the following describes osmosis?</div><div class="q-marks">[1 mark]</div></div></div>
+        <div class="question"><div class="q-row"><div class="q-num">2</div><div class="q-text">Explain the difference between diffusion and active transport.</div><div class="q-marks">[2 marks]</div></div><div class="q-ans-box"></div></div>
+        <div class="question"><div class="q-row"><div class="q-num">3</div><div class="q-text">Describe the structure of DNA.</div><div class="q-marks">[4 marks]</div></div><div class="q-ans-box" style="height:72px;"></div></div>
+        <div class="question"><div class="q-row"><div class="q-num">4</div><div class="q-text">What is meant by the term enzyme specificity?</div><div class="q-marks">[2 marks]</div></div><div class="q-ans-box"></div></div>
+        <div class="sec-label" style="margin-top:8px;">Section B</div>
+        <div class="question"><div class="q-row"><div class="q-num">5</div><div class="q-text">Analyse two reasons why cell specialisation is important in multicellular organisms.</div><div class="q-marks">[6 marks]</div></div><div class="q-ans-box" style="height:90px;"></div></div>
+        <div class="question"><div class="q-row"><div class="q-num">6</div><div class="q-text">Evaluate the impact of genetic engineering on modern medicine. In your answer consider both benefits and ethical implications.</div><div class="q-marks">[12 marks]</div></div><div class="q-ans-box" style="height:110px;"></div></div>
+      </div>
+      <div id="pv-ms" class="paper-doc" style="display:none;">
+        <div class="p-board">AQA — Mark Scheme</div><div class="p-title" style="margin-bottom:4px;">Biology A2 — June 2025</div><div class="p-sub">For examiner use only</div>
+        <div style="height:12px;"></div>
+        <div style="display:flex;flex-direction:column;gap:12px;">
+          <div style="padding-bottom:12px;border-bottom:1px solid rgba(107,79,160,0.12);"><div style="font-size:11px;font-weight:700;color:#6B4FA0;margin-bottom:3px;">Q01.1</div><div style="font-size:13px;color:#1a1a1a;margin-bottom:3px;">B — Controlling what enters and exits the cell</div><div style="font-size:11px;color:rgba(0,0,0,0.45);">Accept any reference to selective permeability or transport regulation.</div><div style="font-size:10px;font-weight:600;color:#6B4FA0;background:rgba(107,79,160,0.08);padding:2px 7px;border-radius:3px;width:fit-content;margin-top:4px;">1 mark</div></div>
+          <div style="padding-bottom:12px;border-bottom:1px solid rgba(107,79,160,0.12);"><div style="font-size:11px;font-weight:700;color:#6B4FA0;margin-bottom:3px;">Q2</div><div style="font-size:13px;color:#1a1a1a;margin-bottom:3px;">Diffusion is passive (no energy); active transport requires ATP. Diffusion moves down concentration gradient; active transport moves against it.</div><div style="font-size:11px;color:rgba(0,0,0,0.45);">Award 1 mark per valid contrasting point. Max 2 marks.</div><div style="font-size:10px;font-weight:600;color:#6B4FA0;background:rgba(107,79,160,0.08);padding:2px 7px;border-radius:3px;width:fit-content;margin-top:4px;">2 marks</div></div>
+          <div style="padding-bottom:12px;border-bottom:1px solid rgba(107,79,160,0.12);"><div style="font-size:11px;font-weight:700;color:#6B4FA0;margin-bottom:3px;">Q3</div><div style="font-size:13px;color:#1a1a1a;margin-bottom:3px;">Double helix; two polynucleotide strands; hydrogen bonds between complementary base pairs (A-T, C-G); sugar-phosphate backbone; antiparallel strands.</div><div style="font-size:10px;font-weight:600;color:#6B4FA0;background:rgba(107,79,160,0.08);padding:2px 7px;border-radius:3px;width:fit-content;margin-top:4px;">4 marks</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="pv-ft"><div class="pv-info">Scroll to review all questions before confirming</div><button class="btn-p lg" onclick="snapTo('s-upload-scripts')">Confirm →</button></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════ S6: UPLOAD SCRIPTS ═══ -->
+<div class="screen" id="s-upload-scripts" data-screen-label="06 Upload Scripts">
+  <div class="tile" style="width:420px;">
+    <div class="tile-hd"><div><div class="tile-title">Upload student papers</div><div class="tile-sub">Biology A2 — June 2025</div></div></div>
+    <div class="ut-body">
+      <div class="ut-opt" id="ut1" onclick="selUt(1)"><div class="ut-oi"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg></div><div><div class="ut-ol">Upload all scripts as one PDF</div><div class="ut-os">Combine all student papers into a single file. DeepMark will separate them automatically.</div></div></div>
+      <div class="ut-opt" id="ut2" onclick="selUt(2)"><div class="ut-oi"><svg viewBox="0 0 24 24"><rect x="2" y="3" width="8" height="10" rx="1"/><rect x="14" y="3" width="8" height="10" rx="1"/><rect x="2" y="17" width="8" height="4" rx="1"/><rect x="14" y="17" width="8" height="4" rx="1"/></svg></div><div><div class="ut-ol">Upload scripts one by one</div><div class="ut-os">Upload each student's paper individually as a separate PDF file.</div></div></div>
+      <div class="ut-opt" id="ut3" onclick="selUt(3)"><div class="ut-oi"><svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></div><div><div class="ut-ol">Upload photos of scripts</div><div class="ut-os">Take photos of handwritten papers. DeepMark processes and extracts responses automatically.</div></div></div>
+    </div>
+    <div class="tile-ft"><div class="ut-hint" id="ut-hint">Select an upload method to continue</div><button class="btn-extract" id="btn-extract" onclick="goExtractLoad()">Extract student papers</button></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════ S7: EXTRACT LOADING ═══ -->
+<div class="screen" id="s-extract-loading" data-screen-label="07 Extracting">
+  <div class="tile ldr-tile">
+    <div class="ldr-wrap"><div class="ldr-ring"></div><div class="ldr-arc"></div><div class="ldr-dot"></div><div class="ldr-p"></div><div class="ldr-p"></div><div class="ldr-p"></div></div>
+    <div class="ldr-title">Extracting student papers</div>
+    <div class="ldr-status" id="ex-status">Reading uploaded file…</div>
+    <div class="ldr-bar-wrap"><div class="ldr-bar" id="ex-bar"></div></div>
+    <div class="ldr-est">Estimated time: <span id="ex-est">~30 seconds</span></div>
+    <div class="ldr-note">We'll notify you when extraction is complete.<br>You can close this window and come back later.</div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════ S8: SCRIPT REVIEW ═══ -->
+<div class="screen" id="s-script-review" data-screen-label="08 Script Review">
+  <div class="tile rv-tile">
+    <div class="tile-hd">
+      <div><div class="tile-title">Review scripts</div><div class="tile-sub">Confirm which scripts to include, then start marking</div></div>
+      <div class="rv-hd-r">
+        <button class="btn-ra" style="background:white;color:#6B4FA0;border:1px solid rgba(107,79,160,0.3);box-shadow:none;" onclick="includeAll()">Include all</button>
+        <button class="btn-ra" onclick="reviewAll()">Review all</button>
+      </div>
+    </div>
+    <div class="rv-body"><div class="rv-list" id="rv-list"></div><div class="rv-thumbs" id="rv-thumbs"></div></div>
+    <div class="rv-ft"><div class="rv-ct"><span id="rv-include-count">24</span> of 24 scripts included</div><button class="btn-start" onclick="goSubmitted()">Start marking 24 scripts →</button></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════ S9: SUBMITTED ═══ -->
+<div class="screen" id="s-submitted" data-screen-label="09 Submitted">
+  <div class="sub-tile">
+    <div class="plane-ic"><svg viewBox="0 0 24 24"><path d="M22 2L11 13"/><path d="M22 2L15 22 11 13 2 9l20-7z"/></svg></div>
+    <div class="sub-ttl">All scripts submitted for marking.</div>
+    <div class="sub-nt"><span class="note-ln">You can close this window at any time.</span><span class="note-ln hi">DeepMark will email you when it's done.</span></div>
+    <div class="sub-bw"><div class="sub-b" id="sub-b"></div></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════ S10: MARKING DASHBOARD ═══ -->
+<div class="screen" id="s-marking-dash" data-screen-label="10 Marking Engine">
+  <div class="tile mk-tile">
+    <div class="tile-hd">
+      <div><div class="tile-title">Marking Engine</div><div class="tile-sub">Biology A2 — June 2025 · 24 scripts queued</div></div>
+      <div style="display:flex;align-items:center;">
+        <div class="mini-ldr"><div class="ml-ring"></div><div class="ml-arc"></div><div class="ml-dot"></div></div>
+        <div class="mk-sl">DeepMark is marking</div>
+      </div>
+    </div>
+    <div class="mk-body">
+      <div class="mk-queue" id="mk-queue"></div>
+      <div class="mk-right">
+        <div class="mk-metrics">
+          <div class="met-card"><div class="met-lbl">Est. remaining</div><div class="met-val" id="mk-time">18m 32s</div><div class="met-sub">at current pace</div></div>
+          <div class="met-card"><div class="met-lbl">Decisions made</div><div class="met-val" id="mk-dec">0</div><div class="met-sub">marking decisions</div></div>
+          <div class="met-card"><div class="met-lbl">Scripts done</div><div class="met-val" id="mk-done">0<span class="met-dn">/24</span></div><div class="met-sub">complete</div></div>
+        </div>
+        <div class="intel-win">
+          <div class="intel-hd"><svg style="width:13px;height:13px;stroke:rgba(107,79,160,0.65);fill:none;stroke-width:1.5;" viewBox="0 0 24 24"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg><div class="intel-lbl">DeepMark Intelligence</div></div>
+          <div class="intel-fw"><div class="intel-feed" id="mk-feed"></div></div>
+        </div>
+      </div>
+    </div>
+    <div class="mk-ft"><div class="mk-ft-note">DeepMark will email you when complete — you can safely close this window</div><button class="btn-s" onclick="snapTo('s-marking-complete')">View results →</button></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════ S11: MARKING COMPLETE ═══ -->
+<div class="screen" id="s-marking-complete" data-screen-label="11 Marking Complete">
+  <div class="mc-tile">
+    <div class="mc-tick"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div>
+    <div class="mc-ttl">Marking complete</div>
+    <div class="mc-sub">Biology A2 — June 2025 · All 24 scripts marked</div>
+    <div class="mc-stats">
+      <div class="mc-stat"><div class="mc-sv">
+</div><div class="mc-sl">
+</div></div>
+      <div class="mc-stat"><div class="mc-sv">
+</div><div class="mc-sl">
+</div></div>
+      <div class="mc-stat"><div class="mc-sv">
+</div><div class="mc-sl">
+</div></div>
+    </div>
+    <button class="btn-p lg" onclick="snapTo('s-results')" style="margin-top:4px;">Review results →</button>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════ S12: RESULTS ═══ -->
+<div class="screen" id="s-results" data-screen-label="12 Results">
+  <div class="tile rl-tile">
+    <div class="tile-hd">
+      <div><div class="tile-title" style="font-size:15px;">Biology A2 — June 2025</div><div class="tile-sub">24 scripts marked · review and confirm each before downloading</div></div>
+      <div class="rl-hd-r"><div class="rl-exp"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Export CSV</div><div class="rl-exp"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>Export PDF</div></div>
+    </div>
+    <div class="rl-th"><div class="th">Student</div><div class="th c">Score</div><div class="th c">Grade</div><div class="th r">Actions</div></div>
+    <div class="rl-body" id="rl-body"></div>
+    <div class="rl-ft"><div class="rl-cc"><span id="rl-conf-ct">0</span> of 24 confirmed</div><button class="btn-br" onclick="openScript(0)">Begin review →</button></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════ S13: SCRIPT VIEWER ═══ -->
+<div class="screen" id="s-script-viewer" data-screen-label="13 Script Viewer">
+  <div class="tile vw-tile">
+    <div class="vw-tb">
+      <div class="vw-stu" id="vw-stu">Rhys Taylor</div>
+      <div class="vw-sc" id="vw-sc">34/43 · 79%</div>
+      <div class="vw-gr" id="vw-gr">Grade 7</div>
+      <div class="vw-tbr">
+        <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:rgba(0,0,0,0.35);"><div style="width:6px;height:6px;border-radius:50%;background:#5BAB82;"></div>Extraction</div>
+        <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:rgba(0,0,0,0.35);"><div style="width:6px;height:6px;border-radius:50%;background:#4A90C4;"></div>Grading</div>
+        <div class="vw-prog" id="vw-prog">Script 1 of 24</div>
+        <div class="vw-xb" onclick="snapTo('s-results')">✕</div>
+      </div>
+    </div>
+    <div class="vw-body">
+      <div class="vw-pages" id="vw-pages"></div>
+      <div class="vw-main">
+        <div class="ftb">
+          <div class="ftb-btn on">✓</div><div class="ftb-btn">✕</div>
+          <div class="ftb-sep"></div>
+          <div class="ftb-btn"><svg viewBox="0 0 24 24"><path d="M6 4h8a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"/><path d="M6 12h9a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"/></svg></div>
+          <div class="ftb-btn"><svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg></div>
+          <div class="ftb-sep"></div>
+          <div class="ftb-btn"><span style="font-size:9px;font-weight:700;color:rgba(130,180,220,0.9);">AO1</span></div>
+          <div class="ftb-btn"><span style="font-size:9px;font-weight:700;color:rgba(180,155,220,0.9);">AO2</span></div>
+          <div class="ftb-btn"><span style="font-size:9px;font-weight:700;color:rgba(130,200,170,0.9);">AO3</span></div>
+          <div class="ftb-sep"></div>
+          <div class="ftb-hint">Select text · press 1–7</div>
+        </div>
+        <div class="pc">
+          <div class="ai-sum"><div class="ai-lbl">DeepMark Assessment Summary</div><div class="ai-txt" id="vw-ai-txt">Rhys demonstrates strong knowledge of biological structures with clear AO1 recall. Section B analytical chains are well developed but AO3 evaluation lacks explicit comparative judgement. To improve: end extended answers with a clear evaluative statement that explicitly weighs the significance of each argument.</div></div>
+          <div class="s-div">Section A — Multiple Choice</div>
+          <div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;">
+            <thead><tr><th style="font-size:10px;font-weight:600;color:rgba(0,0,0,0.3);text-transform:uppercase;letter-spacing:0.06em;padding:5px 8px;border-bottom:1px solid rgba(0,0,0,0.07);text-align:left;">Q</th><th style="font-size:10px;font-weight:600;color:rgba(0,0,0,0.3);text-transform:uppercase;letter-spacing:0.06em;padding:5px 8px;border-bottom:1px solid rgba(0,0,0,0.07);text-align:left;">Correct</th><th style="font-size:10px;font-weight:600;color:rgba(0,0,0,0.3);text-transform:uppercase;letter-spacing:0.06em;padding:5px 8px;border-bottom:1px solid rgba(0,0,0,0.07);text-align:left;">Student</th><th style="font-size:10px;font-weight:600;color:rgba(0,0,0,0.3);text-transform:uppercase;letter-spacing:0.06em;padding:5px 8px;border-bottom:1px solid rgba(0,0,0,0.07);"></th><th style="font-size:10px;font-weight:600;color:rgba(0,0,0,0.3);text-transform:uppercase;letter-spacing:0.06em;padding:5px 8px;border-bottom:1px solid rgba(0,0,0,0.07);text-align:left;">Mark</th></tr></thead>
+            <tbody id="vw-mcq"></tbody>
+          </table></div>
+          <div class="s-div">Section A — Short Answer</div>
+          <div class="qb"><div class="qh"><div class="ql2">Q2</div><div class="qt2">Explain the difference between diffusion and active transport.</div><div class="qsp full" id="vw-q2">2/2</div></div><div class="qresp">"Diffusion is passive, no energy needed, moves down concentration gradient. Active transport requires ATP and moves particles against the gradient."</div><div class="qtags"><div class="tag ao1">AO1</div><div class="tag tick">✓ Energy contrast</div><div class="tag tick">✓ Direction contrasted</div></div></div>
+          <div class="qb"><div class="qh"><div class="ql2">Q3</div><div class="qt2">Describe the structure of DNA.</div><div class="qsp full" id="vw-q3">4/4</div></div><div class="qresp">"DNA is a double helix with two antiparallel strands held by hydrogen bonds between complementary base pairs (A-T, C-G), with a sugar-phosphate backbone."</div><div class="qtags"><div class="tag ao1">AO1</div><div class="tag tick">✓ Double helix</div><div class="tag tick">✓ Antiparallel</div><div class="tag tick">✓ H-bonds</div></div></div>
+          <div class="s-div">Section B — Extended Response</div>
+          <div class="qb"><div class="qh"><div class="ql2">Q6</div><div class="qt2">Analyse two reasons why cell specialisation is important in multicellular organisms. [6 marks]</div><div class="qsp part" id="vw-q6">5/6</div></div><div class="qresp">"Specialisation allows cells to carry out specific functions more efficiently. Division of labour means different cells do different jobs so the organism functions more effectively."</div><div class="qtags"><div class="tag ao2">AO2</div><div class="tag tick">✓ Structure-function chain</div><div class="tag ao3">AO3</div><div class="tag warn">⚠ Conclusion vague</div></div><div class="qnote">5/6 — AO3 withheld: conclusion references "greater efficiency" but does not explicitly evaluate which argument is more significant.</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="vw-ft">
+      <div class="vw-nav"><button class="btn-nav" onclick="reviewPrev()">← Previous</button><button class="btn-nav" onclick="snapTo('s-results')">Back to list</button></div>
+      <button class="btn-cm" onclick="confirmCurrent()">Confirm marking ✓</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════ S14: ALL CONFIRMED ═══ -->
+<div class="screen" id="s-all-confirmed" data-screen-label="14 Download">
+  <div class="conf-tile">
+    <div class="big-tick"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div>
+    <div style="font-size:17px;font-weight:600;color:#2D3748;margin-bottom:4px;">All papers marked</div>
+    <div style="font-size:11px;color:rgba(0,0,0,0.35);margin-bottom:24px;">Biology A2 — June 2025 · 24 scripts confirmed</div>
+    <div style="font-size:14px;font-weight:600;color:#6B4FA0;margin-bottom:12px;">Download &amp; Print</div>
+    <div class="dl-opts">
+      <div class="dl-opt" onclick="snapTo('s-download-format')"><div class="dl-ol"><div class="dl-oi"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div><div><div class="dl-ln">Student papers</div><div class="dl-ls">Annotated PDFs per student</div></div></div><div class="dl-arr">›</div></div>
+      <div class="dl-opt"><div class="dl-ol"><div class="dl-oi"><svg viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></div><div><div class="dl-ln">Examiner report</div><div class="dl-ls">Class summary &amp; question analysis</div></div></div><div class="dl-arr">›</div></div>
+      <div class="dl-opt"><div class="dl-ol"><div class="dl-oi"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/></svg></div><div><div class="dl-ln">Scoring spreadsheet</div><div class="dl-ls">Marks per student as CSV</div></div></div><div class="dl-arr">›</div></div>
+    </div>
+    <button class="btn-dn-sm" onclick="snapTo('s-results')">Done</button>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════ S15: DOWNLOAD FORMAT ═══ -->
+<div class="screen" id="s-download-format" data-screen-label="15 Format">
+  <div class="dlfmt-tile">
+    <div class="tile-hd"><div><div class="tile-title">Download student papers</div><div class="tile-sub">Choose format and annotation options</div></div></div>
+    <div style="padding:14px 20px;display:flex;flex-direction:column;gap:10px;">
+      <div><div class="dl-format-label" style="font-size:10px;font-weight:600;color:rgba(0,0,0,0.28);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:6px;">Format</div>
+      <div class="fmt-ops"><div class="fmt-op sel" id="fmt-std" onclick="selFmt('std')"><div class="fmt-nm">Standard</div><div class="fmt-ds">One page per sheet</div></div><div class="fmt-op" id="fmt-2up" onclick="selFmt('2up')"><div class="fmt-nm">2 pages per A4</div><div class="fmt-ds">Compact, saves paper</div></div></div></div>
+      <div class="cb-row" onclick="toggleAnnot()"><div class="cb-bx" id="cb-annot"><svg viewBox="0 0 9 9"><polyline points="1,4.5 3.5,7 8,2"/></svg></div><div><div class="cb-lbl">Include annotations</div><div class="cb-ds">AO tags, tick marks, and examiner notes on printed scripts</div></div></div>
+    </div>
+    <div class="tile-ft"><button class="btn-s" onclick="snapTo('s-all-confirmed')">← Back</button><button class="btn-dl" onclick="snapTo('s-all-confirmed')"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Download PDF</button></div>
+  </div>
+</div>
+
+<script>
+// ── CORE NAVIGATION ──────────────────────────────────────────
+var MODAL_SCREENS = ['s-upload','s-upload-loading','s-extraction-confirm','s-paper-preview','s-upload-scripts','s-extract-loading','s-script-review','s-submitted','s-marking-dash','s-marking-complete','s-results','s-script-viewer','s-all-confirmed','s-download-format'];
+var ALL_SCREENS = ['s-dashboard'].concat(MODAL_SCREENS);
+
+function snapTo(id) {
+  ALL_SCREENS.forEach(function(s) {
+    var el = document.getElementById(s);
+    el.classList.remove('active');
+    el.style.display = '';
+  });
+  var next = document.getElementById(id);
+  next.classList.add('active');
+  var dim = document.getElementById('dim');
+  if (id === 's-dashboard') { dim.classList.remove('on'); }
+  else { dim.classList.add('on'); }
+  // Screen-specific init
+  if (id === 's-marking-dash') initMarkingDash();
+  if (id === 's-script-review') initReview();
+  if (id === 's-results') buildResultsTable();
+}
+
+// ── SIDEBAR ──────────────────────────────────────────────────
+function openSB()  { document.getElementById('db-sb').classList.add('open');  document.getElementById('db-blur').classList.add('open'); }
+function closeSB() { document.getElementById('db-sb').classList.remove('open'); document.getElementById('db-blur').classList.remove('open'); }
+
+// ── UPLOAD → LOADING → EXTRACTION CONFIRM ───────────────────
+function goUploadLoad() {
+  snapTo('s-upload-loading');
+  runProgress('ul-bar','ul-status','ul-est',['Extracting document structure…','Identifying question blocks…','Parsing mark scheme…','Mapping marks to questions…','Rendering preview…','Almost done…'], 45, function() {
+    snapTo('s-extraction-confirm');
+  });
+}
+
+function runProgress(barId, statusId, estId, msgs, secs, done) {
+  var bar = document.getElementById(barId);
+  var status = document.getElementById(statusId);
+  var est = document.getElementById(estId);
+  var prog = 0, msgIdx = 0;
+  var iv = setInterval(function() {
+    prog = Math.min(100, prog + Math.random() * 14 + 5);
+    bar.style.width = prog + '%';
+    var nm = Math.min(msgs.length - 1, Math.floor((prog / 100) * msgs.length));
+    if (nm !== msgIdx) {
+      msgIdx = nm;
+      status.style.opacity = '0';
+      setTimeout(function() { status.textContent = msgs[msgIdx]; status.style.opacity = '1'; }, 200);
+    }
+    var rem = Math.max(0, Math.ceil((1 - prog / 100) * secs));
+    est.textContent = rem > 0 ? '~' + rem + ' seconds' : 'Complete';
+    if (prog >= 100) {
+      clearInterval(iv);
+      status.textContent = msgs[msgs.length - 1].replace('…', ' ✓');
+      setTimeout(done, 700);
+    }
+  }, 550);
+  status.style.transition = 'opacity 0.2s ease';
+}
+
+// ── PAPER PREVIEW TABS ───────────────────────────────────────
+function pvTab(t) {
+  document.getElementById('pv-qp').style.display = t === 'qp' ? '' : 'none';
+  document.getElementById('pv-ms').style.display = t === 'ms' ? '' : 'none';
+  document.getElementById('tab-qp').classList.toggle('active', t === 'qp');
+  document.getElementById('tab-ms').classList.toggle('active', t === 'ms');
+  document.getElementById('pv-body').scrollTop = 0;
+}
+
+// ── UPLOAD SCRIPTS ───────────────────────────────────────────
+function selUt(n) {
+  [1,2,3].forEach(function(i) { document.getElementById('ut'+i).classList.remove('sel'); });
+  document.getElementById('ut'+n).classList.add('sel');
+  document.getElementById('btn-extract').classList.add('vis');
+  document.getElementById('ut-hint').style.opacity = '0';
+}
+
+function goExtractLoad() {
+  snapTo('s-extract-loading');
+  runProgress('ex-bar','ex-status','ex-est',['Reading uploaded file…','Separating individual scripts…','Identifying student names…','Processing handwriting…','Organising answer blocks…','Almost done…'], 30, function() {
+    snapTo('s-script-review');
+  });
+}
+
+// ── GRADE BOUNDARIES ─────────────────────────────────────────
+var gbOpen = false;
+function toggleGB() {
+  gbOpen = !gbOpen;
+  var pop = document.getElementById('gb-popover');
+  if (pop) pop.classList.toggle('open', gbOpen);
+}
+
+// ── SCRIPT REVIEW ────────────────────────────────────────────
+var students = ['Rhys Taylor','Aryan Patel','Sophie Husseyin','Kieran Sear','Belle Stanford','Seyed Raigan','Zack Wierciak','Ana Oliveira','Marcus Chen','Priya Sharma','Tom Henderson','Fatima Al-Hassan','Jake Morrison','Lily Zhang','Connor Murphy','Amara Osei','Daniel Park','Emma Rossi','Yusuf Ibrahim','Chloe Bennett','Nathan Williams','Aisha Malik','Oliver James','Grace Turner'];
+var pageCounts = [7,7,6,7,7,5,7,7,6,7,5,7,6,7,7,5,6,7,7,6,7,5,6,7];
+var rvIncluded = students.map(function() { return true; });
+
+function initReview() {
+  rvIncluded = students.map(function() { return true; });
+  buildRVList();
+  buildRVThumbs();
+  updateRVCount();
+}
+
+function updateRVCount() {
+  var ct = rvIncluded.filter(Boolean).length;
+  var el = document.getElementById('rv-include-count');
+  if (el) el.textContent = ct;
+}
+
+function buildRVList() {
+  var list = document.getElementById('rv-list');
+  list.innerHTML = '';
+  students.forEach(function(name, i) {
+    var item = document.createElement('div');
+    item.className = 'rv-item';
+    item.style.opacity = rvIncluded[i] ? '1' : '0.4';
+
+    // include checkbox
+    var cbWrap = document.createElement('div');
+    cbWrap.style.cssText = 'width:16px;height:16px;border-radius:3px;border:1.5px solid rgba(107,79,160,0.4);background:' + (rvIncluded[i] ? '#6B4FA0' : 'transparent') + ';display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;transition:all 0.13s;';
+    cbWrap.innerHTML = rvIncluded[i] ? '<svg width="9" height="9" viewBox="0 0 9 9"><polyline points="1,4.5 3.5,7 8,2" style="stroke:white;fill:none;stroke-width:2;"/></svg>' : '';
+    cbWrap.onclick = (function(idx) { return function(e) {
+      e.stopPropagation();
+      rvIncluded[idx] = !rvIncluded[idx];
+      buildRVList();
+      buildRVThumbs();
+      updateRVCount();
+    }; })(i);
+
+    var num = document.createElement('div');
+    num.className = 'rv-num';
+    num.textContent = i + 1;
+
+    var nm = document.createElement('div');
+    nm.className = 'rv-nm';
+    nm.textContent = name;
+
+    // eye icon
+    var eye = document.createElement('div');
+    eye.style.cssText = 'display:flex;align-items:center;cursor:pointer;flex-shrink:0;color:rgba(107,79,160,0.55);';
+    eye.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+    eye.onclick = (function(idx) { return function(e) {
+      e.stopPropagation();
+      openScript(idx);
+    }; })(i);
+
+    var pg = document.createElement('div');
+    pg.className = 'rv-pg';
+    pg.textContent = pageCounts[i] + ' pages';
+
+    var del = document.createElement('div');
+    del.className = 'rv-del';
+    del.textContent = '✕ Delete';
+    del.onclick = (function(idx) { return function(e) {
+      e.stopPropagation();
+      rvIncluded[idx] = false;
+      buildRVList();
+      buildRVThumbs();
+      updateRVCount();
+    }; })(i);
+
+    item.appendChild(cbWrap);
+    item.appendChild(num);
+    item.appendChild(nm);
+    item.appendChild(eye);
+    item.appendChild(pg);
+    item.appendChild(del);
+    list.appendChild(item);
+  });
+}
+
+function buildRVThumbs() {
+  var thumbs = document.getElementById('rv-thumbs');
+  thumbs.innerHTML = '';
+  students.forEach(function(name, i) {
+    var t = document.createElement('div');
+    t.className = 's-thumb';
+    if (!rvIncluded[i]) t.style.opacity = '0.35';
+    var lines = [['h','f'],['t','f'],['h','s'],['t','f'],['h','xs'],['h','f'],['t','s']];
+    var pat = lines.concat(lines).slice(0, 7 + (i % 3));
+    var linesHtml = pat.map(function(l) {
+      var w = l[1] === 'f' ? (80 + Math.random() * 15) : l[1] === 's' ? (50 + Math.random() * 20) : (25 + Math.random() * 20);
+      return '<div class="st-ln ' + (l[0] === 'h' ? 'h' : 't') + '" style="width:' + w + '%"></div>';
+    }).join('');
+    t.innerHTML = '<div class="st-nm">' + name.split(' ')[0] + '</div><div class="st-pg"><div class="st-aqa">AQA</div><div class="st-hb"></div>' + linesHtml + '</div><div class="st-pc">' + pageCounts[i] + ' pages</div>';
+    thumbs.appendChild(t);
+  });
+}
+
+function includeAll() {
+  rvIncluded = students.map(function() { return true; });
+  buildRVList();
+  buildRVThumbs();
+  updateRVCount();
+}
+
+function reviewAll() {
+  // Navigate to script viewer starting at first student
+  openScript(0);
+}
+
+// ── SUBMITTED → MARKING DASH ─────────────────────────────────
+function goSubmitted() {
+  snapTo('s-submitted');
+  setTimeout(function() { document.getElementById('sub-b').style.width = '100%'; }, 80);
+  setTimeout(function() { snapTo('s-marking-dash'); }, 4500);
+}
+
+// ── MARKING DASHBOARD ─────────────────────────────────────────
+var mkStudents = students.slice();
+var mkCurrent = 0, mkDone = 0, mkDecisions = 0, mkSecs = 24 * 52;
+var mkProgress = students.map(function() { return 0; });
+var mkDoneArr = students.map(function() { return false; });
+var mkInterval, mkTimeInterval, mkFeedInterval;
+var feedLines = [
+  {c:'fc-head',t:'── Initialising DeepMark Engine v2.4 ──'},
+  {c:'fc-mid',t:'Loading AQA Biology A2 mark scheme (7402/1)…'},
+  {c:'fc-blue',t:'Mark scheme parsed: 15 questions · 43 marks · AO1/AO2/AO3 weighted'},
+  {c:'fc-head',t:'── Script 1: Rhys Taylor ──'},
+  {c:'fc-mid',t:'Page 1 parsed · candidate 65203 · OCR confidence 94.2%'},
+  {c:'fc-green',t:'Q01.1 → B ✓  Q01.2 → B ✓  Q01.3 → C ✓  [3/3]'},
+  {c:'fc-mid',t:'Q2 → diffusion vs active transport · scanning handwriting…'},
+  {c:'fc-green',t:'Q2 → both contrasting points evidenced · direction + energy ✓  [2/2]'},
+  {c:'fc-green',t:'Q3 → double helix ✓ · antiparallel ✓ · H-bonds ✓ · base pairs ✓  [4/4]'},
+  {c:'fc-amber',t:'Q6 → [5/6] · AO3 mark withheld: conclusion lacks explicit judgement'},
+  {c:'fc-green',t:'✓ COMPLETE: Rhys Taylor → 34/43 (79%) · Grade 7'},
+  {c:'fc-head',t:'── Script 2: Aryan Patel ──'},
+  {c:'fc-mid',t:'7 pages detected · OCR confidence 91.7%'},
+  {c:'fc-green',t:'Q01.1 → C ✓  Q01.2 → B ✓  Q01.3 → A ✓  [3/3]'},
+  {c:'fc-green',t:'Q2 → [2/2] · Q3 → [4/4] · Q4 → [2/2]'},
+  {c:'fc-green',t:'✓ COMPLETE: Aryan Patel → 37/43 (86%) · Grade 8'},
+  {c:'fc-head',t:'── Script 3: Sophie Husseyin ──'},
+  {c:'fc-amber',t:'Q2 → one contrasting point only · direction not contrasted → [1/2]'},
+  {c:'fc-amber',t:'Q6 → AO3 evaluation absent · [4/6]'},
+  {c:'fc-green',t:'✓ COMPLETE: Sophie Husseyin → 29/43 (67%) · Grade 6'},
+  {c:'fc-head',t:'── Script 4: Kieran Sear ──'},
+  {c:'fc-mid',t:'OCR confidence 96.1% · excellent handwriting clarity'},
+  {c:'fc-green',t:'Q7 → [12/12] · Level 4 language throughout · exceptional response'},
+  {c:'fc-green',t:'✓ COMPLETE: Kieran Sear → 40/43 (93%) · Grade 9'},
+];
+var mkFeedIdx = 0;
+
+function initMarkingDash() {
+  mkCurrent = 0; mkDone = 0; mkDecisions = 0; mkSecs = 24 * 52;
+  mkProgress = students.map(function() { return 0; });
+  mkDoneArr = students.map(function() { return false; });
+  mkFeedIdx = 0;
+  if (mkInterval) clearInterval(mkInterval);
+  if (mkTimeInterval) clearInterval(mkTimeInterval);
+  buildMkQueue();
+  document.getElementById('mk-feed').innerHTML = '';
+  document.getElementById('mk-done').innerHTML = '0<span class="met-dn">/24</span>';
+  document.getElementById('mk-dec').textContent = '0';
+
+  mkInterval = setInterval(function() {
+    if (mkCurrent >= students.length) return;
+    mkProgress[mkCurrent] = Math.min(100, mkProgress[mkCurrent] + Math.random() * 6 + 3);
+    var bar = document.getElementById('qbar-' + mkCurrent);
+    if (bar) bar.style.width = mkProgress[mkCurrent] + '%';
+    if (mkProgress[mkCurrent] >= 100) {
+      mkDoneArr[mkCurrent] = true; mkDone++; mkCurrent++;
+      document.getElementById('mk-done').innerHTML = mkDone + '<span class="met-dn">/24</span>';
+      buildMkQueue();
+    }
+    mkDecisions += Math.floor(Math.random() * 3 + 1);
+    document.getElementById('mk-dec').textContent = mkDecisions;
+  }, 900);
+
+  mkTimeInterval = setInterval(function() {
+    if (mkSecs > 0) mkSecs--;
+    var m = Math.floor(mkSecs / 60), s = mkSecs % 60;
+    document.getElementById('mk-time').textContent = m + 'm ' + (s < 10 ? '0' : '') + s + 's';
+  }, 1000);
+
+  nextFeedLine();
+}
+
+function buildMkQueue() {
+  var q = document.getElementById('mk-queue');
+  q.innerHTML = '';
+  students.forEach(function(name, i) {
+    var state = mkDoneArr[i] ? 'done' : i === mkCurrent ? 'active' : 'waiting';
+    var stCls = mkDoneArr[i] ? 'done2' : i === mkCurrent ? 'marking' : 'waiting2';
+    var stTxt = mkDoneArr[i] ? 'Complete' : i === mkCurrent ? 'Marking…' : 'Waiting';
+    var sc = mkDoneArr[i] ? (28 + Math.floor(i * 0.6) + 3) + '/43' : '';
+    var div = document.createElement('div');
+    div.className = 'qi-item ' + state;
+    div.innerHTML = '<div class="qi-row"><div class="qi-nm">' + name + '</div>' + (sc ? '<div class="qi-sc">' + sc + '</div>' : '') + '</div><div class="qi-st ' + stCls + '"><div class="qi-sd"></div>' + stTxt + '</div><div class="qi-bw"><div class="qi-b" id="qbar-' + i + '" style="width:' + (mkDoneArr[i] ? 100 : i === mkCurrent ? mkProgress[i] : 0) + '%"></div></div>';
+    q.appendChild(div);
+  });
+}
+
+function nextFeedLine() {
+  if (mkFeedIdx >= feedLines.length) return;
+  var line = feedLines[mkFeedIdx++];
+  var div = document.createElement('div');
+  div.className = 'fl ' + line.c;
+  div.textContent = line.t;
+  var feed = document.getElementById('mk-feed');
+  if (feed) {
+    feed.appendChild(div);
+    feed.scrollTop = feed.scrollHeight;
+    var pause = line.c === 'fc-head' ? 300 : 180;
+    setTimeout(nextFeedLine, pause + line.t.length * 18);
+  }
+}
+
+// ── RESULTS TABLE ─────────────────────────────────────────────
+var resultStudents = [
+  {name:'Rhys Taylor',    raw:34,pct:79,grade:'Grade 7'},
+  {name:'Aryan Patel',    raw:37,pct:86,grade:'Grade 8'},
+  {name:'Sophie Husseyin',raw:29,pct:67,grade:'Grade 6'},
+  {name:'Kieran Sear',    raw:40,pct:93,grade:'Grade 9'},
+  {name:'Belle Stanford', raw:26,pct:60,grade:'Grade 5'},
+  {name:'Seyed Raigan',   raw:23,pct:53,grade:'Grade 4'},
+  {name:'Zack Wierciak',  raw:24,pct:56,grade:'Grade 4'},
+  {name:'Ana Oliveira',   raw:31,pct:72,grade:'Grade 6'},
+  {name:'Marcus Chen',    raw:33,pct:77,grade:'Grade 7'},
+  {name:'Priya Sharma',   raw:38,pct:88,grade:'Grade 8'},
+  {name:'Tom Henderson',  raw:22,pct:51,grade:'Grade 4'},
+  {name:'Fatima Al-Hassan',raw:36,pct:84,grade:'Grade 8'},
+  {name:'Jake Morrison',  raw:18,pct:42,grade:'Grade 3'},
+  {name:'Lily Zhang',     raw:35,pct:81,grade:'Grade 7'},
+  {name:'Connor Murphy',  raw:27,pct:63,grade:'Grade 5'},
+  {name:'Amara Osei',     raw:30,pct:70,grade:'Grade 6'},
+  {name:'Daniel Park',    raw:21,pct:49,grade:'Grade 3'},
+  {name:'Emma Rossi',     raw:32,pct:74,grade:'Grade 7'},
+  {name:'Yusuf Ibrahim',  raw:28,pct:65,grade:'Grade 5'},
+  {name:'Chloe Bennett',  raw:39,pct:91,grade:'Grade 9'},
+  {name:'Nathan Williams',raw:25,pct:58,grade:'Grade 5'},
+  {name:'Aisha Malik',    raw:34,pct:79,grade:'Grade 7'},
+  {name:'Oliver James',   raw:19,pct:44,grade:'Grade 3'},
+  {name:'Grace Turner',   raw:33,pct:77,grade:'Grade 7'},
+];
+var confirmed = new Array(resultStudents.length).fill(false);
+var currentReviewIdx = 0;
+var annotChecked = true;
+
+function colCls(pct) {
+  if (pct >= 80) return 'high';
+  if (pct >= 65) return 'mid-high';
+  if (pct >= 50) return 'mid';
+  if (pct >= 35) return 'mid-low';
+  return 'low';
+}
+
+function buildResultsTable() {
+  var body = document.getElementById('rl-body');
+  body.innerHTML = '';
+  resultStudents.forEach(function(s, i) {
+    var cls = colCls(s.pct);
+    var row = document.createElement('div');
+    row.className = 'rl-row';
+    var act = confirmed[i]
+      ? '<div class="btn-cfmd">✓ Confirmed</div>'
+      : '<button class="btn-rv" onclick="event.stopPropagation();openScript(' + i + ')">Review</button>';
+    row.innerHTML = '<div class="rl-nc"><div class="rl-nm">' + s.name + '</div><div class="pb-wrap"><div class="pb ' + cls + '" style="width:' + s.pct + '%"></div></div></div><div class="sc"><span class="sb ' + cls + '">' + s.raw + '/43 · ' + s.pct + '%</span></div><div class="gc"><span class="gb ' + cls + '">' + s.grade + '</span></div><div class="ac">' + act + '</div>';
+    row.addEventListener('click', function() { openScript(i); });
+    body.appendChild(row);
+  });
+  var ct = confirmed.filter(Boolean).length;
+  document.getElementById('rl-conf-ct').textContent = ct;
+  if (ct === resultStudents.length) {
+    setTimeout(function() { snapTo('s-all-confirmed'); }, 400);
+  }
+}
+
+function openScript(idx) {
+  currentReviewIdx = idx;
+  var s = resultStudents[idx];
+  var cls = colCls(s.pct);
+  var colMap = {high:{bg:'rgba(91,171,130,0.14)',c:'#2E7A54'},  'mid-high':{bg:'rgba(139,191,106,0.14)',c:'#4A7A1E'}, mid:{bg:'rgba(196,184,74,0.14)',c:'#7A6E10'}, 'mid-low':{bg:'rgba(196,136,58,0.14)',c:'#8A5010'}, low:{bg:'rgba(192,68,68,0.13)',c:'#8A1E1E'}};
+  var col = colMap[cls];
+  document.getElementById('vw-stu').textContent = s.name;
+  var sc = document.getElementById('vw-sc');
+  var gr = document.getElementById('vw-gr');
+  sc.textContent = s.raw + '/43 · ' + s.pct + '%';
+  gr.textContent = s.grade;
+  sc.style.background = col.bg; sc.style.color = col.c;
+  gr.style.background = col.bg; gr.style.color = col.c;
+  document.getElementById('vw-prog').textContent = 'Script ' + (idx + 1) + ' of ' + resultStudents.length;
+  buildVwPages();
+  buildVwMCQ(idx);
+  snapTo('s-script-viewer');
+}
+
+function buildVwPages() {
+  var pages = document.getElementById('vw-pages');
+  pages.innerHTML = '';
+  for (var p = 0; p < 7; p++) {
+    var pm = document.createElement('div');
+    pm.className = 'pm' + (p === 0 ? ' active' : '');
+    pm.innerHTML = '<div class="pm-lbl">p.' + (p + 1) + '</div>';
+    ['hw','t','hw','t','hw','t'].forEach(function(t) {
+      var ln = document.createElement('div');
+      ln.className = 'pm-ln' + (t === 'hw' ? ' hw' : '');
+      ln.style.width = (t === 'hw' ? 65 + Math.random() * 25 : 45 + Math.random() * 35) + '%';
+      pm.appendChild(ln);
+    });
+    pm.onclick = (function(el) { return function() {
+      document.querySelectorAll('.pm').forEach(function(e) { e.classList.remove('active'); });
+      el.classList.add('active');
+    }; })(pm);
+    pages.appendChild(pm);
+  }
+}
+
+function buildVwMCQ(idx) {
+  var body = document.getElementById('vw-mcq');
+  var correct = ['B','B','A'];
+  var answers = [['B','B','C'],['C','B','A'],['B','A','A'],['B','B','C']];
+  var ans = answers[idx % answers.length];
+  body.innerHTML = correct.map(function(c, i) {
+    var a = ans[i]; var ok = a === c;
+    return '<tr><td style="font-size:12px;color:#2D3748;padding:7px 8px;border-bottom:1px solid rgba(0,0,0,0.04);">Q0' + (i+1) + '.' + (i+1) + '</td><td style="font-size:12px;padding:7px 8px;border-bottom:1px solid rgba(0,0,0,0.04);">' + c + '</td><td style="font-size:12px;padding:7px 8px;border-bottom:1px solid rgba(0,0,0,0.04);">' + a + '</td><td style="font-size:12px;padding:7px 8px;border-bottom:1px solid rgba(0,0,0,0.04);color:' + (ok ? '#5BAB82' : '#C04444') + ';">' + (ok ? '✓' : '✗') + '</td><td style="font-size:12px;font-weight:600;padding:7px 8px;border-bottom:1px solid rgba(0,0,0,0.04);color:' + (ok ? '#5BAB82' : '#C04444') + ';">' + (ok ? '1/1' : '0/1') + '</td></tr>';
+  }).join('');
+}
+
+function confirmCurrent() {
+  confirmed[currentReviewIdx] = true;
+  var next = -1;
+  for (var i = currentReviewIdx + 1; i < resultStudents.length; i++) { if (!confirmed[i]) { next = i; break; } }
+  if (next === -1) { for (var j = 0; j < currentReviewIdx; j++) { if (!confirmed[j]) { next = j; break; } } }
+  if (next !== -1) { openScript(next); } else { snapTo('s-all-confirmed'); }
+  buildResultsTable();
+}
+
+function reviewPrev() { openScript(currentReviewIdx > 0 ? currentReviewIdx - 1 : resultStudents.length - 1); }
+
+// ── DOWNLOAD FORMAT ───────────────────────────────────────────
+function selFmt(f) {
+  document.getElementById('fmt-std').classList.toggle('sel', f === 'std');
+  document.getElementById('fmt-2up').classList.toggle('sel', f === '2up');
+}
+
+function toggleAnnot() {
+  annotChecked = !annotChecked;
+  var box = document.getElementById('cb-annot');
+  box.classList.toggle('unc', !annotChecked);
+  box.innerHTML = annotChecked ? '<svg viewBox="0 0 9 9"><polyline points="1,4.5 3.5,7 8,2"/></svg>' : '';
+}
+</script>
+</body>
+</html>

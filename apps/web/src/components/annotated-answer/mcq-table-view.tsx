@@ -6,21 +6,30 @@ import {
 	PopoverContent,
 	PopoverTrigger,
 } from "@/components/ui/popover"
-import type { McqOption } from "@/lib/marking/types"
+import { UngradedBadge } from "@/components/ungraded-badge"
+import { resolveTeacherOverride } from "@/lib/marking/overrides/resolve"
+import type { TeacherOverride } from "@/lib/marking/types"
 import { cn } from "@/lib/utils"
+import { type McqRow, mcqTableAttrsSchema } from "@mcp-gcse/shared"
 import { NodeViewWrapper } from "@tiptap/react"
 import { Check, X } from "lucide-react"
+import { useDocOps } from "./doc-ops-context"
 import { useGradingData } from "./grading-data-context"
 
-type McqRow = {
-	questionId: string
-	questionNumber: string
-	questionText: string | null
-	maxScore: number
-	options: McqOption[]
-	correctLabels: string[]
-	studentAnswer: string | null
-	awardedScore: number
+/**
+ * Per-row override resolution — same precedence as the question-block path
+ * (doc attr wins, PG row fallback). Centralised in
+ * `@/lib/marking/overrides/resolve` so this logic is pinned by a unit test.
+ */
+function rowOverride(
+	row: McqRow,
+	pgRow: TeacherOverride | undefined,
+) {
+	return resolveTeacherOverride(
+		row.teacherOverride ?? null,
+		row.teacherFeedbackOverride ?? null,
+		pgRow,
+	)
 }
 
 /** Shared grid template so header, data rows, and footer columns align. */
@@ -32,15 +41,21 @@ export function McqTableView({
 }: {
 	node: { attrs: Record<string, unknown> }
 }) {
-	const results = node.attrs.results as McqRow[]
-	const { overridesByQuestionId, activeQuestionNumber, onOverrideChange } =
-		useGradingData()
+	// Doc/React boundary: parse once so the row-render loop below works
+	// against a typed shape without `as` casts.
+	const { results } = mcqTableAttrsSchema.parse(node.attrs)
+	const { overridesByQuestionId, activeQuestionNumber } = useGradingData()
+	const { saveOverride } = useDocOps()
 
 	const totalAwarded = results.reduce((sum, r) => {
-		const override = overridesByQuestionId.get(r.questionId)
-		return sum + (override?.score_override ?? r.awardedScore)
+		const override = rowOverride(r, overridesByQuestionId.get(r.questionId))
+		return sum + (override?.score_override ?? r.awardedScore ?? 0)
 	}, 0)
 	const totalMax = results.reduce((sum, r) => sum + r.maxScore, 0)
+	const hasUngraded = results.some((r) => {
+		const override = rowOverride(r, overridesByQuestionId.get(r.questionId))
+		return r.awardedScore === null && !override
+	})
 
 	if (results.length === 0) return null
 
@@ -67,14 +82,23 @@ export function McqTableView({
 
 				{/* Data rows */}
 				{results.map((r) => {
-					const override = overridesByQuestionId.get(r.questionId)
+					const override = rowOverride(
+						r,
+						overridesByQuestionId.get(r.questionId),
+					)
 					const effectiveScore = override?.score_override ?? r.awardedScore
-					const isCorrect = effectiveScore === r.maxScore
+					const isUngraded = effectiveScore === null
+					const isCorrect = !isUngraded && effectiveScore === r.maxScore
 					const isActive = activeQuestionNumber === r.questionNumber
 
 					return (
 						<Popover key={r.questionId}>
+							{/* nativeButton={false} — the trigger is a <div> because the row
+							    is a CSS grid; a <button> would collapse the columns. The
+							    inner score-override badge has its own nested popover so we
+							    cannot form a single native <button> for the whole row. */}
 							<PopoverTrigger
+								nativeButton={false}
 								render={
 									<div
 										id={`question-${r.questionNumber}`}
@@ -94,7 +118,9 @@ export function McqTableView({
 											{r.studentAnswer?.trim() || "–"}
 										</span>
 										<span>
-											{isCorrect ? (
+											{isUngraded ? (
+												<span className="text-muted-foreground text-xs">–</span>
+											) : isCorrect ? (
 												<Check
 													className="h-3.5 w-3.5 text-emerald-500"
 													strokeWidth={3}
@@ -119,11 +145,11 @@ export function McqTableView({
 											onClick={(e) => {
 												e.stopPropagation()
 												if (override) {
-													onOverrideChange(r.questionId, null)
+													saveOverride(r.questionId, null)
 												} else {
-													onOverrideChange(r.questionId, {
+													saveOverride(r.questionId, {
 														score_override:
-															r.awardedScore >= r.maxScore ? 0 : r.maxScore,
+															(r.awardedScore ?? 0) >= r.maxScore ? 0 : r.maxScore,
 														reason: null,
 														feedback_override: undefined,
 													})
@@ -134,11 +160,11 @@ export function McqTableView({
 													e.preventDefault()
 													e.stopPropagation()
 													if (override) {
-														onOverrideChange(r.questionId, null)
+														saveOverride(r.questionId, null)
 													} else {
-														onOverrideChange(r.questionId, {
+														saveOverride(r.questionId, {
 															score_override:
-																r.awardedScore >= r.maxScore ? 0 : r.maxScore,
+																(r.awardedScore ?? 0) >= r.maxScore ? 0 : r.maxScore,
 															reason: null,
 															feedback_override: undefined,
 														})
@@ -146,18 +172,22 @@ export function McqTableView({
 												}
 											}}
 										>
-											<span
-												className={cn(
-													"font-semibold tabular-nums",
-													override
-														? "text-blue-500"
-														: isCorrect
-															? "text-emerald-600"
-															: "text-red-500",
-												)}
-											>
-												{effectiveScore}/{r.maxScore}
-											</span>
+											{isUngraded ? (
+												<UngradedBadge maxScore={r.maxScore} shape="rect" />
+											) : (
+												<span
+													className={cn(
+														"font-semibold tabular-nums",
+														override
+															? "text-blue-500"
+															: isCorrect
+																? "text-emerald-600"
+																: "text-red-500",
+													)}
+												>
+													{effectiveScore}/{r.maxScore}
+												</span>
+											)}
 										</span>
 									</div>
 								}

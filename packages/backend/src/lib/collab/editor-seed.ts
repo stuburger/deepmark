@@ -1,15 +1,16 @@
 import { logger } from "@/lib/infra/logger"
-import { type PageToken, alignTokensToAnswer } from "@mcp-gcse/shared"
-import type { EditorView } from "@tiptap/pm/view"
 import {
 	type AnnotationMarkSpec,
 	type McqRow,
 	type OcrTokenSpec,
+	type PageToken,
+	alignTokensToAnswer,
 	applyOcrTokenMarks,
 	insertMcqTableBlock,
 	insertQuestionBlock,
 	setAnswerText,
-} from "./editor-ops"
+} from "@mcp-gcse/shared"
+import type { EditorView } from "@tiptap/pm/view"
 import { HeadlessEditor } from "./headless-editor"
 
 const TAG = "collab-editor-seed"

@@ -3,11 +3,11 @@ import { Resource } from "sst"
 
 import { HocuspocusProvider } from "@hocuspocus/provider"
 import {
+	DOC_FRAGMENT_NAME,
 	buildSubmissionDocumentName,
 	editorExtensions,
 } from "@mcp-gcse/shared"
 import { getSchema } from "@tiptap/core"
-import type { Node as PmNode } from "@tiptap/pm/model"
 import { EditorState } from "@tiptap/pm/state"
 import { EditorView } from "@tiptap/pm/view"
 import { Window } from "happy-dom"
@@ -93,7 +93,7 @@ export async function withSubmissionEditor<T>(
 	try {
 		await waitForSync(provider, SYNC_TIMEOUT_MS)
 
-		const fragment = doc.getXmlFragment("doc")
+		const fragment = doc.getXmlFragment(DOC_FRAGMENT_NAME)
 		const state = EditorState.create({
 			schema: getEditorSchema(),
 			plugins: [ySyncPlugin(fragment)],
@@ -167,93 +167,3 @@ function waitForFlush(
 	})
 }
 
-// ─── Block-targeted ops ──────────────────────────────────────────────────────
-// These are the web-tier subset of `packages/backend/src/lib/collab/editor-ops.ts`
-// — only the ops that web server actions need (currently teacher overrides).
-// The full Lambda-side editor-ops module remains the canonical home for any
-// op the grade Lambda dispatches.
-
-export type WebTeacherOverride = {
-	score: number | null
-	reason: string | null
-	feedback: string | null
-	setBy: string | null
-	setAt: string | null
-}
-
-/**
- * Apply a teacher score / feedback override to the named question. Two
- * paths matching the rest of the editor-ops module: questionAnswer block
- * via setNodeMarkup, OR a row inside the doc's mcqTable via
- * setNodeMarkup on the table with an updated `results` array.
- */
-export function dispatchTeacherOverride(
-	view: EditorView,
-	questionId: string,
-	override: WebTeacherOverride | null,
-	feedbackOverride: string | null,
-): void {
-	const { state, dispatch } = view
-
-	const block = findQuestionBlock(state.doc, questionId)
-	if (block) {
-		const nodePos = block.start - 1
-		dispatch(
-			state.tr.setNodeMarkup(nodePos, undefined, {
-				...block.node.attrs,
-				teacherOverride: override,
-				teacherFeedbackOverride: feedbackOverride,
-			}),
-		)
-		return
-	}
-
-	const table = findMcqTable(state.doc)
-	if (!table) return
-	const results = (table.node.attrs.results as Array<Record<string, unknown>>) ?? []
-	const idx = results.findIndex((r) => r.questionId === questionId)
-	if (idx === -1) return
-	const updated = [...results]
-	updated[idx] = {
-		...updated[idx],
-		teacherOverride: override,
-		teacherFeedbackOverride: feedbackOverride,
-	}
-	const tablePos = table.start - 1
-	dispatch(
-		state.tr.setNodeMarkup(tablePos, undefined, {
-			...table.node.attrs,
-			results: updated,
-		}),
-	)
-}
-
-function findQuestionBlock(
-	doc: PmNode,
-	questionId: string,
-): { node: PmNode; start: number } | null {
-	let result: { node: PmNode; start: number } | null = null
-	doc.descendants((node, pos) => {
-		if (result) return false
-		if (
-			node.type.name === "questionAnswer" &&
-			node.attrs.questionId === questionId
-		) {
-			result = { node, start: pos + 1 }
-			return false
-		}
-	})
-	return result
-}
-
-function findMcqTable(doc: PmNode): { node: PmNode; start: number } | null {
-	let result: { node: PmNode; start: number } | null = null
-	doc.descendants((node, pos) => {
-		if (result) return false
-		if (node.type.name === "mcqTable") {
-			result = { node, start: pos + 1 }
-			return false
-		}
-	})
-	return result
-}

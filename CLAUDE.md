@@ -72,6 +72,13 @@ deepmark/
 | Auth | OpenAuth (`@openauthjs/openauth`) |
 | Linting/Format | Biome (`bun check` / `bun fix`) |
 | Build | Turborepo |
+| Editor / Collab | TipTap 3.x + Yjs via Hocuspocus, real-time cursors via `@tiptap/extension-collaboration-caret` |
+
+### Editor / Yjs — TipTap version skew
+
+When adding TipTap collaboration extensions, match the **minor** version of `@tiptap/y-tiptap` (the forked y-prosemirror that TipTap 3.x ships), not just the major. The cursor/caret rename is a particularly nasty trap: `@tiptap/extension-collaboration-cursor` is the deprecated v3 placeholder that imports the upstream `y-prosemirror` and crashes with `Cannot read properties of undefined (reading 'doc')` against a TipTap-bound provider; `@tiptap/extension-collaboration-caret` is the live extension using `@tiptap/y-tiptap`. Use the caret form, and pin its minor version to whatever `@tiptap/extension-collaboration` is on.
+
+CSS class names changed too: `collaboration-carets__caret` / `__label` / `__selection` (not `collaboration-cursor__*`).
 
 ### AWS Region
 

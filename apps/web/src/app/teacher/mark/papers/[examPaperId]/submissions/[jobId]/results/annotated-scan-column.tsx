@@ -99,6 +99,7 @@ export function AnnotatedScanColumn({
 	showMarks = false,
 	showChains = false,
 	highlightedTokenIds,
+	showZoomControls = false,
 }: {
 	pages: ScanPage[]
 	/** Cloud Vision word-level tokens for all pages — filtered per page internally. */
@@ -119,7 +120,8 @@ export function AnnotatedScanColumn({
 	showChains?: boolean
 	/** Token IDs to highlight (from PM hover). */
 	highlightedTokenIds?: Set<string> | null
-	/** Called when a token is hovered on the scan. */
+	/** When true, the zoom +/-/reset buttons render above each page. */
+	showZoomControls?: boolean
 }) {
 	// Map question_id → question_number so a mark click can route to the
 	// matching graded region's question navigation.
@@ -153,7 +155,7 @@ export function AnnotatedScanColumn({
 	if (pages.length === 0) return null
 
 	return (
-		<div ref={containerRef} className="flex flex-col gap-8 px-6 py-6">
+		<div ref={containerRef} className="flex flex-col gap-2 px-3 py-2">
 			{pages.map((page, i) => {
 				const isPdf = page.mimeType === "application/pdf"
 				const pageUrl = scanProxyUrl(page.key)
@@ -171,10 +173,10 @@ export function AnnotatedScanColumn({
 					<div
 						key={page.order}
 						data-page-order={page.order}
-						className="flex flex-col gap-2"
+						className="flex flex-col gap-1"
 					>
 						{label && (
-							<p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+							<p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground leading-tight">
 								{label}
 							</p>
 						)}
@@ -206,6 +208,7 @@ export function AnnotatedScanColumn({
 								showChains={showChains}
 								onMarkClick={handleMarkClick}
 								highlightedTokenIds={highlightedTokenIds}
+								showZoomControls={showZoomControls}
 							/>
 						) : (
 							<div className="relative overflow-hidden rounded-xl border bg-muted/20">

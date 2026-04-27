@@ -5,7 +5,7 @@ import type { PendingAnnotation } from "@/lib/annotations/types"
 import {
 	type QuestionGradeAttrs,
 	setQuestionGrade,
-} from "@/lib/collab/editor-ops"
+} from "@mcp-gcse/shared"
 import type { HeadlessEditor } from "@/lib/collab/headless-editor"
 import type {
 	ExamPaperWithSections,

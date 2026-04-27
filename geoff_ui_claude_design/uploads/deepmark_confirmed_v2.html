@@ -1,0 +1,644 @@
+
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=DM+Mono:wght@300;400&display=swap');
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  .root {
+    font-family: 'Inter', sans-serif;
+    height: 640px; position: relative; overflow: hidden;
+    background: var(--color-background-secondary);
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  .bg-content { position: absolute; inset: 0; z-index: 0; display: flex; flex-direction: column; padding: 52px 40px; gap: 20px; filter: blur(5px); }
+  .bg-greeting { font-size: 28px; font-weight: 300; color: var(--color-text-secondary); opacity: 0.4; }
+  .bg-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; margin-top: 20px; }
+  .bg-card { height: 80px; background: var(--color-background-primary); border-radius: 5px; opacity: 0.35; }
+  .overlay { position: absolute; inset: 0; z-index: 10; background: rgba(0,0,0,0.22); }
+
+  .step { position: absolute; z-index: 20; display: none; inset: 0; }
+  .step.visible { display: flex; align-items: center; justify-content: center; }
+  .step.entering {
+    display: flex; align-items: center; justify-content: center;
+    animation: snapIn 0.55s cubic-bezier(0.22,1,0.36,1) forwards;
+  }
+  @keyframes snapIn {
+    0%{opacity:0;transform:scale(0.82)} 60%{opacity:1} 85%{transform:scale(1.015)} 100%{opacity:1;transform:scale(1)}
+  }
+
+  /* ── Results list ── */
+  .results-tile {
+    background: var(--color-background-primary);
+    border: 1px solid rgba(0,0,0,0.08); border-radius: 10px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.2), 0 6px 20px rgba(0,0,0,0.12);
+    width: 680px; max-height: 590px;
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+
+  .rl-header { padding: 16px 20px 12px; border-bottom: 1px solid rgba(0,0,0,0.07); display: flex; align-items: flex-start; justify-content: space-between; flex-shrink: 0; }
+  .rl-title { font-size: 15px; font-weight: 600; color: var(--color-text-primary); }
+  .rl-sub { font-size: 11px; color: var(--color-text-tertiary); margin-top: 2px; }
+  .rl-header-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+  .rl-export { display: flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 400; color: var(--color-text-secondary); cursor: pointer; padding: 5px 10px; border: 1px solid rgba(0,0,0,0.1); border-radius: 6px; transition: background 0.13s; white-space: nowrap; }
+  .rl-export:hover { background: rgba(0,0,0,0.04); }
+  .rl-export svg { width: 11px; height: 11px; stroke: currentColor; fill: none; stroke-width: 1.5; }
+
+  .rl-stats { display: grid; grid-template-columns: repeat(3,1fr); gap: 1px; border-bottom: 1px solid rgba(0,0,0,0.07); flex-shrink: 0; background: rgba(0,0,0,0.04); max-height: 0; overflow: hidden; transition: max-height 0.4s ease, opacity 0.4s ease; opacity: 0; }
+  .rl-stats.visible { max-height: 80px; opacity: 1; }
+  .stat-cell { background: var(--color-background-primary); padding: 10px 18px; }
+  .stat-label { font-size: 9px; font-weight: 600; color: rgba(0,0,0,0.28); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 3px; }
+  .stat-val { font-size: 18px; font-weight: 400; color: #1a1a1a; letter-spacing: -0.02em; }
+
+  .rl-table-head { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; padding: 7px 20px; flex-shrink: 0; border-bottom: 1px solid rgba(0,0,0,0.07); }
+  .th { font-size: 10px; font-weight: 600; color: rgba(0,0,0,0.28); text-transform: uppercase; letter-spacing: 0.08em; }
+  .th.center { text-align: center; }
+  .th.right { text-align: right; }
+
+  .rl-body { flex: 1; overflow-y: auto; }
+  .rl-body::-webkit-scrollbar { width: 4px; }
+  .rl-body::-webkit-scrollbar-thumb { background: rgba(107,79,160,0.15); border-radius: 2px; }
+
+  .rl-row { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; padding: 8px 20px 6px; border-bottom: 1px solid rgba(0,0,0,0.05); align-items: center; transition: background 0.12s; cursor: pointer; }
+  .rl-row:hover { background: rgba(107,79,160,0.03); }
+
+  .rl-name-cell { display: flex; flex-direction: column; gap: 4px; padding-right: 12px; }
+  .rl-name { font-size: 12px; font-weight: 500; color: var(--color-text-primary); }
+  .pct-bar-wrap { height: 2.5px; background: rgba(0,0,0,0.07); border-radius: 2px; overflow: hidden; }
+  .pct-bar { height: 100%; border-radius: 2px; }
+  .pct-bar.high { background: #5BAB82; }
+  .pct-bar.mid-high { background: #8BBF6A; }
+  .pct-bar.mid { background: #C4B84A; }
+  .pct-bar.mid-low { background: #C4883A; }
+  .pct-bar.low { background: #C04444; }
+
+  .score-cell { display: flex; justify-content: center; }
+  .score-badge { font-size: 10px; font-weight: 500; padding: 3px 9px; border-radius: 4px; white-space: nowrap; }
+  .score-badge.high { background: rgba(91,171,130,0.14); color: #2E7A54; }
+  .score-badge.mid-high { background: rgba(139,191,106,0.14); color: #4A7A1E; }
+  .score-badge.mid { background: rgba(196,184,74,0.14); color: #7A6E10; }
+  .score-badge.mid-low { background: rgba(196,136,58,0.14); color: #8A5010; }
+  .score-badge.low { background: rgba(192,68,68,0.13); color: #8A1E1E; }
+
+  .grade-cell { display: flex; justify-content: center; }
+  .grade-badge { font-size: 10px; font-weight: 500; padding: 3px 9px; border-radius: 4px; white-space: nowrap; }
+  .grade-badge.high { background: rgba(91,171,130,0.14); color: #2E7A54; }
+  .grade-badge.mid-high { background: rgba(139,191,106,0.14); color: #4A7A1E; }
+  .grade-badge.mid { background: rgba(196,184,74,0.14); color: #7A6E10; }
+  .grade-badge.mid-low { background: rgba(196,136,58,0.14); color: #8A5010; }
+  .grade-badge.low { background: rgba(192,68,68,0.13); color: #8A1E1E; }
+
+  .actions-cell { display: flex; justify-content: flex-end; align-items: center; gap: 6px; }
+
+  .rl-view-btn { width: 24px; height: 24px; border-radius: 5px; background: rgba(0,0,0,0.07); border: 1px solid rgba(0,0,0,0.1); display: flex; align-items: center; justify-content: center; cursor: pointer; transition: background 0.13s; flex-shrink: 0; }
+  .rl-view-btn:hover { background: rgba(0,0,0,0.12); }
+  .rl-view-btn svg { width: 11px; height: 11px; stroke: rgba(0,0,0,0.45); fill: none; stroke-width: 1.5; }
+
+  .btn-review { height: 24px; padding: 0 10px; border-radius: 5px; border: none; background: #6B7280; color: white; font-size: 11px; font-weight: 400; cursor: pointer; font-family: 'Inter', sans-serif; transition: background 0.13s; white-space: nowrap; }
+  .btn-review:hover { background: #4B5563; }
+
+  .btn-confirmed { height: 24px; padding: 0 10px; border-radius: 5px; border: 1px solid rgba(91,171,130,0.3); background: rgba(91,171,130,0.08); font-size: 11px; font-weight: 400; color: #3D8A62; cursor: default; font-family: 'Inter', sans-serif; white-space: nowrap; display: flex; align-items: center; gap: 4px; }
+
+  .rl-footer { padding: 12px 18px; border-top: 1px solid rgba(0,0,0,0.07); display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+  .rl-confirmed-count { font-size: 11px; color: var(--color-text-tertiary); }
+  .rl-confirmed-count span { color: #6B4FA0; font-weight: 600; }
+
+  .btn-begin-review { height: 36px; padding: 0 22px; border-radius: 5px; border: none; background: #6B4FA0; color: white; font-size: 13px; font-weight: 600; cursor: pointer; font-family: 'Inter', sans-serif; box-shadow: 3px 3px 0px rgba(40,15,90,0.35), 2px 2px 8px rgba(107,79,160,0.3); transition: background 0.13s, transform 0.13s; }
+  .btn-begin-review:hover { background: #5A3D8A; transform: translateY(-1px); }
+
+  /* ── Script viewer ── */
+  .viewer-tile {
+    background: var(--color-background-primary);
+    border: 1px solid rgba(0,0,0,0.08); border-radius: 10px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.2), 0 6px 20px rgba(0,0,0,0.12);
+    width: 780px; height: 590px;
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+
+  .vw-topbar { padding: 11px 16px; border-bottom: 1px solid rgba(0,0,0,0.07); display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+  .vw-student { font-size: 13px; font-weight: 600; color: var(--color-text-primary); }
+  .vw-score { font-size: 11px; font-weight: 500; padding: 3px 9px; border-radius: 4px; }
+  .vw-grade { font-size: 11px; font-weight: 500; padding: 3px 9px; border-radius: 4px; }
+  .vw-topbar-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+  .vw-indicator { display: flex; align-items: center; gap: 4px; font-size: 10px; color: rgba(0,0,0,0.35); }
+  .vw-dot { width: 6px; height: 6px; border-radius: 50%; }
+  .vw-dot.green { background: #5BAB82; }
+  .vw-dot.blue { background: #4A90C4; }
+  .vw-dot.amber { background: #C4883A; }
+  .vw-progress { font-size: 10px; color: rgba(0,0,0,0.3); white-space: nowrap; }
+  .vw-close { width: 26px; height: 26px; border-radius: 5px; border: 1px solid rgba(0,0,0,0.1); background: transparent; display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--color-text-secondary); font-size: 13px; }
+
+  .vw-body { flex: 1; display: flex; overflow: hidden; }
+
+  .vw-pages { width: 100px; flex-shrink: 0; border-right: 1px solid rgba(0,0,0,0.07); overflow-y: auto; padding: 8px 6px; display: flex; flex-direction: column; gap: 5px; background: var(--color-background-secondary); }
+  .page-mini { background: white; border: 1.5px solid rgba(0,0,0,0.1); border-radius: 4px; padding: 5px 4px; cursor: pointer; transition: border-color 0.13s; }
+  .page-mini:hover { border-color: rgba(107,79,160,0.4); }
+  .page-mini.active { border-color: #6B4FA0; }
+  .page-mini-label { font-size: 6px; color: rgba(0,0,0,0.3); margin-bottom: 2px; font-family: 'DM Mono', monospace; }
+  .pm-line { height: 1.5px; border-radius: 0.5px; margin-bottom: 2px; }
+  .pm-line.text { background: rgba(0,0,0,0.11); }
+  .pm-line.hw { background: rgba(0,0,0,0.32); height: 2px; }
+
+  .vw-main { flex: 1; overflow-y: auto; padding: 0 24px 24px; }
+  .vw-main::-webkit-scrollbar { width: 4px; }
+
+  /* Floating toolbar — semi-transparent, lighter */
+  .floating-toolbar {
+    position: sticky; top: 0; z-index: 30;
+    display: flex; align-items: center; gap: 3px;
+    background: rgba(55,65,81,0.72);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-radius: 10px; padding: 5px 8px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.15), 0 1px 4px rgba(0,0,0,0.1);
+    margin: 12px auto 16px; width: fit-content;
+    border: 1px solid rgba(255,255,255,0.1);
+  }
+
+  .tb-sep { width: 1px; height: 16px; background: rgba(255,255,255,0.12); margin: 0 3px; }
+  .tb-btn { width: 28px; height: 28px; border-radius: 6px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: rgba(255,255,255,0.6); font-size: 11px; font-weight: 600; transition: background 0.13s, color 0.13s; }
+  .tb-btn:hover { background: rgba(255,255,255,0.12); color: rgba(255,255,255,0.95); }
+  .tb-btn.active { background: rgba(107,79,160,0.6); color: white; }
+  .tb-btn svg { width: 13px; height: 13px; stroke: currentColor; fill: none; stroke-width: 1.5; }
+  .tb-hint { font-size: 9px; color: rgba(255,255,255,0.3); padding: 0 5px; white-space: nowrap; }
+
+  .paper-content { display: flex; flex-direction: column; gap: 18px; }
+  .paper-ai-summary { background: rgba(107,79,160,0.04); border: 1px solid rgba(107,79,160,0.14); border-radius: 8px; padding: 12px 16px; }
+  .ai-label { font-size: 9px; font-weight: 600; color: rgba(107,79,160,0.55); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 6px; }
+  .ai-text { font-size: 12px; color: var(--color-text-secondary); line-height: 1.65; }
+  .section-divider { font-size: 10px; font-weight: 700; color: rgba(0,0,0,0.28); text-transform: uppercase; letter-spacing: 0.12em; border-bottom: 1px solid rgba(0,0,0,0.07); padding-bottom: 5px; }
+  .mcq-table { width: 100%; border-collapse: collapse; }
+  .mcq-table th { font-size: 10px; font-weight: 600; color: rgba(0,0,0,0.3); text-transform: uppercase; letter-spacing: 0.06em; padding: 5px 8px; border-bottom: 1px solid rgba(0,0,0,0.07); text-align: left; }
+  .mcq-table td { font-size: 12px; color: var(--color-text-primary); padding: 7px 8px; border-bottom: 1px solid rgba(0,0,0,0.04); }
+  .mc-correct { color: #5BAB82; font-weight: 600; }
+  .mc-wrong { color: #C04444; font-weight: 600; }
+  .q-block { display: flex; flex-direction: column; gap: 7px; }
+  .q-head { display: flex; align-items: flex-start; gap: 8px; }
+  .q-label { font-size: 10px; font-weight: 600; color: rgba(0,0,0,0.35); flex-shrink: 0; padding-top: 1px; }
+  .q-text { font-size: 12px; font-weight: 500; color: var(--color-text-primary); flex: 1; line-height: 1.4; }
+  .q-score-pill { font-size: 11px; font-weight: 700; padding: 3px 11px; border-radius: 20px; flex-shrink: 0; }
+  .q-score-pill.full { background: #5BAB82; color: white; }
+  .q-score-pill.part { background: #C4883A; color: white; }
+  .q-response { background: rgba(0,0,0,0.02); border-left: 3px solid rgba(107,79,160,0.18); border-radius: 0 5px 5px 0; padding: 8px 12px; font-size: 11.5px; color: var(--color-text-secondary); line-height: 1.65; font-style: italic; }
+  .q-tags { display: flex; gap: 6px; flex-wrap: wrap; }
+  .tag { font-size: 10px; font-weight: 500; padding: 2px 7px; border-radius: 4px; }
+  .tag.ao1 { background: rgba(74,144,196,0.1); color: #2E6FA0; }
+  .tag.ao2 { background: rgba(107,79,160,0.09); color: #6B4FA0; }
+  .tag.ao3 { background: rgba(91,171,130,0.1); color: #3D7A5C; }
+  .tag.tick { background: rgba(91,171,130,0.1); color: #3D7A5C; }
+  .tag.warn { background: rgba(196,136,58,0.1); color: #7A4A10; }
+  .q-note { font-size: 11px; color: rgba(0,0,0,0.4); line-height: 1.6; font-style: italic; }
+
+  .vw-footer { padding: 11px 16px; border-top: 1px solid rgba(0,0,0,0.07); display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+  .vw-nav { display: flex; gap: 6px; }
+  .btn-nav { height: 32px; padding: 0 14px; border-radius: 5px; border: 1px solid rgba(0,0,0,0.1); background: transparent; font-size: 11px; font-weight: 400; color: var(--color-text-secondary); cursor: pointer; font-family: 'Inter', sans-serif; }
+  .btn-nav:hover { background: rgba(0,0,0,0.04); }
+
+  /* Confirm marking — purple accent */
+  .btn-confirm-marking {
+    height: 36px; padding: 0 24px; border-radius: 6px;
+    border: none; background: #6B4FA0; color: white;
+    font-size: 13px; font-weight: 600; cursor: pointer;
+    font-family: 'Inter', sans-serif;
+    box-shadow: 3px 3px 0px rgba(40,15,90,0.35), 2px 2px 10px rgba(107,79,160,0.3);
+    transition: background 0.13s, transform 0.13s;
+  }
+  .btn-confirm-marking:hover { background: #5A3D8A; transform: translateY(-1px); }
+
+  /* ── All confirmed — compact, centred ── */
+  .confirmed-tile {
+    background: var(--color-background-primary);
+    border: 1px solid rgba(107,79,160,0.2); border-radius: 10px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.2), 0 6px 20px rgba(0,0,0,0.12);
+    width: 340px;
+    display: flex; flex-direction: column; align-items: center;
+    padding: 32px 28px 24px;
+    text-align: center; gap: 0;
+  }
+
+  /* Big centred tick */
+  .ct-big-tick {
+    width: 64px; height: 64px; border-radius: 50%;
+    background: rgba(107,79,160,0.08);
+    border: 2px solid rgba(107,79,160,0.3);
+    display: flex; align-items: center; justify-content: center;
+    margin-bottom: 16px;
+    animation: popIn 0.4s cubic-bezier(0.22,1,0.36,1) forwards;
+  }
+  @keyframes popIn { 0%{transform:scale(0.5);opacity:0} 100%{transform:scale(1);opacity:1} }
+  .ct-big-tick svg { width: 32px; height: 32px; stroke: #6B4FA0; fill: none; stroke-width: 2.5; }
+
+  .ct-title {
+    font-size: 17px; font-weight: 600; color: var(--color-text-primary);
+    margin-bottom: 4px;
+  }
+  .ct-sub {
+    font-size: 11px; color: var(--color-text-tertiary);
+    margin-bottom: 24px;
+  }
+
+  /* Download section label */
+  .ct-dl-label {
+    font-size: 14px; font-weight: 600; color: #6B4FA0;
+    margin-bottom: 12px; text-align: center;
+    letter-spacing: 0.01em;
+  }
+
+  /* Download options — full width, compact */
+  .dl-opts { width: 100%; display: flex; flex-direction: column; gap: 7px; margin-bottom: 16px; }
+
+  .dl-opt {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 14px; border: 1.5px solid rgba(107,79,160,0.18); border-radius: 8px;
+    cursor: pointer; transition: border-color 0.14s, background 0.14s; width: 100%;
+  }
+  .dl-opt:hover { border-color: rgba(107,79,160,0.45); background: rgba(107,79,160,0.03); }
+
+  .dl-opt-left { display: flex; align-items: center; gap: 10px; }
+  .dl-opt-icon { width: 26px; height: 26px; border-radius: 6px; background: rgba(107,79,160,0.08); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .dl-opt-icon svg { width: 13px; height: 13px; stroke: #6B4FA0; fill: none; stroke-width: 1.5; }
+  .dl-opt-label { font-size: 13px; font-weight: 500; color: var(--color-text-primary); }
+  .dl-opt-sub { font-size: 10px; color: var(--color-text-tertiary); margin-top: 1px; }
+  .dl-opt-arrow { color: rgba(107,79,160,0.4); font-size: 14px; flex-shrink: 0; }
+
+  .btn-done-sm { height: 30px; padding: 0 16px; border-radius: 5px; border: 1px solid rgba(0,0,0,0.1); background: transparent; font-size: 11px; font-weight: 400; color: var(--color-text-tertiary); cursor: pointer; font-family: 'Inter', sans-serif; }
+  .btn-done-sm:hover { background: rgba(0,0,0,0.04); }
+
+  /* ── Student papers download ── */
+  .dl-tile { background: var(--color-background-primary); border: 1px solid rgba(107,79,160,0.2); border-radius: 10px; box-shadow: 0 20px 60px rgba(0,0,0,0.2), 0 6px 20px rgba(0,0,0,0.12); width: 360px; display: flex; flex-direction: column; overflow: hidden; }
+  .dl-header { padding: 16px 20px 13px; border-bottom: 1px solid rgba(0,0,0,0.07); }
+  .dl-title { font-size: 14px; font-weight: 600; color: var(--color-text-primary); }
+  .dl-sub-text { font-size: 11px; color: var(--color-text-tertiary); margin-top: 2px; }
+  .dl-body { padding: 14px 20px; display: flex; flex-direction: column; gap: 10px; }
+  .dl-format-label { font-size: 10px; font-weight: 600; color: rgba(0,0,0,0.28); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 6px; }
+  .format-options { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .format-opt { border: 1.5px solid rgba(107,79,160,0.2); border-radius: 7px; padding: 9px 12px; cursor: pointer; transition: all 0.13s; text-align: center; }
+  .format-opt:hover { border-color: rgba(107,79,160,0.45); background: rgba(107,79,160,0.03); }
+  .format-opt.selected { border-color: #6B4FA0; background: rgba(107,79,160,0.06); }
+  .format-opt-name { font-size: 12px; font-weight: 500; color: var(--color-text-primary); margin-bottom: 1px; }
+  .format-opt-desc { font-size: 10px; color: var(--color-text-tertiary); }
+  .checkbox-row { display: flex; align-items: center; gap: 10px; padding: 9px 13px; border: 1.5px solid rgba(107,79,160,0.18); border-radius: 7px; cursor: pointer; }
+  .cb-box { width: 15px; height: 15px; border-radius: 3px; flex-shrink: 0; background: #6B4FA0; border: 2px solid #6B4FA0; display: flex; align-items: center; justify-content: center; transition: all 0.13s; }
+  .cb-box.unchecked { background: transparent; border-color: rgba(0,0,0,0.2); }
+  .cb-box svg { width: 8px; height: 8px; stroke: white; fill: none; stroke-width: 2.5; }
+  .cb-label { font-size: 12px; font-weight: 500; color: var(--color-text-primary); }
+  .cb-desc { font-size: 10px; color: var(--color-text-tertiary); margin-top: 1px; }
+  .dl-footer { padding: 11px 20px 14px; border-top: 1px solid rgba(0,0,0,0.07); display: flex; gap: 8px; justify-content: flex-end; }
+  .btn-back-sm { height: 34px; padding: 0 14px; border-radius: 5px; border: 1px solid rgba(0,0,0,0.1); background: transparent; font-size: 12px; font-weight: 400; color: var(--color-text-secondary); cursor: pointer; font-family: 'Inter', sans-serif; }
+  .btn-download { height: 34px; padding: 0 18px; border-radius: 5px; border: none; background: #6B4FA0; color: white; font-size: 12px; font-weight: 600; cursor: pointer; font-family: 'Inter', sans-serif; box-shadow: 2px 2px 8px rgba(107,79,160,0.3); display: flex; align-items: center; gap: 6px; transition: background 0.13s; }
+  .btn-download:hover { background: #5A3D8A; }
+  .btn-download svg { width: 13px; height: 13px; stroke: white; fill: none; stroke-width: 2; }
+</style>
+
+<div class="root" id="root">
+  <div class="bg-content">
+    <div class="bg-greeting">Good morning, Sarah.</div>
+    <div class="bg-grid">
+      <div class="bg-card"></div><div class="bg-card"></div><div class="bg-card"></div>
+      <div class="bg-card"></div><div class="bg-card"></div><div class="bg-card"></div>
+    </div>
+  </div>
+  <div class="overlay"></div>
+
+  <!-- STEP A: Results list -->
+  <div class="step visible" id="stepA">
+    <div class="results-tile">
+      <div class="rl-header">
+        <div>
+          <div class="rl-title">Biology A2 — June 2025</div>
+          <div class="rl-sub">24 scripts marked · review and confirm each before downloading</div>
+        </div>
+        <div class="rl-header-right">
+          <div class="rl-export"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Export CSV</div>
+          <div class="rl-export"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>Export PDF</div>
+        </div>
+      </div>
+      <div class="rl-stats" id="rlStats">
+        <div class="stat-cell"><div class="stat-label">Average score</div><div class="stat-val" id="statAvg">—</div></div>
+        <div class="stat-cell"><div class="stat-label">Highest</div><div class="stat-val" id="statHigh">—</div></div>
+        <div class="stat-cell"><div class="stat-label">Lowest</div><div class="stat-val" id="statLow">—</div></div>
+      </div>
+      <div class="rl-table-head">
+        <div class="th">Student</div>
+        <div class="th center">Score</div>
+        <div class="th center">Grade</div>
+        <div class="th right">Actions</div>
+      </div>
+      <div class="rl-body" id="rlBody"></div>
+      <div class="rl-footer">
+        <div class="rl-confirmed-count"><span id="confirmedCount">0</span> of 24 confirmed</div>
+        <button class="btn-begin-review" onclick="startReview()">Begin review →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- STEP B: Script viewer -->
+  <div class="step" id="stepB">
+    <div class="viewer-tile">
+      <div class="vw-topbar">
+        <div class="vw-student" id="vwStudent">Rhys Taylor</div>
+        <div class="vw-score" id="vwScore">34/43 · 79%</div>
+        <div class="vw-grade" id="vwGrade">Grade 7</div>
+        <div class="vw-topbar-right">
+          <div class="vw-indicator"><div class="vw-dot green"></div>Extraction</div>
+          <div class="vw-indicator"><div class="vw-dot blue"></div>Grading</div>
+          <div class="vw-indicator"><div class="vw-dot amber"></div>Annotation</div>
+          <div class="vw-progress" id="vwProgress">Script 1 of 24</div>
+          <button class="vw-close" onclick="snapTo('stepA')">✕</button>
+        </div>
+      </div>
+      <div class="vw-body">
+        <div class="vw-pages" id="vwPages"></div>
+        <div class="vw-main">
+          <div class="floating-toolbar">
+            <div class="tb-btn active">✓</div>
+            <div class="tb-btn">✕</div>
+            <div class="tb-sep"></div>
+            <div class="tb-btn"><svg viewBox="0 0 24 24"><path d="M6 4h8a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"/><path d="M6 12h9a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"/></svg></div>
+            <div class="tb-btn"><svg viewBox="0 0 24 24"><path d="M6 3v7a6 6 0 0 0 6 6 6 6 0 0 0 6-6V3"/><line x1="4" y1="21" x2="20" y2="21"/></svg></div>
+            <div class="tb-btn"><svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg></div>
+            <div class="tb-sep"></div>
+            <div class="tb-btn"><span style="font-size:9px;font-weight:700;color:rgba(130,180,220,0.9);">AO1</span></div>
+            <div class="tb-btn"><span style="font-size:9px;font-weight:700;color:rgba(180,155,220,0.9);">AO2</span></div>
+            <div class="tb-btn"><span style="font-size:9px;font-weight:700;color:rgba(130,200,170,0.9);">AO3</span></div>
+            <div class="tb-sep"></div>
+            <div class="tb-hint">Select text · press 1–7</div>
+          </div>
+          <div class="paper-content">
+            <div class="paper-ai-summary">
+              <div class="ai-label">DeepMark Assessment Summary</div>
+              <div class="ai-text">Rhys demonstrates strong knowledge of biological structures with clear AO1 recall. Section B analytical chains are well developed but AO3 evaluation lacks explicit comparative judgement. To improve: end extended answers with a clear evaluative statement that explicitly weighs the significance of each argument.</div>
+            </div>
+            <div class="section-divider">Section A — Multiple Choice</div>
+            <table class="mcq-table">
+              <thead><tr><th>Q</th><th>Correct</th><th>Student</th><th></th><th>Mark</th></tr></thead>
+              <tbody>
+                <tr><td>Q01.1</td><td>B</td><td>B</td><td style="color:#5BAB82;">✓</td><td class="mc-correct">1/1</td></tr>
+                <tr><td>Q01.2</td><td>B</td><td>B</td><td style="color:#5BAB82;">✓</td><td class="mc-correct">1/1</td></tr>
+                <tr><td>Q01.3</td><td>A</td><td>C</td><td style="color:#C04444;">✗</td><td class="mc-wrong">0/1</td></tr>
+              </tbody>
+            </table>
+            <div class="section-divider">Section A — Short Answer</div>
+            <div class="q-block">
+              <div class="q-head"><div class="q-label">Q2</div><div class="q-text">Explain the difference between diffusion and active transport.</div><div class="q-score-pill full">2/2</div></div>
+              <div class="q-response">"Diffusion is passive, no energy needed, moves down concentration gradient. Active transport requires ATP and moves particles against the gradient."</div>
+              <div class="q-tags"><div class="tag ao1">AO1</div><div class="tag tick">✓ Energy contrast</div><div class="tag tick">✓ Direction contrasted</div></div>
+            </div>
+            <div class="q-block">
+              <div class="q-head"><div class="q-label">Q3</div><div class="q-text">Describe the structure of DNA.</div><div class="q-score-pill full">4/4</div></div>
+              <div class="q-response">"DNA is a double helix with two antiparallel strands held by hydrogen bonds between complementary base pairs (A-T, C-G), with a sugar-phosphate backbone."</div>
+              <div class="q-tags"><div class="tag ao1">AO1</div><div class="tag tick">✓ Double helix</div><div class="tag tick">✓ Antiparallel</div><div class="tag tick">✓ H-bonds</div><div class="tag tick">✓ Base pairs</div></div>
+            </div>
+            <div class="section-divider">Section B — Extended Response</div>
+            <div class="q-block">
+              <div class="q-head"><div class="q-label">Q6</div><div class="q-text">Analyse two reasons why cell specialisation is important in multicellular organisms. [6 marks]</div><div class="q-score-pill part">5/6</div></div>
+              <div class="q-response">"Specialisation allows cells to carry out specific functions more efficiently — nerve cells are elongated to transmit signals quickly. Division of labour means different cells do different jobs so the organism functions more effectively."</div>
+              <div class="q-tags"><div class="tag ao2">AO2</div><div class="tag tick">✓ Structure-function chain</div><div class="tag ao2">AO2</div><div class="tag tick">✓ Division of labour</div><div class="tag ao3">AO3</div><div class="tag warn">⚠ Conclusion vague</div></div>
+              <div class="q-note">5/6 — AO3 withheld: conclusion references "greater efficiency" but does not explicitly evaluate which argument is more significant.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="vw-footer">
+        <div class="vw-nav">
+          <button class="btn-nav" onclick="reviewPrev()">← Previous</button>
+          <button class="btn-nav" onclick="snapTo('stepA')">Back to list</button>
+        </div>
+        <button class="btn-confirm-marking" onclick="confirmCurrent()">Confirm marking ✓</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- STEP C: All confirmed — compact, centred -->
+  <div class="step" id="stepC">
+    <div class="confirmed-tile">
+      <div class="ct-big-tick">
+        <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+      </div>
+      <div class="ct-title">All papers marked</div>
+      <div class="ct-sub">Biology A2 — June 2025 · 24 scripts confirmed</div>
+      <div class="ct-dl-label">Download &amp; Print</div>
+      <div class="dl-opts">
+        <div class="dl-opt" onclick="snapTo('stepD')">
+          <div class="dl-opt-left">
+            <div class="dl-opt-icon"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>
+            <div><div class="dl-opt-label">Student papers</div><div class="dl-opt-sub">Annotated PDFs per student</div></div>
+          </div>
+          <div class="dl-opt-arrow">›</div>
+        </div>
+        <div class="dl-opt">
+          <div class="dl-opt-left">
+            <div class="dl-opt-icon"><svg viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></div>
+            <div><div class="dl-opt-label">Examiner report</div><div class="dl-opt-sub">Class summary & question analysis</div></div>
+          </div>
+          <div class="dl-opt-arrow">›</div>
+        </div>
+        <div class="dl-opt">
+          <div class="dl-opt-left">
+            <div class="dl-opt-icon"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/></svg></div>
+            <div><div class="dl-opt-label">Scoring spreadsheet</div><div class="dl-opt-sub">Marks per student as CSV</div></div>
+          </div>
+          <div class="dl-opt-arrow">›</div>
+        </div>
+      </div>
+      <button class="btn-done-sm" onclick="snapTo('stepA')">Done</button>
+    </div>
+  </div>
+
+  <!-- STEP D: Student papers format -->
+  <div class="step" id="stepD">
+    <div class="dl-tile">
+      <div class="dl-header">
+        <div class="dl-title">Download student papers</div>
+        <div class="dl-sub-text">Choose format and annotation options</div>
+      </div>
+      <div class="dl-body">
+        <div class="dl-format-label">Format</div>
+        <div class="format-options">
+          <div class="format-opt selected" id="fmtStandard" onclick="selectFormat('standard')"><div class="format-opt-name">Standard</div><div class="format-opt-desc">One page per sheet</div></div>
+          <div class="format-opt" id="fmt2up" onclick="selectFormat('2up')"><div class="format-opt-name">2 pages per A4</div><div class="format-opt-desc">Compact, saves paper</div></div>
+        </div>
+        <div class="checkbox-row" onclick="toggleAnnot()">
+          <div class="cb-box" id="annotBox"><svg viewBox="0 0 9 9"><polyline points="1,4.5 3.5,7 8,2"/></svg></div>
+          <div><div class="cb-label">Include annotations</div><div class="cb-desc">AO tags, tick marks, and examiner notes on printed scripts</div></div>
+        </div>
+      </div>
+      <div class="dl-footer">
+        <button class="btn-back-sm" onclick="snapTo('stepC')">← Back</button>
+        <button class="btn-download" onclick="snapTo('stepC')"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Download PDF</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  var students = [
+    {name:'Rhys Taylor',    raw:34, pct:79, grade:'Grade 7'},
+    {name:'Aryan Patel',    raw:37, pct:86, grade:'Grade 8'},
+    {name:'Sophie Husseyin',raw:29, pct:67, grade:'Grade 6'},
+    {name:'Kieran Sear',    raw:40, pct:93, grade:'Grade 9'},
+    {name:'Belle Stanford', raw:26, pct:60, grade:'Grade 5'},
+    {name:'Seyed Raigan',   raw:23, pct:53, grade:'Grade 4'},
+    {name:'Zack Wierciak',  raw:24, pct:56, grade:'Grade 4'},
+    {name:'Ana Oliveira',   raw:31, pct:72, grade:'Grade 6'},
+    {name:'Marcus Chen',    raw:33, pct:77, grade:'Grade 7'},
+    {name:'Priya Sharma',   raw:38, pct:88, grade:'Grade 8'},
+    {name:'Tom Henderson',  raw:22, pct:51, grade:'Grade 4'},
+    {name:'Fatima Al-Hassan',raw:36,pct:84, grade:'Grade 8'},
+    {name:'Jake Morrison',  raw:18, pct:42, grade:'Grade 3'},
+    {name:'Lily Zhang',     raw:35, pct:81, grade:'Grade 7'},
+    {name:'Connor Murphy',  raw:27, pct:63, grade:'Grade 5'},
+    {name:'Amara Osei',     raw:30, pct:70, grade:'Grade 6'},
+    {name:'Daniel Park',    raw:21, pct:49, grade:'Grade 3'},
+    {name:'Emma Rossi',     raw:32, pct:74, grade:'Grade 7'},
+    {name:'Yusuf Ibrahim',  raw:28, pct:65, grade:'Grade 5'},
+    {name:'Chloe Bennett',  raw:39, pct:91, grade:'Grade 9'},
+    {name:'Nathan Williams',raw:25, pct:58, grade:'Grade 5'},
+    {name:'Aisha Malik',    raw:34, pct:79, grade:'Grade 7'},
+    {name:'Oliver James',   raw:19, pct:44, grade:'Grade 3'},
+    {name:'Grace Turner',   raw:33, pct:77, grade:'Grade 7'},
+  ];
+
+  var confirmed = new Array(students.length).fill(false);
+  var currentReviewIdx = 0;
+  var annotChecked = true;
+
+  function colourClass(pct) {
+    if (pct >= 80) return 'high';
+    if (pct >= 65) return 'mid-high';
+    if (pct >= 50) return 'mid';
+    if (pct >= 35) return 'mid-low';
+    return 'low';
+  }
+
+  function buildTable() {
+    var body = document.getElementById('rlBody');
+    body.innerHTML = '';
+    students.forEach(function(s, i) {
+      var cls = colourClass(s.pct);
+      var row = document.createElement('div');
+      row.className = 'rl-row';
+      var actionHtml = confirmed[i]
+        ? '<div class="btn-confirmed">✓ Confirmed</div>'
+        : '<div class="rl-view-btn" onclick="event.stopPropagation();openScript('+i+')" title="View"><svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></div><button class="btn-review" onclick="event.stopPropagation();openScript('+i+')">Review</button>';
+
+      row.innerHTML =
+        '<div class="rl-name-cell"><div class="rl-name">' + s.name + '</div><div class="pct-bar-wrap"><div class="pct-bar ' + cls + '" style="width:' + s.pct + '%"></div></div></div>' +
+        '<div class="score-cell"><span class="score-badge ' + cls + '">' + s.raw + '/43 · ' + s.pct + '%</span></div>' +
+        '<div class="grade-cell"><span class="grade-badge ' + cls + '">' + s.grade + '</span></div>' +
+        '<div class="actions-cell">' + actionHtml + '</div>';
+
+      row.addEventListener('click', function() { openScript(i); });
+      body.appendChild(row);
+    });
+
+    var count = confirmed.filter(Boolean).length;
+    document.getElementById('confirmedCount').textContent = count;
+
+    if (count === students.length) {
+      showStats();
+      setTimeout(function() { snapTo('stepC'); }, 500);
+    }
+  }
+
+  function showStats() {
+    var pcts = students.map(function(s){ return s.pct; });
+    var avg = Math.round(pcts.reduce(function(a,b){return a+b;},0)/pcts.length);
+    var high = Math.max.apply(null, students.map(function(s){ return s.raw; }));
+    var low  = Math.min.apply(null, students.map(function(s){ return s.raw; }));
+    document.getElementById('statAvg').textContent = avg + '%';
+    document.getElementById('statHigh').textContent = high + '/43';
+    document.getElementById('statLow').textContent  = low + '/43';
+    document.getElementById('rlStats').classList.add('visible');
+  }
+
+  buildTable();
+
+  var colours = {
+    'high':     { bg:'rgba(91,171,130,0.14)',   c:'#2E7A54' },
+    'mid-high': { bg:'rgba(139,191,106,0.14)',  c:'#4A7A1E' },
+    'mid':      { bg:'rgba(196,184,74,0.14)',   c:'#7A6E10' },
+    'mid-low':  { bg:'rgba(196,136,58,0.14)',   c:'#8A5010' },
+    'low':      { bg:'rgba(192,68,68,0.13)',    c:'#8A1E1E' },
+  };
+
+  function openScript(idx) {
+    currentReviewIdx = idx;
+    var s = students[idx];
+    var cls = colourClass(s.pct);
+    var col = colours[cls];
+    var scoreEl = document.getElementById('vwScore');
+    var gradeEl = document.getElementById('vwGrade');
+    scoreEl.textContent = s.raw + '/43 · ' + s.pct + '%';
+    gradeEl.textContent = s.grade;
+    scoreEl.style.background = col.bg; scoreEl.style.color = col.c;
+    gradeEl.style.background = col.bg; gradeEl.style.color = col.c;
+    document.getElementById('vwStudent').textContent = s.name;
+    document.getElementById('vwProgress').textContent = 'Script ' + (idx+1) + ' of ' + students.length;
+    buildPageList();
+    snapTo('stepB');
+  }
+
+  function startReview() { openScript(0); }
+
+  function confirmCurrent() {
+    confirmed[currentReviewIdx] = true;
+    buildTable();
+    var next = -1;
+    for (var i = currentReviewIdx+1; i < students.length; i++) { if (!confirmed[i]) { next=i; break; } }
+    if (next === -1) { for (var i = 0; i < currentReviewIdx; i++) { if (!confirmed[i]) { next=i; break; } } }
+    if (next !== -1) { openScript(next); } else { snapTo('stepC'); }
+  }
+
+  function reviewPrev() { openScript(currentReviewIdx > 0 ? currentReviewIdx-1 : students.length-1); }
+
+  function buildPageList() {
+    var pages = document.getElementById('vwPages');
+    pages.innerHTML = '';
+    var pats = [['hw','text','hw','text'],['text','hw','hw','text'],['hw','hw','text','hw'],['text','hw','text','hw']];
+    for (var p=0; p<7; p++) {
+      var pm = document.createElement('div');
+      pm.className = 'page-mini'+(p===0?' active':'');
+      pm.innerHTML = '<div class="page-mini-label">p.'+(p+1)+'</div>';
+      pats[p%4].forEach(function(t) {
+        var ln = document.createElement('div');
+        ln.className = 'pm-line ' + t;
+        ln.style.width = (t==='hw' ? 75+Math.random()*20 : 55+Math.random()*30)+'%';
+        if (t==='hw') ln.style.height = '2px';
+        pm.appendChild(ln);
+      });
+      pm.onclick = function() {
+        document.querySelectorAll('.page-mini').forEach(function(el){el.classList.remove('active');});
+        this.classList.add('active');
+      };
+      pages.appendChild(pm);
+    }
+  }
+
+  function selectFormat(f) {
+    document.getElementById('fmtStandard').classList.toggle('selected', f==='standard');
+    document.getElementById('fmt2up').classList.toggle('selected', f==='2up');
+  }
+
+  function toggleAnnot() {
+    annotChecked = !annotChecked;
+    var box = document.getElementById('annotBox');
+    box.classList.toggle('unchecked', !annotChecked);
+    box.innerHTML = annotChecked ? '<svg viewBox="0 0 9 9"><polyline points="1,4.5 3.5,7 8,2"/></svg>' : '';
+  }
+
+  function snapTo(id) {
+    ['stepA','stepB','stepC','stepD'].forEach(function(s){
+      var el=document.getElementById(s);
+      el.classList.remove('visible','entering');
+      el.style.display='none';
+    });
+    var next=document.getElementById(id);
+    next.style.display='';
+    next.classList.add('entering');
+    next.addEventListener('animationend',function h(){
+      next.classList.remove('entering');
+      next.classList.add('visible');
+      next.removeEventListener('animationend',h);
+    });
+  }
+</script>

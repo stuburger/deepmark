@@ -1,6 +1,19 @@
-import { type AnnotationSignal, SIGNAL_TO_TIPTAP } from "@mcp-gcse/shared"
 import type { Node as PmNode } from "@tiptap/pm/model"
 import type { EditorView } from "@tiptap/pm/view"
+import type { AnnotationSignal } from "./alignment/types"
+import { SIGNAL_TO_TIPTAP } from "./mark-registry"
+import {
+	type McqRow,
+	type QuestionGradeAttrs,
+	type TeacherOverrideAttrs,
+	mcqTableAttrsSchema,
+} from "./node-attrs"
+
+export type {
+	McqRow,
+	QuestionGradeAttrs,
+	TeacherOverrideAttrs,
+} from "./node-attrs"
 
 /**
  * Incremental edits on a submission's collaborative document, expressed as
@@ -93,78 +106,13 @@ export function insertQuestionBlock(
 }
 
 /**
- * Per-question grade metadata carried as block attrs on `questionAnswer`
- * (and as columns inside `mcqTable.results[]` rows). Exported so the grade
- * Lambda + projection Lambda + the editor schema all share the same
- * shape — the doc is the source of truth, projection mirrors it to PG,
- * UI reads from doc.
- *
- * `null` for any field means "not set yet" (the AI hasn't graded this
- * question, or the field doesn't apply for this marker method).
- * Matches the `GradingResult` shape in `packages/backend/src/lib/grading/grade-questions.ts`
- * field-for-field, just camelCased to match the rest of the editor schema.
+ * Parse the `results` attr off an mcqTable node. Validates structure at the
+ * doc/code boundary so the rest of editor-ops can spread/merge rows without
+ * `as` casts. A malformed table throws — surfaces a doc corruption loudly
+ * rather than silently writing back a half-typed row.
  */
-export type QuestionGradeAttrs = {
-	awardedScore: number | null
-	markingMethod:
-		| "deterministic"
-		| "point_based"
-		| "level_of_response"
-		| null
-	llmReasoning: string | null
-	feedbackSummary: string | null
-	whatWentWell: string[]
-	evenBetterIf: string[]
-	markPointsResults: Array<{
-		pointNumber: number
-		awarded: boolean
-		reasoning: string
-		expectedCriteria?: string
-		studentCovered?: string
-	}>
-	levelAwarded: number | null
-	whyNotNextLevel: string | null
-	capApplied: string | null
-	markSchemeId: string | null
-}
-
-/**
- * Teacher-authored override of the AI grade. Lives on the same block as
- * the AI grade attrs (see `QuestionGradeAttrs`). When `score` is set,
- * renderers prefer it over `awardedScore`.
- */
-export type TeacherOverrideAttrs = {
-	score: number | null
-	reason: string | null
-	feedback: string | null
-	setBy: string | null
-	setAt: string | null
-}
-
-export type McqRow = {
-	questionId: string
-	questionNumber: string
-	questionText: string | null
-	maxScore: number
-	options: Array<{ option_label: string; option_text: string }>
-	correctLabels: string[]
-	studentAnswer: string | null
-	/** AI-awarded score (null until graded). */
-	awardedScore: number | null
-	/** Marker method — usually "deterministic" for MCQs. */
-	markingMethod: QuestionGradeAttrs["markingMethod"]
-	/** Mostly empty for MCQs but kept for shape parity with written rows. */
-	feedbackSummary: string | null
-	llmReasoning: string | null
-	whatWentWell: string[]
-	evenBetterIf: string[]
-	markPointsResults: QuestionGradeAttrs["markPointsResults"]
-	levelAwarded: number | null
-	whyNotNextLevel: string | null
-	capApplied: string | null
-	markSchemeId: string | null
-	teacherOverride: TeacherOverrideAttrs | null
-	teacherFeedbackOverride: string | null
+function readMcqResults(tableAttrs: Record<string, unknown>): McqRow[] {
+	return mcqTableAttrsSchema.parse(tableAttrs).results
 }
 
 /**
@@ -236,11 +184,11 @@ export function setQuestionGrade(
 
 	const table = findMcqTable(state.doc)
 	if (!table) return
-	const results = (table.node.attrs.results as McqRow[]) ?? []
+	const results = readMcqResults(table.node.attrs)
 	const idx = results.findIndex((r) => r.questionId === questionId)
 	if (idx === -1) return
 	const updated = [...results]
-	updated[idx] = { ...updated[idx], ...grade } as McqRow
+	updated[idx] = { ...updated[idx], ...grade }
 	const tablePos = table.start - 1
 	dispatch(
 		state.tr.setNodeMarkup(tablePos, undefined, {
@@ -283,7 +231,7 @@ export function setTeacherOverride(
 
 	const table = findMcqTable(state.doc)
 	if (!table) return
-	const results = (table.node.attrs.results as McqRow[]) ?? []
+	const results = readMcqResults(table.node.attrs)
 	const idx = results.findIndex((r) => r.questionId === questionId)
 	if (idx === -1) return
 	const updated = [...results]
@@ -291,7 +239,70 @@ export function setTeacherOverride(
 		...updated[idx],
 		teacherOverride: override,
 		teacherFeedbackOverride: feedbackOverride,
-	} as McqRow
+	}
+	const tablePos = table.start - 1
+	dispatch(
+		state.tr.setNodeMarkup(tablePos, undefined, {
+			...table.node.attrs,
+			results: updated,
+		}),
+	)
+}
+
+/**
+ * Update the `whatWentWell` and/or `evenBetterIf` bullet lists on a
+ * graded question. Teacher-driven edits flow through here from the
+ * web tier: the QuestionAnswerView shows a textarea (one bullet per
+ * line); on blur the list is parsed and dispatched. AI grades arrive
+ * via `setQuestionGrade` which writes both fields atomically — once
+ * the teacher edits, their value persists since `setQuestionGrade` is
+ * only called from re-grades (which always create a new submission).
+ *
+ * No-op if `questionId` matches no block / row, or if neither field
+ * is present in the patch.
+ */
+export function setQuestionFeedbackBullets(
+	view: EditorView,
+	questionId: string,
+	patch: { whatWentWell?: string[]; evenBetterIf?: string[] },
+): void {
+	if (patch.whatWentWell === undefined && patch.evenBetterIf === undefined)
+		return
+
+	const { state, dispatch } = view
+
+	const block = findQuestionBlock(state.doc, questionId)
+	if (block) {
+		const nodePos = block.start - 1
+		dispatch(
+			state.tr.setNodeMarkup(nodePos, undefined, {
+				...block.node.attrs,
+				...(patch.whatWentWell !== undefined && {
+					whatWentWell: patch.whatWentWell,
+				}),
+				...(patch.evenBetterIf !== undefined && {
+					evenBetterIf: patch.evenBetterIf,
+				}),
+			}),
+		)
+		return
+	}
+
+	const table = findMcqTable(state.doc)
+	if (!table) return
+	const results = readMcqResults(table.node.attrs)
+	const idx = results.findIndex((r) => r.questionId === questionId)
+	if (idx === -1) return
+	const updated = [...results]
+	updated[idx] = {
+		...updated[idx],
+		...(patch.whatWentWell !== undefined && {
+			whatWentWell: patch.whatWentWell,
+		}),
+		...(patch.evenBetterIf !== undefined && {
+			evenBetterIf: patch.evenBetterIf,
+		}),
+	}
 	const tablePos = table.start - 1
 	dispatch(
 		state.tr.setNodeMarkup(tablePos, undefined, {
@@ -328,11 +339,11 @@ export function setQuestionScore(
 
 	const table = findMcqTable(state.doc)
 	if (!table) return
-	const results = (table.node.attrs.results as McqRow[]) ?? []
+	const results = readMcqResults(table.node.attrs)
 	const idx = results.findIndex((r) => r.questionId === questionId)
 	if (idx === -1) return
 	const updated = [...results]
-	updated[idx] = { ...updated[idx], awardedScore } as McqRow
+	updated[idx] = { ...updated[idx], awardedScore }
 	const tablePos = table.start - 1
 	dispatch(
 		state.tr.setNodeMarkup(tablePos, undefined, {

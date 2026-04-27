@@ -1,3 +1,4 @@
+import { DOC_FRAGMENT_NAME } from "@mcp-gcse/shared"
 import { yXmlFragmentToProsemirrorJSON } from "@tiptap/y-tiptap"
 import { afterEach, describe, expect, it } from "vitest"
 import type * as Y from "yjs"
@@ -27,7 +28,7 @@ type DocJson = {
 }
 
 function readJson(doc: Y.Doc): DocJson {
-	return yXmlFragmentToProsemirrorJSON(doc.getXmlFragment("doc")) as DocJson
+	return yXmlFragmentToProsemirrorJSON(doc.getXmlFragment(DOC_FRAGMENT_NAME)) as DocJson
 }
 
 const editors: Array<{ cleanup: () => void }> = []

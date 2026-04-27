@@ -1,0 +1,462 @@
+
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=DM+Mono:wght@300;400&display=swap');
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  .root {
+    font-family: 'Inter', sans-serif;
+    height: 640px; position: relative; overflow: hidden;
+    background: var(--color-background-secondary);
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  .bg-content { position: absolute; inset: 0; z-index: 0; display: flex; flex-direction: column; padding: 52px 40px; gap: 20px; filter: blur(5px); }
+  .bg-greeting { font-size: 28px; font-weight: 300; color: var(--color-text-secondary); opacity: 0.4; }
+  .bg-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; margin-top: 20px; }
+  .bg-card { height: 80px; background: var(--color-background-primary); border-radius: 5px; opacity: 0.35; }
+  .overlay { position: absolute; inset: 0; z-index: 10; background: rgba(0,0,0,0.22); }
+
+  .step { position: absolute; z-index: 20; display: none; inset: 0; }
+  .step.visible { display: flex; align-items: center; justify-content: center; }
+  .step.entering {
+    display: flex; align-items: center; justify-content: center;
+    animation: snapIn 0.55s cubic-bezier(0.22,1,0.36,1) forwards;
+  }
+  @keyframes snapIn {
+    0%{opacity:0;transform:scale(0.82)} 60%{opacity:1} 85%{transform:scale(1.015)} 100%{opacity:1;transform:scale(1)}
+  }
+
+  /* ── Review tile ── */
+  .review-tile {
+    background: var(--color-background-primary);
+    border: 1px solid rgba(0,0,0,0.08); border-radius: 10px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.2), 0 6px 20px rgba(0,0,0,0.12);
+    width: 700px; max-height: 580px;
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+
+  .rv-header {
+    padding: 16px 20px 12px; border-bottom: 1px solid rgba(0,0,0,0.07);
+    display: flex; align-items: flex-start; justify-content: space-between; flex-shrink: 0;
+  }
+  .rv-title { font-size: 14px; font-weight: 600; color: var(--color-text-primary); }
+  .rv-sub { font-size: 11px; color: var(--color-text-tertiary); margin-top: 2px; }
+  .rv-header-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+
+  .hw-toggle {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 11px; font-weight: 500; color: var(--color-text-secondary);
+    cursor: pointer; padding: 6px 10px;
+    border: 1px solid rgba(0,0,0,0.1); border-radius: 6px;
+    transition: all 0.14s; white-space: nowrap;
+  }
+  .hw-toggle:hover { background: rgba(0,0,0,0.03); }
+  .hw-toggle.active { border-color: rgba(107,79,160,0.45); color: #6B4FA0; background: rgba(107,79,160,0.05); }
+  .hw-toggle svg { width: 13px; height: 13px; stroke: currentColor; fill: none; stroke-width: 1.5; }
+
+  .rv-include-all {
+    display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 500;
+    color: var(--color-text-secondary); cursor: pointer; padding: 6px 10px;
+    border: 1px solid rgba(0,0,0,0.1); border-radius: 6px;
+  }
+  .rv-cb { width: 15px; height: 15px; border-radius: 3px; background: #6B4FA0; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .rv-cb svg { width: 9px; height: 9px; stroke: white; fill: none; stroke-width: 2.5; }
+
+  /* Review all — purple accent */
+  .btn-review-all {
+    height: 32px; padding: 0 14px; border-radius: 5px;
+    border: none; background: #6B4FA0; color: white;
+    font-size: 11px; font-weight: 600; cursor: pointer;
+    font-family: 'Inter', sans-serif; white-space: nowrap;
+    box-shadow: 2px 2px 6px rgba(107,79,160,0.3);
+    transition: background 0.13s;
+  }
+  .btn-review-all:hover { background: #5A3D8A; }
+
+  .rv-body { flex: 1; display: flex; overflow: hidden; }
+
+  /* LEFT list */
+  .rv-list { flex: 1; overflow-y: auto; padding: 10px 14px; border-right: 1px solid rgba(0,0,0,0.06); min-width: 0; }
+  .rv-list::-webkit-scrollbar { width: 4px; }
+  .rv-list::-webkit-scrollbar-thumb { background: rgba(107,79,160,0.18); border-radius: 2px; }
+
+  .rv-item {
+    display: flex; align-items: center; gap: 8px; padding: 8px 10px; margin-bottom: 5px;
+    border: 1.5px solid rgba(107,79,160,0.18); border-radius: 7px;
+    background: var(--color-background-primary); transition: border-color 0.13s;
+  }
+  .rv-item:hover { border-color: rgba(107,79,160,0.35); }
+
+  .rv-num { font-family: 'DM Mono', monospace; font-size: 10px; color: rgba(0,0,0,0.28); width: 16px; flex-shrink: 0; }
+
+  .rv-name { flex: 1; font-size: 12px; font-weight: 500; color: var(--color-text-primary); background: transparent; border: none; outline: none; font-family: 'Inter', sans-serif; }
+
+  /* Page count badge — NEW */
+  .rv-pg-count {
+    font-family: 'DM Mono', monospace; font-size: 10px;
+    color: rgba(107,79,160,0.65);
+    background: rgba(107,79,160,0.07);
+    padding: 2px 7px; border-radius: 4px;
+    white-space: nowrap; flex-shrink: 0;
+  }
+
+  /* View icon button — NEW */
+  .rv-view {
+    width: 26px; height: 26px; border-radius: 5px;
+    background: rgba(107,79,160,0.07);
+    border: 1px solid rgba(107,79,160,0.2);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; flex-shrink: 0;
+    transition: background 0.13s, border-color 0.13s;
+  }
+  .rv-view:hover { background: rgba(107,79,160,0.15); border-color: rgba(107,79,160,0.4); }
+  .rv-view svg { width: 12px; height: 12px; stroke: #6B4FA0; fill: none; stroke-width: 1.5; }
+
+  .rv-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+
+  .rv-delete { font-size: 10px; color: rgba(0,0,0,0.28); cursor: pointer; display: flex; align-items: center; gap: 3px; padding: 3px 6px; border-radius: 4px; transition: all 0.12s; }
+  .rv-delete:hover { background: rgba(220,50,50,0.08); color: rgba(200,40,40,0.7); }
+  .rv-delete svg { width: 11px; height: 11px; stroke: currentColor; fill: none; stroke-width: 1.5; }
+
+  .rv-include { display: flex; align-items: center; gap: 5px; font-size: 10px; font-weight: 600; color: #6B4FA0; cursor: pointer; }
+  .rv-icb { width: 14px; height: 14px; border-radius: 3px; background: #6B4FA0; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .rv-icb svg { width: 8px; height: 8px; stroke: white; fill: none; stroke-width: 2.5; }
+
+  /* RIGHT thumbnails */
+  .rv-thumbs { width: 196px; flex-shrink: 0; overflow-y: auto; padding: 10px 8px; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; align-content: start; }
+  .rv-thumbs::-webkit-scrollbar { width: 3px; }
+  .rv-thumbs::-webkit-scrollbar-thumb { background: rgba(107,79,160,0.15); border-radius: 2px; }
+
+  .script-thumb {
+    background: var(--color-background-primary);
+    border: 1.5px solid rgba(107,79,160,0.22); border-radius: 5px;
+    padding: 5px; cursor: pointer; position: relative;
+    transition: border-color 0.13s, box-shadow 0.13s;
+  }
+  .script-thumb:hover { border-color: #6B4FA0; box-shadow: 0 2px 8px rgba(107,79,160,0.18); }
+
+  .st-name { font-size: 5px; font-weight: 600; color: rgba(107,79,160,0.7); text-align: center; margin-bottom: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  /* A4 page representation */
+  .st-page {
+    background: white; border: 1px solid rgba(0,0,0,0.09); border-radius: 2px;
+    padding: 4px 3px; margin-bottom: 3px;
+    position: relative;
+  }
+
+  /* Stack shadow effect */
+  .st-page:first-of-type::before {
+    content: ''; position: absolute; bottom: -2px; left: 2px; right: -2px;
+    height: 100%; background: rgba(210,205,220,0.25);
+    border: 1px solid rgba(107,79,160,0.08); border-radius: 2px; z-index: -1;
+  }
+  .st-page:first-of-type::after {
+    content: ''; position: absolute; bottom: -4px; left: 4px; right: -4px;
+    height: 100%; background: rgba(210,205,220,0.12);
+    border: 1px solid rgba(107,79,160,0.05); border-radius: 2px; z-index: -2;
+  }
+
+  .st-aqa { font-size: 4px; font-weight: 900; color: #1a1a1a; margin-bottom: 1.5px; }
+  .st-header-box { height: 4px; border: 0.5px solid rgba(0,0,0,0.18); border-radius: 1px; margin-bottom: 2px; }
+  .st-title { font-size: 4.5px; font-weight: 800; color: #1a1a1a; line-height: 1.1; margin-bottom: 1.5px; }
+  .st-date { font-size: 3px; color: rgba(0,0,0,0.4); margin-bottom: 2px; border-bottom: 0.5px solid #1a1a1a; padding-bottom: 1px; }
+
+  .st-line { height: 1px; border-radius: 0.5px; margin-bottom: 1.5px; }
+  .st-line.text { background: rgba(0,0,0,0.12); }
+  .st-line.hw { background: rgba(20,20,20,0.38); }
+  .st-line.f { width: 100%; }
+  .st-line.s { width: 68%; }
+  .st-line.xs { width: 42%; }
+
+  .st-pg-footer { font-size: 3.5px; color: rgba(0,0,0,0.25); margin-top: 2px; font-family: 'DM Mono', monospace; }
+
+  .st-pages-count { font-size: 4.5px; color: rgba(107,79,160,0.55); text-align: center; margin-top: 3px; font-family: 'DM Mono', monospace; }
+
+  .st-view-btn {
+    position: absolute; top: 3px; right: 3px; z-index: 5;
+    width: 13px; height: 13px; border-radius: 2px;
+    background: rgba(107,79,160,0.12);
+    display: flex; align-items: center; justify-content: center;
+    opacity: 0; transition: opacity 0.13s;
+  }
+  .script-thumb:hover .st-view-btn { opacity: 1; }
+  .st-view-btn svg { width: 8px; height: 8px; stroke: #6B4FA0; fill: none; stroke-width: 1.5; }
+
+  .rv-footer {
+    padding: 12px 20px; border-top: 1px solid rgba(0,0,0,0.07);
+    display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;
+  }
+  .rv-count { font-size: 11px; color: var(--color-text-tertiary); }
+  .rv-count span { color: #6B4FA0; font-weight: 600; }
+
+  /* Start marking — purple accent */
+  .btn-start {
+    height: 36px; padding: 0 22px; border-radius: 5px;
+    border: none; background: #6B4FA0; color: white;
+    font-size: 13px; font-weight: 600; cursor: pointer;
+    font-family: 'Inter', sans-serif;
+    box-shadow: 3px 3px 0px rgba(40,15,90,0.35), 2px 2px 8px rgba(107,79,160,0.3);
+    transition: background 0.13s, transform 0.13s; white-space: nowrap;
+  }
+  .btn-start:hover { background: #5A3D8A; transform: translateY(-1px); }
+
+  /* ── Submitted ── */
+  .submitted-tile {
+    background: var(--color-background-primary);
+    border: 1px solid rgba(107,79,160,0.2); border-radius: 10px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.2), 0 6px 20px rgba(0,0,0,0.12);
+    padding: 52px 60px; text-align: center;
+    display: flex; flex-direction: column; align-items: center; gap: 20px;
+    max-width: 420px;
+  }
+  .plane-icon { width: 52px; height: 52px; border-radius: 50%; background: rgba(107,79,160,0.08); border: 2px solid rgba(107,79,160,0.25); display: flex; align-items: center; justify-content: center; }
+  .plane-icon svg { width: 24px; height: 24px; stroke: #6B4FA0; fill: rgba(107,79,160,0.1); stroke-width: 1.8; }
+  .sub-title { font-size: 20px; font-weight: 600; color: var(--color-text-primary); line-height: 1.25; letter-spacing: -0.01em; }
+  .ink-word { display: inline-block; clip-path: inset(0 100% 0 0); animation: inkW 0.45s cubic-bezier(0.22,1,0.36,1) forwards; }
+  @keyframes inkW { 0%{clip-path:inset(0 100% 0 0)} 100%{clip-path:inset(0 0% 0 0)} }
+  .sub-note { display: flex; flex-direction: column; gap: 6px; }
+  .note-line { font-size: 13px; color: var(--color-text-secondary); line-height: 1.5; display: block; clip-path: inset(0 100% 0 0); animation: inkW 0.55s cubic-bezier(0.22,1,0.36,1) forwards; }
+  .note-line.hi { font-weight: 600; color: #6B4FA0; font-size: 14px; }
+  .sub-bar-wrap { width: 140px; height: 2px; background: rgba(107,79,160,0.12); border-radius: 2px; overflow: hidden; }
+  .sub-bar { height: 100%; width: 0%; background: #6B4FA0; border-radius: 2px; transition: width 4s linear; }
+  .sub-dismiss { font-size: 10px; color: var(--color-text-tertiary); cursor: pointer; margin-top: -6px; }
+  .sub-dismiss:hover { color: var(--color-text-secondary); }
+</style>
+
+<h2 class="sr-only">DeepMark script review — list with view icons and page counts, thumbnail grid</h2>
+
+<div class="root" id="root">
+  <div class="bg-content">
+    <div class="bg-greeting">Good morning, Sarah.</div>
+    <div class="bg-grid">
+      <div class="bg-card"></div><div class="bg-card"></div><div class="bg-card"></div>
+      <div class="bg-card"></div><div class="bg-card"></div><div class="bg-card"></div>
+    </div>
+  </div>
+  <div class="overlay"></div>
+
+  <!-- STEP A: Review -->
+  <div class="step visible" id="stepA">
+    <div class="review-tile">
+      <div class="rv-header">
+        <div>
+          <div class="rv-title">Review scripts</div>
+          <div class="rv-sub">Confirm which scripts to include, then start marking</div>
+        </div>
+        <div class="rv-header-right">
+          <div class="hw-toggle" id="hwToggle" onclick="toggleZoom()">
+            <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+            Handwriting ID zoom
+          </div>
+          <div class="rv-include-all">
+            <div class="rv-cb"><svg viewBox="0 0 9 9"><polyline points="1,4.5 3.5,7 8,2"/></svg></div>
+            Include all
+          </div>
+          <button class="btn-review-all">Review all</button>
+        </div>
+      </div>
+
+      <div class="rv-body">
+        <div class="rv-list" id="rvList"></div>
+        <div class="rv-thumbs" id="rvThumbs"></div>
+      </div>
+
+      <div class="rv-footer">
+        <div class="rv-count"><span>24</span> of 24 scripts included</div>
+        <button class="btn-start" onclick="goToSubmitted()">Start marking 24 scripts →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- STEP C: Submitted -->
+  <div class="step" id="stepC">
+    <div class="submitted-tile">
+      <div class="plane-icon">
+        <svg viewBox="0 0 24 24"><path d="M22 2L11 13"/><path d="M22 2L15 22 11 13 2 9l20-7z"/></svg>
+      </div>
+      <div class="sub-title" id="subTitle"></div>
+      <div class="sub-note" id="subNote"></div>
+      <div class="sub-bar-wrap"><div class="sub-bar" id="subBar"></div></div>
+      <div class="sub-dismiss" onclick="snapTo('stepA')">Dismiss</div>
+    </div>
+  </div>
+</div>
+
+<script>
+  var students = [
+    'Rhys Taylor','Aryan Patel','Sophie Husseyin','Kieran Sear',
+    'Belle Stanford','Seyed Raigan','Zack Wierciak','Ana Oliveira',
+    'Marcus Chen','Priya Sharma','Tom Henderson','Fatima Al-Hassan',
+    'Jake Morrison','Lily Zhang','Connor Murphy','Amara Osei',
+    'Daniel Park','Emma Rossi','Yusuf Ibrahim','Chloe Bennett',
+    'Nathan Williams','Aisha Malik','Oliver James','Grace Turner'
+  ];
+
+  // Each student gets a page count 5-7
+  var pageCounts = [7,7,6,7,7,5,7,7,6,7,5,7,6,7,7,5,6,7,7,6,7,5,6,7];
+
+  var zoomMode = false;
+
+  var linePatterns = [
+    ['text f','hw f','text s','hw xs','hw f','text f','hw s','hw xs','text f','hw f'],
+    ['text f','text s','hw f','hw f','text xs','hw s','hw f','text f'],
+    ['hw f','hw s','text f','hw xs','hw f','text s','hw f','text f','hw xs'],
+    ['text f','hw f','hw xs','hw s','text f','hw f','hw f','text xs','hw f'],
+  ];
+
+  function makeLine(type, width, zoomed) {
+    var el = document.createElement('div');
+    el.className = 'st-line ' + type + ' ' + width;
+    var w = width === 'f' ? (88+Math.random()*10) : width === 's' ? (55+Math.random()*15) : (30+Math.random()*15);
+    el.style.width = w + '%';
+    if (type === 'hw') {
+      el.style.height = zoomed ? '2px' : '1px';
+      el.style.background = 'rgba(20,20,20,' + (zoomed ? 0.55 : 0.32) + ')';
+      el.style.transform = 'rotate(' + (Math.random()-0.5)*(zoomed?2:0.8) + 'deg)';
+    }
+    return el;
+  }
+
+  function buildThumb(name, idx, pgCount) {
+    var wrap = document.createElement('div');
+    wrap.className = 'script-thumb';
+
+    var nameEl = document.createElement('div');
+    nameEl.className = 'st-name';
+    nameEl.textContent = name.split(' ')[0];
+    wrap.appendChild(nameEl);
+
+    // Single A4 page with stack shadow
+    var page = document.createElement('div');
+    page.className = 'st-page';
+
+    var aqa = document.createElement('div'); aqa.className = 'st-aqa'; aqa.textContent = 'AQA'; page.appendChild(aqa);
+    var hb = document.createElement('div'); hb.className = 'st-header-box'; page.appendChild(hb);
+    var title = document.createElement('div'); title.className = 'st-title'; title.innerHTML = 'GCSE<br>BUSINESS'; page.appendChild(title);
+    var date = document.createElement('div'); date.className = 'st-date'; date.textContent = 'Tue 24 Mar 2026 · Year 9'; page.appendChild(date);
+
+    // Content lines
+    var pat = linePatterns[idx % linePatterns.length];
+    pat.slice(0, 8).forEach(function(l) {
+      var parts = l.split(' ');
+      page.appendChild(makeLine(parts[0], parts[1], zoomMode));
+    });
+
+    var pgf = document.createElement('div'); pgf.className = 'st-pg-footer'; pgf.textContent = '1 | Page'; page.appendChild(pgf);
+
+    wrap.appendChild(page);
+
+    // Page count
+    var pgCount2 = document.createElement('div');
+    pgCount2.className = 'st-pages-count';
+    pgCount2.textContent = pgCount + ' pages';
+    wrap.appendChild(pgCount2);
+
+    // View icon
+    var viewBtn = document.createElement('div');
+    viewBtn.className = 'st-view-btn';
+    viewBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+    wrap.appendChild(viewBtn);
+
+    return wrap;
+  }
+
+  function buildList() {
+    var list = document.getElementById('rvList');
+    list.innerHTML = '';
+    students.forEach(function(name, i) {
+      var item = document.createElement('div');
+      item.className = 'rv-item';
+
+      var num = document.createElement('div'); num.className = 'rv-num'; num.textContent = i+1;
+      var nameInput = document.createElement('input'); nameInput.className = 'rv-name'; nameInput.value = name;
+
+      // Page count badge — NEW
+      var badge = document.createElement('div'); badge.className = 'rv-pg-count'; badge.textContent = pageCounts[i] + ' pages';
+
+      // View icon — NEW
+      var viewBtn = document.createElement('div'); viewBtn.className = 'rv-view';
+      viewBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+
+      var actions = document.createElement('div'); actions.className = 'rv-actions';
+
+      var del = document.createElement('div'); del.className = 'rv-delete';
+      del.innerHTML = '<svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>Delete';
+
+      var inc = document.createElement('div'); inc.className = 'rv-include';
+      inc.innerHTML = '<div class="rv-icb"><svg viewBox="0 0 8 8"><polyline points="1,4 3,6.5 7,1.5"/></svg></div>Include';
+
+      actions.appendChild(del);
+      actions.appendChild(inc);
+
+      item.appendChild(num);
+      item.appendChild(nameInput);
+      item.appendChild(badge);
+      item.appendChild(viewBtn);
+      item.appendChild(actions);
+
+      list.appendChild(item);
+    });
+  }
+
+  function buildThumbs() {
+    var thumbs = document.getElementById('rvThumbs');
+    thumbs.innerHTML = '';
+    students.forEach(function(name, i) {
+      thumbs.appendChild(buildThumb(name, i, pageCounts[i]));
+    });
+  }
+
+  buildList();
+  buildThumbs();
+
+  function toggleZoom() {
+    zoomMode = !zoomMode;
+    document.getElementById('hwToggle').classList.toggle('active', zoomMode);
+    buildThumbs();
+  }
+
+  function goToSubmitted() {
+    snapTo('stepC');
+
+    var titleEl = document.getElementById('subTitle');
+    var words = 'All scripts submitted for marking.'.split(' ');
+    titleEl.innerHTML = '';
+    words.forEach(function(w,i) {
+      var sp = document.createElement('span');
+      sp.className = 'ink-word';
+      sp.style.animationDelay = (0.2 + i*0.1)+'s';
+      sp.textContent = w + (i<words.length-1?'\u00a0':'');
+      titleEl.appendChild(sp);
+    });
+
+    var noteEl = document.getElementById('subNote');
+    noteEl.innerHTML = '';
+    [{text:'You can close this window at any time.',delay:0.9,cls:''},{text:"DeepMark will email you when it's done.",delay:1.4,cls:'hi'}].forEach(function(l) {
+      var sp = document.createElement('span');
+      sp.className = 'note-line ' + l.cls;
+      sp.style.animationDelay = l.delay+'s';
+      sp.textContent = l.text;
+      noteEl.appendChild(sp);
+    });
+
+    setTimeout(function(){ document.getElementById('subBar').style.width='100%'; }, 80);
+    setTimeout(function(){ snapTo('stepA'); }, 4600);
+  }
+
+  function snapTo(id) {
+    ['stepA','stepC'].forEach(function(s){
+      var el=document.getElementById(s);
+      el.classList.remove('visible','entering');
+      el.style.display='none';
+    });
+    var next=document.getElementById(id);
+    next.style.display='';
+    next.classList.add('entering');
+    next.addEventListener('animationend',function h(){
+      next.classList.remove('entering');
+      next.classList.add('visible');
+      next.removeEventListener('animationend',h);
+    });
+  }
+</script>

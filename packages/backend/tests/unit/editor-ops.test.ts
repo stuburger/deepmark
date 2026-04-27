@@ -1,14 +1,15 @@
-import { yXmlFragmentToProsemirrorJSON } from "@tiptap/y-tiptap"
-import { afterEach, describe, expect, it } from "vitest"
-import type * as Y from "yjs"
 import {
+	DOC_FRAGMENT_NAME,
 	applyAnnotationMark,
 	applyOcrTokenMarks,
 	insertMcqTableBlock,
 	insertQuestionBlock,
 	setAnswerText,
 	setQuestionScore,
-} from "../../src/lib/collab/editor-ops"
+} from "@mcp-gcse/shared"
+import { yXmlFragmentToProsemirrorJSON } from "@tiptap/y-tiptap"
+import { afterEach, describe, expect, it } from "vitest"
+import type * as Y from "yjs"
 import { getEditorSchema } from "../../src/lib/collab/editor-schema"
 import { createTestEditor } from "./helpers/test-editor"
 
@@ -26,7 +27,7 @@ type DocJson = {
 }
 
 function readJson(doc: Y.Doc): DocJson {
-	return yXmlFragmentToProsemirrorJSON(doc.getXmlFragment("doc")) as DocJson
+	return yXmlFragmentToProsemirrorJSON(doc.getXmlFragment(DOC_FRAGMENT_NAME)) as DocJson
 }
 
 const editors: Array<{ cleanup: () => void }> = []

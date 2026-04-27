@@ -5,7 +5,9 @@ import {
 	type GradingDataContextValue,
 	GradingDataProvider,
 } from "@/components/annotated-answer/grading-data-context"
+import { useDocHasQuestionBlocks } from "@/components/annotated-answer/use-doc-has-question-blocks"
 import { useYDoc } from "@/components/annotated-answer/use-y-doc"
+import { OrganicMarkingLoader } from "@/components/marking-loader"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import type {
@@ -13,7 +15,6 @@ import type {
 	StudentPaperAnnotation,
 	StudentPaperResultPayload,
 	TeacherOverride,
-	UpsertTeacherOverrideInput,
 } from "@/lib/marking/types"
 import { useMemo } from "react"
 
@@ -28,71 +29,6 @@ function scoreBadgeVariant(
 	return "destructive"
 }
 
-function OrganicDocumentLoader() {
-	return (
-		<svg
-			aria-hidden="true"
-			className="h-14 w-14 text-blue-500"
-			viewBox="0 0 96 96"
-			fill="none"
-		>
-			<title>Loading document</title>
-			<path
-				d="M28 18C28 13.5817 31.5817 10 36 10H58L72 24V78C72 82.4183 68.4183 86 64 86H36C31.5817 86 28 82.4183 28 78V18Z"
-				className="fill-blue-500/10 stroke-current"
-				strokeWidth="3"
-			/>
-			<path
-				d="M58 10V22C58 23.1046 58.8954 24 60 24H72"
-				className="stroke-current opacity-60"
-				strokeWidth="3"
-				strokeLinecap="round"
-				strokeLinejoin="round"
-			/>
-			<path
-				d="M37 38C43 33 51 43 59 37"
-				className="stroke-current"
-				strokeWidth="3"
-				strokeLinecap="round"
-			>
-				<animate
-					attributeName="d"
-					dur="2.4s"
-					repeatCount="indefinite"
-					values="M37 38C43 33 51 43 59 37;M37 38C43 43 51 33 59 39;M37 38C43 33 51 43 59 37"
-				/>
-			</path>
-			<path
-				d="M36 52C44 47 52 57 60 52"
-				className="stroke-current opacity-70"
-				strokeWidth="3"
-				strokeLinecap="round"
-			>
-				<animate
-					attributeName="d"
-					dur="2.8s"
-					repeatCount="indefinite"
-					values="M36 52C44 47 52 57 60 52;M36 52C44 58 52 47 60 53;M36 52C44 47 52 57 60 52"
-				/>
-			</path>
-			<circle cx="48" cy="68" r="4" className="fill-current">
-				<animate
-					attributeName="r"
-					dur="1.6s"
-					repeatCount="indefinite"
-					values="3;5;3"
-				/>
-				<animate
-					attributeName="opacity"
-					dur="1.6s"
-					repeatCount="indefinite"
-					values="0.35;0.9;0.35"
-				/>
-			</circle>
-		</svg>
-	)
-}
-
 export function GradingResultsPanel({
 	jobId,
 	data,
@@ -100,7 +36,6 @@ export function GradingResultsPanel({
 	activeQuestionNumber,
 	onAnswerSaved,
 	overridesByQuestionId,
-	onOverrideChange,
 	onDerivedAnnotations,
 	onTokenHighlight,
 }: {
@@ -110,10 +45,6 @@ export function GradingResultsPanel({
 	activeQuestionNumber: string | null
 	onAnswerSaved: (questionId: string, text: string) => void
 	overridesByQuestionId?: Map<string, TeacherOverride>
-	onOverrideChange?: (
-		questionId: string,
-		input: UpsertTeacherOverrideInput | null,
-	) => void
 	onDerivedAnnotations?: (annotations: StudentPaperAnnotation[]) => void
 	onTokenHighlight?: (tokenIds: string[] | null) => void
 }) {
@@ -140,6 +71,8 @@ export function GradingResultsPanel({
 	}, [data.grading_results])
 
 	// Build context value — consumed by NodeViews via useGradingData()
+	// for read-side state. Write ops (override, feedback bullets) come from
+	// `useDocOps()` instead (see DocOpsProvider in submission-view).
 	const ctxValue: GradingDataContextValue = useMemo(
 		() => ({
 			gradingResults: gradingResultsMap,
@@ -148,7 +81,6 @@ export function GradingResultsPanel({
 			activeQuestionNumber,
 			jobId,
 			onAnswerSaved,
-			onOverrideChange: onOverrideChange ?? (() => {}),
 		}),
 		[
 			gradingResultsMap,
@@ -157,7 +89,6 @@ export function GradingResultsPanel({
 			activeQuestionNumber,
 			jobId,
 			onAnswerSaved,
-			onOverrideChange,
 		],
 	)
 
@@ -169,7 +100,12 @@ export function GradingResultsPanel({
 	// legacy jobs that predate the Submission model). The hook owns lifecycle:
 	// IndexedDB offline cache + HocuspocusProvider sync + clean teardown.
 	const docKey = data.submission_id ?? jobId
-	const { doc: ydoc, synced } = useYDoc(docKey)
+	const { doc: ydoc, provider, synced } = useYDoc(docKey)
+	const hasBlocks = useDocHasQuestionBlocks(ydoc)
+	// Show the marking loader until the OCR Lambda has projected the question
+	// skeleton. Without this, the editor mounts as soon as the empty doc syncs
+	// and the user sees blank white space mid-extraction.
+	const showLoader = !ydoc || !synced || !hasBlocks
 
 	return (
 		<div className="space-y-4">
@@ -194,17 +130,19 @@ export function GradingResultsPanel({
 			{/* Answer sheet — gated on Y.Doc sync so AI annotations applied
 			    server-side don't race an empty initial doc. */}
 			<GradingDataProvider value={ctxValue}>
-				{ydoc && synced ? (
-					<AnnotatedAnswerSheet
-						ydoc={ydoc}
-						onDerivedAnnotations={onDerivedAnnotations}
-						onTokenHighlight={onTokenHighlight}
-					/>
-				) : (
-					<div className="flex flex-col items-center justify-center gap-3 py-20 text-sm text-muted-foreground">
-						<OrganicDocumentLoader />
-						<span>Loading document...</span>
+				{showLoader ? (
+					<div className="flex h-[60vh] items-center justify-center">
+						<OrganicMarkingLoader />
 					</div>
+				) : (
+					ydoc && (
+						<AnnotatedAnswerSheet
+							ydoc={ydoc}
+							provider={provider}
+							onDerivedAnnotations={onDerivedAnnotations}
+							onTokenHighlight={onTokenHighlight}
+						/>
+					)
 				)}
 			</GradingDataProvider>
 		</div>

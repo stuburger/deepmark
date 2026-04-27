@@ -1,0 +1,571 @@
+
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=DM+Mono:wght@300;400&family=Montserrat:wght@600;700&display=swap');
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  .root {
+    font-family: 'Inter', sans-serif;
+    height: 640px;
+    position: relative;
+    overflow: hidden;
+    background: var(--color-background-secondary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* Blurred background landing page simulation */
+  .bg-content {
+    position: absolute; inset: 0; z-index: 0;
+    display: flex; flex-direction: column;
+    padding: 52px 40px;
+    gap: 20px;
+    filter: blur(0px);
+    transition: filter 0.3s ease;
+  }
+
+  .bg-content.blurred { filter: blur(5px); }
+
+  .bg-greeting { font-size: 28px; font-weight: 300; color: var(--color-text-secondary); opacity: 0.4; }
+  .bg-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; margin-top: 20px; }
+  .bg-card {
+    height: 80px; background: var(--color-background-primary);
+    border-radius: 5px; opacity: 0.35;
+    box-shadow: 3px 3px 0px rgba(0,0,0,0.12), 2px 2px 5px rgba(0,0,0,0.1);
+  }
+
+  /* Dim overlay */
+  .overlay {
+    position: absolute; inset: 0; z-index: 10;
+    background: rgba(0,0,0,0.22);
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.3s ease;
+  }
+  .overlay.on { opacity: 1; }
+
+  /* ── STEP TILES — centred, scale from centre ── */
+  .step {
+    position: absolute; z-index: 20;
+    transform: scale(0.85);
+    opacity: 0;
+    pointer-events: none;
+    transition: transform 0.45s cubic-bezier(0.22,1,0.36,1), opacity 0.3s ease;
+  }
+
+  .step.active {
+    transform: scale(1);
+    opacity: 1;
+    pointer-events: all;
+  }
+
+  .step.exit {
+    transform: scale(0.92);
+    opacity: 0;
+    pointer-events: none;
+    transition: transform 0.2s ease-in, opacity 0.18s ease-in;
+  }
+
+  /* Step 1 — Name + Upload */
+  .tile {
+    background: var(--color-background-primary);
+    border: 1px solid rgba(0,0,0,0.08);
+    border-radius: 10px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.18), 0 6px 20px rgba(0,0,0,0.12);
+    overflow: hidden;
+  }
+
+  .tile-header {
+    padding: 20px 24px 16px;
+    border-bottom: 1px solid rgba(0,0,0,0.06);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+
+  .tile-title {
+    font-size: 13px; font-weight: 600; color: var(--color-text-primary);
+    display: flex; align-items: center; gap: 8px;
+  }
+
+  .tile-step {
+    font-size: 10px; font-weight: 500;
+    color: rgba(107,79,160,0.7);
+    background: rgba(107,79,160,0.08);
+    padding: 2px 8px; border-radius: 10px;
+  }
+
+  .tile-close {
+    width: 24px; height: 24px; border-radius: 5px;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--color-text-tertiary); cursor: pointer; font-size: 14px;
+    transition: background 0.13s;
+  }
+  .tile-close:hover { background: rgba(0,0,0,0.06); }
+
+  .tile-body { padding: 20px 24px; }
+
+  /* Name input */
+  .field-label {
+    font-size: 10px; font-weight: 600; color: var(--color-text-secondary);
+    text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 6px;
+  }
+
+  .field-input {
+    width: 100%;
+    height: 38px;
+    background: var(--color-background-secondary);
+    border: 1px solid rgba(0,0,0,0.1);
+    border-radius: 6px;
+    padding: 0 12px;
+    font-size: 13px; color: var(--color-text-primary);
+    font-family: 'Inter', sans-serif;
+    outline: none;
+    transition: border-color 0.14s;
+    margin-bottom: 16px;
+  }
+
+  .field-input:focus { border-color: #6B4FA0; }
+  .field-input::placeholder { color: var(--color-text-tertiary); }
+
+  /* Upload row */
+  .upload-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }
+
+  .upload-zone {
+    border: 1.5px dashed rgba(0,0,0,0.15);
+    border-radius: 8px;
+    padding: 18px 12px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+    position: relative;
+  }
+
+  .upload-zone:hover {
+    border-color: #6B4FA0;
+    background: rgba(107,79,160,0.03);
+  }
+
+  .upload-icon { width: 28px; height: 28px; margin: 0 auto 8px; stroke: rgba(0,0,0,0.25); fill: none; stroke-width: 1.5; }
+  .upload-zone:hover .upload-icon { stroke: #6B4FA0; }
+
+  .upload-label { font-size: 11px; font-weight: 600; color: var(--color-text-secondary); margin-bottom: 2px; }
+  .upload-sub { font-size: 10px; color: var(--color-text-tertiary); }
+
+  /* Grade boundaries button */
+  .gb-btn {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 12px; font-weight: 500;
+    color: #6B4FA0; cursor: pointer;
+    padding: 8px 12px;
+    border: 1px solid rgba(107,79,160,0.25);
+    border-radius: 6px;
+    width: fit-content;
+    transition: background 0.14s;
+    margin-bottom: 20px;
+  }
+
+  .gb-btn:hover { background: rgba(107,79,160,0.05); }
+  .gb-icon { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 1.5; }
+
+  .tile-footer {
+    padding: 14px 24px;
+    border-top: 1px solid rgba(0,0,0,0.06);
+    display: flex; justify-content: flex-end; gap: 8px;
+  }
+
+  .btn-secondary {
+    height: 34px; padding: 0 16px; border-radius: 5px;
+    border: 1px solid rgba(0,0,0,0.1);
+    background: transparent;
+    font-size: 12px; font-weight: 500; color: var(--color-text-secondary);
+    cursor: pointer; font-family: 'Inter', sans-serif;
+    transition: background 0.13s;
+  }
+  .btn-secondary:hover { background: rgba(0,0,0,0.04); }
+
+  .btn-primary {
+    height: 34px; padding: 0 20px; border-radius: 5px;
+    border: none; background: #6B4FA0;
+    font-size: 12px; font-weight: 600; color: white;
+    cursor: pointer; font-family: 'Inter', sans-serif;
+    box-shadow: 2px 2px 8px rgba(107,79,160,0.3);
+    transition: background 0.13s, transform 0.13s;
+  }
+  .btn-primary:hover { background: #5A3D8A; transform: translateY(-1px); }
+
+  /* ── GRADE BOUNDARIES POPOVER ── */
+  .gb-popover {
+    position: absolute; z-index: 30;
+    right: -180px; top: 50%;
+    transform: translateY(-50%) scale(0.9);
+    opacity: 0; pointer-events: none;
+    transition: all 0.22s cubic-bezier(0.22,1,0.36,1);
+    background: var(--color-background-primary);
+    border: 1px solid rgba(0,0,0,0.09);
+    border-radius: 10px;
+    width: 160px;
+    padding: 14px 14px 10px;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.15), 0 4px 12px rgba(0,0,0,0.1);
+  }
+
+  .gb-popover.open {
+    opacity: 1; pointer-events: all;
+    transform: translateY(-50%) scale(1);
+  }
+
+  .gb-pop-title {
+    font-size: 10px; font-weight: 600; color: var(--color-text-secondary);
+    text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 10px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+
+  .gb-pop-close { cursor: pointer; color: var(--color-text-tertiary); font-size: 13px; }
+
+  .gb-row {
+    display: flex; align-items: center; gap: 8px;
+    margin-bottom: 6px;
+  }
+
+  .gb-grade {
+    font-size: 11px; font-weight: 600; color: #6B4FA0;
+    width: 20px; text-align: center; flex-shrink: 0;
+  }
+
+  .gb-input {
+    flex: 1; height: 28px;
+    background: var(--color-background-secondary);
+    border: 1px solid rgba(0,0,0,0.1); border-radius: 5px;
+    padding: 0 8px; font-size: 11px;
+    font-family: 'DM Mono', monospace;
+    color: var(--color-text-primary); outline: none;
+  }
+
+  .gb-input:focus { border-color: #6B4FA0; }
+
+  .gb-unit { font-size: 10px; color: var(--color-text-tertiary); width: 14px; }
+
+  /* ── STEP 2 — LOADING ── */
+  .loading-tile {
+    width: 320px;
+    background: var(--color-background-primary);
+    border: 1px solid rgba(0,0,0,0.08);
+    border-radius: 10px;
+    padding: 40px 32px 36px;
+    text-align: center;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.18), 0 6px 20px rgba(0,0,0,0.12);
+  }
+
+  .loader-wrap {
+    width: 80px; height: 80px;
+    margin: 0 auto 24px;
+    position: relative;
+  }
+
+  /* Outer ring */
+  .loader-ring {
+    width: 80px; height: 80px;
+    border-radius: 50%;
+    border: 2px solid rgba(107,79,160,0.12);
+    position: absolute; inset: 0;
+  }
+
+  /* Spinning arc */
+  .loader-arc {
+    width: 80px; height: 80px;
+    border-radius: 50%;
+    border: 2.5px solid transparent;
+    border-top-color: #6B4FA0;
+    border-right-color: rgba(107,79,160,0.4);
+    position: absolute; inset: 0;
+    animation: spin 1.2s linear infinite;
+  }
+
+  /* Inner pulsing dot */
+  .loader-dot {
+    width: 12px; height: 12px; border-radius: 50%;
+    background: #6B4FA0;
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%,-50%);
+    animation: dotPulse 1.2s ease-in-out infinite;
+  }
+
+  /* Orbiting particles */
+  .loader-particle {
+    width: 5px; height: 5px; border-radius: 50%;
+    background: #9B79D4;
+    position: absolute;
+    top: 50%; left: 50%;
+    transform-origin: 0 0;
+    animation: orbit 1.8s linear infinite;
+  }
+
+  .loader-particle:nth-child(2) {
+    background: rgba(107,79,160,0.5);
+    animation-delay: -0.6s;
+    width: 4px; height: 4px;
+  }
+
+  .loader-particle:nth-child(3) {
+    background: rgba(107,79,160,0.3);
+    animation-delay: -1.2s;
+    width: 3px; height: 3px;
+  }
+
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+
+  @keyframes dotPulse {
+    0%, 100% { transform: translate(-50%,-50%) scale(1); opacity: 1; }
+    50% { transform: translate(-50%,-50%) scale(0.7); opacity: 0.6; }
+  }
+
+  @keyframes orbit {
+    from { transform: translate(-50%,-50%) rotate(0deg) translateX(32px); }
+    to { transform: translate(-50%,-50%) rotate(360deg) translateX(32px); }
+  }
+
+  .loading-title {
+    font-size: 15px; font-weight: 600; color: var(--color-text-primary);
+    margin-bottom: 6px;
+  }
+
+  .loading-status {
+    font-size: 12px; color: var(--color-text-secondary);
+    margin-bottom: 20px; min-height: 18px;
+  }
+
+  .loading-bar-wrap {
+    width: 100%; height: 3px;
+    background: rgba(107,79,160,0.1);
+    border-radius: 2px; overflow: hidden;
+    margin-bottom: 14px;
+  }
+
+  .loading-bar {
+    height: 100%; width: 0%;
+    background: linear-gradient(90deg, #6B4FA0, #9B79D4);
+    border-radius: 2px;
+    transition: width 0.4s ease;
+  }
+
+  .loading-estimate {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px; color: var(--color-text-tertiary);
+  }
+
+  .loading-estimate span { color: #6B4FA0; font-weight: 500; }
+
+  /* Step nav dots */
+  .step-dots {
+    position: absolute; bottom: -28px; left: 50%;
+    transform: translateX(-50%);
+    display: flex; gap: 6px;
+  }
+
+  .dot {
+    width: 5px; height: 5px; border-radius: 50%;
+    background: rgba(0,0,0,0.15);
+    transition: background 0.2s, width 0.2s;
+  }
+
+  .dot.active { background: #6B4FA0; width: 16px; border-radius: 3px; }
+</style>
+
+<h2 class="sr-only">DeepMark Mark New Paper flow — step 1 upload form, grade boundaries popover, step 2 loading animation</h2>
+
+<div class="root" id="root">
+
+  <!-- Background landing page content (blurred) -->
+  <div class="bg-content" id="bgContent">
+    <div class="bg-greeting">Good morning, Sarah.</div>
+    <div class="bg-grid">
+      <div class="bg-card"></div>
+      <div class="bg-card"></div>
+      <div class="bg-card"></div>
+      <div class="bg-card"></div>
+      <div class="bg-card"></div>
+      <div class="bg-card"></div>
+    </div>
+  </div>
+
+  <div class="overlay on" id="overlay"></div>
+
+  <!-- ── STEP 1: Name + Upload ── -->
+  <div class="step active" id="step1">
+    <div style="position:relative;">
+      <div class="tile" style="width:460px;">
+        <div class="tile-header">
+          <div class="tile-title">
+            Mark new paper
+            <span class="tile-step">Step 1 of 2</span>
+          </div>
+          <div class="tile-close">✕</div>
+        </div>
+        <div class="tile-body">
+
+          <div class="field-label">Class name</div>
+          <input class="field-input" type="text" placeholder="e.g. Biology A2 — June 2025" />
+
+          <div class="upload-row">
+            <div>
+              <div class="field-label">Question paper</div>
+              <div class="upload-zone">
+                <svg class="upload-icon" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+                <div class="upload-label">Upload PDF</div>
+                <div class="upload-sub">Drag & drop or click</div>
+              </div>
+            </div>
+            <div>
+              <div class="field-label">Mark scheme</div>
+              <div class="upload-zone">
+                <svg class="upload-icon" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+                <div class="upload-label">Upload PDF</div>
+                <div class="upload-sub">Drag & drop or click</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Grade boundaries button -->
+          <div class="gb-btn" onclick="toggleGB()">
+            <svg class="gb-icon" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+            Set grade boundaries
+          </div>
+
+        </div>
+        <div class="tile-footer">
+          <button class="btn-secondary">Cancel</button>
+          <button class="btn-primary" onclick="goToStep2()">Upload & continue →</button>
+        </div>
+      </div>
+
+      <!-- Grade boundaries popover — vertical -->
+      <div class="gb-popover" id="gbPopover">
+        <div class="gb-pop-title">
+          Grade boundaries
+          <span class="gb-pop-close" onclick="toggleGB()">✕</span>
+        </div>
+        <div class="gb-row"><span class="gb-grade">9</span><input class="gb-input" value="90" /><span class="gb-unit">%</span></div>
+        <div class="gb-row"><span class="gb-grade">8</span><input class="gb-input" value="80" /><span class="gb-unit">%</span></div>
+        <div class="gb-row"><span class="gb-grade">7</span><input class="gb-input" value="70" /><span class="gb-unit">%</span></div>
+        <div class="gb-row"><span class="gb-grade">6</span><input class="gb-input" value="60" /><span class="gb-unit">%</span></div>
+        <div class="gb-row"><span class="gb-grade">5</span><input class="gb-input" value="50" /><span class="gb-unit">%</span></div>
+        <div class="gb-row"><span class="gb-grade">4</span><input class="gb-input" value="40" /><span class="gb-unit">%</span></div>
+        <div class="gb-row"><span class="gb-grade">3</span><input class="gb-input" value="30" /><span class="gb-unit">%</span></div>
+        <div class="gb-row"><span class="gb-grade">2</span><input class="gb-input" value="20" /><span class="gb-unit">%</span></div>
+        <div class="gb-row"><span class="gb-grade">1</span><input class="gb-input" value="10" /><span class="gb-unit">%</span></div>
+      </div>
+
+      <!-- Step dots -->
+      <div class="step-dots">
+        <div class="dot active"></div>
+        <div class="dot"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── STEP 2: Loading ── -->
+  <div class="step" id="step2">
+    <div style="position:relative;">
+      <div class="loading-tile">
+        <div class="loader-wrap">
+          <div class="loader-ring"></div>
+          <div class="loader-arc"></div>
+          <div class="loader-dot"></div>
+          <div class="loader-particle"></div>
+          <div class="loader-particle"></div>
+          <div class="loader-particle"></div>
+        </div>
+        <div class="loading-title">Processing your paper</div>
+        <div class="loading-status" id="loadingStatus">Extracting document structure…</div>
+        <div class="loading-bar-wrap">
+          <div class="loading-bar" id="loadingBar"></div>
+        </div>
+        <div class="loading-estimate">Estimated time: <span id="timeEst">~45 seconds</span></div>
+      </div>
+      <div class="step-dots">
+        <div class="dot"></div>
+        <div class="dot active"></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  var gbOpen = false;
+
+  function toggleGB() {
+    gbOpen = !gbOpen;
+    document.getElementById('gbPopover').classList.toggle('open', gbOpen);
+  }
+
+  var statusMessages = [
+    'Extracting document structure…',
+    'Identifying question blocks…',
+    'Parsing mark scheme…',
+    'Mapping marks to questions…',
+    'Rendering preview…',
+    'Almost done…'
+  ];
+
+  function goToStep2() {
+    // Exit step 1
+    var s1 = document.getElementById('step1');
+    s1.classList.remove('active');
+    s1.classList.add('exit');
+
+    setTimeout(function() {
+      s1.style.display = 'none';
+      // Enter step 2 — scale up from centre
+      var s2 = document.getElementById('step2');
+      s2.classList.add('active');
+      startLoading();
+    }, 220);
+  }
+
+  function startLoading() {
+    var bar = document.getElementById('loadingBar');
+    var status = document.getElementById('loadingStatus');
+    var timeEst = document.getElementById('timeEst');
+    var progress = 0;
+    var msgIndex = 0;
+
+    var interval = setInterval(function() {
+      progress += Math.random() * 14 + 4;
+      if (progress > 100) progress = 100;
+
+      bar.style.width = progress + '%';
+
+      // Update status message
+      var newMsg = Math.floor((progress / 100) * statusMessages.length);
+      if (newMsg !== msgIndex && newMsg < statusMessages.length) {
+        msgIndex = newMsg;
+        status.style.opacity = '0';
+        setTimeout(function() {
+          status.textContent = statusMessages[msgIndex];
+          status.style.opacity = '1';
+        }, 200);
+      }
+
+      // Update time estimate
+      var remaining = Math.ceil((100 - progress) / 100 * 45);
+      if (remaining > 0) {
+        timeEst.textContent = '~' + remaining + ' seconds';
+      } else {
+        timeEst.textContent = 'Complete';
+      }
+
+      if (progress >= 100) {
+        clearInterval(interval);
+        status.textContent = 'Ready to preview';
+        setTimeout(function() {
+          alert('✓ Paper processed — preview window would snap in here');
+        }, 800);
+      }
+    }, 600);
+  }
+
+  // Apply status transition
+  document.getElementById('loadingStatus').style.transition = 'opacity 0.2s ease';
+</script>

@@ -1,12 +1,12 @@
 import type { PendingAnnotation } from "@/lib/annotations/types"
-import type { AnnotationMarkSpec } from "@/lib/collab/editor-ops"
-import { applyAnnotationMark } from "@/lib/collab/editor-ops"
 import type { AnnotationSpec } from "@/lib/collab/editor-seed"
 import type { HeadlessEditor } from "@/lib/collab/headless-editor"
 import {
+	type AnnotationMarkSpec,
 	type AnnotationSignal,
 	type PageToken,
 	alignTokensToAnswer,
+	applyAnnotationMark,
 	isMarkSignal,
 } from "@mcp-gcse/shared"
 

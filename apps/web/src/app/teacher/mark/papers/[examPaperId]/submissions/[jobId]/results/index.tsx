@@ -4,7 +4,6 @@ import type {
 	StudentPaperAnnotation,
 	StudentPaperJobPayload,
 	TeacherOverride,
-	UpsertTeacherOverrideInput,
 } from "@/lib/marking/types"
 import { useState } from "react"
 import { GradingResultsPanel } from "./grading-results-panel"
@@ -19,7 +18,6 @@ export function MarkingResults({
 	data,
 	activeQuestionNumber,
 	overridesByQuestionId,
-	onOverrideChange,
 	onDerivedAnnotations,
 	onTokenHighlight,
 }: {
@@ -27,10 +25,6 @@ export function MarkingResults({
 	data: StudentPaperJobPayload
 	activeQuestionNumber?: string | null
 	overridesByQuestionId?: Map<string, TeacherOverride>
-	onOverrideChange?: (
-		questionId: string,
-		input: UpsertTeacherOverrideInput | null,
-	) => void
 	onDerivedAnnotations?: (annotations: StudentPaperAnnotation[]) => void
 	onTokenHighlight?: (tokenIds: string[] | null) => void
 }) {
@@ -50,7 +44,6 @@ export function MarkingResults({
 				setAnswers((prev) => ({ ...prev, [id]: text }))
 			}
 			overridesByQuestionId={overridesByQuestionId}
-			onOverrideChange={onOverrideChange}
 			onDerivedAnnotations={onDerivedAnnotations}
 			onTokenHighlight={onTokenHighlight}
 		/>

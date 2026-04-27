@@ -26,29 +26,26 @@ import {
 	Check,
 	ChevronDown,
 	Copy,
+	Crosshair,
 	Layers,
 	Lightbulb,
+	ZoomIn,
 } from "lucide-react"
 import { useState } from "react"
 import { ObservationsSheet } from "./ocr-sheets"
 import { AnnotatedScanColumn } from "./results/annotated-scan-column"
+import type { ScanViewSettings, ScanViewToggle } from "./use-scan-view-settings"
 
 export function ScanPanel({
 	scanPages,
 	pageTokens,
 	gradingResults,
 	levelDescriptors,
-	showOcr,
-	showRegions,
-	onToggleOcr,
-	onToggleRegions,
+	settings,
+	toggle,
 	onGradedRegionClick,
 	debugMode,
 	annotations = [],
-	showMarks = false,
-	showChains = false,
-	onToggleMarks,
-	onToggleChains,
 	hasAnnotations = false,
 	highlightedTokenIds,
 }: {
@@ -56,20 +53,23 @@ export function ScanPanel({
 	pageTokens: PageToken[]
 	gradingResults: StudentPaperJobPayload["grading_results"]
 	levelDescriptors?: string | null
-	showOcr: boolean
-	showRegions: boolean
-	onToggleOcr: () => void
-	onToggleRegions: () => void
+	settings: ScanViewSettings
+	toggle: ScanViewToggle
 	onGradedRegionClick?: (questionNumber: string) => void
 	debugMode?: boolean
 	annotations?: StudentPaperAnnotation[]
-	showMarks?: boolean
-	showChains?: boolean
-	onToggleMarks?: () => void
-	onToggleChains?: () => void
 	hasAnnotations?: boolean
 	highlightedTokenIds?: Set<string> | null
 }) {
+	const {
+		showOcr,
+		showRegions,
+		showMarks,
+		showChains,
+		showZoomControls,
+		viewMode,
+	} = settings
+	const inspectMode = viewMode === "inspect"
 	const [observationsOpen, setObservationsOpen] = useState(false)
 	const [copied, setCopied] = useState(false)
 
@@ -111,26 +111,24 @@ export function ScanPanel({
 							<DropdownMenuCheckboxItem
 								checked={showOcr}
 								disabled={!hasOcr}
-								onCheckedChange={() => onToggleOcr()}
+								onCheckedChange={() => toggle("showOcr")}
 							>
 								Words
 							</DropdownMenuCheckboxItem>
-							{(onToggleMarks ?? onToggleChains) && (
-								<DropdownMenuCheckboxItem
-									checked={showMarks || showChains}
-									disabled={!hasAnnotations}
-									onCheckedChange={() => {
-										onToggleMarks?.()
-										onToggleChains?.()
-									}}
-								>
-									Annotations
-								</DropdownMenuCheckboxItem>
-							)}
+							<DropdownMenuCheckboxItem
+								checked={showMarks || showChains}
+								disabled={!hasAnnotations}
+								onCheckedChange={() => {
+									toggle("showMarks")
+									toggle("showChains")
+								}}
+							>
+								Annotations
+							</DropdownMenuCheckboxItem>
 							<DropdownMenuCheckboxItem
 								checked={showRegions}
 								disabled={!hasRegions}
-								onCheckedChange={() => onToggleRegions()}
+								onCheckedChange={() => toggle("showRegions")}
 							>
 								Answers
 							</DropdownMenuCheckboxItem>
@@ -214,6 +212,58 @@ export function ScanPanel({
 							/>
 						</>
 					)}
+
+					{/* Right-aligned mode toggles */}
+					<div className="ml-auto flex items-center gap-0.5">
+						<Tooltip>
+							<TooltipTrigger
+								render={
+									<button
+										type="button"
+										onClick={() => toggle("viewMode")}
+										className={cn(
+											"inline-flex items-center justify-center h-6 w-6 rounded transition-colors",
+											inspectMode
+												? "bg-foreground text-background"
+												: "text-muted-foreground hover:bg-muted hover:text-foreground",
+										)}
+										aria-pressed={inspectMode}
+										aria-label="Toggle inspect mode"
+									>
+										<Crosshair className="h-3.5 w-3.5" />
+									</button>
+								}
+							/>
+							<TooltipContent side="bottom" sideOffset={6}>
+								{inspectMode
+									? "Inspect mode (word-level highlights)"
+									: "Focus mode (no word highlights)"}
+							</TooltipContent>
+						</Tooltip>
+						<Tooltip>
+							<TooltipTrigger
+								render={
+									<button
+										type="button"
+										onClick={() => toggle("showZoomControls")}
+										className={cn(
+											"inline-flex items-center justify-center h-6 w-6 rounded transition-colors",
+											showZoomControls
+												? "bg-foreground text-background"
+												: "text-muted-foreground hover:bg-muted hover:text-foreground",
+										)}
+										aria-pressed={showZoomControls}
+										aria-label="Toggle zoom controls"
+									>
+										<ZoomIn className="h-3.5 w-3.5" />
+									</button>
+								}
+							/>
+							<TooltipContent side="bottom" sideOffset={6}>
+								{showZoomControls ? "Hide zoom controls" : "Show zoom controls"}
+							</TooltipContent>
+						</Tooltip>
+					</div>
 				</div>
 
 				{/* ── Scan content ──────────────────────────────────────────────── */}
@@ -230,6 +280,7 @@ export function ScanPanel({
 						showMarks={showMarks}
 						showChains={showChains}
 						highlightedTokenIds={highlightedTokenIds}
+						showZoomControls={showZoomControls}
 					/>
 				</ScrollArea>
 

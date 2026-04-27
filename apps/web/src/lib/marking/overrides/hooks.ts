@@ -2,6 +2,7 @@
 
 import {
 	deleteTeacherOverride,
+	saveQuestionFeedbackBullets,
 	upsertTeacherOverride,
 } from "@/lib/marking/overrides/mutations"
 import { getTeacherOverrides } from "@/lib/marking/submissions/queries"
@@ -118,9 +119,32 @@ export function useTeacherOverrideMutations(submissionId: string | undefined) {
 		// flicker.
 	})
 
+	const feedbackBulletsMutation = useMutation({
+		mutationFn: async ({
+			questionId,
+			patch,
+		}: {
+			questionId: string
+			patch: { whatWentWell?: string[]; evenBetterIf?: string[] }
+		}) => {
+			if (!submissionId) throw new Error("No submission")
+			const r = await saveQuestionFeedbackBullets(
+				submissionId,
+				questionId,
+				patch,
+			)
+			if (!r.ok) throw new Error(r.error)
+		},
+		onError: () => toast.error("Failed to save feedback"),
+		// Doc is the source of truth; Hocuspocus echoes the change back to
+		// the browser within ms. No optimistic cache update needed — the
+		// editor's NodeView re-renders from `node.attrs` once the echo arrives.
+	})
+
 	return {
 		upsertOverride: upsertMutation.mutate,
 		deleteOverride: deleteMutation.mutate,
+		saveFeedbackBullets: feedbackBulletsMutation.mutate,
 		isSaving: upsertMutation.isPending,
 	}
 }

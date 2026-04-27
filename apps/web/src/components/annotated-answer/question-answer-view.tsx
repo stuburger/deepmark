@@ -3,11 +3,15 @@
 import { FeedbackOverrideEditor } from "@/components/feedback-override-editor"
 import { ScoreOverrideEditor } from "@/components/score-override-editor"
 import { StimulusDisclosure } from "@/components/stimulus-disclosure"
+import { resolveTeacherOverride } from "@/lib/marking/overrides/resolve"
 import { cn } from "@/lib/utils"
+import { questionAnswerAttrsSchema } from "@mcp-gcse/shared"
 import type { Node as PmNode } from "@tiptap/pm/model"
 import { NodeViewContent, NodeViewWrapper } from "@tiptap/react"
 import { MessageSquareText } from "lucide-react"
-import { useState } from "react"
+import { useMemo, useState } from "react"
+import { BulletListEditor } from "./bullet-list-editor"
+import { useDocOps } from "./doc-ops-context"
 import { useGradingData } from "./grading-data-context"
 
 export function QuestionAnswerView({
@@ -15,30 +19,54 @@ export function QuestionAnswerView({
 }: {
 	node: PmNode & { attrs: Record<string, unknown> }
 }) {
-	const qId = node.attrs.questionId as string | null
-	const qNum = node.attrs.questionNumber as string | null
-	const qText = node.attrs.questionText as string | null
-	const maxScore = node.attrs.maxScore as number | null
-	// AI score is the source-of-truth on the block itself. Defaults to 0
-	// while grading is still in progress (block exists, score not yet
-	// dispatched). Teacher override + WWW/EBI/feedback still come via
-	// useGradingData() until step 2/3 of the doc-as-truth migration land.
-	const docAwardedScore = node.attrs.awardedScore as number | null
-
+	// Doc/React boundary: parse once so the rest of the view consumes a
+	// fully-typed object without per-attr `as` casts. A malformed doc throws
+	// up to the React error boundary — louder is correct here, since silent
+	// `undefined`s would render an empty block instead of an obvious error.
+	const attrs = questionAnswerAttrsSchema.parse(node.attrs)
 	const {
-		gradingResults,
-		overridesByQuestionId,
-		activeQuestionNumber,
-		onOverrideChange,
-	} = useGradingData()
+		questionId: qId,
+		questionNumber: qNum,
+		questionText: qText,
+		maxScore,
+		awardedScore: docAwardedScore,
+		whatWentWell: docWhatWentWell,
+		evenBetterIf: docEvenBetterIf,
+		teacherOverride: docTeacherOverride,
+		teacherFeedbackOverride: docTeacherFeedbackOverride,
+	} = attrs
+
+	const { gradingResults, overridesByQuestionId, activeQuestionNumber } =
+		useGradingData()
+	const { saveOverride, saveFeedbackBullets } = useDocOps()
 
 	const result = qId ? gradingResults.get(qId) : undefined
-	const override = qId ? overridesByQuestionId.get(qId) : undefined
-	const aiScore = docAwardedScore ?? 0
+	const pgOverride = qId ? overridesByQuestionId.get(qId) : undefined
+	const override = useMemo(
+		() =>
+			resolveTeacherOverride(
+				docTeacherOverride,
+				docTeacherFeedbackOverride,
+				pgOverride,
+			),
+		[docTeacherOverride, docTeacherFeedbackOverride, pgOverride],
+	)
+	// `null` until the grade Lambda dispatches an awardedScore. Passed through
+	// as null to the badge so it can render `?/N` rather than `0/N` and avoid
+	// implying a real zero.
+	const aiScore = docAwardedScore
 	const max = maxScore ?? result?.max_score ?? 0
 
-	const www = result?.what_went_well ?? []
-	const ebi = result?.even_better_if ?? []
+	// Doc attrs win when present; fall back to the PG projection for older
+	// docs that predate the doc-as-truth migration of WWW/EBI.
+	const www =
+		docWhatWentWell.length > 0
+			? docWhatWentWell
+			: (result?.what_went_well ?? [])
+	const ebi =
+		docEvenBetterIf.length > 0
+			? docEvenBetterIf
+			: (result?.even_better_if ?? [])
 	const stimuli = result?.stimuli ?? []
 	const feedback = override?.feedback_override ?? result?.feedback_summary
 	const hasFeedback = !!feedback
@@ -82,23 +110,16 @@ export function QuestionAnswerView({
 					<ScoreOverrideEditor
 						aiScore={aiScore}
 						maxScore={max}
-						override={
-							override
-								? {
-										score_override: override.score_override,
-										reason: override.reason,
-									}
-								: null
-						}
+						override={override ?? null}
 						onSave={(score, reason) =>
 							qId &&
-							onOverrideChange(qId, {
+							saveOverride(qId, {
 								score_override: score,
 								reason,
 								feedback_override: override?.feedback_override,
 							})
 						}
-						onReset={() => qId && onOverrideChange(qId, null)}
+						onReset={() => qId && saveOverride(qId, null)}
 					/>
 				</div>
 			)}
@@ -159,36 +180,28 @@ export function QuestionAnswerView({
 						)}
 					</div>
 
-					{/* WWW panel */}
-					{showWww && www.length > 0 && (
-						<ul className="text-xs space-y-0.5">
-							{www.map((item, i) => (
-								<li
-									// biome-ignore lint/suspicious/noArrayIndexKey: static feedback list
-									key={i}
-									className="text-muted-foreground flex items-start gap-1"
-								>
-									<span className="text-green-500 shrink-0">{"\u2713"}</span>
-									{item}
-								</li>
-							))}
-						</ul>
+					{/* WWW panel \u2014 editable */}
+					{showWww && (
+						<BulletListEditor
+							label="What went well"
+							items={www}
+							placeholder="One bullet per line..."
+							onSave={(next) =>
+								qId && saveFeedbackBullets(qId, { whatWentWell: next })
+							}
+						/>
 					)}
 
-					{/* EBI panel */}
-					{showEbi && ebi.length > 0 && (
-						<ul className="text-xs space-y-0.5">
-							{ebi.map((item, i) => (
-								<li
-									// biome-ignore lint/suspicious/noArrayIndexKey: static feedback list
-									key={i}
-									className="text-muted-foreground flex items-start gap-1"
-								>
-									<span className="text-amber-500 shrink-0">{"\u2192"}</span>
-									{item}
-								</li>
-							))}
-						</ul>
+					{/* EBI panel \u2014 editable */}
+					{showEbi && (
+						<BulletListEditor
+							label="Even better if"
+							items={ebi}
+							placeholder="One bullet per line..."
+							onSave={(next) =>
+								qId && saveFeedbackBullets(qId, { evenBetterIf: next })
+							}
+						/>
 					)}
 
 					{/* Feedback panel */}
@@ -199,16 +212,16 @@ export function QuestionAnswerView({
 								overrideFeedback={override?.feedback_override ?? null}
 								onSave={(text) =>
 									qId &&
-									onOverrideChange(qId, {
-										score_override: override?.score_override ?? aiScore,
+									saveOverride(qId, {
+										score_override: override?.score_override ?? aiScore ?? 0,
 										reason: override?.reason,
 										feedback_override: text,
 									})
 								}
 								onReset={() =>
 									qId &&
-									onOverrideChange(qId, {
-										score_override: override?.score_override ?? aiScore,
+									saveOverride(qId, {
+										score_override: override?.score_override ?? aiScore ?? 0,
 										reason: override?.reason,
 										feedback_override: undefined,
 									})

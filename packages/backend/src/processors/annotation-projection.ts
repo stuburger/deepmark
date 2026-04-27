@@ -9,6 +9,7 @@ import type { SqsEvent } from "@/lib/infra/sqs-job-runner"
 import { GetObjectCommand, S3Client } from "@aws-sdk/client-s3"
 import type { Prisma } from "@mcp-gcse/db"
 import {
+	DOC_FRAGMENT_NAME,
 	type DerivedTeacherOverride,
 	type GradingResult,
 	type StudentPaperAnnotation,
@@ -147,7 +148,7 @@ function deriveSnapshot(bytes: Uint8Array): ProjectedSnapshot {
 	const doc = new Y.Doc()
 	try {
 		Y.applyUpdate(doc, bytes)
-		const fragment = doc.getXmlFragment("doc")
+		const fragment = doc.getXmlFragment(DOC_FRAGMENT_NAME)
 		if (fragment.length === 0) {
 			return {
 				annotations: [],

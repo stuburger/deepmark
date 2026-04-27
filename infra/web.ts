@@ -58,5 +58,6 @@ export const web = new sst.aws.Nextjs("Web", {
 		NEXT_PUBLIC_APP_URL: webUrl,
 		NEXT_PUBLIC_COLLAB_URL: collabUrl,
 		NEXT_PUBLIC_STAGE: $app.stage,
+		STAGE: $app.stage,
 	},
 })

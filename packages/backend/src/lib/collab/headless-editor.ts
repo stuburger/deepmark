@@ -1,4 +1,5 @@
 import { HocuspocusProvider } from "@hocuspocus/provider"
+import { DOC_FRAGMENT_NAME } from "@mcp-gcse/shared"
 import { EditorState } from "@tiptap/pm/state"
 import { EditorView } from "@tiptap/pm/view"
 import { Resource } from "sst"
@@ -221,7 +222,7 @@ export class HeadlessEditor {
  */
 export function createHeadlessView(doc: Y.Doc): EditorView {
 	ensureHeadlessDom()
-	const fragment = doc.getXmlFragment("doc")
+	const fragment = doc.getXmlFragment(DOC_FRAGMENT_NAME)
 	const state = EditorState.create({
 		schema: getEditorSchema(),
 		plugins: [ySyncPlugin(fragment)],

@@ -1,4 +1,10 @@
 import { HocuspocusProvider } from "@hocuspocus/provider"
+import {
+	DOC_FRAGMENT_NAME,
+	applyAnnotationMark,
+	insertQuestionBlock,
+	setAnswerText,
+} from "@mcp-gcse/shared"
 import { yXmlFragmentToProsemirrorJSON } from "@tiptap/y-tiptap"
 import { randomUUID } from "node:crypto"
 import { Resource } from "sst"
@@ -7,11 +13,6 @@ import WebSocket from "ws"
 import * as Y from "yjs"
 import { buildSubmissionDocumentName } from "../../src/lib/collab/document-name"
 import { HeadlessEditor } from "../../src/lib/collab/headless-editor"
-import {
-	applyAnnotationMark,
-	insertQuestionBlock,
-	setAnswerText,
-} from "../../src/lib/collab/editor-ops"
 
 /**
  * Live integration test for the headless ProseMirror editor against a real
@@ -143,7 +144,7 @@ describe("HeadlessEditor — live Hocuspocus roundtrip", () => {
 
 		// Reader's final state mirrors the writer's: one questionAnswer block,
 		// the answer text, a tick mark over chars 3..9.
-		const fragment = reader.doc.getXmlFragment("doc")
+		const fragment = reader.doc.getXmlFragment(DOC_FRAGMENT_NAME)
 		const json = yXmlFragmentToProsemirrorJSON(fragment) as {
 			content?: Array<{
 				type: string
@@ -218,7 +219,7 @@ describe("HeadlessEditor — live Hocuspocus roundtrip", () => {
 		await writerB.flush(500)
 
 		await waitFor(() => {
-			const json = yXmlFragmentToProsemirrorJSON(reader.doc.getXmlFragment("doc")) as {
+			const json = yXmlFragmentToProsemirrorJSON(reader.doc.getXmlFragment(DOC_FRAGMENT_NAME)) as {
 				content?: Array<{
 					content?: Array<{
 						text?: string

@@ -9,8 +9,11 @@ import {
 } from "./stage-pips-hooks"
 
 /**
- * Three-pip cluster showing OCR / grading / annotation status independently.
- * Each pip's popover exposes the corresponding re-run action.
+ * Two-pip cluster showing OCR + grading status. Annotations now run inside
+ * the grade Lambda (see `student-paper-grade.ts:markGradingRunComplete` —
+ * `status`, `completed_at`, and `annotations_completed_at` are all set in
+ * the same atomic UPDATE), so a separate annotation pip would always
+ * duplicate the grading pip's signal.
  *
  * Thin wrapper that binds the data + mutation hooks to the presentation
  * component below — callers pass only a jobId and a navigation callback. Use
@@ -42,13 +45,9 @@ export function StagePips({
 }
 
 /**
- * Pure presentation — renders three pips and wires their popover re-run
- * actions to the supplied mutations. No data fetching or side effects.
- *
- * The annotation pip's re-run triggers the grading mutation: annotations live
- * inside the grade Lambda, so regenerating them means re-grading (which
- * creates a new superseded submission — we intentionally have no in-place
- * re-run path).
+ * Pure presentation — renders the OCR + grading pips and wires their
+ * popover re-run actions to the supplied mutations. No data fetching or
+ * side effects.
  */
 export function StagePipsView({
 	stages,
@@ -77,16 +76,6 @@ export function StagePipsView({
 					gradingMutation.isPending ||
 					stages.grading.status === "generating" ||
 					stages.ocr.status !== "done"
-				}
-			/>
-			<StagePip
-				stageKey="annotation"
-				stage={stages.annotation}
-				onRerun={() => gradingMutation.mutate()}
-				rerunDisabled={
-					gradingMutation.isPending ||
-					stages.annotation.status === "generating" ||
-					stages.grading.status !== "done"
 				}
 			/>
 		</div>

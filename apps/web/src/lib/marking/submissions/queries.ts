@@ -165,6 +165,9 @@ const submissionDetailInclude = {
 			...ANNOTATION_BOOKKEEPING_SELECT,
 		},
 	},
+	teacher_overrides: {
+		select: { question_id: true, score_override: true },
+	},
 } as const
 
 type SubmissionWithDetail = Prisma.StudentSubmissionGetPayload<{
@@ -256,10 +259,18 @@ function toJobPayload(sub: SubmissionWithDetail) {
 			})
 		}
 	}
+	// PG-projected teacher overrides — same source of truth that CSV export and
+	// listing queries read from. The doc may be ~2s ahead during active editing,
+	// but exports and the toolbar pull from the projection by design.
+	const overrideByQuestion = new Map(
+		sub.teacher_overrides.map((o) => [o.question_id, o.score_override]),
+	)
 	const gradingResults = withRegions.map((r) => {
 		const mcq = mcqLookup.get(r.question_id)
 		const stimuli = stimuliLookup.get(r.question_id)
+		const override = overrideByQuestion.get(r.question_id)
 		const next = { ...r }
+		if (override !== undefined) next.awarded_score = override
 		if (mcq) {
 			next.multiple_choice_options = mcq.options
 			next.correct_option_labels = mcq.correctLabels

@@ -68,7 +68,7 @@ export default async function TeacherLayout({
 			</Sidebar>
 			<SidebarInset>
 				<AppNavbar />
-				<main className="flex-1 overflow-auto p-6">{children}</main>
+				<main className="flex-1 overflow-auto px-6 pb-6">{children}</main>
 			</SidebarInset>
 			<PushRegistration />
 		</SidebarProvider>

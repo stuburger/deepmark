@@ -10,9 +10,19 @@ import {
 	BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
+import {
+	Popover,
+	PopoverContent,
+	PopoverTrigger,
+} from "@/components/ui/popover"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import {
+	Tooltip,
+	TooltipContent,
+	TooltipProvider,
+	TooltipTrigger,
+} from "@/components/ui/tooltip"
 import { deleteExamPaper } from "@/lib/exam-paper/paper/mutations"
 import type {
 	ExamPaperDetail,
@@ -25,18 +35,17 @@ import type {
 } from "@/lib/pdf-ingestion/queries"
 import { queryKeys } from "@/lib/query-keys"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
-import { AlertTriangle, Globe, Lock, PenLine, Trash2 } from "lucide-react"
+import { AlertTriangle, Copy, Globe, Lock, PenLine, Trash2 } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { parseAsString, parseAsStringEnum, useQueryState } from "nuqs"
 import { useState } from "react"
 import { toast } from "sonner"
-import { DocumentUploadCards } from "./document-upload-cards"
+import { DocumentThumbnail } from "./document-thumbnail"
 import { EditableTitle } from "./editable-title"
 import { ExamPaperAnalyticsTab } from "./exam-paper-analytics-tab"
 import { capitalize } from "./exam-paper-helpers"
 import { ExamPaperQuestionsCard } from "./exam-paper-questions-card"
-import { GradeBoundariesCard } from "./grade-boundaries-card"
 import { useBatchIngestion } from "./hooks/use-batch-ingestion"
 import { useExamPaperLiveQueries } from "./hooks/use-exam-paper-live-queries"
 import { useLinkMarkScheme } from "./hooks/use-exam-paper-mutations"
@@ -44,12 +53,10 @@ import { useSimilarQuestions } from "./hooks/use-similar-questions"
 import { useSubmissions } from "./hooks/use-submissions"
 import { useSwMessages } from "./hooks/use-sw-messages"
 import { useUnlinkedSchemes } from "./hooks/use-unlinked-schemes"
-import { LevelDescriptorsCard } from "./level-descriptors-card"
 import { LinkMarkSchemeDialog } from "./link-mark-scheme-dialog"
+import { MarkingGuidanceButton } from "./marking-guidance-button"
 import { MarkingJobDialog } from "./marking-job-dialog"
-import { QuestionPaperThumbnail } from "./qp-thumbnail"
 import { UnifiedQuestionDialog } from "./questions/[question_id]/unified-question-dialog"
-import { ReadinessStrip } from "./readiness-strip"
 import { StagingReviewDialog } from "./staging-review-dialog"
 import { SubmissionsTabContent } from "./submissions-tab-content"
 import { UnlinkedSchemesPanel } from "./unlinked-schemes-panel"
@@ -178,10 +185,6 @@ export function ExamPaperPageShell({
 	const allQuestionsHaveMarkSchemes =
 		totalQuestions > 0 && questionsWithMarkScheme === totalQuestions
 
-	const hasExemplar =
-		completedDocs.some((d) => d.document_type === "exemplar") ||
-		allQuestions.some((q) => q.origin === "exemplar")
-
 	const readyForSubmissions = hasQuestionPaper && allQuestionsHaveMarkSchemes
 	const stagedCount = ingestion?.isReadyForReview
 		? ingestion.allScripts.length
@@ -200,7 +203,7 @@ export function ExamPaperPageShell({
 				className="gap-0"
 			>
 				{/* Sticky frosted-glass header: title + tabs bar */}
-				<div className="sticky top-0 z-0 -mx-6 -mt-6 px-6 pt-6 pb-2 backdrop-blur-xl bg-background/60 border-b">
+				<div className="sticky top-0 z-0 -mx-6 px-6 pt-3 pb-2 backdrop-blur-xl bg-background/60 border-b">
 					<div className="pb-4">
 						<Breadcrumb>
 							<BreadcrumbList>
@@ -219,7 +222,42 @@ export function ExamPaperPageShell({
 						</Breadcrumb>
 						<div className="mt-3 flex items-start justify-between gap-4">
 							<div className="flex items-start gap-4 min-w-0">
-								<QuestionPaperThumbnail jobId={questionPaperDoc?.id ?? null} />
+								<div className="flex items-start gap-2 shrink-0">
+									<DocumentThumbnail
+										examPaperId={paper.id}
+										documentType="question_paper"
+										completedDoc={questionPaperDoc ?? null}
+										activeJob={
+											jobs.find((j) => j.document_type === "question_paper") ??
+											null
+										}
+										onJobStarted={() =>
+											void queryClient.invalidateQueries({
+												queryKey: queryKeys.examPaperLiveState(paper.id),
+											})
+										}
+										size="compact"
+									/>
+									<DocumentThumbnail
+										examPaperId={paper.id}
+										documentType="mark_scheme"
+										completedDoc={
+											completedDocs.find(
+												(d) => d.document_type === "mark_scheme",
+											) ?? null
+										}
+										activeJob={
+											jobs.find((j) => j.document_type === "mark_scheme") ??
+											null
+										}
+										onJobStarted={() =>
+											void queryClient.invalidateQueries({
+												queryKey: queryKeys.examPaperLiveState(paper.id),
+											})
+										}
+										size="compact"
+									/>
+								</div>
 								<div className="min-w-0">
 									<EditableTitle id={paper.id} initialTitle={paper.title} />
 									<div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
@@ -243,16 +281,69 @@ export function ExamPaperPageShell({
 									</div>
 								</div>
 							</div>
-							<div className="flex shrink-0 items-center gap-2">
-								<Button
-									size="sm"
-									variant="ghost"
-									className="text-muted-foreground hover:text-destructive"
-									onClick={() => setDeleteDialogOpen(true)}
-								>
-									<Trash2 className="h-3.5 w-3.5" />
-									<span className="sr-only">Delete paper</span>
-								</Button>
+							<div className="flex shrink-0 items-center gap-1">
+								<MarkingGuidanceButton
+									examPaperId={paper.id}
+									initialValue={paper.level_descriptors}
+								/>
+								{similarPairs.length > 0 && !duplicateBannerDismissed && (
+									<Popover>
+										<PopoverTrigger
+											render={
+												<Button
+													type="button"
+													variant="ghost"
+													size="sm"
+													className="relative text-muted-foreground hover:text-foreground"
+												>
+													<Copy className="h-3.5 w-3.5" />
+													<span className="absolute top-1 right-1 h-1.5 w-1.5 rounded-full bg-amber-500" />
+													<span className="sr-only">
+														{similarPairs.length} potential duplicate
+														{similarPairs.length !== 1 ? "s" : ""}
+													</span>
+												</Button>
+											}
+										/>
+										<PopoverContent className="w-72 text-xs">
+											<p className="text-amber-800 dark:text-amber-200">
+												<span className="font-medium">
+													{similarPairs.length} potential duplicate question
+													{similarPairs.length !== 1 ? "s" : ""}
+												</span>{" "}
+												detected. Rows marked with a dot may need review — sort
+												by the similarity column to group them.
+											</p>
+											<Button
+												variant="ghost"
+												size="xs"
+												className="mt-2 -ml-2 text-muted-foreground hover:text-foreground"
+												onClick={() => setDuplicateBannerDismissed(true)}
+											>
+												Dismiss
+											</Button>
+										</PopoverContent>
+									</Popover>
+								)}
+								<TooltipProvider>
+									<Tooltip>
+										<TooltipTrigger
+											render={
+												<Button
+													type="button"
+													size="sm"
+													variant="ghost"
+													className="text-muted-foreground hover:text-destructive"
+													onClick={() => setDeleteDialogOpen(true)}
+												>
+													<Trash2 className="h-3.5 w-3.5" />
+													<span className="sr-only">Delete paper</span>
+												</Button>
+											}
+										/>
+										<TooltipContent>Delete paper</TooltipContent>
+									</Tooltip>
+								</TooltipProvider>
 							</div>
 						</div>
 					</div>
@@ -286,44 +377,6 @@ export function ExamPaperPageShell({
 
 				{/* ── Paper tab ── */}
 				<TabsContent value="paper" className="space-y-6 mt-10">
-					<Card>
-						<CardContent className="pt-4 space-y-4">
-							{/* Readiness strip */}
-							<ReadinessStrip
-								hasQuestionPaper={hasQuestionPaper}
-								allQuestionsHaveMarkSchemes={allQuestionsHaveMarkSchemes}
-								questionsWithMarkScheme={questionsWithMarkScheme}
-								totalQuestions={totalQuestions}
-								hasExemplar={hasExemplar}
-								hasLevelDescriptors={!!paper.level_descriptors}
-							/>
-							<DocumentUploadCards
-								examPaperId={paper.id}
-								completedDocs={completedDocs}
-								activeJobs={jobs}
-								onJobStarted={() =>
-									void queryClient.invalidateQueries({
-										queryKey: queryKeys.examPaperLiveState(paper.id),
-									})
-								}
-							>
-								<LevelDescriptorsCard
-									examPaperId={paper.id}
-									initialValue={paper.level_descriptors}
-								/>
-							</DocumentUploadCards>
-						</CardContent>
-					</Card>
-
-					<GradeBoundariesCard
-						paperId={paper.id}
-						subject={paper.subject}
-						paperTotal={paper.total_marks}
-						tier={paper.tier}
-						boundaries={paper.grade_boundaries}
-						mode={paper.grade_boundary_mode}
-					/>
-
 					{/* Missing mark scheme banner */}
 					{totalQuestions > 0 && !allQuestionsHaveMarkSchemes && (
 						<div className="flex items-center gap-3 rounded-lg border border-destructive/40 bg-destructive/5 px-3 py-2.5 text-sm">
@@ -338,27 +391,6 @@ export function ExamPaperPageShell({
 								</span>{" "}
 								Upload a mark scheme PDF or add one manually before marking.
 							</span>
-						</div>
-					)}
-
-					{/* Duplicate warning banner */}
-					{similarPairs.length > 0 && !duplicateBannerDismissed && (
-						<div className="flex items-center gap-3 rounded-lg border border-amber-400/40 bg-amber-500/5 px-3 py-2.5 text-sm">
-							<AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
-							<span className="flex-1 text-amber-800 dark:text-amber-200">
-								{similarPairs.length} potential duplicate question
-								{similarPairs.length !== 1 ? "s" : ""} detected — rows marked
-								with a dot may need review. Sort by the similarity column to
-								group them.
-							</span>
-							<Button
-								variant="ghost"
-								size="xs"
-								className="shrink-0 text-amber-600 hover:text-amber-900 dark:text-amber-400"
-								onClick={() => setDuplicateBannerDismissed(true)}
-							>
-								Dismiss
-							</Button>
 						</div>
 					)}
 

@@ -22,18 +22,20 @@ export function MarkPointRow({
 	onRemove,
 }: Props) {
 	return (
-		<div className="flex items-start gap-2 rounded-md border border-input/60 p-2">
-			<Textarea
-				value={criteria}
-				onChange={(e) => onChange(e.target.value)}
-				disabled={disabled}
-				placeholder={`Mark point ${index + 1}`}
-				rows={2}
-				className="flex-1 text-sm resize-y min-h-[2.5rem]"
-			/>
-			<span className="shrink-0 mt-2 text-xs font-medium text-muted-foreground tabular-nums whitespace-nowrap">
-				1 mark
-			</span>
+		<div className="flex items-start gap-2">
+			<div className="relative flex-1">
+				<Textarea
+					value={criteria}
+					onChange={(e) => onChange(e.target.value)}
+					disabled={disabled}
+					placeholder={`Mark point ${index + 1}`}
+					rows={4}
+					className="text-sm resize-y pb-6"
+				/>
+				<span className="pointer-events-none absolute bottom-2 left-3 text-[11px] font-medium text-muted-foreground tabular-nums">
+					1 mark
+				</span>
+			</div>
 			<Button
 				type="button"
 				variant="ghost"

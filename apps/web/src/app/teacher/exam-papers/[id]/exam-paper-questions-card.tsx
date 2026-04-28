@@ -25,6 +25,7 @@ import {
 	schemeBadge,
 } from "./exam-paper-helpers"
 import { ExamPaperPaperView } from "./exam-paper-paper-view"
+import { GradeBoundariesCard } from "./grade-boundaries-card"
 
 type SortKey = "number" | "marks" | "similarity"
 type SortDir = "asc" | "desc"
@@ -121,7 +122,15 @@ export function ExamPaperQuestionsCard({
 					</div>
 				</div>
 			</CardHeader>
-			<CardContent>
+			<CardContent className="space-y-4">
+				<GradeBoundariesCard
+					paperId={paper.id}
+					subject={paper.subject}
+					paperTotal={paper.total_marks}
+					tier={paper.tier}
+					boundaries={paper.grade_boundaries}
+					mode={paper.grade_boundary_mode}
+				/>
 				{view === "paper" ? (
 					<ExamPaperPaperView paper={paper} paperId={paper.id} />
 				) : allQuestions.length === 0 ? (

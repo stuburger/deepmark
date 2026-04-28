@@ -1,6 +1,5 @@
 "use client"
 
-import { Button } from "@/components/ui/button"
 import {
 	Field,
 	FieldDescription,
@@ -8,16 +7,15 @@ import {
 	FieldGroup,
 	FieldLabel,
 } from "@/components/ui/field"
-import { Spinner } from "@/components/ui/spinner"
 import { Textarea } from "@/components/ui/textarea"
 import { updateMarkScheme } from "@/lib/mark-scheme/manual"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { CheckCircle2 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useState, useTransition } from "react"
 import { useForm } from "react-hook-form"
 import { z } from "zod/v4"
 import { useUpdateMarkScheme } from "../../hooks/use-exam-paper-mutations"
+import { FormFooter } from "./mark-scheme-edit-form"
 
 // ── Schema ──────────────────────────────────────────────────────────────────
 
@@ -38,6 +36,7 @@ type Props = {
 	initialContent: string
 	pointsTotal: number
 	onSuccess?: () => void
+	onCancel?: () => void
 	paperId?: string
 }
 
@@ -50,6 +49,7 @@ export function LorMarkSchemeEditForm({
 	initialContent,
 	pointsTotal,
 	onSuccess,
+	onCancel,
 	paperId,
 }: Props) {
 	const router = useRouter()
@@ -109,86 +109,80 @@ export function LorMarkSchemeEditForm({
 	}
 
 	return (
-		<form onSubmit={form.handleSubmit(onSubmit)}>
-			<FieldGroup>
-				<Field>
-					<FieldLabel>Description</FieldLabel>
-					<Textarea
-						{...form.register("description")}
-						rows={2}
-						disabled={effectivelyPending}
-						className="resize-y text-sm"
-						onChange={(e) => {
-							form.register("description").onChange(e)
-							setSaved(false)
-						}}
-					/>
-					<FieldError>{form.formState.errors.description?.message}</FieldError>
-				</Field>
+		<form
+			onSubmit={form.handleSubmit(onSubmit)}
+			className="flex flex-col flex-1 min-h-0"
+		>
+			<div className="flex-1 min-h-0 overflow-y-auto px-5 py-4">
+				<FieldGroup>
+					<Field>
+						<FieldLabel>Description</FieldLabel>
+						<Textarea
+							{...form.register("description")}
+							rows={2}
+							disabled={effectivelyPending}
+							className="resize-y text-sm"
+							onChange={(e) => {
+								form.register("description").onChange(e)
+								setSaved(false)
+							}}
+						/>
+						<FieldError>
+							{form.formState.errors.description?.message}
+						</FieldError>
+					</Field>
 
-				<Field>
-					<FieldLabel>Mark scheme content</FieldLabel>
-					<FieldDescription>
-						The complete mark scheme as markdown: level descriptors, indicative
-						content, exemplar answers, marker notes.
-					</FieldDescription>
-					<Textarea
-						{...form.register("content")}
-						rows={16}
-						disabled={effectivelyPending}
-						placeholder="## Level descriptors&#10;### Level 3 (7–9 marks)&#10;...&#10;&#10;## Indicative content&#10;Answers may include:&#10;- ...&#10;&#10;## Exemplar answer (Level 3)&#10;..."
-						className="resize-y text-sm font-mono"
-						onChange={(e) => {
-							form.register("content").onChange(e)
-							setSaved(false)
-						}}
-					/>
-					<FieldError>{form.formState.errors.content?.message}</FieldError>
-				</Field>
+					<Field>
+						<FieldLabel>Mark scheme content</FieldLabel>
+						<FieldDescription>
+							The complete mark scheme as markdown: level descriptors,
+							indicative content, exemplar answers, marker notes.
+						</FieldDescription>
+						<Textarea
+							{...form.register("content")}
+							rows={16}
+							disabled={effectivelyPending}
+							placeholder="## Level descriptors&#10;### Level 3 (7–9 marks)&#10;...&#10;&#10;## Indicative content&#10;Answers may include:&#10;- ...&#10;&#10;## Exemplar answer (Level 3)&#10;..."
+							className="resize-y text-sm font-mono"
+							onChange={(e) => {
+								form.register("content").onChange(e)
+								setSaved(false)
+							}}
+						/>
+						<FieldError>{form.formState.errors.content?.message}</FieldError>
+					</Field>
 
-				<Field>
-					<FieldLabel>
-						Guidance
-						<span className="ml-1 text-xs font-normal text-muted-foreground">
-							(optional)
-						</span>
-					</FieldLabel>
-					<Textarea
-						{...form.register("guidance")}
-						rows={2}
-						disabled={effectivelyPending}
-						placeholder="Additional guidance for markers…"
-						className="resize-y text-sm"
-						onChange={(e) => {
-							form.register("guidance").onChange(e)
-							setSaved(false)
-						}}
-					/>
-				</Field>
-			</FieldGroup>
+					<Field>
+						<FieldLabel>
+							Guidance
+							<span className="ml-1 text-xs font-normal text-muted-foreground">
+								(optional)
+							</span>
+						</FieldLabel>
+						<Textarea
+							{...form.register("guidance")}
+							rows={2}
+							disabled={effectivelyPending}
+							placeholder="Additional guidance for markers…"
+							className="resize-y text-sm"
+							onChange={(e) => {
+								form.register("guidance").onChange(e)
+								setSaved(false)
+							}}
+						/>
+					</Field>
+				</FieldGroup>
 
-			{submitError && (
-				<p className="mt-3 text-sm text-destructive">{submitError}</p>
-			)}
-
-			<div className="mt-4 flex items-center gap-3">
-				<Button type="submit" size="sm" disabled={effectivelyPending}>
-					{effectivelyPending ? (
-						<>
-							<Spinner className="h-3.5 w-3.5 mr-1.5" />
-							Saving…
-						</>
-					) : (
-						"Save changes"
-					)}
-				</Button>
-				{saved && (
-					<span className="flex items-center gap-1.5 text-sm text-green-600 dark:text-green-400">
-						<CheckCircle2 className="h-4 w-4" />
-						Saved
-					</span>
+				{submitError && (
+					<p className="mt-3 text-sm text-destructive">{submitError}</p>
 				)}
 			</div>
+
+			<FormFooter
+				pending={effectivelyPending}
+				saved={saved}
+				onCancel={onCancel}
+			/>
 		</form>
 	)
 }

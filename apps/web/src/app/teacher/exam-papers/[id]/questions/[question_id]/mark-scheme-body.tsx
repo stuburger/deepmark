@@ -90,6 +90,8 @@ export type MarkSchemeBodyProps = (
 	| EditLorProps
 ) & {
 	onSuccess?: () => void
+	/** Closes the surrounding container (e.g. the unified question dialog). */
+	onCancel?: () => void
 	/** When provided, enables optimistic cache updates on the exam paper query. */
 	paperId?: string
 }
@@ -137,8 +139,8 @@ export function MarkSchemeBody(props: MarkSchemeBodyProps) {
 	}
 
 	return (
-		<>
-			<div className="flex items-center justify-end pb-2">
+		<div className="flex flex-col h-full min-h-0">
+			<div className="shrink-0 flex items-center justify-end px-5 pt-3 pb-2">
 				<Button
 					type="button"
 					variant="secondary"
@@ -162,49 +164,51 @@ export function MarkSchemeBody(props: MarkSchemeBodyProps) {
 			</div>
 
 			{autofillError && (
-				<p className="text-sm text-destructive -mt-2">{autofillError}</p>
+				<p className="shrink-0 px-5 pb-2 text-sm text-destructive">
+					{autofillError}
+				</p>
 			)}
 
-			<div className="pt-1">
-				{isLor ? (
-					<LorMarkSchemeEditForm
-						key={formKey}
-						markSchemeId={(props as EditLorProps).markSchemeId}
-						initialDescription={
-							autofillValues?.marking_method === "level_of_response"
-								? autofillValues.description
-								: (props as EditLorProps).initialDescription
-						}
-						initialGuidance={(props as EditLorProps).initialGuidance}
-						initialContent={
-							autofillValues?.marking_method === "level_of_response"
-								? autofillValues.content
-								: (props as EditLorProps).initialContent
-						}
-						pointsTotal={(props as EditLorProps).pointsTotal}
-						paperId={props.paperId}
-						onSuccess={props.onSuccess}
-					/>
-				) : (
-					<MarkSchemeFormWithAutofill
-						key={formKey}
-						props={
-							props as
-								| CreateMcqProps
-								| CreateWrittenProps
-								| EditMcqProps
-								| EditWrittenProps
-						}
-						autofillValues={
-							autofillValues?.marking_method === "level_of_response"
-								? null
-								: autofillValues
-						}
-						paperId={props.paperId}
-						onSuccess={props.onSuccess}
-					/>
-				)}
-			</div>
-		</>
+			{isLor ? (
+				<LorMarkSchemeEditForm
+					key={formKey}
+					markSchemeId={(props as EditLorProps).markSchemeId}
+					initialDescription={
+						autofillValues?.marking_method === "level_of_response"
+							? autofillValues.description
+							: (props as EditLorProps).initialDescription
+					}
+					initialGuidance={(props as EditLorProps).initialGuidance}
+					initialContent={
+						autofillValues?.marking_method === "level_of_response"
+							? autofillValues.content
+							: (props as EditLorProps).initialContent
+					}
+					pointsTotal={(props as EditLorProps).pointsTotal}
+					paperId={props.paperId}
+					onSuccess={props.onSuccess}
+					onCancel={props.onCancel}
+				/>
+			) : (
+				<MarkSchemeFormWithAutofill
+					key={formKey}
+					props={
+						props as
+							| CreateMcqProps
+							| CreateWrittenProps
+							| EditMcqProps
+							| EditWrittenProps
+					}
+					autofillValues={
+						autofillValues?.marking_method === "level_of_response"
+							? null
+							: autofillValues
+					}
+					paperId={props.paperId}
+					onSuccess={props.onSuccess}
+					onCancel={props.onCancel}
+				/>
+			)}
+		</div>
 	)
 }

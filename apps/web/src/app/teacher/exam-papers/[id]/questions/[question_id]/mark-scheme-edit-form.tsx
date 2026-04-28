@@ -203,7 +203,7 @@ function useMarkSchemeSubmit({
 
 // ── Exported component ──────────────────────────────────────────────────────
 
-export function MarkSchemeEditForm(props: Props) {
+export function MarkSchemeEditForm(props: Props & { onCancel?: () => void }) {
 	if (props.questionType === "multiple_choice") {
 		return <McqForm {...props} />
 	}
@@ -212,8 +212,8 @@ export function MarkSchemeEditForm(props: Props) {
 
 // ── MCQ form ────────────────────────────────────────────────────────────────
 
-function McqForm(props: Props) {
-	const { submit, saved, setSaved, submitError, effectivelyPending, isEdit } =
+function McqForm(props: Props & { onCancel?: () => void }) {
+	const { submit, saved, setSaved, submitError, effectivelyPending } =
 		useMarkSchemeSubmit(props)
 
 	const form = useForm<McqFormValues>({
@@ -248,76 +248,87 @@ function McqForm(props: Props) {
 	const options = props.multipleChoiceOptions ?? []
 
 	return (
-		<form onSubmit={form.handleSubmit(onSubmit)}>
-			<FieldGroup>
-				<Field>
-					<FieldLabel>Description</FieldLabel>
-					<Textarea
-						{...form.register("description", {
-							onChange: () => setSaved(false),
-						})}
-						rows={3}
+		<form
+			onSubmit={form.handleSubmit(onSubmit)}
+			className="flex flex-col flex-1 min-h-0"
+		>
+			<div className="flex-1 min-h-0 overflow-y-auto px-5 py-4">
+				<FieldGroup>
+					<Field>
+						<FieldLabel>Description</FieldLabel>
+						<Textarea
+							{...form.register("description", {
+								onChange: () => setSaved(false),
+							})}
+							rows={3}
+							disabled={effectivelyPending}
+							placeholder="e.g. The correct answer is B."
+							className="resize-y text-sm"
+						/>
+						<FieldError>
+							{form.formState.errors.description?.message}
+						</FieldError>
+					</Field>
+
+					<Field>
+						<FieldLabel>Correct answer</FieldLabel>
+						<div className="space-y-2">
+							{options.map((opt) => {
+								const checked = form
+									.watch("correctLabels")
+									.includes(opt.option_label)
+								return (
+									<label
+										key={opt.option_label}
+										className={`flex cursor-pointer items-start gap-3 rounded-lg border px-3 py-2.5 transition-colors ${
+											checked
+												? "border-green-500/60 bg-green-500/5"
+												: "hover:bg-muted/50"
+										}`}
+									>
+										<input
+											type="checkbox"
+											checked={checked}
+											onChange={() => selectCorrectLabel(opt.option_label)}
+											disabled={effectivelyPending}
+											className="mt-0.5 accent-primary"
+										/>
+										<span className="shrink-0 font-mono font-medium text-sm w-4">
+											{opt.option_label}
+										</span>
+										<span className="text-sm">{opt.option_text}</span>
+									</label>
+								)
+							})}
+						</div>
+						<FieldError>
+							{form.formState.errors.correctLabels?.message}
+						</FieldError>
+					</Field>
+
+					<GuidanceField
+						register={form.register}
 						disabled={effectivelyPending}
-						placeholder="e.g. The correct answer is B."
-						className="resize-y text-sm"
+						onDirty={() => setSaved(false)}
 					/>
-					<FieldError>{form.formState.errors.description?.message}</FieldError>
-				</Field>
+				</FieldGroup>
 
-				<Field>
-					<FieldLabel>Correct answer</FieldLabel>
-					<div className="space-y-2">
-						{options.map((opt) => {
-							const checked = form
-								.watch("correctLabels")
-								.includes(opt.option_label)
-							return (
-								<label
-									key={opt.option_label}
-									className={`flex cursor-pointer items-start gap-3 rounded-lg border px-3 py-2.5 transition-colors ${
-										checked
-											? "border-green-500/60 bg-green-500/5"
-											: "hover:bg-muted/50"
-									}`}
-								>
-									<input
-										type="checkbox"
-										checked={checked}
-										onChange={() => selectCorrectLabel(opt.option_label)}
-										disabled={effectivelyPending}
-										className="mt-0.5 accent-primary"
-									/>
-									<span className="shrink-0 font-mono font-medium text-sm w-4">
-										{opt.option_label}
-									</span>
-									<span className="text-sm">{opt.option_text}</span>
-								</label>
-							)
-						})}
-					</div>
-					<FieldError>
-						{form.formState.errors.correctLabels?.message}
-					</FieldError>
-				</Field>
-
-				<GuidanceField
-					register={form.register}
-					disabled={effectivelyPending}
-					onDirty={() => setSaved(false)}
-				/>
-			</FieldGroup>
-
-			{submitError && (
-				<p className="mt-3 text-sm text-destructive">{submitError}</p>
-			)}
-			<SaveButton pending={effectivelyPending} saved={saved} isEdit={isEdit} />
+				{submitError && (
+					<p className="mt-3 text-sm text-destructive">{submitError}</p>
+				)}
+			</div>
+			<FormFooter
+				pending={effectivelyPending}
+				saved={saved}
+				onCancel={props.onCancel}
+			/>
 		</form>
 	)
 }
 
 // ── Written form ────────────────────────────────────────────────────────────
 
-function WrittenForm(props: Props) {
+function WrittenForm(props: Props & { onCancel?: () => void }) {
 	const { submit, saved, setSaved, submitError, effectivelyPending, isEdit } =
 		useMarkSchemeSubmit(props)
 
@@ -372,82 +383,97 @@ function WrittenForm(props: Props) {
 	}
 
 	return (
-		<form onSubmit={form.handleSubmit(onSubmit)}>
-			<FieldGroup>
-				<Field>
-					<FieldLabel>Description</FieldLabel>
-					<Textarea
-						{...form.register("description", {
-							onChange: () => setSaved(false),
-						})}
-						rows={3}
-						disabled={effectivelyPending}
-						placeholder="Describe what a correct answer should include…"
-						className="resize-y text-sm"
-					/>
-					<FieldError>{form.formState.errors.description?.message}</FieldError>
-				</Field>
-
-				{showMarkPoints && (
+		<form
+			onSubmit={form.handleSubmit(onSubmit)}
+			className="flex flex-col flex-1 min-h-0"
+		>
+			<div className="flex-1 min-h-0 overflow-y-auto px-5 py-4">
+				<FieldGroup>
 					<Field>
-						<FieldLabel>
-							Mark points
-							<span className="ml-2 text-xs font-normal text-muted-foreground">
-								{totalPoints} mark{totalPoints !== 1 ? "s" : ""} total
-							</span>
-						</FieldLabel>
-						<div className="space-y-2">
-							{markPointFields.fields.map((field, i) => (
-								<MarkPointRow
-									key={field.id}
-									criteria={watchedPoints[i]?.criteria ?? ""}
-									index={i}
-									disabled={effectivelyPending}
-									isOnly={markPointFields.fields.length <= 1}
-									onChange={(value) => {
-										form.setValue(`markPoints.${i}.criteria`, value)
-										setSaved(false)
-									}}
-									onRemove={() => {
-										markPointFields.remove(i)
-										setSaved(false)
-									}}
-								/>
-							))}
-						</div>
-						<Button
-							type="button"
-							variant="outline"
-							size="sm"
-							onClick={() => {
-								markPointFields.append({
-									criteria: "",
-									description: "",
-									points: 1,
-								})
-								setSaved(false)
-							}}
+						<FieldLabel>Description</FieldLabel>
+						<Textarea
+							{...form.register("description", {
+								onChange: () => setSaved(false),
+							})}
+							rows={3}
 							disabled={effectivelyPending}
-							className="mt-2"
-						>
-							<Plus className="h-3.5 w-3.5 mr-1.5" />
-							Add mark point
-						</Button>
-						<FieldError>{form.formState.errors.markPoints?.message}</FieldError>
+							placeholder="Describe what a correct answer should include…"
+							className="resize-y text-sm"
+						/>
+						<FieldError>
+							{form.formState.errors.description?.message}
+						</FieldError>
 					</Field>
+
+					{showMarkPoints && (
+						<Field>
+							<div className="flex items-center justify-between gap-2">
+								<FieldLabel className="m-0">
+									Mark points
+									<span className="ml-2 text-xs font-normal text-muted-foreground">
+										{totalPoints} mark{totalPoints !== 1 ? "s" : ""} total
+									</span>
+								</FieldLabel>
+								<Button
+									type="button"
+									variant="ghost"
+									size="sm"
+									onClick={() => {
+										markPointFields.append({
+											criteria: "",
+											description: "",
+											points: 1,
+										})
+										setSaved(false)
+									}}
+									disabled={effectivelyPending}
+									className="h-7 px-2 text-xs"
+								>
+									<Plus className="h-3.5 w-3.5 mr-1" />
+									Add mark point
+								</Button>
+							</div>
+							<div className="space-y-2">
+								{markPointFields.fields.map((field, i) => (
+									<MarkPointRow
+										key={field.id}
+										criteria={watchedPoints[i]?.criteria ?? ""}
+										index={i}
+										disabled={effectivelyPending}
+										isOnly={markPointFields.fields.length <= 1}
+										onChange={(value) => {
+											form.setValue(`markPoints.${i}.criteria`, value)
+											setSaved(false)
+										}}
+										onRemove={() => {
+											markPointFields.remove(i)
+											setSaved(false)
+										}}
+									/>
+								))}
+							</div>
+							<FieldError>
+								{form.formState.errors.markPoints?.message}
+							</FieldError>
+						</Field>
+					)}
+
+					<GuidanceField
+						register={form.register}
+						disabled={effectivelyPending}
+						onDirty={() => setSaved(false)}
+					/>
+				</FieldGroup>
+
+				{submitError && (
+					<p className="mt-3 text-sm text-destructive">{submitError}</p>
 				)}
-
-				<GuidanceField
-					register={form.register}
-					disabled={effectivelyPending}
-					onDirty={() => setSaved(false)}
-				/>
-			</FieldGroup>
-
-			{submitError && (
-				<p className="mt-3 text-sm text-destructive">{submitError}</p>
-			)}
-			<SaveButton pending={effectivelyPending} saved={saved} isEdit={isEdit} />
+			</div>
+			<FormFooter
+				pending={effectivelyPending}
+				saved={saved}
+				onCancel={props.onCancel}
+			/>
 		</form>
 	)
 }
@@ -482,35 +508,44 @@ function GuidanceField({
 	)
 }
 
-function SaveButton({
+export function FormFooter({
 	pending,
 	saved,
-	isEdit,
+	onCancel,
 }: {
 	pending: boolean
 	saved: boolean
-	isEdit: boolean
+	onCancel?: () => void
 }) {
 	return (
-		<div className="mt-4 flex items-center gap-3">
-			<Button type="submit" size="sm" disabled={pending}>
-				{pending ? (
-					<>
-						<Spinner className="h-3.5 w-3.5 mr-1.5" />
-						Saving…
-					</>
-				) : isEdit ? (
-					"Save changes"
-				) : (
-					"Create mark scheme"
-				)}
-			</Button>
+		<div className="shrink-0 flex items-center justify-end gap-3 border-t bg-background px-5 py-3">
 			{saved && (
 				<span className="flex items-center gap-1.5 text-sm text-green-600 dark:text-green-400">
 					<CheckCircle2 className="h-4 w-4" />
 					Saved
 				</span>
 			)}
+			{onCancel && (
+				<Button
+					type="button"
+					variant="ghost"
+					size="sm"
+					onClick={onCancel}
+					disabled={pending}
+				>
+					Close
+				</Button>
+			)}
+			<Button type="submit" size="sm" disabled={pending}>
+				{pending ? (
+					<>
+						<Spinner className="h-3.5 w-3.5 mr-1.5" />
+						Saving…
+					</>
+				) : (
+					"Save"
+				)}
+			</Button>
 		</div>
 	)
 }

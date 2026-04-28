@@ -139,7 +139,7 @@ export function LinkedPdfUploadClient({
 	const isProcessing = !!jobId && jobStatus !== "failed" && !uploading
 
 	return (
-		<div className="max-w-xl space-y-6">
+		<div className="max-w-xl space-y-6 pt-6">
 			<div>
 				<Link
 					href={`/teacher/exam-papers/${examPaperId}`}

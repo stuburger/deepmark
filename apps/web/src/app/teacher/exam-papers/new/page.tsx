@@ -276,7 +276,7 @@ export default function NewExamPaperPage() {
 		stage.kind === "confirm" && stage.pendingIngestion !== null
 
 	return (
-		<div className="max-w-xl space-y-6">
+		<div className="max-w-xl space-y-6 pt-6">
 			<div>
 				<Link
 					href="/teacher/exam-papers"

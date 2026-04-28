@@ -197,7 +197,7 @@ export function UnifiedQuestionDialog({
 
 							<TabsContent
 								value="mark_scheme"
-								className="flex-1 min-h-0 overflow-y-auto px-5 py-4"
+								className="flex-1 min-h-0 flex flex-col p-0 overflow-hidden"
 							>
 								{loadingDetail ? (
 									<div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
@@ -210,6 +210,7 @@ export function UnifiedQuestionDialog({
 										detail={detail}
 										paperId={paperId}
 										hasScheme={hasScheme}
+										onCancel={() => onOpenChange(false)}
 									/>
 								)}
 							</TabsContent>
@@ -241,11 +242,13 @@ function MarkSchemeBodyForQuestion({
 	detail,
 	paperId,
 	hasScheme,
+	onCancel,
 }: {
 	question: ExamPaperQuestion
 	detail: QuestionDetail | null
 	paperId: string
 	hasScheme: boolean
+	onCancel?: () => void
 }) {
 	const isMcq = question.question_type === "multiple_choice"
 
@@ -259,11 +262,13 @@ function MarkSchemeBodyForQuestion({
 					questionType: "multiple_choice",
 					multipleChoiceOptions: question.multiple_choice_options,
 					paperId,
+					onCancel,
 				}
 			: {
 					mode: "create",
 					questionId: question.id,
 					paperId,
+					onCancel,
 				}
 		return <MarkSchemeBody {...createProps} />
 	}
@@ -285,6 +290,7 @@ function MarkSchemeBodyForQuestion({
 			initialGuidance: ms.guidance ?? "",
 			initialCorrectOptionLabels: ms.correct_option_labels,
 			paperId,
+			onCancel,
 		}
 		return <MarkSchemeBody {...props} />
 	}
@@ -300,6 +306,7 @@ function MarkSchemeBodyForQuestion({
 			initialContent: ms.content ?? "",
 			pointsTotal: ms.points_total,
 			paperId,
+			onCancel,
 		}
 		return <MarkSchemeBody {...props} />
 	}
@@ -328,6 +335,7 @@ function MarkSchemeBodyForQuestion({
 		initialGuidance: ms.guidance ?? "",
 		initialMarkPoints: markPoints,
 		paperId,
+		onCancel,
 	}
 	return <MarkSchemeBody {...props} />
 }

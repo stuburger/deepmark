@@ -60,11 +60,13 @@ export function MarkSchemeFormWithAutofill({
 	autofillValues,
 	paperId,
 	onSuccess,
+	onCancel,
 }: {
 	props: CreateMcqProps | CreateWrittenProps | EditMcqProps | EditWrittenProps
 	autofillValues: AutofillValues | null
 	paperId?: string
 	onSuccess?: () => void
+	onCancel?: () => void
 }) {
 	const isMcq =
 		(props.mode === "create" && props.questionType === "multiple_choice") ||
@@ -87,6 +89,7 @@ export function MarkSchemeFormWithAutofill({
 					initialCorrectOptionLabels={autofill?.correct_option_labels}
 					paperId={paperId}
 					onSuccess={onSuccess}
+					onCancel={onCancel}
 				/>
 			)
 		}
@@ -100,6 +103,7 @@ export function MarkSchemeFormWithAutofill({
 				initialMarkPoints={autofill?.mark_points}
 				paperId={paperId}
 				onSuccess={onSuccess}
+				onCancel={onCancel}
 			/>
 		)
 	}
@@ -121,6 +125,7 @@ export function MarkSchemeFormWithAutofill({
 				}
 				paperId={paperId}
 				onSuccess={onSuccess}
+				onCancel={onCancel}
 			/>
 		)
 	}
@@ -139,6 +144,7 @@ export function MarkSchemeFormWithAutofill({
 			}
 			paperId={paperId}
 			onSuccess={onSuccess}
+			onCancel={onCancel}
 		/>
 	)
 }

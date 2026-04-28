@@ -1,7 +1,12 @@
 "use client"
 
 import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
+import {
+	Dialog,
+	DialogContent,
+	DialogHeader,
+	DialogTitle,
+} from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { updatePaperSettings } from "@/lib/exam-paper/paper/mutations"
@@ -16,14 +21,7 @@ import {
 	isTieredSubject,
 } from "@mcp-gcse/shared"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
-import {
-	CheckCircle2,
-	Check as CheckIcon,
-	GraduationCap,
-	Loader2,
-	Pencil,
-	Sparkles,
-} from "lucide-react"
+import { Loader2, Sparkles } from "lucide-react"
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
 
@@ -89,7 +87,7 @@ export function GradeBoundariesCard({
 		toDraft(boundaries),
 	)
 	const [validationError, setValidationError] = useState<string | null>(null)
-	const [editing, setEditing] = useState(false)
+	const [dialogOpen, setDialogOpen] = useState(false)
 	const [undoTarget, setUndoTarget] = useState<{
 		boundaries: GradeBoundary[] | null
 		mode: BoundaryMode | null
@@ -121,16 +119,11 @@ export function GradeBoundariesCard({
 	})
 
 	const typicals = getTypicalBoundaries(subject, tier)
-	const isCustomised =
-		boundaries !== null &&
-		typicals !== null &&
-		effectiveMode === "percent" &&
-		!boundariesEqual(boundaries, typicals)
 	const isTypical =
 		boundaries !== null &&
 		typicals !== null &&
 		effectiveMode === "percent" &&
-		!isCustomised
+		boundariesEqual(boundaries, typicals)
 
 	function handleCellBlur() {
 		if (!boundaries) return
@@ -182,7 +175,6 @@ export function GradeBoundariesCard({
 			return
 		}
 		setUndoTarget({ boundaries, mode })
-		// Typical templates are percent-based — align mode accordingly.
 		save.mutate({
 			grade_boundary_mode: "percent",
 			grade_boundaries: template,
@@ -218,189 +210,137 @@ export function GradeBoundariesCard({
 
 	const saving = save.isPending
 	const rawModeDisabled = paperTotal <= 0
-
-	const statusBadge = (() => {
-		if (saving)
-			return (
-				<span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-					<Loader2 className="h-3 w-3 animate-spin" />
-					Saving…
-				</span>
-			)
-		if (isTypical)
-			return (
-				<span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-					<CheckCircle2 className="h-3 w-3 text-green-600 dark:text-green-400" />
-					typical {tier ?? ""}
-				</span>
-			)
-		if (isCustomised)
-			return (
-				<span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-					<CheckCircle2 className="h-3 w-3 text-green-600 dark:text-green-400" />
-					customised
-				</span>
-			)
-		if (boundaries !== null)
-			return (
-				<span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-					<CheckCircle2 className="h-3 w-3 text-green-600 dark:text-green-400" />
-					{effectiveMode === "raw" ? "raw marks" : "custom"}
-				</span>
-			)
-		return <span className="text-xs text-muted-foreground italic">not set</span>
-	})()
-
 	const unitLabel = effectiveMode === "percent" ? "%" : `/ ${paperTotal}`
 
 	return (
-		<Card>
-			<CardContent className="pt-4 space-y-3">
-				<div className="flex items-center justify-between gap-3 flex-wrap">
-					<div className="flex items-center gap-2">
-						<GraduationCap className="h-4 w-4 text-muted-foreground" />
-						<p className="text-sm font-medium">Grade boundaries</p>
-						{statusBadge}
-					</div>
+		<>
+			{/* Inline trigger — just the rail (or a "Set up" prompt when empty) */}
+			<button
+				type="button"
+				onClick={() => setDialogOpen(true)}
+				className="mx-auto block w-full max-w-4xl rounded-md py-2 text-left transition-colors hover:bg-muted/40"
+			>
+				<div className="mb-1 flex items-center gap-2">
+					<span className="text-xs font-medium text-muted-foreground">
+						Levels
+					</span>
+					{saving && (
+						<Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+					)}
+				</div>
+				{boundaries ? (
+					<BoundaryTimeline
+						boundaries={boundaries}
+						mode={effectiveMode}
+						paperTotal={paperTotal}
+					/>
+				) : (
+					<p className="text-xs text-muted-foreground">+ Set up levels</p>
+				)}
+			</button>
 
-					<div className="flex items-center gap-2 shrink-0">
-						{tiered && (
+			<Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+				<DialogContent className="sm:max-w-2xl">
+					<DialogHeader>
+						<DialogTitle>Levels</DialogTitle>
+					</DialogHeader>
+
+					<div className="space-y-4 pt-2">
+						<div className="flex items-center justify-end gap-2 flex-wrap">
+							{tiered && (
+								<ToggleGroup
+									value={tier ? [tier] : []}
+									onValueChange={(values) => {
+										const next = values[0]
+										handleTierChange(
+											next === "foundation" || next === "higher" ? next : null,
+										)
+									}}
+									variant="outline"
+									size="sm"
+								>
+									<ToggleGroupItem value="foundation">
+										Foundation
+									</ToggleGroupItem>
+									<ToggleGroupItem value="higher">Higher</ToggleGroupItem>
+								</ToggleGroup>
+							)}
 							<ToggleGroup
-								value={tier ? [tier] : []}
+								value={[effectiveMode]}
 								onValueChange={(values) => {
 									const next = values[0]
-									handleTierChange(
-										next === "foundation" || next === "higher" ? next : null,
-									)
+									if (next === "percent" || next === "raw")
+										handleModeChange(next)
 								}}
 								variant="outline"
 								size="sm"
+								title={
+									rawModeDisabled
+										? "Set the paper's total marks to enable raw mode"
+										: undefined
+								}
 							>
-								<ToggleGroupItem value="foundation">Foundation</ToggleGroupItem>
-								<ToggleGroupItem value="higher">Higher</ToggleGroupItem>
+								<ToggleGroupItem value="percent">%</ToggleGroupItem>
+								<ToggleGroupItem value="raw" disabled={rawModeDisabled}>
+									Raw
+								</ToggleGroupItem>
 							</ToggleGroup>
-						)}
-						<ToggleGroup
-							value={[effectiveMode]}
-							onValueChange={(values) => {
-								const next = values[0]
-								if (next === "percent" || next === "raw") handleModeChange(next)
-							}}
-							variant="outline"
-							size="sm"
-							title={
-								rawModeDisabled
-									? "Set the paper's total marks to enable raw mode"
-									: undefined
-							}
-						>
-							<ToggleGroupItem value="percent">%</ToggleGroupItem>
-							<ToggleGroupItem value="raw" disabled={rawModeDisabled}>
-								Raw
-							</ToggleGroupItem>
-						</ToggleGroup>
-						{boundaries && (
-							<Button
-								type="button"
-								variant={editing ? "default" : "ghost"}
-								size="sm"
-								className="h-8"
-								onClick={() => {
-									if (editing) {
-										// Commit any pending draft on exit
-										handleCellBlur()
-									}
-									setEditing((v) => !v)
-								}}
-							>
-								{editing ? (
-									<>
-										<CheckIcon className="h-3.5 w-3.5 mr-1" />
-										Done
-									</>
-								) : (
-									<>
-										<Pencil className="h-3.5 w-3.5 mr-1" />
-										Edit
-									</>
-								)}
-							</Button>
-						)}
-					</div>
-				</div>
-
-				{boundaries ? (
-					editing ? (
-						<PopulatedRow
-							draft={draft}
-							validationError={validationError}
-							unitLabel={unitLabel}
-							onCellChange={handleCellChange}
-							onCellBlur={handleCellBlur}
-							disabled={saving}
-						/>
-					) : (
-						<BoundaryTimeline
-							boundaries={boundaries}
-							mode={effectiveMode}
-							paperTotal={paperTotal}
-						/>
-					)
-				) : (
-					<EmptyState
-						tier={tier}
-						tiered={tiered}
-						hasTemplate={typicals !== null}
-						onGenerate={generate}
-						onEnterManually={() => {
-							// Seed a sensible descending placeholder based on current mode.
-							const upper = effectiveMode === "percent" ? 90 : paperTotal
-							const step = upper / 9
-							const seeded: GradeBoundary[] = GRADES.map((g, i) => ({
-								grade: g,
-								min_mark: Math.max(0, Math.round(upper - i * step)),
-							}))
-							save.mutate({ grade_boundaries: seeded })
-						}}
-						disabled={saving}
-					/>
-				)}
-
-				{boundaries && (
-					<div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
-						<span>
-							{isTypical
-								? "Typical values — edit any cell to customise."
-								: isCustomised
-									? "Verify against your board's published boundaries."
-									: effectiveMode === "raw"
-										? `Raw marks out of ${paperTotal}. Higher grade wins at exact thresholds.`
-										: "Enter each grade's minimum percentage."}
-						</span>
-						<div className="flex items-center gap-1">
-							{undoTarget !== null && (
-								<Button variant="ghost" size="xs" onClick={undoGenerate}>
-									Undo generate
-								</Button>
-							)}
-							{!isTypical && typicals !== null && (
-								<Button variant="ghost" size="xs" onClick={resetToTypical}>
-									Reset to typical
-								</Button>
-							)}
-							<Button
-								variant="ghost"
-								size="xs"
-								className="text-muted-foreground hover:text-destructive"
-								onClick={clearBoundaries}
-							>
-								Clear
-							</Button>
 						</div>
+
+						{boundaries ? (
+							<PopulatedRow
+								draft={draft}
+								validationError={validationError}
+								unitLabel={unitLabel}
+								onCellChange={handleCellChange}
+								onCellBlur={handleCellBlur}
+								disabled={saving}
+							/>
+						) : (
+							<EmptyState
+								tier={tier}
+								tiered={tiered}
+								hasTemplate={typicals !== null}
+								onGenerate={generate}
+								onEnterManually={() => {
+									const upper = effectiveMode === "percent" ? 90 : paperTotal
+									const step = upper / 9
+									const seeded: GradeBoundary[] = GRADES.map((g, i) => ({
+										grade: g,
+										min_mark: Math.max(0, Math.round(upper - i * step)),
+									}))
+									save.mutate({ grade_boundaries: seeded })
+								}}
+								disabled={saving}
+							/>
+						)}
+
+						{boundaries && (
+							<div className="flex items-center justify-end gap-1">
+								{undoTarget !== null && (
+									<Button variant="ghost" size="sm" onClick={undoGenerate}>
+										Undo generate
+									</Button>
+								)}
+								{!isTypical && typicals !== null && (
+									<Button variant="ghost" size="sm" onClick={resetToTypical}>
+										Reset to typical
+									</Button>
+								)}
+								<Button
+									variant="ghost"
+									size="sm"
+									className="text-muted-foreground hover:text-destructive"
+									onClick={clearBoundaries}
+								>
+									Clear
+								</Button>
+							</div>
+						)}
 					</div>
-				)}
-			</CardContent>
-		</Card>
+				</DialogContent>
+			</Dialog>
+		</>
 	)
 }
 
@@ -464,17 +404,13 @@ function BoundaryTimeline({
 	const upper = mode === "percent" ? 100 : Math.max(paperTotal, 1)
 	const labelSuffix = mode === "percent" ? "%" : ""
 
-	// Sort by min_mark ascending so the rail reads left-to-right as low → high
-	// (grade 1 on the left, grade 9 on the right).
 	const sorted = [...boundaries].sort((a, b) => a.min_mark - b.min_mark)
 
 	return (
 		<div className="px-2 pt-2 pb-1">
 			<div className="relative h-9">
-				{/* Track */}
 				<div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-1.5 rounded-full bg-gradient-to-r from-red-500/25 via-amber-500/30 to-emerald-500/45" />
 
-				{/* Markers */}
 				{sorted.map((b) => {
 					const pct = Math.min(100, Math.max(0, (b.min_mark / upper) * 100))
 					return (

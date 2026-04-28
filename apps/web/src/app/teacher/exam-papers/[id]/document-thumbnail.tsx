@@ -76,10 +76,14 @@ export function DocumentThumbnail({
 	const canUpload = !isAcquired && !isProcessing && !uploading
 
 	// Load presigned URL once we know which doc we're viewing.
+	// Keyed on the stable id (not the object) so polling doesn't force a refetch
+	// every 3s — refetching changes the URL, which re-runs the canvas effect and
+	// flashes the thumbnail blank during PDF render.
+	const completedDocId = completedDoc?.id ?? null
 	useEffect(() => {
-		if (!completedDoc) return
+		if (!completedDocId) return
 		let cancelled = false
-		getPdfIngestionJobDownloadUrl(completedDoc.id).then((r) => {
+		getPdfIngestionJobDownloadUrl(completedDocId).then((r) => {
 			if (cancelled) return
 			if (!r.ok) return
 			setPdfUrl(r.url)
@@ -87,7 +91,7 @@ export function DocumentThumbnail({
 		return () => {
 			cancelled = true
 		}
-	}, [completedDoc])
+	}, [completedDocId])
 
 	// Render first page to canvas once we have the URL.
 	useEffect(() => {

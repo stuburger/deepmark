@@ -2,6 +2,7 @@
 
 import { CollaboratorAvatars } from "@/components/annotated-answer/collaborator-avatars"
 import { useCollaborators } from "@/components/annotated-answer/use-collaborators"
+import { useDocScoreTotals } from "@/components/annotated-answer/use-doc-score-totals"
 import { useYDoc } from "@/components/annotated-answer/use-y-doc"
 import {
 	Tooltip,
@@ -56,8 +57,17 @@ export function SubmissionToolbar({
 	// is null while indexeddb-only mode is active or before the cache entry
 	// initialises; useCollaborators tolerates that and returns [].
 	const docKey = data.submission_id ?? jobId
-	const { provider } = useYDoc(docKey)
+	const { doc, provider } = useYDoc(docKey)
 	const collaborators = useCollaborators(provider)
+
+	// Live totals from the Y.Doc — overrides the server payload so teacher
+	// edits in the editor reflect immediately. Falls back to `data.*` until
+	// the doc has hydrated with at least one max score.
+	const liveTotals = useDocScoreTotals(doc)
+	const totalAwarded = liveTotals.hasData
+		? liveTotals.awarded
+		: data.total_awarded
+	const totalMax = liveTotals.hasData ? liveTotals.max : data.total_max
 
 	return (
 		<TooltipProvider>
@@ -94,13 +104,13 @@ export function SubmissionToolbar({
 					<VersionSwitcher jobId={jobId} onVersionChange={onVersionChange} />
 				)}
 
-				{phase === "completed" && data.total_max > 0 && (
+				{phase === "completed" && totalMax > 0 && (
 					<span className="ml-2 inline-flex items-center gap-1.5">
-						<ScoreBadge awarded={data.total_awarded} max={data.total_max} />
+						<ScoreBadge awarded={totalAwarded} max={totalMax} />
 						{(() => {
 							const grade = computeGrade(
-								data.total_awarded,
-								data.total_max,
+								totalAwarded,
+								totalMax,
 								data.grade_boundaries,
 								data.grade_boundary_mode ?? "percent",
 							)

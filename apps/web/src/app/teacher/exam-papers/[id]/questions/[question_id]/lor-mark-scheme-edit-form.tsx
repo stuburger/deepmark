@@ -9,9 +9,10 @@ import {
 } from "@/components/ui/field"
 import { Textarea } from "@/components/ui/textarea"
 import { updateMarkScheme } from "@/lib/mark-scheme/manual"
+import type { MarkSchemeInput } from "@/lib/mark-scheme/types"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useRouter } from "next/navigation"
-import { useState, useTransition } from "react"
+import { useCallback, useEffect, useState, useTransition } from "react"
 import { useForm } from "react-hook-form"
 import { z } from "zod/v4"
 import { useUpdateMarkScheme } from "../../hooks/use-exam-paper-mutations"
@@ -38,6 +39,7 @@ type Props = {
 	onSuccess?: () => void
 	onCancel?: () => void
 	paperId?: string
+	onDraftChange?: (input: MarkSchemeInput) => void
 }
 
 // ── Component ───────────────────────────────────────────────────────────────
@@ -51,6 +53,7 @@ export function LorMarkSchemeEditForm({
 	onSuccess,
 	onCancel,
 	paperId,
+	onDraftChange,
 }: Props) {
 	const router = useRouter()
 	const [isPending, startTransition] = useTransition()
@@ -68,17 +71,32 @@ export function LorMarkSchemeEditForm({
 		},
 	})
 
+	const toInput = useCallback(
+		(values: FormValues): MarkSchemeInput => {
+			return {
+				marking_method: "level_of_response",
+				description: values.description.trim(),
+				guidance: values.guidance.trim() || null,
+				content: values.content,
+				points_total: pointsTotal,
+			}
+		},
+		[pointsTotal],
+	)
+
+	useEffect(() => {
+		onDraftChange?.(toInput(form.getValues()))
+		const subscription = form.watch(() => {
+			onDraftChange?.(toInput(form.getValues()))
+		})
+		return () => subscription.unsubscribe()
+	}, [form, onDraftChange, toInput])
+
 	function onSubmit(values: FormValues) {
 		setSubmitError(null)
 		setSaved(false)
 
-		const input = {
-			marking_method: "level_of_response" as const,
-			description: values.description.trim(),
-			guidance: values.guidance.trim() || null,
-			content: values.content,
-			points_total: pointsTotal,
-		}
+		const input = toInput(values)
 
 		if (paperId) {
 			updateHook.mutate(

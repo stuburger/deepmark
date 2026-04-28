@@ -85,7 +85,6 @@ async function seedExamPaperAndQuestions(): Promise<void> {
 			total_marks: totalMarks,
 			duration_minutes: 60,
 			is_active: true,
-			is_public: false,
 			created_by_id: FIXTURE.userId,
 		},
 		update: {},

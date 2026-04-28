@@ -1,10 +1,8 @@
-import { buttonVariants } from "@/components/ui/button-variants"
 import { Skeleton } from "@/components/ui/skeleton"
 import { listExamPapers } from "@/lib/exam-paper/paper/queries"
-import { PlusCircle } from "lucide-react"
-import Link from "next/link"
 import { Suspense } from "react"
 import { ExamPaperCard } from "./exam-paper-card"
+import { NewExamPaperButton } from "./new-exam-paper-button"
 
 async function ExamPaperGrid() {
 	const result = await listExamPapers()
@@ -16,13 +14,7 @@ async function ExamPaperGrid() {
 	if (result.papers.length === 0) {
 		return (
 			<p className="text-sm text-muted-foreground py-16 text-center">
-				No exam papers yet.{" "}
-				<Link
-					href="/teacher/exam-papers/new"
-					className="underline underline-offset-4"
-				>
-					Create your first one.
-				</Link>
+				No exam papers yet. Click &ldquo;New exam paper&rdquo; to create one.
 			</p>
 		)
 	}
@@ -82,10 +74,7 @@ export default function ExamPapersPage() {
 						teacher marking flow.
 					</p>
 				</div>
-				<Link href="/teacher/exam-papers/new" className={buttonVariants()}>
-					<PlusCircle className="h-4 w-4 mr-2" />
-					New exam paper
-				</Link>
+				<NewExamPaperButton />
 			</div>
 
 			<Suspense fallback={<ExamPaperGridSkeleton />}>

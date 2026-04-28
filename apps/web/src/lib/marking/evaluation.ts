@@ -10,10 +10,56 @@ import {
 	type QuestionWithMarkScheme,
 	parseMarkPointsFromPrisma,
 } from "@mcp-gcse/shared"
+import { z } from "zod/v4"
 import { auth } from "../auth"
 import { log } from "../logger"
+import type { MarkSchemeInput } from "../mark-scheme/types"
 
 const TAG = "eval-actions"
+
+const markSchemeInputSchema = z.discriminatedUnion("marking_method", [
+	z.object({
+		marking_method: z.literal("point_based"),
+		description: z.string().trim().min(1, "Description is required"),
+		guidance: z.string().trim().nullable().optional(),
+		mark_points: z
+			.array(
+				z.object({
+					criteria: z.string().trim().min(1, "Mark point criteria is required"),
+					description: z.string().optional(),
+					points: z.number().int().min(0, "Mark point value is invalid"),
+				}),
+			)
+			.min(1, "At least one mark point is required"),
+	}),
+	z.object({
+		marking_method: z.literal("deterministic"),
+		description: z.string().trim().min(1, "Description is required"),
+		guidance: z.string().trim().nullable().optional(),
+		correct_option_labels: z
+			.array(z.string())
+			.min(1, "Select at least one correct answer"),
+	}),
+	z.object({
+		marking_method: z.literal("level_of_response"),
+		description: z.string().trim().min(1, "Description is required"),
+		guidance: z.string().trim().nullable().optional(),
+		content: z.string().trim().min(1, "Mark scheme content is required"),
+		points_total: z.number().int().positive("Cannot determine total marks"),
+	}),
+])
+
+type ParsedMarkSchemeInput = z.infer<typeof markSchemeInputSchema>
+
+type EvaluationMarkScheme = {
+	description: string
+	guidance: string | null
+	points_total: number
+	marking_method: "deterministic" | "point_based" | "level_of_response"
+	mark_points: unknown
+	content: string | null
+	correct_option_labels: string[]
+}
 
 export type EvalMarkPoint = {
 	description: string
@@ -45,6 +91,7 @@ export type EvaluateStudentAnswerResult =
 export async function evaluateStudentAnswer(
 	questionId: string,
 	studentAnswer: string,
+	markSchemeDraft?: MarkSchemeInput | null,
 ): Promise<EvaluateStudentAnswerResult> {
 	const session = await auth()
 	if (!session) return { ok: false, error: "Not authenticated" }
@@ -86,11 +133,21 @@ export async function evaluateStudentAnswer(
 		if (!question) return { ok: false, error: "Question not found" }
 
 		const markScheme = question.mark_schemes[0]
-		if (!markScheme) {
+		if (!markScheme && !markSchemeDraft) {
 			return { ok: false, error: "No mark scheme available for this question" }
 		}
 
-		const markPoints = parseMarkPointsFromPrisma(markScheme.mark_points)
+		const selectedMarkScheme = markSchemeDraft
+			? parseDraftMarkScheme(markSchemeDraft)
+			: markScheme
+				? toEvaluationMarkScheme(markScheme)
+				: null
+
+		if (!selectedMarkScheme) {
+			return { ok: false, error: getDraftMarkSchemeError(markSchemeDraft) }
+		}
+
+		const markPoints = parseMarkPointsFromPrisma(selectedMarkScheme.mark_points)
 
 		type RawOption = { option_label: string; option_text: string }
 		const availableOptions = Array.isArray(question.multiple_choice_options)
@@ -108,20 +165,17 @@ export async function evaluateStudentAnswer(
 					: "written",
 			questionText: question.text,
 			topic: question.topic,
-			rubric: markScheme.description,
-			guidance: markScheme.guidance,
-			totalPoints: markScheme.points_total,
+			rubric: selectedMarkScheme.description,
+			guidance: selectedMarkScheme.guidance,
+			totalPoints: selectedMarkScheme.points_total,
 			markPoints,
-			markingMethod: markScheme.marking_method as
-				| "deterministic"
-				| "point_based"
-				| "level_of_response",
+			markingMethod: selectedMarkScheme.marking_method,
 			correctOptionLabels:
-				markScheme.correct_option_labels.length > 0
-					? markScheme.correct_option_labels
+				selectedMarkScheme.correct_option_labels.length > 0
+					? selectedMarkScheme.correct_option_labels
 					: undefined,
 			availableOptions,
-			content: markScheme.content,
+			content: selectedMarkScheme.content,
 		}
 
 		const { getDefaultRunner } = await import("@/lib/llm-runtime")
@@ -158,7 +212,7 @@ export async function evaluateStudentAnswer(
 			questionId,
 			score: evalResult.score,
 			max_score: evalResult.max_score,
-			marking_method: markScheme.marking_method,
+			marking_method: selectedMarkScheme.marking_method,
 		})
 
 		return { ok: true, result: evalResult }
@@ -169,5 +223,79 @@ export async function evaluateStudentAnswer(
 			error: String(err),
 		})
 		return { ok: false, error: "Evaluation failed. Please try again." }
+	}
+}
+
+function parseDraftMarkScheme(
+	input: MarkSchemeInput,
+): EvaluationMarkScheme | null {
+	const parsed = markSchemeInputSchema.safeParse(input)
+	if (!parsed.success) return null
+	const draft: ParsedMarkSchemeInput = parsed.data
+
+	if (draft.marking_method === "deterministic") {
+		return {
+			description: draft.description,
+			guidance: draft.guidance || null,
+			points_total: 1,
+			marking_method: "deterministic",
+			mark_points: [],
+			content: null,
+			correct_option_labels: draft.correct_option_labels,
+		}
+	}
+
+	if (draft.marking_method === "level_of_response") {
+		return {
+			description: draft.description,
+			guidance: draft.guidance || null,
+			points_total: draft.points_total,
+			marking_method: "level_of_response",
+			mark_points: [],
+			content: draft.content,
+			correct_option_labels: [],
+		}
+	}
+
+	return {
+		description: draft.description,
+		guidance: draft.guidance || null,
+		points_total: draft.mark_points.reduce((sum, mp) => sum + mp.points, 0),
+		marking_method: "point_based",
+		mark_points: draft.mark_points.map((mp, index) => ({
+			point_number: index + 1,
+			criteria: mp.criteria,
+			description: mp.description ?? "",
+			points: mp.points,
+		})),
+		content: null,
+		correct_option_labels: [],
+	}
+}
+
+function getDraftMarkSchemeError(input: MarkSchemeInput | null | undefined) {
+	if (!input) return "No mark scheme available for this question"
+	const parsed = markSchemeInputSchema.safeParse(input)
+	if (parsed.success) return "No mark scheme available for this question"
+	return parsed.error.issues[0]?.message ?? "Mark scheme draft is invalid"
+}
+
+function toEvaluationMarkScheme(markScheme: {
+	description: string
+	guidance: string | null
+	points_total: number
+	marking_method: "deterministic" | "point_based" | "level_of_response"
+	mark_points: unknown
+	content: string | null
+	correct_option_labels: string[]
+}): EvaluationMarkScheme {
+	return {
+		description: markScheme.description,
+		guidance: markScheme.guidance,
+		points_total: markScheme.points_total,
+		marking_method: markScheme.marking_method,
+		mark_points: markScheme.mark_points,
+		content: markScheme.content,
+		correct_option_labels: markScheme.correct_option_labels,
 	}
 }

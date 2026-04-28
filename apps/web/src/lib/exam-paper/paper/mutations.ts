@@ -23,7 +23,6 @@ export type CreateExamPaperInput = {
 	paper_number?: number
 	total_marks: number
 	duration_minutes: number
-	is_public?: boolean
 }
 
 export type CreateExamPaperResult =
@@ -39,7 +38,6 @@ export async function createExamPaperStandalone(
 		userId: session.userId,
 		title: input.title,
 		subject: input.subject,
-		is_public: input.is_public,
 	})
 	try {
 		const paper = await db.examPaper.create({
@@ -51,7 +49,6 @@ export async function createExamPaperStandalone(
 				paper_number: input.paper_number ?? null,
 				total_marks: input.total_marks,
 				duration_minutes: input.duration_minutes,
-				is_public: input.is_public ?? false,
 				created_by_id: session.userId,
 			},
 		})
@@ -89,31 +86,6 @@ export async function updateExamPaperTitle(
 	} catch (err) {
 		log.error(TAG, "updateExamPaperTitle failed", { id, error: String(err) })
 		return { ok: false, error: "Failed to update exam paper title" }
-	}
-}
-
-export type ToggleExamPaperPublicResult =
-	| { ok: true }
-	| { ok: false; error: string }
-
-export async function toggleExamPaperPublic(
-	id: string,
-	is_public: boolean,
-): Promise<ToggleExamPaperPublicResult> {
-	const session = await auth()
-	if (!session) return { ok: false, error: "Not authenticated" }
-	log.info(TAG, "toggleExamPaperPublic called", {
-		userId: session.userId,
-		id,
-		is_public,
-	})
-	try {
-		await db.examPaper.update({ where: { id }, data: { is_public } })
-		log.info(TAG, "Exam paper visibility updated", { id, is_public })
-		return { ok: true }
-	} catch (err) {
-		log.error(TAG, "toggleExamPaperPublic failed", { id, error: String(err) })
-		return { ok: false, error: "Failed to update exam paper" }
 	}
 }
 

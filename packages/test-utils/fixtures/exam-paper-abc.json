@@ -16,7 +16,6 @@
 		"total_marks": 35,
 		"duration_minutes": 40,
 		"is_active": true,
-		"is_public": true,
 		"metadata": null
 	},
 	"exam_section": {

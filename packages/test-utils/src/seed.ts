@@ -28,7 +28,6 @@ export async function ensureExamPaper(): Promise<void> {
 			total_marks: fixture.exam_paper.total_marks,
 			duration_minutes: fixture.exam_paper.duration_minutes,
 			is_active: fixture.exam_paper.is_active,
-			is_public: fixture.exam_paper.is_public,
 			created_by_id: fixture.user.id,
 		},
 		update: {},

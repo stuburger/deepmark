@@ -9,12 +9,12 @@ import {
 } from "@/components/ui/field"
 import { Spinner } from "@/components/ui/spinner"
 import { Textarea } from "@/components/ui/textarea"
-import type { MarkSchemeInput } from "@/lib/mark-scheme/manual"
 import { createMarkScheme, updateMarkScheme } from "@/lib/mark-scheme/manual"
+import type { MarkSchemeInput } from "@/lib/mark-scheme/types"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { CheckCircle2, Plus } from "lucide-react"
 import { useRouter } from "next/navigation"
-import { useState, useTransition } from "react"
+import { useCallback, useEffect, useState, useTransition } from "react"
 import { useFieldArray, useForm } from "react-hook-form"
 import { z } from "zod/v4"
 import {
@@ -57,6 +57,7 @@ type McqProps = {
 	multipleChoiceOptions: McqOption[]
 	onSuccess?: () => void
 	paperId?: string
+	onDraftChange?: (input: MarkSchemeInput) => void
 } & (
 	| {
 			markSchemeId?: never
@@ -79,6 +80,7 @@ type WrittenProps = {
 	questionType?: "written" | string
 	onSuccess?: () => void
 	paperId?: string
+	onDraftChange?: (input: MarkSchemeInput) => void
 } & (
 	| {
 			markSchemeId?: never
@@ -225,6 +227,23 @@ function McqForm(props: Props & { onCancel?: () => void }) {
 		},
 	})
 
+	const toInput = useCallback((values: McqFormValues): MarkSchemeInput => {
+		return {
+			marking_method: "deterministic",
+			description: values.description.trim(),
+			guidance: values.guidance.trim() || null,
+			correct_option_labels: values.correctLabels,
+		}
+	}, [])
+
+	useEffect(() => {
+		props.onDraftChange?.(toInput(form.getValues()))
+		const subscription = form.watch(() => {
+			props.onDraftChange?.(toInput(form.getValues()))
+		})
+		return () => subscription.unsubscribe()
+	}, [form, props.onDraftChange, toInput])
+
 	// Single-select for now: the deterministic grader treats correctLabels as an
 	// exact-match set, so multi-select would require teachers to think about
 	// "student must tick all of these" semantics. GCSE MCQs are almost always
@@ -237,12 +256,7 @@ function McqForm(props: Props & { onCancel?: () => void }) {
 	}
 
 	function onSubmit(values: McqFormValues) {
-		submit({
-			marking_method: "deterministic",
-			description: values.description.trim(),
-			guidance: values.guidance.trim() || null,
-			correct_option_labels: values.correctLabels,
-		})
+		submit(toInput(values))
 	}
 
 	const options = props.multipleChoiceOptions ?? []
@@ -365,21 +379,36 @@ function WrittenForm(props: Props & { onCancel?: () => void }) {
 	// just the number of mark points.
 	const totalPoints = watchedPoints.length
 
-	function onSubmit(values: WrittenFormValues) {
-		submit({
-			marking_method: "point_based",
-			description: values.description.trim(),
-			guidance: values.guidance.trim() || null,
-			// Each mark point is fixed at 1 mark; description has been removed from
-			// the editor (it was a label-only field that wasn't used downstream).
-			mark_points: showMarkPoints
-				? values.markPoints.map((mp) => ({
-						criteria: mp.criteria.trim(),
-						description: "",
-						points: 1,
-					}))
-				: [],
+	const toInput = useCallback(
+		(values: WrittenFormValues): MarkSchemeInput => {
+			return {
+				marking_method: "point_based",
+				description: values.description.trim(),
+				guidance: values.guidance.trim() || null,
+				// Each mark point is fixed at 1 mark; description has been removed from
+				// the editor (it was a label-only field that wasn't used downstream).
+				mark_points: showMarkPoints
+					? values.markPoints.map((mp) => ({
+							criteria: mp.criteria.trim(),
+							description: "",
+							points: 1,
+						}))
+					: [],
+			}
+		},
+		[showMarkPoints],
+	)
+
+	useEffect(() => {
+		props.onDraftChange?.(toInput(form.getValues()))
+		const subscription = form.watch(() => {
+			props.onDraftChange?.(toInput(form.getValues()))
 		})
+		return () => subscription.unsubscribe()
+	}, [form, props.onDraftChange, toInput])
+
+	function onSubmit(values: WrittenFormValues) {
+		submit(toInput(values))
 	}
 
 	return (

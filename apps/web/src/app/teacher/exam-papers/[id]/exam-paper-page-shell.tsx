@@ -35,7 +35,7 @@ import type {
 } from "@/lib/pdf-ingestion/queries"
 import { queryKeys } from "@/lib/query-keys"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
-import { AlertTriangle, Copy, Globe, Lock, PenLine, Trash2 } from "lucide-react"
+import { AlertTriangle, Copy, Trash2, Upload } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { parseAsString, parseAsStringEnum, useQueryState } from "nuqs"
@@ -269,15 +269,6 @@ export function ExamPaperPageShell({
 										{paper.paper_number && (
 											<span>Paper {paper.paper_number}</span>
 										)}
-										{paper.is_public ? (
-											<Badge variant="default" className="gap-1">
-												<Globe className="h-3 w-3" /> Public
-											</Badge>
-										) : (
-											<Badge variant="outline" className="gap-1">
-												<Lock className="h-3 w-3" /> Draft
-											</Badge>
-										)}
 									</div>
 								</div>
 							</div>
@@ -357,17 +348,13 @@ export function ExamPaperPageShell({
 						<TabsTrigger value="submissions" className={tabTriggerClass}>
 							Submissions
 							{stagedCount > 0 ? (
-								<span className="ml-1.5 inline-flex items-center justify-center rounded-full bg-amber-500 text-white px-1.5 py-0.5 text-[10px] font-semibold tabular-nums leading-none">
-									{stagedCount}
-								</span>
+								<AlertTriangle
+									className="ml-1.5 h-3.5 w-3.5 shrink-0 text-amber-500"
+									aria-label={`${stagedCount} staged ${stagedCount === 1 ? "script" : "scripts"} not yet sent for marking`}
+								/>
 							) : ingestion?.isProcessing ? (
 								<span className="ml-1.5 h-1.5 w-1.5 rounded-full bg-primary animate-pulse shrink-0" />
 							) : null}
-							{submissions.length > 0 && (
-								<span className="ml-1.5 inline-flex items-center justify-center rounded-full bg-muted px-1.5 py-0.5 text-xs tabular-nums leading-none">
-									{submissions.length}
-								</span>
-							)}
 						</TabsTrigger>
 						<TabsTrigger value="analytics" className={tabTriggerClass}>
 							Analytics
@@ -530,10 +517,10 @@ export function ExamPaperPageShell({
 				<Button
 					onClick={() => readyForSubmissions && setUploadOpen(true)}
 					disabled={!readyForSubmissions}
-					className="rounded-full px-5 py-3.5 shadow-lg hover:shadow-sm active:scale-95"
+					aria-label="Upload scripts"
+					className="h-[75px] w-[75px] rounded-full p-0 shadow-lg hover:shadow-sm active:scale-95"
 				>
-					<PenLine className="h-4 w-4" />
-					Upload scripts
+					<Upload className="size-8" />
 				</Button>
 			</div>
 		</>

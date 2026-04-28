@@ -7,7 +7,7 @@ import { TableCell, TableRow } from "@/components/ui/table"
 import { deleteExamPaper } from "@/lib/exam-paper/paper/mutations"
 import type { ExamPaperListItem } from "@/lib/exam-paper/types"
 import { useMutation } from "@tanstack/react-query"
-import { Globe, Lock, Trash2 } from "lucide-react"
+import { Trash2 } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useState } from "react"
@@ -98,17 +98,6 @@ export function ExamPaperRow({ paper }: { paper: ExamPaperListItem }) {
 				<TableCell className="text-center">{paper.total_marks}</TableCell>
 				<TableCell className="text-center">
 					{paper.duration_minutes} min
-				</TableCell>
-				<TableCell>
-					{paper.is_public ? (
-						<Badge variant="default" className="gap-1">
-							<Globe className="h-3 w-3" /> Public
-						</Badge>
-					) : (
-						<Badge variant="outline" className="gap-1 text-muted-foreground">
-							<Lock className="h-3 w-3" /> Draft
-						</Badge>
-					)}
 				</TableCell>
 				<TableCell className="text-muted-foreground">
 					{formatDate(paper.created_at)}

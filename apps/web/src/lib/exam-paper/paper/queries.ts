@@ -20,14 +20,9 @@ export type ListExamPapersResult =
 	| { ok: true; papers: ExamPaperListItem[] }
 	| { ok: false; error: string }
 
-export async function listExamPapers(options?: {
-	publicOnly?: boolean
-}): Promise<ListExamPapersResult> {
+export async function listExamPapers(): Promise<ListExamPapersResult> {
 	try {
 		const papers = await db.examPaper.findMany({
-			where: options?.publicOnly
-				? { is_public: true, is_active: true }
-				: undefined,
 			orderBy: [{ year: "desc" }, { created_at: "desc" }],
 			select: {
 				id: true,
@@ -39,7 +34,6 @@ export async function listExamPapers(options?: {
 				total_marks: true,
 				duration_minutes: true,
 				is_active: true,
-				is_public: true,
 				created_at: true,
 				_count: {
 					select: {
@@ -128,7 +122,6 @@ export async function getExamPaperDetail(
 				total_marks: paper.total_marks,
 				duration_minutes: paper.duration_minutes,
 				is_active: paper.is_active,
-				is_public: paper.is_public,
 				created_at: paper.created_at,
 				sections: paper.sections.map((section) => ({
 					id: section.id,
@@ -189,7 +182,7 @@ export type ListCatalogExamPapersResult =
 export async function listCatalogExamPapers(): Promise<ListCatalogExamPapersResult> {
 	try {
 		const papers = await db.examPaper.findMany({
-			where: { is_public: true, is_active: true },
+			where: { is_active: true },
 			orderBy: [{ subject: "asc" }, { year: "desc" }],
 			select: {
 				id: true,

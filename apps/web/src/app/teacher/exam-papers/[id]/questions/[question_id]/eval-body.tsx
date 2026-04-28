@@ -4,34 +4,40 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
 import { Textarea } from "@/components/ui/textarea"
+import type { MarkSchemeInput } from "@/lib/mark-scheme/types"
 import {
 	type EvalResult,
 	evaluateStudentAnswer,
 } from "@/lib/marking/evaluation"
 import { CheckCircle2, XCircle } from "lucide-react"
 import { useState } from "react"
+import { toast } from "sonner"
 
 /**
  * The "test answer" panel — embed inside any container (e.g. a tab in the
  * unified question dialog).
  */
-export function EvalBody({ questionId }: { questionId: string }) {
+export function EvalBody({
+	questionId,
+	markSchemeDraft,
+}: {
+	questionId: string
+	markSchemeDraft: MarkSchemeInput | null
+}) {
 	const [answer, setAnswer] = useState("")
 	const [loading, setLoading] = useState(false)
 	const [result, setResult] = useState<EvalResult | null>(null)
-	const [error, setError] = useState<string | null>(null)
 
 	async function handleGrade() {
 		if (!answer.trim()) return
 		setLoading(true)
 		setResult(null)
-		setError(null)
 
-		const res = await evaluateStudentAnswer(questionId, answer)
+		const res = await evaluateStudentAnswer(questionId, answer, markSchemeDraft)
 		setLoading(false)
 
 		if (!res.ok) {
-			setError(res.error)
+			toast.error(res.error)
 			return
 		}
 		setResult(res.result)
@@ -46,7 +52,10 @@ export function EvalBody({ questionId }: { questionId: string }) {
 			<Textarea
 				placeholder="Type or paste a student answer here…"
 				value={answer}
-				onChange={(e) => setAnswer(e.target.value)}
+				onChange={(e) => {
+					setAnswer(e.target.value)
+					setResult(null)
+				}}
 				rows={5}
 				disabled={loading}
 				className="resize-y"
@@ -66,8 +75,6 @@ export function EvalBody({ questionId }: { questionId: string }) {
 					"Grade answer"
 				)}
 			</Button>
-
-			{error && <p className="text-sm text-destructive">{error}</p>}
 
 			{result && (
 				<div className="space-y-4 border-t pt-4">

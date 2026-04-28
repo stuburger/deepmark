@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button"
 import {
 	Dialog,
 	DialogContent,
+	DialogFooter,
 	DialogHeader,
 	DialogTitle,
 } from "@/components/ui/dialog"
@@ -21,7 +22,7 @@ import {
 	isTieredSubject,
 } from "@mcp-gcse/shared"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
-import { Loader2, Sparkles } from "lucide-react"
+import { Loader2, Save, Sparkles } from "lucide-react"
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
 
@@ -125,7 +126,7 @@ export function GradeBoundariesCard({
 		effectiveMode === "percent" &&
 		boundariesEqual(boundaries, typicals)
 
-	function handleCellBlur() {
+	function handleSave() {
 		if (!boundaries) return
 		const parsed = parseDraft(draft, effectiveMode, paperTotal)
 		if ("error" in parsed) {
@@ -133,13 +134,34 @@ export function GradeBoundariesCard({
 			return
 		}
 		setValidationError(null)
-		if (boundariesEqual(parsed, boundaries)) return
-		save.mutate({ grade_boundaries: parsed })
+		if (boundariesEqual(parsed, boundaries)) {
+			setDialogOpen(false)
+			return
+		}
+		save.mutate(
+			{ grade_boundaries: parsed },
+			{
+				onSuccess: (result) => {
+					if (result.ok) setDialogOpen(false)
+				},
+			},
+		)
 	}
 
 	function handleCellChange(grade: string, raw: string) {
 		setDraft((prev) => ({ ...prev, [grade]: raw.replace(/[^0-9]/g, "") }))
 	}
+
+	function handleOpenChange(nextOpen: boolean) {
+		if (!nextOpen) {
+			setDraft(toDraft(boundaries))
+			setValidationError(null)
+		}
+		setDialogOpen(nextOpen)
+	}
+
+	const savedDraft = toDraft(boundaries)
+	const isDirty = GRADES.some((g) => (draft[g] ?? "") !== (savedDraft[g] ?? ""))
 
 	function handleTierChange(next: Tier | null) {
 		if (next === tier) return
@@ -239,7 +261,7 @@ export function GradeBoundariesCard({
 				)}
 			</button>
 
-			<Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+			<Dialog open={dialogOpen} onOpenChange={handleOpenChange}>
 				<DialogContent className="sm:max-w-2xl">
 					<DialogHeader>
 						<DialogTitle>Levels</DialogTitle>
@@ -293,7 +315,7 @@ export function GradeBoundariesCard({
 								validationError={validationError}
 								unitLabel={unitLabel}
 								onCellChange={handleCellChange}
-								onCellBlur={handleCellBlur}
+								onSubmit={handleSave}
 								disabled={saving}
 							/>
 						) : (
@@ -338,6 +360,25 @@ export function GradeBoundariesCard({
 							</div>
 						)}
 					</div>
+
+					{boundaries && (
+						<DialogFooter>
+							<Button
+								variant="outline"
+								onClick={() => handleOpenChange(false)}
+								disabled={saving}
+							>
+								Cancel
+							</Button>
+							<Button
+								onClick={handleSave}
+								disabled={!isDirty || saving}
+							>
+								<Save className="h-3.5 w-3.5 mr-1.5" />
+								{saving ? "Saving…" : "Save"}
+							</Button>
+						</DialogFooter>
+					)}
 				</DialogContent>
 			</Dialog>
 		</>
@@ -349,14 +390,14 @@ function PopulatedRow({
 	validationError,
 	unitLabel,
 	onCellChange,
-	onCellBlur,
+	onSubmit,
 	disabled,
 }: {
 	draft: Record<string, string>
 	validationError: string | null
 	unitLabel: string
 	onCellChange: (grade: string, value: string) => void
-	onCellBlur: () => void
+	onSubmit: () => void
 	disabled: boolean
 }) {
 	return (
@@ -371,9 +412,11 @@ function PopulatedRow({
 							inputMode="numeric"
 							value={draft[g] ?? ""}
 							onChange={(e) => onCellChange(g, e.target.value)}
-							onBlur={onCellBlur}
 							onKeyDown={(e) => {
-								if (e.key === "Enter") e.currentTarget.blur()
+								if (e.key === "Enter") {
+									e.preventDefault()
+									onSubmit()
+								}
 							}}
 							disabled={disabled}
 							className="h-8 text-center tabular-nums px-1"

@@ -9,6 +9,7 @@ import { Spinner } from "@/components/ui/spinner"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { getQuestionDetail } from "@/lib/exam-paper/questions/queries"
 import type { ExamPaperQuestion, QuestionDetail } from "@/lib/exam-paper/types"
+import type { MarkSchemeInput } from "@/lib/mark-scheme/types"
 import { Pencil, X } from "lucide-react"
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
@@ -35,6 +36,8 @@ export function UnifiedQuestionDialog({
 	const [tab, setTab] = useState<Tab>("mark_scheme")
 	const [editingQuestion, setEditingQuestion] = useState(false)
 	const [detail, setDetail] = useState<QuestionDetail | null>(null)
+	const [markSchemeDraft, setMarkSchemeDraft] =
+		useState<MarkSchemeInput | null>(null)
 	const [loadingDetail, setLoadingDetail] = useState(false)
 
 	const questionId = question?.id ?? null
@@ -44,6 +47,8 @@ export function UnifiedQuestionDialog({
 	useEffect(() => {
 		if (!open || !questionId) return
 		let cancelled = false
+		setDetail(null)
+		setMarkSchemeDraft(null)
 		setLoadingDetail(true)
 		getQuestionDetail(questionId).then((res) => {
 			if (cancelled) return
@@ -65,6 +70,7 @@ export function UnifiedQuestionDialog({
 			setEditingQuestion(false)
 			setTab("mark_scheme")
 			setDetail(null)
+			setMarkSchemeDraft(null)
 		}
 	}, [open])
 
@@ -197,6 +203,7 @@ export function UnifiedQuestionDialog({
 
 							<TabsContent
 								value="mark_scheme"
+								keepMounted
 								className="flex-1 min-h-0 flex flex-col p-0 overflow-hidden"
 							>
 								{loadingDetail ? (
@@ -211,6 +218,7 @@ export function UnifiedQuestionDialog({
 										paperId={paperId}
 										hasScheme={hasScheme}
 										onCancel={() => onOpenChange(false)}
+										onDraftChange={setMarkSchemeDraft}
 									/>
 								)}
 							</TabsContent>
@@ -220,7 +228,11 @@ export function UnifiedQuestionDialog({
 								className="flex-1 min-h-0 overflow-y-auto px-5 py-4"
 							>
 								{hasScheme ? (
-									<EvalBody questionId={question.id} />
+									<EvalBody
+										key={question.id}
+										questionId={question.id}
+										markSchemeDraft={markSchemeDraft}
+									/>
 								) : (
 									<div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
 										Add a mark scheme first to test answers against it.
@@ -243,12 +255,14 @@ function MarkSchemeBodyForQuestion({
 	paperId,
 	hasScheme,
 	onCancel,
+	onDraftChange,
 }: {
 	question: ExamPaperQuestion
 	detail: QuestionDetail | null
 	paperId: string
 	hasScheme: boolean
 	onCancel?: () => void
+	onDraftChange: (input: MarkSchemeInput) => void
 }) {
 	const isMcq = question.question_type === "multiple_choice"
 
@@ -263,12 +277,14 @@ function MarkSchemeBodyForQuestion({
 					multipleChoiceOptions: question.multiple_choice_options,
 					paperId,
 					onCancel,
+					onDraftChange,
 				}
 			: {
 					mode: "create",
 					questionId: question.id,
 					paperId,
 					onCancel,
+					onDraftChange,
 				}
 		return <MarkSchemeBody {...createProps} />
 	}
@@ -291,6 +307,7 @@ function MarkSchemeBodyForQuestion({
 			initialCorrectOptionLabels: ms.correct_option_labels,
 			paperId,
 			onCancel,
+			onDraftChange,
 		}
 		return <MarkSchemeBody {...props} />
 	}
@@ -307,6 +324,7 @@ function MarkSchemeBodyForQuestion({
 			pointsTotal: ms.points_total,
 			paperId,
 			onCancel,
+			onDraftChange,
 		}
 		return <MarkSchemeBody {...props} />
 	}
@@ -336,6 +354,7 @@ function MarkSchemeBodyForQuestion({
 		initialMarkPoints: markPoints,
 		paperId,
 		onCancel,
+		onDraftChange,
 	}
 	return <MarkSchemeBody {...props} />
 }

@@ -223,7 +223,6 @@ export type CreateExamPaperWithIngestionInput = {
 	total_marks: number
 	duration_minutes: number
 	document_type: PdfDocumentType
-	is_public?: boolean
 	/** Foundation/Higher if known; null for untiered subjects or unknown. */
 	tier?: TierLevel | null
 	/** Defaults to false — can be very expensive. Only enable for mark schemes. */
@@ -244,7 +243,6 @@ export type CreateExamPaperWithMultipleIngestionsInput = {
 	paper_number?: number
 	total_marks: number
 	duration_minutes: number
-	is_public?: boolean
 	/** Foundation/Higher if known; null for untiered subjects or unknown. */
 	tier?: TierLevel | null
 }
@@ -296,7 +294,6 @@ export async function createExamPaperWithIngestion(
 				paper_number: input.paper_number ?? null,
 				total_marks: input.total_marks,
 				duration_minutes: input.duration_minutes,
-				is_public: input.is_public ?? false,
 				created_by_id: session.userId,
 				tier: input.tier ?? null,
 			},
@@ -397,7 +394,6 @@ export async function createExamPaperWithMultipleIngestions(
 				paper_number: input.paper_number ?? null,
 				total_marks: input.total_marks,
 				duration_minutes: input.duration_minutes,
-				is_public: input.is_public ?? false,
 				created_by_id: session.userId,
 				tier: input.tier ?? null,
 			},

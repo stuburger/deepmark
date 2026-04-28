@@ -3,6 +3,7 @@
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
 import { autofillMarkScheme } from "@/lib/mark-scheme/autofill"
+import type { MarkSchemeInput } from "@/lib/mark-scheme/types"
 import { Sparkles } from "lucide-react"
 import { useState } from "react"
 import { LorMarkSchemeEditForm } from "./lor-mark-scheme-edit-form"
@@ -94,6 +95,7 @@ export type MarkSchemeBodyProps = (
 	onCancel?: () => void
 	/** When provided, enables optimistic cache updates on the exam paper query. */
 	paperId?: string
+	onDraftChange?: (input: MarkSchemeInput) => void
 }
 
 // ─── Body ─────────────────────────────────────────────────────────────────────
@@ -188,6 +190,7 @@ export function MarkSchemeBody(props: MarkSchemeBodyProps) {
 					paperId={props.paperId}
 					onSuccess={props.onSuccess}
 					onCancel={props.onCancel}
+					onDraftChange={props.onDraftChange}
 				/>
 			) : (
 				<MarkSchemeFormWithAutofill
@@ -207,6 +210,7 @@ export function MarkSchemeBody(props: MarkSchemeBodyProps) {
 					paperId={props.paperId}
 					onSuccess={props.onSuccess}
 					onCancel={props.onCancel}
+					onDraftChange={props.onDraftChange}
 				/>
 			)}
 		</div>

@@ -14,7 +14,7 @@ import { deleteExamPaper } from "@/lib/exam-paper/paper/mutations"
 import type { ExamPaperListItem } from "@/lib/exam-paper/types"
 import { SUBJECT_LABELS, type Subject } from "@/lib/subjects"
 import { useMutation } from "@tanstack/react-query"
-import { Clock, Globe, Layers, Lock, Trash2 } from "lucide-react"
+import { Clock, Layers, Trash2 } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useState } from "react"
@@ -97,20 +97,6 @@ export function ExamPaperCard({ paper }: { paper: ExamPaperListItem }) {
 						<Badge variant="outline" className="text-xs font-normal shrink-0">
 							{subjectLabel}
 						</Badge>
-						{paper.is_public ? (
-							<Badge variant="default" className="gap-1 text-xs shrink-0">
-								<Globe className="h-3 w-3" />
-								Public
-							</Badge>
-						) : (
-							<Badge
-								variant="outline"
-								className="gap-1 text-xs text-muted-foreground shrink-0"
-							>
-								<Lock className="h-3 w-3" />
-								Draft
-							</Badge>
-						)}
 					</div>
 					<CardTitle className="text-sm font-semibold leading-snug mt-2 line-clamp-2">
 						{paper.title}

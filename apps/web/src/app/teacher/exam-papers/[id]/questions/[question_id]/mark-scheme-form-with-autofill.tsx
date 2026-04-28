@@ -1,5 +1,6 @@
 "use client"
 
+import type { MarkSchemeInput } from "@/lib/mark-scheme/types"
 import { MarkSchemeEditForm } from "./mark-scheme-edit-form"
 
 type McqOption = { option_label: string; option_text: string }
@@ -61,12 +62,14 @@ export function MarkSchemeFormWithAutofill({
 	paperId,
 	onSuccess,
 	onCancel,
+	onDraftChange,
 }: {
 	props: CreateMcqProps | CreateWrittenProps | EditMcqProps | EditWrittenProps
 	autofillValues: AutofillValues | null
 	paperId?: string
 	onSuccess?: () => void
 	onCancel?: () => void
+	onDraftChange?: (input: MarkSchemeInput) => void
 }) {
 	const isMcq =
 		(props.mode === "create" && props.questionType === "multiple_choice") ||
@@ -90,6 +93,7 @@ export function MarkSchemeFormWithAutofill({
 					paperId={paperId}
 					onSuccess={onSuccess}
 					onCancel={onCancel}
+					onDraftChange={onDraftChange}
 				/>
 			)
 		}
@@ -104,6 +108,7 @@ export function MarkSchemeFormWithAutofill({
 				paperId={paperId}
 				onSuccess={onSuccess}
 				onCancel={onCancel}
+				onDraftChange={onDraftChange}
 			/>
 		)
 	}
@@ -126,6 +131,7 @@ export function MarkSchemeFormWithAutofill({
 				paperId={paperId}
 				onSuccess={onSuccess}
 				onCancel={onCancel}
+				onDraftChange={onDraftChange}
 			/>
 		)
 	}
@@ -145,6 +151,7 @@ export function MarkSchemeFormWithAutofill({
 			paperId={paperId}
 			onSuccess={onSuccess}
 			onCancel={onCancel}
+			onDraftChange={onDraftChange}
 		/>
 	)
 }

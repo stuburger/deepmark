@@ -10,7 +10,6 @@ export type ExamPaperListItem = {
 	total_marks: number
 	duration_minutes: number
 	is_active: boolean
-	is_public: boolean
 	created_at: Date
 	_count: {
 		sections: number
@@ -64,7 +63,6 @@ export type ExamPaperDetail = {
 	total_marks: number
 	duration_minutes: number
 	is_active: boolean
-	is_public: boolean
 	created_at: Date
 	sections: ExamPaperSection[]
 	section_count: number

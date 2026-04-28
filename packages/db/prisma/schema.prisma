@@ -318,6 +318,7 @@ model ExamPaper {
   created_at       DateTime @default(now())
   updated_at       DateTime @updatedAt
   is_active        Boolean  @default(true)
+  /// Not in use at the moment — kept on the schema so we can reintroduce a public/catalog flow later. Defaults to false; do not read or write from app code.
   is_public        Boolean  @default(false)
   // { difficulty_level?, season? }. `tier` was promoted to a first-class column
   // in April 2026; legacy rows may still carry `metadata.tier`.

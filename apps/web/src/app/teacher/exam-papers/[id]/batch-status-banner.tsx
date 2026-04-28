@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button"
 import type { BatchIngestionState } from "@/lib/batch/types"
-import { Loader2 } from "lucide-react"
+import { AlertTriangle, Loader2 } from "lucide-react"
 
 export function BatchStatusBanner({
 	ingestion,
@@ -32,7 +32,7 @@ export function BatchStatusBanner({
 	return (
 		<div className="flex items-center justify-between gap-4 rounded-lg border bg-muted/20 px-4 py-3">
 			<div className="flex items-center gap-3">
-				<span className="h-2 w-2 rounded-full bg-primary animate-pulse shrink-0" />
+				<AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-500" />
 				<p className="text-sm">
 					<span className="font-medium">
 						{pendingReviewCount > 0

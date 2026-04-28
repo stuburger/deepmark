@@ -1,14 +1,5 @@
 # DeepMark — CLAUDE.md
 
-## Team & Access Control
-
-At the start of every conversation, ask who is using Claude Code. Adapt scope accordingly:
-
-- **Stuart Bourhill** — Project owner, full-stack developer. Full access to all packages, infra, and config. No restrictions.
-- **Geoff Waugh** — Frontend contributor. Restrict all file edits to `apps/web/` only. Do not modify files in `packages/`, `infra/`, or root config files (`sst.config.ts`, `package.json`, etc.). If Geoff's request requires changes outside `apps/web/`, explain what's needed and suggest he asks Stuart.
-
-If the user doesn't identify themselves, ask before proceeding with any edits.
-
 ---
 
 ## What is DeepMark?

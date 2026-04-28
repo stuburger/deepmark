@@ -10,6 +10,7 @@ import {
 import { type GradeBoundary, gradeBoundariesSchema } from "@mcp-gcse/shared"
 import { auth } from "../../auth"
 import { log } from "../../logger"
+import { typicalGradeBoundaryCreateData } from "./grade-boundary-defaults"
 
 const TAG = "exam-paper/mutations"
 
@@ -23,6 +24,7 @@ export type CreateExamPaperInput = {
 	paper_number?: number
 	total_marks: number
 	duration_minutes: number
+	tier?: TierLevel | null
 }
 
 export type CreateExamPaperResult =
@@ -50,6 +52,7 @@ export async function createExamPaperStandalone(
 				total_marks: input.total_marks,
 				duration_minutes: input.duration_minutes,
 				created_by_id: session.userId,
+				...typicalGradeBoundaryCreateData(input.subject, input.tier),
 			},
 		})
 		log.info(TAG, "Exam paper created", {

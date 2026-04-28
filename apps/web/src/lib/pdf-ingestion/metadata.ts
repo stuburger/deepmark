@@ -13,6 +13,7 @@ import { Output, generateText } from "ai"
 import { Resource } from "sst"
 import { z } from "zod"
 import { auth } from "../auth"
+import { typicalGradeBoundaryCreateData } from "../exam-paper/paper/grade-boundary-defaults"
 import { callLlmWithFallback } from "../llm-runtime"
 import { log } from "../logger"
 
@@ -295,7 +296,7 @@ export async function createExamPaperWithIngestion(
 				total_marks: input.total_marks,
 				duration_minutes: input.duration_minutes,
 				created_by_id: session.userId,
-				tier: input.tier ?? null,
+				...typicalGradeBoundaryCreateData(input.subject, input.tier),
 			},
 		})
 
@@ -395,7 +396,7 @@ export async function createExamPaperWithMultipleIngestions(
 				total_marks: input.total_marks,
 				duration_minutes: input.duration_minutes,
 				created_by_id: session.userId,
-				tier: input.tier ?? null,
+				...typicalGradeBoundaryCreateData(input.subject, input.tier),
 			},
 		})
 

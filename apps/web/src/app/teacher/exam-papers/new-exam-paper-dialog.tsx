@@ -27,6 +27,7 @@ import {
 	type Subject,
 } from "@/lib/subjects"
 import { validatePdfFile } from "@/lib/upload-validation"
+import { isTieredSubject } from "@mcp-gcse/shared"
 import { Sparkles } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useState } from "react"
@@ -53,9 +54,19 @@ type Stage =
 	  }
 	| { kind: "error"; message: string }
 
+type Tier = "foundation" | "higher"
+
 type Props = {
 	open: boolean
 	onOpenChange: (open: boolean) => void
+}
+
+function defaultTierForSubject(
+	subject: Subject,
+	detected?: Tier | null,
+): Tier | null {
+	if (!isTieredSubject(subject)) return null
+	return detected ?? "higher"
 }
 
 export function NewExamPaperDialog({ open, onOpenChange }: Props) {
@@ -69,9 +80,7 @@ export function NewExamPaperDialog({ open, onOpenChange }: Props) {
 	const [paperNumber, setPaperNumber] = useState("")
 	const [totalMarks, setTotalMarks] = useState("")
 	const [durationMinutes, setDurationMinutes] = useState("")
-	const [detectedTier, setDetectedTier] = useState<
-		"foundation" | "higher" | null
-	>(null)
+	const [tier, setTier] = useState<Tier | null>("higher")
 	const [submitting, setSubmitting] = useState(false)
 
 	function applyMetadataToForm(metadata: DetectedPdfMetadata) {
@@ -91,7 +100,7 @@ export function NewExamPaperDialog({ open, onOpenChange }: Props) {
 		setPaperNumber(metadata.paper_number ? String(metadata.paper_number) : "")
 		setTotalMarks(String(metadata.total_marks))
 		setDurationMinutes(String(metadata.duration_minutes))
-		setDetectedTier(metadata.tier)
+		setTier(defaultTierForSubject(validSubject, metadata.tier))
 	}
 
 	function resetForm() {
@@ -102,7 +111,12 @@ export function NewExamPaperDialog({ open, onOpenChange }: Props) {
 		setPaperNumber("")
 		setTotalMarks("")
 		setDurationMinutes("")
-		setDetectedTier(null)
+		setTier("higher")
+	}
+
+	function handleSubjectChange(nextSubject: Subject) {
+		setSubject(nextSubject)
+		setTier((current) => defaultTierForSubject(nextSubject, current))
 	}
 
 	function handleOpenChange(next: boolean) {
@@ -233,7 +247,7 @@ export function NewExamPaperDialog({ open, onOpenChange }: Props) {
 					: undefined,
 				total_marks: parsedMarks,
 				duration_minutes: parsedDuration,
-				tier: detectedTier,
+				tier,
 			})
 			setSubmitting(false)
 			if (!result.ok) {
@@ -252,6 +266,7 @@ export function NewExamPaperDialog({ open, onOpenChange }: Props) {
 					: undefined,
 				total_marks: parsedMarks,
 				duration_minutes: parsedDuration,
+				tier,
 			})
 			setSubmitting(false)
 			if (!result.ok) {
@@ -342,7 +357,9 @@ export function NewExamPaperDialog({ open, onOpenChange }: Props) {
 										id="subject"
 										className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
 										value={subject}
-										onChange={(e) => setSubject(e.target.value as Subject)}
+										onChange={(e) =>
+											handleSubjectChange(e.target.value as Subject)
+										}
 									>
 										{SUBJECTS.map((s) => (
 											<option key={s.value} value={s.value}>
@@ -367,6 +384,24 @@ export function NewExamPaperDialog({ open, onOpenChange }: Props) {
 									</select>
 								</div>
 							</div>
+
+							{isTieredSubject(subject) && (
+								<div className="space-y-2">
+									<Label htmlFor="tier">Tier</Label>
+									<select
+										id="tier"
+										className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+										value={tier ?? "higher"}
+										onChange={(e) => setTier(e.target.value as Tier)}
+									>
+										<option value="foundation">Foundation</option>
+										<option value="higher">Higher</option>
+									</select>
+									<p className="text-xs text-muted-foreground">
+										Used to prefill typical grade boundaries.
+									</p>
+								</div>
+							)}
 
 							<div className="grid grid-cols-2 gap-4">
 								<div className="space-y-2">
@@ -413,7 +448,6 @@ export function NewExamPaperDialog({ open, onOpenChange }: Props) {
 									/>
 								</div>
 							</div>
-
 						</form>
 
 						<div className="flex gap-2 justify-end">

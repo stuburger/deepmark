@@ -45,8 +45,10 @@ ${learningSection}${stimulusSection}<Topic>\n${question.topic}\n</Topic>
 
 <MarkingRules>
 - For each mark point, decide: met or not (true/false). Binary; no partial credit per point.
-- Total marks awarded MUST NOT exceed ${question.totalPoints}
-- If unsure, be conservative. Ignore spelling/grammar; focus on understanding.
+- Total marks awarded MUST NOT exceed ${question.totalPoints}.
+- Mark like an experienced examiner. For each mark_point, judge whether the student's answer — read against the full question — actually demonstrates the creditable element. Reward loose or non-textbook wording when the student clearly shows understanding; do not require the student to echo phrases from the criteria or guidance.
+- Withhold the mark when the answer is too fragmentary to constitute an answer to the question. A one- or two-word phrase that does not engage with what was asked earns 0, even if it incidentally contains a word found in the criterion or guidance — students cannot game marks by parroting fragments.
+- Ignore spelling and grammar; focus on understanding.
 </MarkingRules>
 
 <Instructions>

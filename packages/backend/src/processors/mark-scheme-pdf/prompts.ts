@@ -45,45 +45,36 @@ GENERAL RULES:
 - Detect marking_method: "multiple_choice" for MCQ, "level_of_response" if the mark scheme uses level descriptors with mark ranges (e.g. Level 1: 1–3 marks), or "point_based" for individual mark point criteria.
 - If level_of_response: extract command_word if given, items_required if given, levels (array of { level, mark_range [min, max], descriptor, ao_requirements? }), and caps if any (array of { condition, max_level or max_mark, reason }).
 
-MARK POINTS, GUIDANCE AND TOTAL MARKS — CRITICAL RULES:
-- total_marks MUST match the mark allocation explicitly stated in the document (e.g. "(2 marks)" in the question or the sum of AO marks in the header). Never default to 1 when the document says otherwise.
-- EVERY mark_point in the array is worth exactly 1 mark. The schema does not let you assign 2 marks to a single mark_point — there is no \`points\` field. The number of mark_points in the array MUST equal total_marks. A 2-mark question yields two mark_points; a 3-mark question yields three; and so on. NEVER emit a single mark_point intended to carry multiple marks — always split it.
-- guidance MUST be populated whenever the mark scheme provides a list of acceptable answers, example responses, "Answers may include" content, or any rubric notes about how examiners should apply the mark scheme. Copy the FULL list verbatim into guidance, including worked or developed answer examples. The downstream grader reads guidance and uses it to apply judgement when student wording is loose or incomplete.
-- \`criteria\` is the ONLY field the grader reads to decide whether a student earned a specific mark — it must be specific and concrete, never a vague placeholder like "Identification of a correct way" or "Correct answer". Copy directly from the document where possible.
+MARK POINTS — RULES:
+- total_marks MUST match the mark allocation stated in the document (e.g. "(2 marks)").
+- Every mark_point is worth exactly 1 mark. mark_points.length MUST equal total_marks. A 2-mark question = 2 mark_points; a 3-mark question = 3 mark_points. Never emit a single mark_point that "carries" multiple marks — always split.
+- \`criteria\` describes ONE creditable element of student content. Keep it short and document-faithful — ideally 5–15 words, the actual thing the student must say. No prefixes like "Award 1 mark for…" (every mark_point is 1 mark by definition). No hedges, no inline examples, no "accept loose wording" — that lives in guidance.
+- Never compound elements with "BOTH X AND Y" inside one criterion. Two creditable things = two mark_points.
+- Never emit vague placeholders ("Identification of a correct way", "Correct answer"). Copy creditable content from the document.
 
-PATTERNS — how to split mark_points by question shape:
-  * **2-mark "define / explain / what is meant by" questions** (definition/explain pattern). Even if the mark scheme prints one block of acceptable content worth 2 marks, you MUST split into two distinct mark_points:
-      - mark_point 1 \`criteria\`: "Award 1 mark for any recognisable understanding of the concept — one valid feature, example, purpose, or mechanism, even if wording is loose, technical vocabulary is missing, or only one of the key elements is present. Acceptable indicators include: [copy the acceptable-answer list / 'Answers may include' bullets verbatim from the document]."
-      - mark_point 2 \`criteria\`: "Award 1 mark for a complete and precise definition that includes BOTH key elements: [list the specific elements verbatim from the mark scheme — e.g. for 'franchising': (a) the franchisor grants rights/licence to use the brand AND (b) the franchisee pays a fee or share of profits / receives ongoing support]."
-  * **"1 mark for each correct [item] up to N marks"** — create N mark_points. Each mark_point's \`criteria\` is the same verbatim list of acceptable answers from the document. The grader will award one mark per distinct acceptable answer the student provides.
-  * **"1 mark identify + 1 mark develop/explain"** — create 2 separate mark_points. First's \`criteria\`: full list of valid identifications. Second's \`criteria\`: "Award 1 mark for a linked explanation or consequence that develops the identified point (e.g. 'which means the exact requirements of customers can be met')".
-  * **Calculation questions** — one mark_point per marking step in the worked solution. Each \`criteria\` describes the specific step (e.g. "Award 1 mark for correctly calculating gross profit: Revenue − COGS = £X").
+PATTERNS — splitting by question shape:
+- **2-mark define/explain ("what is meant by…")**: identify the two creditable elements in the mark scheme — emit one terse mark_point per element. Student showing one element scores 1/2; both → 2/2.
+- **"1 mark for each correct [item] up to N marks"**: emit N mark_points, each with the same verbatim list of acceptable answers from the document.
+- **"1 mark identify + 1 mark develop/explain"**: 2 mark_points — first is the list of valid identifications; second is the linked explanation/consequence.
+- **Calculation**: one mark_point per marking step in the worked solution, each naming the step concisely.
 
-GUIDANCE FIELD — partial credit & examiner judgement:
-- For 2-mark definition / explain questions, the guidance field MUST include all of the following, in addition to verbatim "Answers may include" content from the document:
-    1. A 0/1/2 mark ladder spelled out:
-       - 2 marks = clear, accurate definition with both key elements present.
-       - 1 mark = some valid understanding, even if incomplete, vague, missing technical vocabulary, or missing one key element. A relevant example that demonstrates the student "gets it" can earn this mark.
-       - 0 marks = incorrect, irrelevant, or no meaningful understanding.
-    2. The instruction: "Do NOT award 0 simply because the answer is incomplete. Award 1 mark whenever the student demonstrates recognisable understanding of the concept (one valid feature, example, purpose, or mechanism). 0 should be reserved for answers that are wrong, irrelevant, or show no creditworthy understanding."
-    3. The instruction: "An example that demonstrates understanding can be credited even if the textbook definition is not given verbatim. Apply examiner judgement — does the student 'get it'?"
-- For all other point_based questions, guidance should still capture any "Accept…", "Do not accept…", "Credit if…" notes from the document so the grader can apply them.
+GUIDANCE — faithful to the document, no editorialising:
+- Guidance carries ONLY what the PDF mark scheme actually says: "Accept…", "Do not accept…", "Credit if…", "Answers may include…" — copied verbatim. If the document has no rubric notes, leave guidance empty or set it to just the "Answers may include" list.
+- Do NOT add templated leniency phrases ("accept loose wording", "the student does not need textbook vocabulary", etc.). Marking philosophy lives in the grader, not in extracted guidance — the grader applies teacher judgement. Guidance must be document-faithful.
+- Do not embed mark ladders, worked examples, or per-element marking instructions. Criteria carry the creditable content; the grader decides whether the student earned each mark.
 
-WORKED EXAMPLE — define/explain split for a 2-mark question:
-Question (from PDF): "What is meant by the term 'franchising'? (2 marks)"
-Mark scheme content (in PDF): "A business arrangement where the franchisor grants the franchisee the right/licence to use its brand, products and business model in return for a fee and/or share of profits. Often includes ongoing support."
+WORKED EXAMPLE — 2-mark define/explain ("What is meant by 'franchising'? (2 marks)")
+Mark scheme content: "Right/licence to use the franchisor's brand and business model in return for a fee/royalty/share of profits. Often includes ongoing support."
 
-Correct extraction:
+Correct extraction shape:
 {
-  "question_text": "What is meant by the term 'franchising'?",
-  "question_type": "written",
   "total_marks": 2,
   "marking_method": "point_based",
   "mark_points": [
-    { "criteria": "Award 1 mark for any recognisable understanding of franchising — that one business is granting another the right/licence to operate under their brand, OR that the franchisee uses the franchisor's name/products/business model. Loose wording is acceptable; a concrete example (e.g. McDonald's, Subway) that shows the student understands the concept also earns this mark." },
-    { "criteria": "Award 1 mark for a complete definition that includes BOTH (a) the franchisor grants rights/licence to use the brand/business model AND (b) the franchisee pays a fee, royalty, or share of profits in return (and/or receives ongoing support such as training, marketing)." }
+    { "criteria": "Right/licence to use the franchisor's brand, name, products, or business model." },
+    { "criteria": "Fee, royalty, or share of profits paid to the franchisor — and/or ongoing support received." }
   ],
-  "guidance": "Answers may include: rights/licence to use brand; use of products and business model; payment of upfront fee / royalties / share of profits; ongoing support such as training, marketing, supplies. Example accepted: 'A larger firm gives a company rights and licences to open a store using their business' — award 1 mark for recognisable understanding (rights/brand identified, but no payment/support element). Example accepted: 'You let someone have the rights to your brand and they open a business and you receive a percentage of profits' — award 2 marks (both elements present). 0/1/2 mark ladder: 2 = both key elements (rights AND payment/support); 1 = one element OR a relevant example that demonstrates understanding even if technical vocabulary is missing; 0 = wrong, irrelevant, or no meaningful understanding. Do NOT award 0 simply because the answer is incomplete — only when there is no creditworthy understanding. An example that demonstrates the student 'gets it' can be credited even if the textbook definition is not given verbatim."
+  "guidance": "Answers may include: rights/licence to use brand; payment of fee/royalty/share of profits; ongoing support (training, marketing, supplies)."
 }
 
 CONTENT FIELD — LEVEL OF RESPONSE QUESTIONS:

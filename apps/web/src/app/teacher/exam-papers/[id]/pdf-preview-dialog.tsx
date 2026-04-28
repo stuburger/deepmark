@@ -8,8 +8,6 @@ import {
 	DialogTitle,
 	DialogTrigger,
 } from "@/components/ui/dialog"
-import { Spinner } from "@/components/ui/spinner"
-import { getPdfIngestionJobDownloadUrl } from "@/lib/pdf-ingestion/job-lifecycle"
 import {
 	type PdfDocument,
 	getPdfDocumentsForPaper,
@@ -46,22 +44,10 @@ export function PdfViewerDialog({
 	label: string
 }) {
 	const [open, setOpen] = useState(false)
-	const [url, setUrl] = useState<string | null>(null)
-	const [loading, setLoading] = useState(false)
-	const [error, setError] = useState<string | null>(null)
+	const url = `/api/pdf-ingestion-jobs/${encodeURIComponent(jobId)}/document`
 
-	async function handleOpen() {
+	function handleOpen() {
 		setOpen(true)
-		if (url) return // already fetched
-		setLoading(true)
-		setError(null)
-		const result = await getPdfIngestionJobDownloadUrl(jobId)
-		setLoading(false)
-		if (!result.ok) {
-			setError(result.error)
-			return
-		}
-		setUrl(result.url)
 	}
 
 	return (
@@ -78,24 +64,7 @@ export function PdfViewerDialog({
 					<DialogTitle className="text-base">{label}</DialogTitle>
 				</DialogHeader>
 				<div className="flex-1 min-h-0">
-					{loading && (
-						<div className="flex h-full items-center justify-center gap-2 text-sm text-muted-foreground">
-							<Spinner className="h-5 w-5" />
-							<span>Loading PDF…</span>
-						</div>
-					)}
-					{error && (
-						<div className="flex h-full items-center justify-center text-sm text-destructive">
-							{error}
-						</div>
-					)}
-					{url && (
-						<iframe
-							src={url}
-							className="w-full h-full border-0"
-							title={label}
-						/>
-					)}
+					<iframe src={url} className="w-full h-full border-0" title={label} />
 				</div>
 			</DialogContent>
 		</Dialog>

@@ -1,11 +1,7 @@
 "use server"
 
 import { db } from "@/lib/db"
-import { GetObjectCommand, S3Client } from "@aws-sdk/client-s3"
-import { getSignedUrl } from "@aws-sdk/s3-request-presigner"
 import { auth } from "../auth"
-
-const s3 = new S3Client({})
 
 // ─── getPdfIngestionJobStatus ───────────────────────────────────────────────
 
@@ -35,29 +31,4 @@ export async function getPdfIngestionJobStatus(
 		detected_exam_paper_metadata: job.detected_exam_paper_metadata,
 		auto_create_exam_paper: job.auto_create_exam_paper,
 	}
-}
-
-// ─── getPdfIngestionJobDownloadUrl ──────────────────────────────────────────
-
-export type GetPdfDownloadUrlResult =
-	| { ok: true; url: string }
-	| { ok: false; error: string }
-
-export async function getPdfIngestionJobDownloadUrl(
-	jobId: string,
-): Promise<GetPdfDownloadUrlResult> {
-	const session = await auth()
-	if (!session) return { ok: false, error: "Not authenticated" }
-	const job = await db.pdfIngestionJob.findFirst({
-		where: { id: jobId },
-		select: { s3_key: true, s3_bucket: true },
-	})
-	if (!job) return { ok: false, error: "Job not found" }
-	if (!job.s3_key) return { ok: false, error: "No PDF on file for this job" }
-	const command = new GetObjectCommand({
-		Bucket: job.s3_bucket,
-		Key: job.s3_key,
-	})
-	const url = await getSignedUrl(s3, command, { expiresIn: 300 })
-	return { ok: true, url }
 }

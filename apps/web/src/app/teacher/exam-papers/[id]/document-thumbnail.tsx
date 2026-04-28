@@ -7,7 +7,6 @@ import {
 	DialogTitle,
 } from "@/components/ui/dialog"
 import { Spinner } from "@/components/ui/spinner"
-import { getPdfIngestionJobDownloadUrl } from "@/lib/pdf-ingestion/job-lifecycle"
 import type { PdfDocument } from "@/lib/pdf-ingestion/queries"
 import { createLinkedPdfUpload } from "@/lib/pdf-ingestion/upload"
 import { validatePdfFile } from "@/lib/upload-validation"
@@ -65,7 +64,6 @@ export function DocumentThumbnail({
 	const fileInputRef = useRef<HTMLInputElement>(null)
 	const canvasRef = useRef<HTMLCanvasElement | null>(null)
 	const [uploading, setUploading] = useState(false)
-	const [pdfUrl, setPdfUrl] = useState<string | null>(null)
 	const [thumbReady, setThumbReady] = useState(false)
 	const [previewOpen, setPreviewOpen] = useState(false)
 
@@ -75,26 +73,14 @@ export function DocumentThumbnail({
 		activeJob !== null && activeJob.status === "failed" && !isAcquired
 	const canUpload = !isAcquired && !isProcessing && !uploading
 
-	// Load presigned URL once we know which doc we're viewing.
-	// Keyed on the stable id (not the object) so polling doesn't force a refetch
-	// every 3s — refetching changes the URL, which re-runs the canvas effect and
-	// flashes the thumbnail blank during PDF render.
 	const completedDocId = completedDoc?.id ?? null
-	useEffect(() => {
-		if (!completedDocId) return
-		let cancelled = false
-		getPdfIngestionJobDownloadUrl(completedDocId).then((r) => {
-			if (cancelled) return
-			if (!r.ok) return
-			setPdfUrl(r.url)
-		})
-		return () => {
-			cancelled = true
-		}
-	}, [completedDocId])
+	const pdfUrl = completedDocId
+		? `/api/pdf-ingestion-jobs/${encodeURIComponent(completedDocId)}/document`
+		: null
 
 	// Render first page to canvas once we have the URL.
 	useEffect(() => {
+		setThumbReady(false)
 		if (!pdfUrl) return
 		const canvas = canvasRef.current
 		if (!canvas) return
@@ -194,7 +180,7 @@ export function DocumentThumbnail({
 				}
 				className={cn(
 					"group relative shrink-0 overflow-hidden rounded-md border bg-muted/30 transition-all",
-					compact ? "h-24 w-[68px]" : "aspect-[3/4] w-32",
+					compact ? "h-24 w-17" : "aspect-3/4 w-32",
 					isAcquired
 						? "border-border shadow-sm hover:shadow-md cursor-zoom-in"
 						: isFailed

@@ -2,29 +2,18 @@
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { buttonVariants } from "@/components/ui/button-variants"
-import {
-	Dialog,
-	DialogContent,
-	DialogDescription,
-	DialogHeader,
-	DialogTitle,
-	DialogTrigger,
-} from "@/components/ui/dialog"
 import { Spinner } from "@/components/ui/spinner"
 import { Textarea } from "@/components/ui/textarea"
 import {
 	type EvalResult,
 	evaluateStudentAnswer,
 } from "@/lib/marking/evaluation"
-import { CheckCircle2, FlaskConical, XCircle } from "lucide-react"
+import { CheckCircle2, XCircle } from "lucide-react"
 import { useState } from "react"
 
-// ─── Body ─────────────────────────────────────────────────────────────────────
-
 /**
- * The "test answer" panel without any Dialog wrapper. Use this to embed the
- * tester inside another container (e.g. a tab in a unified question dialog).
+ * The "test answer" panel — embed inside any container (e.g. a tab in the
+ * unified question dialog).
  */
 export function EvalBody({ questionId }: { questionId: string }) {
 	const [answer, setAnswer] = useState("")
@@ -155,54 +144,5 @@ export function EvalBody({ questionId }: { questionId: string }) {
 				</div>
 			)}
 		</div>
-	)
-}
-
-// ─── Dialog wrapper ───────────────────────────────────────────────────────────
-
-export function EvalDialog({
-	questionId,
-	open: controlledOpen,
-	onOpenChange: controlledOnOpenChange,
-	hideTrigger,
-}: {
-	questionId: string
-	open?: boolean
-	onOpenChange?: (open: boolean) => void
-	hideTrigger?: boolean
-}) {
-	const [internalOpen, setInternalOpen] = useState(false)
-	const open = controlledOpen !== undefined ? controlledOpen : internalOpen
-
-	function handleOpenChange(next: boolean) {
-		if (controlledOpen !== undefined) {
-			controlledOnOpenChange?.(next)
-		} else {
-			setInternalOpen(next)
-		}
-	}
-
-	return (
-		<Dialog open={open} onOpenChange={handleOpenChange}>
-			{!hideTrigger && (
-				<DialogTrigger
-					className={buttonVariants({ variant: "outline", size: "sm" })}
-				>
-					<FlaskConical className="h-3.5 w-3.5 mr-1.5" />
-					Test answer
-				</DialogTrigger>
-			)}
-			<DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
-				<DialogHeader>
-					<DialogTitle>Test a student answer</DialogTitle>
-					<DialogDescription>
-						Enter a student answer and grade it against the mark scheme. Results
-						are not saved.
-					</DialogDescription>
-				</DialogHeader>
-
-				<EvalBody questionId={questionId} />
-			</DialogContent>
-		</Dialog>
 	)
 }

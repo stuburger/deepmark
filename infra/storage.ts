@@ -1,7 +1,9 @@
 export const scansBucket = new sst.aws.Bucket("ScansBucket", {
 	cors: {
 		allowHeaders: ["*"],
-		allowMethods: ["PUT"],
+		// GET enables in-browser fetch of presigned URLs (e.g. pdfjs rendering
+		// QP/MS thumbnails). PUT is for direct upload of student scripts/PDFs.
+		allowMethods: ["GET", "PUT"],
 		allowOrigins: ["*"],
 		maxAge: "1 hour",
 	},

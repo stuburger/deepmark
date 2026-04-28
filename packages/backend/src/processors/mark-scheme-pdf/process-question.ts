@@ -143,12 +143,11 @@ export function resolveMarkSchemeFields(
 	const markPoints = (q.mark_points ?? []).map((mp, idx) => ({
 		point_number: idx + 1,
 		description: "",
-		points: mp.points ?? 1,
+		points: 1,
 		criteria: mp.criteria,
 	}))
 
-	const pointsTotal =
-		q.total_marks ?? markPoints.reduce((s, mp) => s + mp.points, 0)
+	const pointsTotal = q.total_marks ?? markPoints.length
 
 	return {
 		raw: q,

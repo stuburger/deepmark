@@ -92,7 +92,7 @@ type EditLorProps = {
 	pointsTotal: number
 }
 
-export type MarkSchemeDialogProps = (
+export type MarkSchemeBodyProps = (
 	| CreateMcqProps
 	| CreateWrittenProps
 	| EditMcqProps
@@ -102,6 +102,9 @@ export type MarkSchemeDialogProps = (
 	onSuccess?: () => void
 	/** When provided, enables optimistic cache updates on the exam paper query. */
 	paperId?: string
+}
+
+export type MarkSchemeDialogProps = MarkSchemeBodyProps & {
 	/** Controlled open state — if provided the dialog is driven externally. */
 	open?: boolean
 	/** Required when `open` is provided. */
@@ -110,11 +113,13 @@ export type MarkSchemeDialogProps = (
 	hideTrigger?: boolean
 }
 
-// ─── Component ────────────────────────────────────────────────────────────────
+// ─── Body ─────────────────────────────────────────────────────────────────────
 
-export function MarkSchemeDialog(props: MarkSchemeDialogProps) {
-	const [internalOpen, setInternalOpen] = useState(false)
-	const open = props.open !== undefined ? props.open : internalOpen
+/**
+ * The mark-scheme editor without any Dialog wrapper. Use this to embed the
+ * editor inside another container (e.g. a tab in a unified question dialog).
+ */
+export function MarkSchemeBody(props: MarkSchemeBodyProps) {
 	const [autofilling, setAutofilling] = useState(false)
 	const [autofillError, setAutofillError] = useState<string | null>(null)
 
@@ -124,18 +129,6 @@ export function MarkSchemeDialog(props: MarkSchemeDialogProps) {
 	const [autofillValues, setAutofillValues] = useState<AutofillValues | null>(
 		null,
 	)
-
-	// Quick generate + save (no dialog)
-	const [quickSaving, setQuickSaving] = useState(false)
-	const [quickSaved, setQuickSaved] = useState(false)
-	const [quickError, setQuickError] = useState<string | null>(null)
-	const quickSavedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-	useEffect(() => {
-		return () => {
-			if (quickSavedTimerRef.current) clearTimeout(quickSavedTimerRef.current)
-		}
-	}, [])
 
 	const isLor =
 		props.mode === "edit" && props.markingMethod === "level_of_response"
@@ -161,6 +154,102 @@ export function MarkSchemeDialog(props: MarkSchemeDialogProps) {
 		setAutofillValues(result.suggestion)
 		setFormKey((k) => k + 1)
 	}
+
+	return (
+		<>
+			<div className="flex items-center justify-end pb-2">
+				<Button
+					type="button"
+					variant="secondary"
+					size="sm"
+					onClick={handleAutofill}
+					disabled={autofilling}
+					className="shrink-0"
+				>
+					{autofilling ? (
+						<>
+							<Spinner className="h-3.5 w-3.5 mr-1.5" />
+							Generating…
+						</>
+					) : (
+						<>
+							<Sparkles className="h-3.5 w-3.5 mr-1.5" />
+							Autofill
+						</>
+					)}
+				</Button>
+			</div>
+
+			{autofillError && (
+				<p className="text-sm text-destructive -mt-2">{autofillError}</p>
+			)}
+
+			<div className="pt-1">
+				{isLor ? (
+					<LorMarkSchemeEditForm
+						key={formKey}
+						markSchemeId={(props as EditLorProps).markSchemeId}
+						initialDescription={
+							autofillValues?.marking_method === "level_of_response"
+								? autofillValues.description
+								: (props as EditLorProps).initialDescription
+						}
+						initialGuidance={(props as EditLorProps).initialGuidance}
+						initialContent={
+							autofillValues?.marking_method === "level_of_response"
+								? autofillValues.content
+								: (props as EditLorProps).initialContent
+						}
+						pointsTotal={(props as EditLorProps).pointsTotal}
+						paperId={props.paperId}
+						onSuccess={props.onSuccess}
+					/>
+				) : (
+					<MarkSchemeFormWithAutofill
+						key={formKey}
+						props={
+							props as
+								| CreateMcqProps
+								| CreateWrittenProps
+								| EditMcqProps
+								| EditWrittenProps
+						}
+						autofillValues={
+							autofillValues?.marking_method === "level_of_response"
+								? null
+								: autofillValues
+						}
+						paperId={props.paperId}
+						onSuccess={props.onSuccess}
+					/>
+				)}
+			</div>
+		</>
+	)
+}
+
+// ─── Dialog wrapper ───────────────────────────────────────────────────────────
+
+export function MarkSchemeDialog(props: MarkSchemeDialogProps) {
+	const [internalOpen, setInternalOpen] = useState(false)
+	const open = props.open !== undefined ? props.open : internalOpen
+
+	// Quick generate + save (no dialog)
+	const [quickSaving, setQuickSaving] = useState(false)
+	const [quickSaved, setQuickSaved] = useState(false)
+	const [quickError, setQuickError] = useState<string | null>(null)
+	const quickSavedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+	useEffect(() => {
+		return () => {
+			if (quickSavedTimerRef.current) clearTimeout(quickSavedTimerRef.current)
+		}
+	}, [])
+
+	const isLor =
+		props.mode === "edit" && props.markingMethod === "level_of_response"
+
+	const effectiveMarkingMethod = isLor ? "level_of_response" : undefined
 
 	async function handleQuickGenerate() {
 		setQuickSaving(true)
@@ -232,7 +321,6 @@ export function MarkSchemeDialog(props: MarkSchemeDialogProps) {
 			setInternalOpen(next)
 		}
 		if (!next) {
-			setAutofillError(null)
 			props.onSuccess?.()
 		}
 	}
@@ -284,76 +372,11 @@ export function MarkSchemeDialog(props: MarkSchemeDialogProps) {
 
 				<DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
 					<DialogHeader>
-						<div className="flex items-center justify-between gap-3">
-							<DialogTitle>{dialogTitle}</DialogTitle>
-							<Button
-								type="button"
-								variant="secondary"
-								size="sm"
-								onClick={handleAutofill}
-								disabled={autofilling}
-								className="shrink-0"
-							>
-								{autofilling ? (
-									<>
-										<Spinner className="h-3.5 w-3.5 mr-1.5" />
-										Generating…
-									</>
-								) : (
-									<>
-										<Sparkles className="h-3.5 w-3.5 mr-1.5" />
-										Autofill
-									</>
-								)}
-							</Button>
-						</div>
+						<DialogTitle>{dialogTitle}</DialogTitle>
 						<DialogDescription>{dialogDescription}</DialogDescription>
 					</DialogHeader>
 
-					{autofillError && (
-						<p className="text-sm text-destructive -mt-2">{autofillError}</p>
-					)}
-
-					<div className="pt-1">
-						{isLor ? (
-							<LorMarkSchemeEditForm
-								key={formKey}
-								markSchemeId={(props as EditLorProps).markSchemeId}
-								initialDescription={
-									autofillValues?.marking_method === "level_of_response"
-										? autofillValues.description
-										: (props as EditLorProps).initialDescription
-								}
-								initialGuidance={(props as EditLorProps).initialGuidance}
-								initialContent={
-									autofillValues?.marking_method === "level_of_response"
-										? autofillValues.content
-										: (props as EditLorProps).initialContent
-								}
-								pointsTotal={(props as EditLorProps).pointsTotal}
-								paperId={props.paperId}
-								onSuccess={props.onSuccess}
-							/>
-						) : (
-							<MarkSchemeFormWithAutofill
-								key={formKey}
-								props={
-									props as
-										| CreateMcqProps
-										| CreateWrittenProps
-										| EditMcqProps
-										| EditWrittenProps
-								}
-								autofillValues={
-									autofillValues?.marking_method === "level_of_response"
-										? null
-										: autofillValues
-								}
-								paperId={props.paperId}
-								onSuccess={props.onSuccess}
-							/>
-						)}
-					</div>
+					<MarkSchemeBody {...props} />
 				</DialogContent>
 			</Dialog>
 		</div>

@@ -28,9 +28,7 @@ import { MarkPointRow } from "./mark-point-row"
 const mcqFormSchema = z.object({
 	description: z.string().min(1, "Description is required"),
 	guidance: z.string(),
-	correctLabels: z
-		.array(z.string())
-		.min(1, "Select at least one correct answer"),
+	correctLabels: z.array(z.string()).min(1, "Select the correct answer"),
 })
 
 const writtenFormSchema = z.object({
@@ -227,12 +225,14 @@ function McqForm(props: Props) {
 		},
 	})
 
-	function toggleCorrectLabel(label: string) {
+	// Single-select for now: the deterministic grader treats correctLabels as an
+	// exact-match set, so multi-select would require teachers to think about
+	// "student must tick all of these" semantics. GCSE MCQs are almost always
+	// one-correct; revisit if a subject genuinely needs multi-select.
+	function selectCorrectLabel(label: string) {
 		const current = form.getValues("correctLabels")
-		const next = current.includes(label)
-			? current.filter((l) => l !== label)
-			: [...current, label]
-		form.setValue("correctLabels", next, { shouldValidate: true })
+		if (current.length === 1 && current[0] === label) return
+		form.setValue("correctLabels", [label], { shouldValidate: true })
 		setSaved(false)
 	}
 
@@ -265,7 +265,7 @@ function McqForm(props: Props) {
 				</Field>
 
 				<Field>
-					<FieldLabel>Correct answer(s)</FieldLabel>
+					<FieldLabel>Correct answer</FieldLabel>
 					<div className="space-y-2">
 						{options.map((opt) => {
 							const checked = form
@@ -283,7 +283,7 @@ function McqForm(props: Props) {
 									<input
 										type="checkbox"
 										checked={checked}
-										onChange={() => toggleCorrectLabel(opt.option_label)}
+										onChange={() => selectCorrectLabel(opt.option_label)}
 										disabled={effectivelyPending}
 										className="mt-0.5 accent-primary"
 									/>
@@ -350,21 +350,22 @@ function WrittenForm(props: Props) {
 	})
 
 	const watchedPoints = form.watch("markPoints")
-	const totalPoints = watchedPoints.reduce(
-		(sum, mp) => sum + (mp.points || 0),
-		0,
-	)
+	// Each mark point is now fixed at 1 mark (see onSubmit), so the total is
+	// just the number of mark points.
+	const totalPoints = watchedPoints.length
 
 	function onSubmit(values: WrittenFormValues) {
 		submit({
 			marking_method: "point_based",
 			description: values.description.trim(),
 			guidance: values.guidance.trim() || null,
+			// Each mark point is fixed at 1 mark; description has been removed from
+			// the editor (it was a label-only field that wasn't used downstream).
 			mark_points: showMarkPoints
 				? values.markPoints.map((mp) => ({
 						criteria: mp.criteria.trim(),
-						description: mp.description.trim(),
-						points: mp.points,
+						description: "",
+						points: 1,
 					}))
 				: [],
 		})
@@ -400,22 +401,11 @@ function WrittenForm(props: Props) {
 								<MarkPointRow
 									key={field.id}
 									criteria={watchedPoints[i]?.criteria ?? ""}
-									description={watchedPoints[i]?.description ?? ""}
-									points={String(watchedPoints[i]?.points ?? 1)}
 									index={i}
 									disabled={effectivelyPending}
 									isOnly={markPointFields.fields.length <= 1}
-									onChange={(f, value) => {
-										if (f === "points") {
-											form.setValue(
-												`markPoints.${i}.points`,
-												Number.parseInt(value, 10) || 0,
-											)
-										} else if (f === "description") {
-											form.setValue(`markPoints.${i}.description`, value)
-										} else {
-											form.setValue(`markPoints.${i}.criteria`, value)
-										}
+									onChange={(value) => {
+										form.setValue(`markPoints.${i}.criteria`, value)
 										setSaved(false)
 									}}
 									onRemove={() => {

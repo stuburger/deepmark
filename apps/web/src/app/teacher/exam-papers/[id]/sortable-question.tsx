@@ -9,25 +9,14 @@ import {
 	TooltipProvider,
 	TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { getQuestionDetail } from "@/lib/exam-paper/questions/queries"
-import type { ExamPaperQuestion, QuestionDetail } from "@/lib/exam-paper/types"
+import type { ExamPaperQuestion } from "@/lib/exam-paper/types"
 import { cn } from "@/lib/utils"
 import { useSortable } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
-import {
-	AlertTriangle,
-	FlaskConical,
-	GripVertical,
-	NotebookPen,
-	Pencil,
-	Trash2,
-} from "lucide-react"
+import { AlertTriangle, GripVertical, Pencil, Trash2 } from "lucide-react"
+import { parseAsString, useQueryState } from "nuqs"
 import { useState } from "react"
-import { toast } from "sonner"
 import { useDeleteQuestion } from "./hooks/use-exam-paper-mutations"
-import { EvalDialog } from "./questions/[question_id]/eval-dialog"
-import { MarkSchemeDialog } from "./questions/[question_id]/mark-scheme-dialog"
-import { QuestionEditDialog } from "./questions/[question_id]/question-edit-dialog"
 
 const iconBtnClass =
 	"h-7 w-7 p-0 text-muted-foreground/60 hover:text-foreground transition-colors"
@@ -53,32 +42,12 @@ export function SortableQuestion({
 	} = useSortable({ id: question.id })
 	const style = { transform: CSS.Transform.toString(transform), transition }
 
-	const [evalOpen, setEvalOpen] = useState(false)
-	const [editOpen, setEditOpen] = useState(false)
-	const [msOpen, setMsOpen] = useState(false)
-	const [msDetail, setMsDetail] = useState<QuestionDetail | null>(null)
-	const [msLoading, setMsLoading] = useState(false)
+	const [, setEditQuestionId] = useQueryState("edit_question", parseAsString)
 	const [confirmOpen, setConfirmOpen] = useState(false)
 
 	const hasScheme =
 		question.mark_scheme_status === "linked" ||
 		question.mark_scheme_status === "auto_linked"
-
-	async function handleMarkSchemeClick() {
-		if (!hasScheme) {
-			setMsOpen(true)
-			return
-		}
-		setMsLoading(true)
-		const result = await getQuestionDetail(question.id)
-		setMsLoading(false)
-		if (!result.ok) {
-			toast.error("Failed to load mark scheme")
-			return
-		}
-		setMsDetail(result.question)
-		setMsOpen(true)
-	}
 
 	function handleDelete() {
 		deleteQ(question.id, {
@@ -101,25 +70,15 @@ export function SortableQuestion({
 		question.mark_scheme_points_total !== null &&
 		question.points !== question.mark_scheme_points_total
 
-	const ms = msDetail?.mark_schemes[0]
-	const msDialogEditProps = buildEditProps(
-		ms,
-		msDetail,
-		msOpen,
-		setMsOpen,
-		setMsDetail,
-		paperId,
-	)
-
 	return (
 		<div
 			ref={setNodeRef}
 			style={style}
-			{...attributes}
 			className={[
 				"group relative py-5 border-b border-dashed border-zinc-200 dark:border-zinc-700 last:border-0",
 				isDragging ? "opacity-40" : "",
 			].join(" ")}
+			{...attributes}
 		>
 			<div className="flex items-start gap-2">
 				{/* Drag handle */}
@@ -204,44 +163,19 @@ export function SortableQuestion({
 						/>
 					)}
 
-					{/* Action row */}
+					{/* Action row — single edit-pencil + delete */}
 					<TooltipProvider>
 						<div className="mt-2 flex items-center justify-end gap-0.5">
 							<Tooltip>
 								<TooltipTrigger
 									className={iconBtnClass}
-									onClick={() => setEvalOpen(true)}
-								>
-									<FlaskConical className="h-3.5 w-3.5" />
-									<span className="sr-only">Test answer</span>
-								</TooltipTrigger>
-								<TooltipContent>Test answer</TooltipContent>
-							</Tooltip>
-
-							<Tooltip>
-								<TooltipTrigger
-									className={iconBtnClass}
-									onClick={() => setEditOpen(true)}
+									onClick={() => void setEditQuestionId(question.id)}
 								>
 									<Pencil className="h-3.5 w-3.5" />
 									<span className="sr-only">Edit question</span>
 								</TooltipTrigger>
-								<TooltipContent>Edit question</TooltipContent>
-							</Tooltip>
-
-							<Tooltip>
-								<TooltipTrigger
-									className={iconBtnClass}
-									onClick={handleMarkSchemeClick}
-									disabled={msLoading}
-								>
-									<NotebookPen className="h-3.5 w-3.5" />
-									<span className="sr-only">
-										{hasScheme ? "Edit mark scheme" : "Add mark scheme"}
-									</span>
-								</TooltipTrigger>
 								<TooltipContent>
-									{hasScheme ? "Edit mark scheme" : "Add mark scheme"}
+									Edit question, mark scheme & test answers
 								</TooltipContent>
 							</Tooltip>
 
@@ -260,53 +194,6 @@ export function SortableQuestion({
 				</div>
 			</div>
 
-			{/* Dialogs */}
-			<EvalDialog
-				questionId={question.id}
-				open={evalOpen}
-				onOpenChange={setEvalOpen}
-				hideTrigger
-			/>
-
-			<QuestionEditDialog
-				questionId={question.id}
-				initialText={question.text}
-				initialPoints={question.points}
-				initialQuestionNumber={question.question_number}
-				paperId={paperId}
-				open={editOpen}
-				onOpenChange={setEditOpen}
-			/>
-
-			{/* Mark scheme dialog — create mode */}
-			{!hasScheme &&
-				(question.question_type === "multiple_choice" ? (
-					<MarkSchemeDialog
-						mode="create"
-						questionId={question.id}
-						questionType="multiple_choice"
-						multipleChoiceOptions={question.multiple_choice_options}
-						open={msOpen}
-						onOpenChange={setMsOpen}
-						hideTrigger
-						paperId={paperId}
-					/>
-				) : (
-					<MarkSchemeDialog
-						mode="create"
-						questionId={question.id}
-						open={msOpen}
-						onOpenChange={setMsOpen}
-						hideTrigger
-						paperId={paperId}
-					/>
-				))}
-
-			{/* Mark scheme dialog — edit mode */}
-			{hasScheme && msDialogEditProps && (
-				<MarkSchemeDialog {...msDialogEditProps} />
-			)}
-
 			<ConfirmDialog
 				open={confirmOpen}
 				onOpenChange={(next) => {
@@ -320,79 +207,4 @@ export function SortableQuestion({
 			/>
 		</div>
 	)
-}
-
-// ── Build mark scheme edit dialog props ─────────────────────────────────────
-
-function buildEditProps(
-	ms: QuestionDetail["mark_schemes"][number] | undefined,
-	msDetail: QuestionDetail | null,
-	msOpen: boolean,
-	setMsOpen: (v: boolean) => void,
-	setMsDetail: (v: QuestionDetail | null) => void,
-	paperId: string,
-) {
-	if (!ms || !msDetail) return null
-	const common = {
-		open: msOpen,
-		onOpenChange: (v: boolean) => {
-			setMsOpen(v)
-			if (!v) setMsDetail(null)
-		},
-		hideTrigger: true as const,
-		paperId,
-	}
-	if (ms.marking_method === "deterministic") {
-		return {
-			...common,
-			mode: "edit" as const,
-			questionId: msDetail.id,
-			markSchemeId: ms.id,
-			markingMethod: "deterministic" as const,
-			multipleChoiceOptions: msDetail.multiple_choice_options,
-			initialDescription: ms.description ?? "",
-			initialGuidance: ms.guidance ?? "",
-			initialCorrectOptionLabels: ms.correct_option_labels,
-		}
-	}
-	if (ms.marking_method === "level_of_response") {
-		return {
-			...common,
-			mode: "edit" as const,
-			questionId: msDetail.id,
-			markSchemeId: ms.id,
-			markingMethod: "level_of_response" as const,
-			initialDescription: ms.description ?? "",
-			initialGuidance: ms.guidance ?? "",
-			initialContent: ms.content ?? "",
-			pointsTotal: ms.points_total,
-		}
-	}
-	return {
-		...common,
-		mode: "edit" as const,
-		questionId: msDetail.id,
-		markSchemeId: ms.id,
-		markingMethod: "point_based" as const,
-		initialDescription: ms.description ?? "",
-		initialGuidance: ms.guidance ?? "",
-		initialMarkPoints: Array.isArray(ms.mark_points)
-			? (
-					ms.mark_points as Array<{
-						criteria?: string
-						description?: string
-						points: number
-					}>
-				).map((mp) => ({
-					// Fall back to legacy `description` for rows written before the UI
-					// swapped to `criteria`. After the backfill every DB row carries at
-					// least one of the two. If we fell back (no criteria), we don't
-					// want to ALSO surface the same text in the description field, so
-					// we only carry description through when criteria was genuinely set.
-					criteria: mp.criteria ?? mp.description ?? "",
-					description: mp.criteria ? (mp.description ?? "") : "",
-					points: mp.points,
-				}))
-			: [],
-	}
 }

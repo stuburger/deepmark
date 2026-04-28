@@ -112,6 +112,21 @@ export function LorMarkSchemeEditForm({
 		<form onSubmit={form.handleSubmit(onSubmit)}>
 			<FieldGroup>
 				<Field>
+					<FieldLabel>Description</FieldLabel>
+					<Textarea
+						{...form.register("description")}
+						rows={2}
+						disabled={effectivelyPending}
+						className="resize-y text-sm"
+						onChange={(e) => {
+							form.register("description").onChange(e)
+							setSaved(false)
+						}}
+					/>
+					<FieldError>{form.formState.errors.description?.message}</FieldError>
+				</Field>
+
+				<Field>
 					<FieldLabel>Mark scheme content</FieldLabel>
 					<FieldDescription>
 						The complete mark scheme as markdown: level descriptors, indicative
@@ -129,21 +144,6 @@ export function LorMarkSchemeEditForm({
 						}}
 					/>
 					<FieldError>{form.formState.errors.content?.message}</FieldError>
-				</Field>
-
-				<Field>
-					<FieldLabel>Description</FieldLabel>
-					<Textarea
-						{...form.register("description")}
-						rows={2}
-						disabled={effectivelyPending}
-						className="resize-y text-sm"
-						onChange={(e) => {
-							form.register("description").onChange(e)
-							setSaved(false)
-						}}
-					/>
-					<FieldError>{form.formState.errors.description?.message}</FieldError>
 				</Field>
 
 				<Field>

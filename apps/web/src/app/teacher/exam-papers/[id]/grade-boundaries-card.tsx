@@ -16,7 +16,14 @@ import {
 	isTieredSubject,
 } from "@mcp-gcse/shared"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
-import { CheckCircle2, GraduationCap, Loader2, Sparkles } from "lucide-react"
+import {
+	CheckCircle2,
+	Check as CheckIcon,
+	GraduationCap,
+	Loader2,
+	Pencil,
+	Sparkles,
+} from "lucide-react"
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
 
@@ -82,6 +89,7 @@ export function GradeBoundariesCard({
 		toDraft(boundaries),
 	)
 	const [validationError, setValidationError] = useState<string | null>(null)
+	const [editing, setEditing] = useState(false)
 	const [undoTarget, setUndoTarget] = useState<{
 		boundaries: GradeBoundary[] | null
 		mode: BoundaryMode | null
@@ -291,18 +299,53 @@ export function GradeBoundariesCard({
 								Raw
 							</ToggleGroupItem>
 						</ToggleGroup>
+						{boundaries && (
+							<Button
+								type="button"
+								variant={editing ? "default" : "ghost"}
+								size="sm"
+								className="h-8"
+								onClick={() => {
+									if (editing) {
+										// Commit any pending draft on exit
+										handleCellBlur()
+									}
+									setEditing((v) => !v)
+								}}
+							>
+								{editing ? (
+									<>
+										<CheckIcon className="h-3.5 w-3.5 mr-1" />
+										Done
+									</>
+								) : (
+									<>
+										<Pencil className="h-3.5 w-3.5 mr-1" />
+										Edit
+									</>
+								)}
+							</Button>
+						)}
 					</div>
 				</div>
 
 				{boundaries ? (
-					<PopulatedRow
-						draft={draft}
-						validationError={validationError}
-						unitLabel={unitLabel}
-						onCellChange={handleCellChange}
-						onCellBlur={handleCellBlur}
-						disabled={saving}
-					/>
+					editing ? (
+						<PopulatedRow
+							draft={draft}
+							validationError={validationError}
+							unitLabel={unitLabel}
+							onCellChange={handleCellChange}
+							onCellBlur={handleCellBlur}
+							disabled={saving}
+						/>
+					) : (
+						<BoundaryTimeline
+							boundaries={boundaries}
+							mode={effectiveMode}
+							paperTotal={paperTotal}
+						/>
+					)
 				) : (
 					<EmptyState
 						tier={tier}
@@ -405,6 +448,57 @@ function PopulatedRow({
 			{validationError ? (
 				<p className="text-xs text-destructive">{validationError}</p>
 			) : null}
+		</div>
+	)
+}
+
+function BoundaryTimeline({
+	boundaries,
+	mode,
+	paperTotal,
+}: {
+	boundaries: GradeBoundary[]
+	mode: BoundaryMode
+	paperTotal: number
+}) {
+	const upper = mode === "percent" ? 100 : Math.max(paperTotal, 1)
+	const labelSuffix = mode === "percent" ? "%" : ""
+
+	// Sort by min_mark ascending so the rail reads left-to-right as low → high
+	// (grade 1 on the left, grade 9 on the right).
+	const sorted = [...boundaries].sort((a, b) => a.min_mark - b.min_mark)
+
+	return (
+		<div className="px-2 pt-2 pb-1">
+			<div className="relative h-9">
+				{/* Track */}
+				<div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-1.5 rounded-full bg-gradient-to-r from-red-500/25 via-amber-500/30 to-emerald-500/45" />
+
+				{/* Markers */}
+				{sorted.map((b) => {
+					const pct = Math.min(100, Math.max(0, (b.min_mark / upper) * 100))
+					return (
+						<div
+							key={b.grade}
+							className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 flex flex-col items-center gap-0.5"
+							style={{ left: `${pct}%` }}
+						>
+							<span className="text-[10px] font-semibold tabular-nums leading-none rounded px-1 py-0.5 bg-background border shadow-sm">
+								{b.grade}
+							</span>
+							<span className="h-1 w-px bg-foreground/50" />
+							<span className="text-[10px] font-medium text-muted-foreground tabular-nums leading-none">
+								{b.min_mark}
+								{labelSuffix}
+							</span>
+						</div>
+					)
+				})}
+			</div>
+			<div className="mt-1 flex justify-between text-[10px] text-muted-foreground tabular-nums">
+				<span>0</span>
+				<span>{mode === "percent" ? "100%" : paperTotal}</span>
+			</div>
 		</div>
 	)
 }

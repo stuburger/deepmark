@@ -8,15 +8,25 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table"
-import type { ExamPaperStats } from "@/lib/marking/types"
+import type { ExamPaperStats, SubmissionHistoryItem } from "@/lib/marking/types"
+import type { BoundaryMode, GradeBoundary } from "@mcp-gcse/shared"
 import { Loader2 } from "lucide-react"
+import { ScoreDistribution } from "./score-distribution"
 
 export function ExamPaperAnalyticsTab({
 	stats,
 	loading,
+	submissions,
+	boundaries,
+	boundaryMode,
+	paperTotal,
 }: {
 	stats: ExamPaperStats | null
 	loading: boolean
+	submissions: SubmissionHistoryItem[]
+	boundaries: GradeBoundary[] | null
+	boundaryMode: BoundaryMode | null
+	paperTotal: number
 }) {
 	if (loading) {
 		return (
@@ -35,6 +45,10 @@ export function ExamPaperAnalyticsTab({
 		)
 	}
 
+	const markedSubmissions = submissions.filter(
+		(s) => s.status === "ocr_complete" && s.total_max > 0,
+	)
+
 	return (
 		<>
 			<div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
@@ -51,6 +65,28 @@ export function ExamPaperAnalyticsTab({
 					</CardContent>
 				</Card>
 			</div>
+
+			{markedSubmissions.length > 0 && (
+				<Card>
+					<CardHeader>
+						<h3 className="text-sm font-semibold">Score distribution</h3>
+						<p className="text-xs text-muted-foreground">
+							Where each student landed.
+							{boundaries
+								? " Vertical lines mark the grade boundaries."
+								: " Set grade boundaries to overlay them here."}
+						</p>
+					</CardHeader>
+					<CardContent>
+						<ScoreDistribution
+							submissions={markedSubmissions}
+							boundaries={boundaries}
+							boundaryMode={boundaryMode}
+							paperTotal={paperTotal}
+						/>
+					</CardContent>
+				</Card>
+			)}
 
 			{stats.question_stats.length > 0 && (
 				<Card>

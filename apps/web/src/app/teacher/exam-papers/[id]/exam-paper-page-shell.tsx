@@ -1,6 +1,14 @@
 "use client"
 
 import { Badge } from "@/components/ui/badge"
+import {
+	Breadcrumb,
+	BreadcrumbItem,
+	BreadcrumbLink,
+	BreadcrumbList,
+	BreadcrumbPage,
+	BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
@@ -39,6 +47,8 @@ import { useUnlinkedSchemes } from "./hooks/use-unlinked-schemes"
 import { LevelDescriptorsCard } from "./level-descriptors-card"
 import { LinkMarkSchemeDialog } from "./link-mark-scheme-dialog"
 import { MarkingJobDialog } from "./marking-job-dialog"
+import { QuestionPaperThumbnail } from "./qp-thumbnail"
+import { UnifiedQuestionDialog } from "./questions/[question_id]/unified-question-dialog"
 import { ReadinessStrip } from "./readiness-strip"
 import { StagingReviewDialog } from "./staging-review-dialog"
 import { SubmissionsTabContent } from "./submissions-tab-content"
@@ -97,6 +107,10 @@ export function ExamPaperPageShell({
 	const [stagingOpen, setStagingOpen] = useState(false)
 	const [markingJobId, setMarkingJobId] = useQueryState("job", parseAsString)
 	const [, setQuestionParam] = useQueryState("question", parseAsString)
+	const [editQuestionId, setEditQuestionId] = useQueryState(
+		"edit_question",
+		parseAsString,
+	)
 
 	// Batch ingestion (classifying, staging) — independent of submissions
 	const {
@@ -148,8 +162,11 @@ export function ExamPaperPageShell({
 	// Derived readiness state
 	const allQuestions = paper.sections.flatMap((s) => s.questions)
 
+	const questionPaperDoc = completedDocs.find(
+		(d) => d.document_type === "question_paper",
+	)
 	const hasQuestionPaper =
-		completedDocs.some((d) => d.document_type === "question_paper") ||
+		!!questionPaperDoc ||
 		allQuestions.some((q) => q.origin === "question_paper")
 
 	const totalQuestions = allQuestions.length
@@ -185,31 +202,45 @@ export function ExamPaperPageShell({
 				{/* Sticky frosted-glass header: title + tabs bar */}
 				<div className="sticky top-0 z-0 -mx-6 -mt-6 px-6 pt-6 pb-2 backdrop-blur-xl bg-background/60 border-b">
 					<div className="pb-4">
-						<Link
-							href="/teacher/exam-papers"
-							className="text-sm text-muted-foreground hover:text-foreground"
-						>
-							← Back to exam papers
-						</Link>
-						<div className="mt-2 flex items-start justify-between gap-4">
-							<div>
-								<EditableTitle id={paper.id} initialTitle={paper.title} />
-								<div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-									<Badge variant="secondary">{capitalize(paper.subject)}</Badge>
-									{paper.exam_board && <span>{paper.exam_board}</span>}
-									<span>{paper.year}</span>
-									{paper.paper_number && (
-										<span>Paper {paper.paper_number}</span>
-									)}
-									{paper.is_public ? (
-										<Badge variant="default" className="gap-1">
-											<Globe className="h-3 w-3" /> Public
+						<Breadcrumb>
+							<BreadcrumbList>
+								<BreadcrumbItem>
+									<BreadcrumbLink render={<Link href="/teacher/exam-papers" />}>
+										Exam papers
+									</BreadcrumbLink>
+								</BreadcrumbItem>
+								<BreadcrumbSeparator />
+								<BreadcrumbItem>
+									<BreadcrumbPage className="line-clamp-1">
+										{paper.title}
+									</BreadcrumbPage>
+								</BreadcrumbItem>
+							</BreadcrumbList>
+						</Breadcrumb>
+						<div className="mt-3 flex items-start justify-between gap-4">
+							<div className="flex items-start gap-4 min-w-0">
+								<QuestionPaperThumbnail jobId={questionPaperDoc?.id ?? null} />
+								<div className="min-w-0">
+									<EditableTitle id={paper.id} initialTitle={paper.title} />
+									<div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+										<Badge variant="secondary">
+											{capitalize(paper.subject)}
 										</Badge>
-									) : (
-										<Badge variant="outline" className="gap-1">
-											<Lock className="h-3 w-3" /> Draft
-										</Badge>
-									)}
+										{paper.exam_board && <span>{paper.exam_board}</span>}
+										<span>{paper.year}</span>
+										{paper.paper_number && (
+											<span>Paper {paper.paper_number}</span>
+										)}
+										{paper.is_public ? (
+											<Badge variant="default" className="gap-1">
+												<Globe className="h-3 w-3" /> Public
+											</Badge>
+										) : (
+											<Badge variant="outline" className="gap-1">
+												<Lock className="h-3 w-3" /> Draft
+											</Badge>
+										)}
+									</div>
 								</div>
 							</div>
 							<div className="flex shrink-0 items-center gap-2">
@@ -369,6 +400,10 @@ export function ExamPaperPageShell({
 					<ExamPaperAnalyticsTab
 						stats={analyticsStats ?? null}
 						loading={analyticsLoading}
+						submissions={submissions}
+						boundaries={paper.grade_boundaries}
+						boundaryMode={paper.grade_boundary_mode}
+						paperTotal={paper.total_marks}
 					/>
 				</TabsContent>
 			</Tabs>
@@ -406,6 +441,22 @@ export function ExamPaperPageShell({
 				}}
 				onJobChange={(newJobId) => void setMarkingJobId(newJobId)}
 			/>
+
+			{(() => {
+				const editQuestion = editQuestionId
+					? allQuestions.find((q) => q.id === editQuestionId)
+					: null
+				return (
+					<UnifiedQuestionDialog
+						question={editQuestion ?? null}
+						paperId={paper.id}
+						open={editQuestion !== null}
+						onOpenChange={(v) => {
+							if (!v) void setEditQuestionId(null)
+						}}
+					/>
+				)
+			})()}
 
 			<StagingReviewDialog
 				open={stagingOpen}

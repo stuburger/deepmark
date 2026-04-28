@@ -12,8 +12,8 @@ import type { ExamPaperQuestion, QuestionDetail } from "@/lib/exam-paper/types"
 import { Pencil, X } from "lucide-react"
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
-import { EvalBody } from "./eval-dialog"
-import { MarkSchemeBody, type MarkSchemeBodyProps } from "./mark-scheme-dialog"
+import { EvalBody } from "./eval-body"
+import { MarkSchemeBody, type MarkSchemeBodyProps } from "./mark-scheme-body"
 import { QuestionEditForm } from "./question-edit-form"
 
 type Props = {

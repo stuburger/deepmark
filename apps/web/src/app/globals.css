@@ -108,8 +108,11 @@
 	--mark-cross-bg-active: rgb(220 38 38 / 0.55);
 	--mark-circle-bg-active: rgb(234 88 12 / 0.55);
 	--mark-box-ring-active: #6b21a8;
+	--mark-box-bg-active: rgb(168 85 247 / 0.18);
 	--mark-underline-active: #1d4ed8;
+	--mark-underline-bg-active: rgb(59 130 246 / 0.18);
 	--mark-double-underline-active: #15803d;
+	--mark-double-underline-bg-active: rgb(34 197 94 / 0.18);
 	--mark-chain-evaluation-bg-active: rgb(245 158 11 / 0.45);
 	--mark-chain-judgement-bg-active: rgb(139 92 246 / 0.4);
 	--mark-chain-reasoning-bg-active: rgb(59 130 246 / 0.4);

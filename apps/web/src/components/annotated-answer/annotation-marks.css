@@ -153,62 +153,63 @@
 	padding-left: 1px;
 }
 
-.ProseMirror .is-active-annotation[data-mark-type="tick"],
-.ProseMirror .is-active-annotation [data-mark-type="tick"] {
+/* Mark-span darkening — keyed off the OUTER `[data-mark-type=…]` span via
+   `:has()`. The active class lands on an inner ocrToken span (because
+   OcrTokenMark has `priority: 1`, putting annotation marks outside), so we
+   walk back up the tree to the mark and recolour it as a whole. This
+   covers inter-word whitespace too, giving an unbroken highlight. */
+.ProseMirror span[data-mark-type="tick"]:has(.is-active-annotation) {
 	background-color: var(--mark-tick-bg-active);
 }
 
-.ProseMirror .is-active-annotation[data-mark-type="cross"],
-.ProseMirror .is-active-annotation [data-mark-type="cross"] {
+.ProseMirror span[data-mark-type="cross"]:has(.is-active-annotation) {
 	background-color: var(--mark-cross-bg-active);
 }
 
-.ProseMirror .is-active-annotation[data-mark-type="circle"],
-.ProseMirror .is-active-annotation [data-mark-type="circle"] {
+.ProseMirror span[data-mark-type="circle"]:has(.is-active-annotation) {
 	background-color: var(--mark-circle-bg-active);
 }
 
-.ProseMirror .is-active-annotation[data-mark-type="box"],
-.ProseMirror .is-active-annotation [data-mark-type="box"] {
+.ProseMirror span[data-mark-type="box"]:has(.is-active-annotation) {
+	background-color: var(--mark-box-bg-active);
 	box-shadow: inset 0 0 0 1px var(--mark-box-ring-active);
 }
 
-.ProseMirror .is-active-annotation[data-mark-type="underline"],
-.ProseMirror .is-active-annotation [data-mark-type="underline"] {
+/* Underline / double-underline don't have a base background, so the active
+   state both darkens the stroke and lays down a tinted highlight. */
+.ProseMirror span[data-mark-type="underline"]:has(.is-active-annotation) {
+	background-color: var(--mark-underline-bg-active);
 	text-decoration-color: var(--mark-underline-active);
 }
 
-.ProseMirror .is-active-annotation[data-mark-type="double_underline"],
-.ProseMirror .is-active-annotation [data-mark-type="double_underline"] {
+.ProseMirror
+	span[data-mark-type="double_underline"]:has(.is-active-annotation) {
+	background-color: var(--mark-double-underline-bg-active);
 	text-decoration-color: var(--mark-double-underline-active);
 }
 
 .ProseMirror
-	.is-active-annotation[data-mark-type="chain"][data-chain-type="evaluation"],
-.ProseMirror
-	.is-active-annotation
-	[data-mark-type="chain"][data-chain-type="evaluation"] {
+	span[data-mark-type="chain"][data-chain-type="evaluation"]:has(
+		.is-active-annotation
+	) {
 	background-color: var(--mark-chain-evaluation-bg-active);
 }
 
 .ProseMirror
-	.is-active-annotation[data-mark-type="chain"][data-chain-type="judgement"],
-.ProseMirror
-	.is-active-annotation
-	[data-mark-type="chain"][data-chain-type="judgement"] {
+	span[data-mark-type="chain"][data-chain-type="judgement"]:has(
+		.is-active-annotation
+	) {
 	background-color: var(--mark-chain-judgement-bg-active);
 }
 
 .ProseMirror
-	.is-active-annotation[data-mark-type="chain"][data-chain-type="reasoning"],
+	span[data-mark-type="chain"][data-chain-type="reasoning"]:has(
+		.is-active-annotation
+	),
 .ProseMirror
-	.is-active-annotation[data-mark-type="chain"]:not([data-chain-type]),
-.ProseMirror
-	.is-active-annotation
-	[data-mark-type="chain"][data-chain-type="reasoning"],
-.ProseMirror
-	.is-active-annotation
-	[data-mark-type="chain"]:not([data-chain-type]) {
+	span[data-mark-type="chain"]:not([data-chain-type]):has(
+		.is-active-annotation
+	) {
 	background-color: var(--mark-chain-reasoning-bg-active);
 }
 

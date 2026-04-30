@@ -143,10 +143,11 @@ export function NewExamPaperDialog({ open, onOpenChange }: Props) {
 		onProgress({ kind: "uploading", fileName: file.name })
 
 		const uploadResult = await requestMetadataUpload()
-		if (!uploadResult.ok) return null
+		const upload = uploadResult?.data
+		if (!upload) return null
 
 		try {
-			const putRes = await fetch(uploadResult.url, {
+			const putRes = await fetch(upload.url, {
 				method: "PUT",
 				body: file,
 				headers: { "Content-Type": "application/pdf" },
@@ -159,13 +160,14 @@ export function NewExamPaperDialog({ open, onOpenChange }: Props) {
 		onProgress({
 			kind: "extracting",
 			fileName: file.name,
-			s3Key: uploadResult.s3Key,
+			s3Key: upload.s3Key,
 		})
 
-		const metadataResult = await extractPdfMetadata(uploadResult.s3Key)
-		if (!metadataResult.ok) return null
+		const metadataResult = await extractPdfMetadata({ s3Key: upload.s3Key })
+		const meta = metadataResult?.data?.metadata
+		if (!meta) return null
 
-		return { s3Key: uploadResult.s3Key, metadata: metadataResult.metadata }
+		return { s3Key: upload.s3Key, metadata: meta }
 	}
 
 	async function processFirstFile(file: File) {
@@ -250,11 +252,15 @@ export function NewExamPaperDialog({ open, onOpenChange }: Props) {
 				tier,
 			})
 			setSubmitting(false)
-			if (!result.ok) {
-				toast.error(result.error)
+			if (result?.serverError) {
+				toast.error(result.serverError)
 				return
 			}
-			router.push(`/teacher/exam-papers/${result.paperId}`)
+			if (!result?.data) {
+				toast.error("Failed to create exam paper")
+				return
+			}
+			router.push(`/teacher/exam-papers/${result.data.paperId}`)
 		} else {
 			const result = await createExamPaperStandalone({
 				title: title.trim(),
@@ -269,11 +275,15 @@ export function NewExamPaperDialog({ open, onOpenChange }: Props) {
 				tier,
 			})
 			setSubmitting(false)
-			if (!result.ok) {
-				toast.error(result.error)
+			if (result?.serverError) {
+				toast.error(result.serverError)
 				return
 			}
-			router.push(`/teacher/exam-papers/${result.id}`)
+			if (!result?.data) {
+				toast.error("Failed to create exam paper")
+				return
+			}
+			router.push(`/teacher/exam-papers/${result.data.id}`)
 		}
 	}
 

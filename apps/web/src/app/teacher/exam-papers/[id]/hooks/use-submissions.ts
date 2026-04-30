@@ -21,8 +21,8 @@ export function useSubmissions({
 	} = useQuery({
 		queryKey: queryKeys.submissions(paperId),
 		queryFn: async () => {
-			const r = await listSubmissionsForPaper(paperId)
-			return r.ok ? r.submissions : []
+			const r = await listSubmissionsForPaper({ examPaperId: paperId })
+			return r?.data?.submissions ?? []
 		},
 		initialData: initialSubmissions,
 		refetchInterval: POLL_INTERVAL_MS,

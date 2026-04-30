@@ -77,7 +77,7 @@ export function useCurrentUser(): {
 		queryKey: queryKeys.currentUser(),
 		queryFn: async () => {
 			const r = await getCurrentUser()
-			return r.ok ? r.user : null
+			return r?.data?.user ?? null
 		},
 		staleTime: Number.POSITIVE_INFINITY,
 	})

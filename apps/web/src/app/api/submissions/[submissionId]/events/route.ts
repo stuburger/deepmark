@@ -1,4 +1,4 @@
-import { auth } from "@/lib/auth"
+import { assertSubmissionAccess, requireSessionUser } from "@/lib/authz"
 import { getJobStages } from "@/lib/marking/stages/queries"
 import {
 	fingerprint,
@@ -38,14 +38,18 @@ const HEARTBEAT_INTERVAL_MS = 30_000
  */
 export async function GET(
 	request: NextRequest,
-	{ params }: { params: Promise<{ jobId: string }> },
+	{ params }: { params: Promise<{ submissionId: string }> },
 ) {
-	const session = await auth()
-	if (!session) {
+	const session = await requireSessionUser()
+	if (!session.ok) {
 		return new Response("Unauthorized", { status: 401 })
 	}
 
-	const { jobId } = await params
+	const { submissionId } = await params
+	const access = await assertSubmissionAccess(session.user, submissionId, "viewer")
+	if (!access.ok) {
+		return new Response("Not found", { status: 404 })
+	}
 
 	const encoder = new TextEncoder()
 	const signal = request.signal
@@ -61,8 +65,8 @@ export async function GET(
 			}
 
 			const readStages = async (): Promise<JobStages | null> => {
-				const r = await getJobStages(jobId)
-				return r.ok ? r.stages : null
+				const r = await getJobStages({ jobId: submissionId })
+				return r?.data?.stages ?? null
 			}
 
 			const initial = await readStages()
@@ -73,7 +77,7 @@ export async function GET(
 			}
 			write("snapshot", initial)
 			console.log(
-				`[SSE:${jobId.slice(-6)}] open`,
+				`[SSE:${submissionId.slice(-6)}] open`,
 				initial.ocr.status,
 				initial.grading.status,
 				initial.annotation.status,
@@ -101,7 +105,7 @@ export async function GET(
 				if (fp !== lastFp) {
 					write("update", stages)
 					console.log(
-						`[SSE:${jobId.slice(-6)}] update tick=${tickCount}`,
+						`[SSE:${submissionId.slice(-6)}] update tick=${tickCount}`,
 						stages.ocr.status,
 						stages.grading.status,
 						stages.annotation.status,
@@ -115,7 +119,7 @@ export async function GET(
 				}
 			}
 
-			console.log(`[SSE:${jobId.slice(-6)}] closed after ${tickCount} ticks`)
+			console.log(`[SSE:${submissionId.slice(-6)}] closed after ${tickCount} ticks`)
 			controller.close()
 		},
 	})

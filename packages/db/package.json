@@ -16,6 +16,7 @@
 		"typecheck": "tsc --noEmit",
 		"clean": "rm -rf dist .turbo",
 		"extract-env": "bun run scripts/extract-env.ts",
+		"backfill:resource-grants": "bun run scripts/backfill-resource-grants.ts",
 		"db:generate": "prisma generate",
 		"db:migrate": "prisma migrate dev",
 		"db:deploy": "prisma migrate deploy",

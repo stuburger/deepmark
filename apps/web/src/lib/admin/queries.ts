@@ -1,5 +1,6 @@
 "use server"
 
+import { adminAction } from "@/lib/authz"
 import { db } from "@/lib/db"
 
 // ─── Dashboard ────────────────────────────────────────────────────────────────
@@ -39,48 +40,9 @@ export type DashboardData = {
 	usersByRole: UsersByRole[]
 }
 
-export async function getDashboardData(): Promise<DashboardData> {
-	const [
-		totalUsers,
-		totalQuestions,
-		totalExamPapers,
-		totalQuestionBanks,
-		pendingAnswers,
-		completedAnswers,
-		failedAnswers,
-		totalSubmissions,
-		activeSubmissions,
-		markSchemesNeedingReview,
-		answersByStatus,
-		questionsBySubjectRaw,
-		usersByRoleRaw,
-	] = await Promise.all([
-		db.user.count(),
-		db.question.count(),
-		db.examPaper.count({ where: { is_active: true } }),
-		db.questionBank.count({ where: { is_active: true } }),
-		db.answer.count({ where: { marking_status: "pending" } }),
-		db.answer.count({ where: { marking_status: "completed" } }),
-		db.answer.count({ where: { marking_status: "failed" } }),
-		db.studentSubmission.count(),
-		db.studentSubmission.count({
-			where: {
-				superseded_at: null,
-				grading_runs: {
-					none: { status: { in: ["complete", "failed", "cancelled"] } },
-				},
-			},
-		}),
-		db.markScheme.count({
-			where: { link_status: { in: ["unlinked", "auto_linked"] } },
-		}),
-		db.answer.groupBy({ by: ["marking_status"], _count: { id: true } }),
-		db.question.groupBy({ by: ["subject"], _count: { id: true } }),
-		db.user.groupBy({ by: ["role"], _count: { id: true } }),
-	])
-
-	return {
-		stats: {
+export const getDashboardData = adminAction.action(
+	async (): Promise<DashboardData> => {
+		const [
 			totalUsers,
 			totalQuestions,
 			totalExamPapers,
@@ -91,21 +53,62 @@ export async function getDashboardData(): Promise<DashboardData> {
 			totalSubmissions,
 			activeSubmissions,
 			markSchemesNeedingReview,
-		},
-		markingStatusBreakdown: answersByStatus.map((row) => ({
-			status: row.marking_status,
-			count: row._count.id,
-		})),
-		questionsBySubject: questionsBySubjectRaw.map((row) => ({
-			subject: row.subject,
-			count: row._count.id,
-		})),
-		usersByRole: usersByRoleRaw.map((row) => ({
-			role: row.role,
-			count: row._count.id,
-		})),
-	}
-}
+			answersByStatus,
+			questionsBySubjectRaw,
+			usersByRoleRaw,
+		] = await Promise.all([
+			db.user.count(),
+			db.question.count(),
+			db.examPaper.count({ where: { is_active: true } }),
+			db.questionBank.count({ where: { is_active: true } }),
+			db.answer.count({ where: { marking_status: "pending" } }),
+			db.answer.count({ where: { marking_status: "completed" } }),
+			db.answer.count({ where: { marking_status: "failed" } }),
+			db.studentSubmission.count(),
+			db.studentSubmission.count({
+				where: {
+					superseded_at: null,
+					grading_runs: {
+						none: { status: { in: ["complete", "failed", "cancelled"] } },
+					},
+				},
+			}),
+			db.markScheme.count({
+				where: { link_status: { in: ["unlinked", "auto_linked"] } },
+			}),
+			db.answer.groupBy({ by: ["marking_status"], _count: { id: true } }),
+			db.question.groupBy({ by: ["subject"], _count: { id: true } }),
+			db.user.groupBy({ by: ["role"], _count: { id: true } }),
+		])
+
+		return {
+			stats: {
+				totalUsers,
+				totalQuestions,
+				totalExamPapers,
+				totalQuestionBanks,
+				pendingAnswers,
+				completedAnswers,
+				failedAnswers,
+				totalSubmissions,
+				activeSubmissions,
+				markSchemesNeedingReview,
+			},
+			markingStatusBreakdown: answersByStatus.map((row) => ({
+				status: row.marking_status,
+				count: row._count.id,
+			})),
+			questionsBySubject: questionsBySubjectRaw.map((row) => ({
+				subject: row.subject,
+				count: row._count.id,
+			})),
+			usersByRole: usersByRoleRaw.map((row) => ({
+				role: row.role,
+				count: row._count.id,
+			})),
+		}
+	},
+)
 
 // ─── Questions list ───────────────────────────────────────────────────────────
 
@@ -125,12 +128,8 @@ export type QuestionListItem = {
 	}
 }
 
-export type ListQuestionsResult =
-	| { ok: true; questions: QuestionListItem[] }
-	| { ok: false; error: string }
-
-export async function listQuestions(): Promise<ListQuestionsResult> {
-	try {
+export const listQuestions = adminAction.action(
+	async (): Promise<{ questions: QuestionListItem[] }> => {
 		const questions = await db.question.findMany({
 			orderBy: { created_at: "desc" },
 			select: {
@@ -151,11 +150,9 @@ export async function listQuestions(): Promise<ListQuestionsResult> {
 				},
 			},
 		})
-		return { ok: true, questions }
-	} catch {
-		return { ok: false, error: "Failed to load questions" }
-	}
-}
+		return { questions }
+	},
+)
 
 // ─── Exemplars list ───────────────────────────────────────────────────────────
 
@@ -181,12 +178,8 @@ export type ExemplarAnswerListItem = {
 	validation: ExemplarValidationStats | null
 }
 
-export type ListExemplarAnswersResult =
-	| { ok: true; exemplars: ExemplarAnswerListItem[] }
-	| { ok: false; error: string }
-
-export async function listExemplarAnswers(): Promise<ListExemplarAnswersResult> {
-	try {
+export const listExemplarAnswers = adminAction.action(
+	async (): Promise<{ exemplars: ExemplarAnswerListItem[] }> => {
 		const raw = await db.exemplarAnswer.findMany({
 			orderBy: { created_at: "desc" },
 			select: {
@@ -240,8 +233,6 @@ export async function listExemplarAnswers(): Promise<ListExemplarAnswersResult> 
 			}
 		})
 
-		return { ok: true, exemplars }
-	} catch {
-		return { ok: false, error: "Failed to load exemplar answers" }
-	}
-}
+		return { exemplars }
+	},
+)

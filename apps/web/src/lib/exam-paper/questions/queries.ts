@@ -1,18 +1,19 @@
 "use server"
 
+import { resourceAction } from "@/lib/authz"
 import { db } from "@/lib/db"
+import { z } from "zod"
 import type { MultipleChoiceOption, QuestionDetail } from "../types"
 
-// ─── Question detail ──────────────────────────────────────────────────────────
-
-export type GetQuestionDetailResult =
-	| { ok: true; question: QuestionDetail }
-	| { ok: false; error: string }
-
-export async function getQuestionDetail(
-	questionId: string,
-): Promise<GetQuestionDetailResult> {
-	try {
+export const getQuestionDetail = resourceAction({
+	type: "question",
+	role: "viewer",
+	schema: z.object({ questionId: z.string() }),
+	id: ({ questionId }) => questionId,
+}).action(
+	async ({
+		parsedInput: { questionId },
+	}): Promise<{ question: QuestionDetail | null }> => {
 		const question = await db.question.findUnique({
 			where: { id: questionId },
 			select: {
@@ -43,14 +44,13 @@ export async function getQuestionDetail(
 				},
 			},
 		})
-		if (!question) return { ok: false, error: "Question not found" }
+		if (!question) return { question: null }
 
 		const rawOptions = Array.isArray(question.multiple_choice_options)
 			? (question.multiple_choice_options as MultipleChoiceOption[])
 			: []
 
 		return {
-			ok: true,
 			question: {
 				id: question.id,
 				text: question.text,
@@ -80,7 +80,5 @@ export async function getQuestionDetail(
 				})),
 			},
 		}
-	} catch {
-		return { ok: false, error: "Failed to load question" }
-	}
-}
+	},
+)

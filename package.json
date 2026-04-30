@@ -33,7 +33,8 @@
 	},
 	"workspaces": ["packages/*", "apps/*"],
 	"scripts": {
-		"test:unit": "vitest run --project shared:unit --project backend:unit",
+		"test:unit": "vitest run --project shared:unit --project backend:unit --project web:unit",
+		"lint:authz": "bun --cwd apps/web scripts/checks/action-conventions.ts",
 		"test:integration": "sst shell -- vitest run --project 'backend:integration' --project 'web:integration'",
 		"process-logo": "bun scripts/process-logo.ts",
 		"build": "turbo build",

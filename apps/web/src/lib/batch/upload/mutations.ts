@@ -1,122 +1,109 @@
 "use server"
 
+import { resourceAction } from "@/lib/authz"
 import { db } from "@/lib/db"
 import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3"
 import { SQSClient, SendMessageCommand } from "@aws-sdk/client-sqs"
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner"
 import { Resource } from "sst"
-import { auth } from "../../auth"
-import { log } from "../../logger"
-
-const TAG = "batch/upload"
+import { z } from "zod"
 
 const bucketName = Resource.ScansBucket.name
 const s3 = new S3Client({})
 const sqs = new SQSClient({})
 
-// ─── createBatchIngestJob ───────────────────────────────────────────────────
+export const createBatchIngestJob = resourceAction({
+	type: "examPaper",
+	role: "editor",
+	schema: z.object({ examPaperId: z.string() }),
+	id: ({ examPaperId }) => examPaperId,
+}).action(
+	async ({
+		parsedInput: { examPaperId },
+		ctx,
+	}): Promise<{ batchJobId: string }> => {
+		const examPaper = await db.examPaper.findFirst({
+			where: { id: examPaperId, is_active: true },
+			select: { id: true },
+		})
+		if (!examPaper) throw new Error("Exam paper not found")
 
-export type CreateBatchIngestJobResult =
-	| { ok: true; batchJobId: string }
-	| { ok: false; error: string }
+		const job = await db.batchIngestJob.create({
+			data: {
+				exam_paper_id: examPaperId,
+				uploaded_by: ctx.user.id,
+				status: "uploading",
+			},
+		})
 
-export async function createBatchIngestJob(
-	examPaperId: string,
-): Promise<CreateBatchIngestJobResult> {
-	const session = await auth()
-	if (!session) return { ok: false, error: "Not authenticated" }
+		ctx.log.info("BatchIngestJob created", { batchJobId: job.id })
 
-	const examPaper = await db.examPaper.findFirst({
-		where: { id: examPaperId, is_active: true },
-		select: { id: true },
-	})
-	if (!examPaper) return { ok: false, error: "Exam paper not found" }
+		return { batchJobId: job.id }
+	},
+)
 
-	const job = await db.batchIngestJob.create({
-		data: {
-			exam_paper_id: examPaperId,
-			uploaded_by: session.userId,
-			status: "uploading",
-		},
-	})
+export const addFileToBatch = resourceAction({
+	type: "batch",
+	role: "editor",
+	schema: z.object({
+		batchJobId: z.string(),
+		filename: z.string(),
+		mimeType: z.string(),
+	}),
+	id: ({ batchJobId }) => batchJobId,
+}).action(
+	async ({
+		parsedInput: { batchJobId, filename, mimeType },
+	}): Promise<{ uploadUrl: string; key: string }> => {
+		const batch = await db.batchIngestJob.findFirst({
+			where: { id: batchJobId },
+			select: { id: true },
+		})
+		if (!batch) throw new Error("Batch job not found")
 
-	log.info(TAG, "BatchIngestJob created", {
-		userId: session.userId,
-		batchJobId: job.id,
-	})
+		const key = `batches/${batchJobId}/source/${filename}`
+		const command = new PutObjectCommand({
+			Bucket: bucketName,
+			Key: key,
+			ContentType: mimeType,
+		})
+		const uploadUrl = await getSignedUrl(s3, command, { expiresIn: 3600 })
 
-	return { ok: true, batchJobId: job.id }
-}
+		return { uploadUrl, key }
+	},
+)
 
-// ─── addFileToBatch ─────────────────────────────────────────────────────────
+export const triggerClassification = resourceAction({
+	type: "batch",
+	role: "editor",
+	schema: z.object({ batchJobId: z.string() }),
+	id: ({ batchJobId }) => batchJobId,
+}).action(
+	async ({ parsedInput: { batchJobId }, ctx }): Promise<{ ok: true }> => {
+		const batch = await db.batchIngestJob.findFirst({
+			where: { id: batchJobId },
+			select: { id: true },
+		})
+		if (!batch) throw new Error("Batch job not found")
 
-export type AddFileToBatchResult =
-	| { ok: true; uploadUrl: string; key: string }
-	| { ok: false; error: string }
+		await sqs.send(
+			new SendMessageCommand({
+				QueueUrl: Resource.BatchClassifyQueue.url,
+				MessageBody: JSON.stringify({ batch_job_id: batchJobId }),
+			}),
+		)
 
-export async function addFileToBatch(
-	batchJobId: string,
-	filename: string,
-	mimeType: string,
-): Promise<AddFileToBatchResult> {
-	const session = await auth()
-	if (!session) return { ok: false, error: "Not authenticated" }
+		// Flip to "classifying" so the client's activeBatch query picks it up
+		// immediately on refetch. Without this, the row sits at "uploading" until
+		// the Lambda wakes up — leaving the teacher with no visible feedback for
+		// 1–3s after closing the upload dialog.
+		await db.batchIngestJob.update({
+			where: { id: batchJobId },
+			data: { status: "classifying" },
+		})
 
-	const batch = await db.batchIngestJob.findFirst({
-		where: { id: batchJobId },
-		select: { id: true },
-	})
-	if (!batch) return { ok: false, error: "Batch job not found" }
+		ctx.log.info("Classification triggered", { batchJobId })
 
-	const key = `batches/${batchJobId}/source/${filename}`
-	const command = new PutObjectCommand({
-		Bucket: bucketName,
-		Key: key,
-		ContentType: mimeType,
-	})
-	const uploadUrl = await getSignedUrl(s3, command, { expiresIn: 3600 })
-
-	return { ok: true, uploadUrl, key }
-}
-
-// ─── triggerClassification ──────────────────────────────────────────────────
-
-export type TriggerClassificationResult =
-	| { ok: true }
-	| { ok: false; error: string }
-
-export async function triggerClassification(
-	batchJobId: string,
-): Promise<TriggerClassificationResult> {
-	const session = await auth()
-	if (!session) return { ok: false, error: "Not authenticated" }
-
-	const batch = await db.batchIngestJob.findFirst({
-		where: { id: batchJobId },
-		select: { id: true },
-	})
-	if (!batch) return { ok: false, error: "Batch job not found" }
-
-	await sqs.send(
-		new SendMessageCommand({
-			QueueUrl: Resource.BatchClassifyQueue.url,
-			MessageBody: JSON.stringify({ batch_job_id: batchJobId }),
-		}),
-	)
-
-	// Flip to "classifying" so the client's activeBatch query picks it up
-	// immediately on refetch. Without this, the row sits at "uploading" until
-	// the Lambda wakes up — leaving the teacher with no visible feedback for
-	// 1–3s after closing the upload dialog.
-	await db.batchIngestJob.update({
-		where: { id: batchJobId },
-		data: { status: "classifying" },
-	})
-
-	log.info(TAG, "Classification triggered", {
-		userId: session.userId,
-		batchJobId,
-	})
-
-	return { ok: true }
-}
+		return { ok: true }
+	},
+)

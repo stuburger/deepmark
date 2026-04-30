@@ -23,6 +23,7 @@ export type { ActiveDragState }
 
 export function useStagedScriptsState(
 	paperId: string,
+	batchId: string,
 	scripts: StagedScript[],
 	onDeleteScript?: (scriptId: string) => void,
 ) {
@@ -74,7 +75,7 @@ export function useStagedScriptsState(
 
 	function openCarousel(script: StagedScript, startIndex: number) {
 		const name = localNames[script.id] ?? script.proposed_name ?? ""
-		openPageCarousel(script, startIndex, name)
+		openPageCarousel(batchId, script, startIndex, name)
 	}
 
 	// ── Page-key persistence ─────────────────────────────────────────────────
@@ -87,8 +88,11 @@ export function useStagedScriptsState(
 		script: StagedScript,
 		rollbackSnapshot?: StagedScript[],
 	) {
-		const r = await updateStagedScriptPageKeys(script.id, script.page_keys)
-		if (!r.ok) {
+		const r = await updateStagedScriptPageKeys({
+			scriptId: script.id,
+			pageKeys: script.page_keys,
+		})
+		if (r?.serverError) {
 			if (rollbackSnapshot) setLocalScripts(rollbackSnapshot)
 			toast.error("Failed to save page layout — changes reverted")
 			return
@@ -110,8 +114,8 @@ export function useStagedScriptsState(
 			snapshot: StagedScript[]
 			snapshotNames: Record<string, string>
 		}) => {
-			const r = await deleteStagedScript(scriptId)
-			if (!r.ok) throw new Error(r.error)
+			const r = await deleteStagedScript({ scriptId })
+			if (r?.serverError) throw new Error(r.serverError)
 		},
 		onError: (err, vars) => {
 			setLocalScripts(vars.snapshot)

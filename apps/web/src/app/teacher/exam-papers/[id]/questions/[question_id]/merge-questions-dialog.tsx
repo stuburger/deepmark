@@ -131,14 +131,23 @@ export function MergeQuestionsDialog({
 			}
 		}
 
-		const result = await consolidateQuestions(keepId, discardId, {
+		const result = await consolidateQuestions({
+			keepQuestionId: keepId,
+			discardQuestionId: discardId,
 			discardMarkSchemeId,
 		})
 
 		setMerging(false)
 
-		if (!result.ok) {
-			setError(result.error)
+		if (result?.serverError) {
+			setError(result.serverError)
+			return
+		}
+		if (result?.validationErrors) {
+			const ve = result.validationErrors
+			const fieldErrorList = Object.values(ve.fieldErrors).flat()
+			const issue = ve.formErrors[0] ?? fieldErrorList[0]
+			setError(issue ?? "Invalid input")
 			return
 		}
 

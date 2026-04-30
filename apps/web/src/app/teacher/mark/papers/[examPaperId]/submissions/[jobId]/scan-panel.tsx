@@ -37,6 +37,7 @@ import { AnnotatedScanColumn } from "./results/annotated-scan-column"
 import type { ScanViewSettings, ScanViewToggle } from "./use-scan-view-settings"
 
 export function ScanPanel({
+	submissionId,
 	scanPages,
 	pageTokens,
 	gradingResults,
@@ -49,6 +50,7 @@ export function ScanPanel({
 	hasAnnotations = false,
 	highlightedTokenIds,
 }: {
+	submissionId: string
 	scanPages: ScanPage[]
 	pageTokens: PageToken[]
 	gradingResults: StudentPaperJobPayload["grading_results"]
@@ -269,6 +271,7 @@ export function ScanPanel({
 				{/* ── Scan content ──────────────────────────────────────────────── */}
 				<ScrollArea className="flex-1 min-h-0 bg-muted/20">
 					<AnnotatedScanColumn
+						submissionId={submissionId}
 						pages={scanPages}
 						pageTokens={pageTokens}
 						showHighlights={showOcr}

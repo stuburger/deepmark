@@ -1,5 +1,6 @@
 "use client"
 
+import { ShareDialog } from "@/components/sharing/share-dialog"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -12,7 +13,7 @@ import {
 	TableRow,
 } from "@/components/ui/table"
 import type { SubmissionHistoryItem } from "@/lib/marking/types"
-import { Loader2, Trash2 } from "lucide-react"
+import { Loader2, Share2, Trash2 } from "lucide-react"
 import {
 	TERMINAL_STATUSES,
 	formatDate,
@@ -128,13 +129,29 @@ export function SubmissionTable({
 									</TableCell>
 									<TableCell>
 										<div className="flex items-center justify-end gap-2">
-											<button
+											<Button
 												type="button"
+												size="sm"
+												variant="ghost"
 												onClick={() => onView(sub.id)}
-												className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+												className="h-7 px-2 text-xs"
 											>
 												View
-											</button>
+											</Button>
+											<ShareDialog
+												submissionIds={[sub.id]}
+												trigger={
+													<Button
+														type="button"
+														size="sm"
+														variant="ghost"
+														className="h-7 px-2 text-xs gap-1"
+													>
+														<Share2 className="h-3.5 w-3.5" />
+														Share
+													</Button>
+												}
+											/>
 											<Button
 												size="sm"
 												variant="ghost"

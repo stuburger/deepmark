@@ -44,8 +44,8 @@ export function VersionSwitcher({
 	const { data: versions } = useQuery({
 		queryKey: queryKeys.jobVersions(jobId),
 		queryFn: async () => {
-			const r = await getSubmissionVersions(jobId)
-			return r.ok ? r.versions : []
+			const r = await getSubmissionVersions({ jobId })
+			return r?.data?.versions ?? []
 		},
 		staleTime: 30_000,
 	})

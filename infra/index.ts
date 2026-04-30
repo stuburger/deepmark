@@ -1,5 +1,6 @@
 import "./storage"
 import "./queues"
+export { collabAuthz } from "./authz"
 export { interactions } from "./api"
 export { router } from "./router"
 export { collabServer } from "./collab"

@@ -1,7 +1,7 @@
 "use client"
 
 import type { StagedScript } from "@/lib/batch/types"
-import { scanProxyUrl } from "@/lib/scan-url"
+import { stagedScriptScanPageUrl } from "@/lib/scan-url"
 import { useState } from "react"
 import type { PageItem } from "../page-carousel"
 
@@ -19,6 +19,7 @@ export function usePageCarousel() {
 	const [carousel, setCarousel] = useState<CarouselState | null>(null)
 
 	function openCarousel(
+		batchId: string,
 		script: StagedScript,
 		startIndex: number,
 		name: string,
@@ -27,7 +28,7 @@ export function usePageCarousel() {
 
 		const pages: PageItem[] = pageKeys.map((pk) => ({
 			key: pk.s3_key,
-			url: scanProxyUrl(pk.s3_key),
+			url: stagedScriptScanPageUrl(batchId, script.id, pk.order),
 			order: pk.order,
 			mimeType: pk.mime_type,
 			sourceFile: pk.source_file,

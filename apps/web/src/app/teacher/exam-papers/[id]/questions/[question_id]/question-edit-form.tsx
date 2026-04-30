@@ -88,7 +88,7 @@ export function QuestionEditForm({
 			{
 				onSuccess: (data) => {
 					setSaved(true)
-					setEmbeddingUpdated(data.embeddingUpdated)
+					setEmbeddingUpdated(data?.embeddingUpdated ?? false)
 					// Standalone page (no paperId/cache): fall back to router refresh
 					if (!paperId) router.refresh()
 					onSaved?.()

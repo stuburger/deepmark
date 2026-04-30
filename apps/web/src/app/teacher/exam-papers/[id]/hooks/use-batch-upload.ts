@@ -39,20 +39,21 @@ export function useBatchUpload({
 	function startPolling(jobId: string) {
 		stopPolling()
 		pollRef.current = setInterval(async () => {
-			const result = await getBatchIngestJob(jobId)
-			if (!result.ok) return
+			const result = await getBatchIngestJob({ batchJobId: jobId })
+			const batch = result?.data?.batch
+			if (!batch) return
 
 			// Classification done — close dialog and hand off to StagingReviewDialog
 			if (
-				result.batch.status === "staging" ||
-				result.batch.status === "marking" ||
-				result.batch.status === "complete"
+				batch.status === "staging" ||
+				batch.status === "marking" ||
+				batch.status === "complete"
 			) {
 				stopPolling()
 				handleOpenChange(false)
-			} else if (result.batch.status === "failed") {
+			} else if (batch.status === "failed") {
 				stopPolling()
-				toast.error(result.batch.error ?? "Classification failed")
+				toast.error(batch.error ?? "Classification failed")
 			}
 		}, 3000)
 	}
@@ -85,10 +86,11 @@ export function useBatchUpload({
 
 	async function ensureBatchJob(): Promise<string> {
 		if (batchJobId) return batchJobId
-		const result = await createBatchIngestJob(examPaperId)
-		if (!result.ok) throw new Error(result.error)
-		setBatchJobId(result.batchJobId)
-		return result.batchJobId
+		const result = await createBatchIngestJob({ examPaperId })
+		if (result?.serverError) throw new Error(result.serverError)
+		if (!result?.data) throw new Error("Failed to create batch")
+		setBatchJobId(result.data.batchJobId)
+		return result.data.batchJobId
 	}
 
 	async function handleFiles(fileList: FileList | null) {
@@ -143,13 +145,14 @@ export function useBatchUpload({
 
 		for (const file of valid) {
 			try {
-				const result = await addFileToBatch(
-					jid,
-					file.name,
-					file.type || "application/octet-stream",
-				)
-				if (!result.ok) throw new Error(result.error)
-				const putRes = await fetch(result.uploadUrl, {
+				const result = await addFileToBatch({
+					batchJobId: jid,
+					filename: file.name,
+					mimeType: file.type || "application/octet-stream",
+				})
+				if (result?.serverError) throw new Error(result.serverError)
+				if (!result?.data) throw new Error("Upload failed")
+				const putRes = await fetch(result.data.uploadUrl, {
 					method: "PUT",
 					body: file,
 					headers: { "Content-Type": file.type || "application/octet-stream" },
@@ -176,9 +179,9 @@ export function useBatchUpload({
 	async function handleStartClassifying() {
 		if (!batchJobId) return
 		setPhase("classifying")
-		const result = await triggerClassification(batchJobId)
-		if (!result.ok) {
-			toast.error(result.error)
+		const result = await triggerClassification({ batchJobId })
+		if (result?.serverError) {
+			toast.error(result.serverError)
 			setPhase("upload")
 			return
 		}

@@ -1,11 +1,12 @@
 import { createClient } from "@openauthjs/openauth/client"
 import { createSubjects } from "@openauthjs/openauth/subject"
 import { cookies as getCookies } from "next/headers"
-import { object, string } from "valibot"
+import { nullable, object, string } from "valibot"
 
 const subjects = createSubjects({
 	user: object({
 		userId: string(),
+		email: nullable(string()),
 	}),
 })
 
@@ -22,6 +23,7 @@ export function getClient() {
 
 export type SessionUser = {
 	userId: string
+	email: string | null
 }
 
 export async function setTokens(access: string, refresh: string) {
@@ -72,5 +74,8 @@ export async function auth(): Promise<SessionUser | null> {
 		await setTokens(verified.tokens.access, verified.tokens.refresh)
 	}
 
-	return { userId: verified.subject.properties.userId }
+	return {
+		userId: verified.subject.properties.userId,
+		email: verified.subject.properties.email,
+	}
 }

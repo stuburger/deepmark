@@ -4,13 +4,14 @@ import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import type { StagedScript } from "@/lib/batch/types"
-import { scanProxyUrl } from "@/lib/scan-url"
+import { stagedScriptScanPageUrl } from "@/lib/scan-url"
 import { useDroppable } from "@dnd-kit/core"
 import { SortableContext, rectSortingStrategy } from "@dnd-kit/sortable"
 import { ChevronDown, ChevronUp, Trash2 } from "lucide-react"
 import { ListViewPageItem } from "./list-view-page-item"
 
 type ListViewScriptSectionProps = {
+	batchId: string
 	script: StagedScript
 	localName: string
 	selectedPageKeys: Set<string>
@@ -26,6 +27,7 @@ type ListViewScriptSectionProps = {
 }
 
 export function ListViewScriptSection({
+	batchId,
 	script,
 	localName,
 	selectedPageKeys,
@@ -136,7 +138,7 @@ export function ListViewScriptSection({
 									<ListViewPageItem
 										key={pk.s3_key}
 										pageKey={pk.s3_key}
-										url={scanProxyUrl(pk.s3_key)}
+										url={stagedScriptScanPageUrl(batchId, script.id, pk.order)}
 										index={idx}
 										isSelected={selectedPageKeys.has(pk.s3_key)}
 										onLightbox={() => onOpenCarousel(script, idx)}

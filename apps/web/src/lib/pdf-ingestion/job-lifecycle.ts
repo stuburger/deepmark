@@ -1,34 +1,32 @@
 "use server"
 
+import { resourceAction } from "@/lib/authz"
 import { db } from "@/lib/db"
-import { auth } from "../auth"
+import { z } from "zod"
 
-// ─── getPdfIngestionJobStatus ───────────────────────────────────────────────
-
-export type GetPdfIngestionJobStatusResult =
-	| {
-			ok: true
-			status: string
-			error: string | null
-			detected_exam_paper_metadata: unknown
-			auto_create_exam_paper: boolean
-	  }
-	| { ok: false; error: string }
-
-export async function getPdfIngestionJobStatus(
-	jobId: string,
-): Promise<GetPdfIngestionJobStatusResult> {
-	const session = await auth()
-	if (!session) return { ok: false, error: "Not authenticated" }
-	const job = await db.pdfIngestionJob.findFirst({
-		where: { id: jobId },
-	})
-	if (!job) return { ok: false, error: "Job not found" }
-	return {
-		ok: true,
-		status: job.status,
-		error: job.error,
-		detected_exam_paper_metadata: job.detected_exam_paper_metadata,
-		auto_create_exam_paper: job.auto_create_exam_paper,
-	}
-}
+export const getPdfIngestionJobStatus = resourceAction({
+	type: "pdfIngestionJob",
+	role: "viewer",
+	schema: z.object({ jobId: z.string() }),
+	id: ({ jobId }) => jobId,
+}).action(
+	async ({
+		parsedInput: { jobId },
+	}): Promise<{
+		status: string
+		error: string | null
+		detected_exam_paper_metadata: unknown
+		auto_create_exam_paper: boolean
+	} | null> => {
+		const job = await db.pdfIngestionJob.findFirst({
+			where: { id: jobId },
+		})
+		if (!job) return null
+		return {
+			status: job.status,
+			error: job.error,
+			detected_exam_paper_metadata: job.detected_exam_paper_metadata,
+			auto_create_exam_paper: job.auto_create_exam_paper,
+		}
+	},
+)

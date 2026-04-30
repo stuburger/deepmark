@@ -53,12 +53,16 @@ export default defineConfig({
 				test: {
 					name: "web:unit",
 					root: webRoot,
-					include: ["src/**/__tests__/**/*.test.ts"],
+					include: [
+						"src/**/__tests__/**/*.test.ts",
+						"scripts/**/__tests__/**/*.test.ts",
+					],
 					testTimeout: 10_000,
 					hookTimeout: 5_000,
 				},
 			},
 			{
+				plugins: [webTsconfigPaths],
 				test: {
 					name: "web:integration",
 					root: path.resolve(__dirname, "apps/web"),

@@ -1,5 +1,6 @@
 "use server"
 
+import { resourceAction } from "@/lib/authz"
 import { db } from "@/lib/db"
 import {
 	DeterministicMarker,
@@ -11,11 +12,7 @@ import {
 	parseMarkPointsFromPrisma,
 } from "@mcp-gcse/shared"
 import { z } from "zod/v4"
-import { auth } from "../auth"
-import { log } from "../logger"
 import type { MarkSchemeInput } from "../mark-scheme/types"
-
-const TAG = "eval-actions"
 
 const markSchemeInputSchema = z.discriminatedUnion("marking_method", [
 	z.object({
@@ -74,38 +71,28 @@ export type EvalResult = {
 	awarded_points: EvalMarkPoint[]
 }
 
-export type EvaluateStudentAnswerResult =
-	| { ok: true; result: EvalResult }
-	| { ok: false; error: string }
+const evaluateInput = z.object({
+	questionId: z.string(),
+	studentAnswer: z.string().trim().min(1, "Student answer cannot be empty"),
+	markSchemeDraft: markSchemeInputSchema.nullable().optional(),
+})
 
 /**
- * Grades a student answer against the mark scheme using the shared MarkerOrchestrator.
- *
- * Marker priority:
- *   1. DeterministicMarker — MCQ questions, no LLM call.
- *   2. LevelOfResponseMarker — LoR questions, uses AQA-style level descriptors.
- *   3. LlmMarker — written/point_based fallback.
- *
- * Nothing is persisted — this is purely for in-browser testing.
+ * Grades a student answer against the mark scheme using the shared
+ * MarkerOrchestrator. Nothing is persisted — purely for in-browser testing.
  */
-export async function evaluateStudentAnswer(
-	questionId: string,
-	studentAnswer: string,
-	markSchemeDraft?: MarkSchemeInput | null,
-): Promise<EvaluateStudentAnswerResult> {
-	const session = await auth()
-	if (!session) return { ok: false, error: "Not authenticated" }
+export const evaluateStudentAnswer = resourceAction({
+	type: "question",
+	role: "viewer",
+	schema: evaluateInput,
+	id: ({ questionId }) => questionId,
+}).action(
+	async ({
+		parsedInput: { questionId, studentAnswer, markSchemeDraft },
+		ctx,
+	}): Promise<{ result: EvalResult }> => {
+		ctx.log.info("evaluateStudentAnswer called", { questionId })
 
-	if (!studentAnswer.trim()) {
-		return { ok: false, error: "Student answer cannot be empty" }
-	}
-
-	log.info(TAG, "evaluateStudentAnswer called", {
-		userId: session.userId,
-		questionId,
-	})
-
-	try {
 		const question = await db.question.findUnique({
 			where: { id: questionId },
 			select: {
@@ -130,21 +117,21 @@ export async function evaluateStudentAnswer(
 			},
 		})
 
-		if (!question) return { ok: false, error: "Question not found" }
+		if (!question) throw new Error("Question not found")
 
 		const markScheme = question.mark_schemes[0]
 		if (!markScheme && !markSchemeDraft) {
-			return { ok: false, error: "No mark scheme available for this question" }
+			throw new Error("No mark scheme available for this question")
 		}
 
-		const selectedMarkScheme = markSchemeDraft
-			? parseDraftMarkScheme(markSchemeDraft)
+		const selectedMarkScheme: EvaluationMarkScheme | null = markSchemeDraft
+			? toEvaluationFromDraft(markSchemeDraft as ParsedMarkSchemeInput)
 			: markScheme
-				? toEvaluationMarkScheme(markScheme)
+				? toEvaluationFromDb(markScheme)
 				: null
 
 		if (!selectedMarkScheme) {
-			return { ok: false, error: getDraftMarkSchemeError(markSchemeDraft) }
+			throw new Error("No mark scheme available for this question")
 		}
 
 		const markPoints = parseMarkPointsFromPrisma(selectedMarkScheme.mark_points)
@@ -207,32 +194,20 @@ export async function evaluateStudentAnswer(
 			}),
 		}
 
-		log.info(TAG, "Evaluation complete", {
-			userId: session.userId,
+		ctx.log.info("Evaluation complete", {
 			questionId,
 			score: evalResult.score,
 			max_score: evalResult.max_score,
 			marking_method: selectedMarkScheme.marking_method,
 		})
 
-		return { ok: true, result: evalResult }
-	} catch (err) {
-		log.error(TAG, "evaluateStudentAnswer failed", {
-			userId: session.userId,
-			questionId,
-			error: String(err),
-		})
-		return { ok: false, error: "Evaluation failed. Please try again." }
-	}
-}
+		return { result: evalResult }
+	},
+)
 
-function parseDraftMarkScheme(
-	input: MarkSchemeInput,
-): EvaluationMarkScheme | null {
-	const parsed = markSchemeInputSchema.safeParse(input)
-	if (!parsed.success) return null
-	const draft: ParsedMarkSchemeInput = parsed.data
-
+function toEvaluationFromDraft(
+	draft: ParsedMarkSchemeInput,
+): EvaluationMarkScheme {
 	if (draft.marking_method === "deterministic") {
 		return {
 			description: draft.description,
@@ -273,14 +248,7 @@ function parseDraftMarkScheme(
 	}
 }
 
-function getDraftMarkSchemeError(input: MarkSchemeInput | null | undefined) {
-	if (!input) return "No mark scheme available for this question"
-	const parsed = markSchemeInputSchema.safeParse(input)
-	if (parsed.success) return "No mark scheme available for this question"
-	return parsed.error.issues[0]?.message ?? "Mark scheme draft is invalid"
-}
-
-function toEvaluationMarkScheme(markScheme: {
+function toEvaluationFromDb(markScheme: {
 	description: string
 	guidance: string | null
 	points_total: number

@@ -16,6 +16,11 @@ import Image from "next/image"
 import Link from "next/link"
 import { redirect } from "next/navigation"
 
+async function logoutFormAction() {
+	"use server"
+	await logout()
+}
+
 export default async function TeacherLayout({
 	children,
 }: {
@@ -54,7 +59,7 @@ export default async function TeacherLayout({
 					>
 						Switch to admin
 					</Link>
-					<form action={logout}>
+					<form action={logoutFormAction}>
 						<Button
 							type="submit"
 							variant="ghost"

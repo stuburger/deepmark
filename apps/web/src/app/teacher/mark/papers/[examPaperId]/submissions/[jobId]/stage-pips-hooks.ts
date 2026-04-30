@@ -26,9 +26,9 @@ export function useStageData(jobId: string): JobStages | null {
 	const { data } = useQuery<JobStages | null>({
 		queryKey: queryKeys.jobStages(jobId),
 		queryFn: async () => {
-			const r = await getJobStages(jobId)
-			if (!r.ok) throw new Error(r.error)
-			return r.stages
+			const r = await getJobStages({ jobId })
+			if (r?.serverError) throw new Error(r.serverError)
+			return r?.data?.stages ?? null
 		},
 		staleTime: Number.POSITIVE_INFINITY,
 		refetchInterval: (query) => {
@@ -62,19 +62,19 @@ export function useStageMutations(
 	gradingMutation: StageRetriggerMutation
 } {
 	const ocrMutation = useMutation({
-		mutationFn: () => retriggerOcr(jobId),
+		mutationFn: () => retriggerOcr({ jobId }),
 		onSuccess: (r) => {
-			if (!r.ok) return toast.error(r.error)
-			onNavigate(r.newJobId)
+			if (r?.serverError) return toast.error(r.serverError)
+			if (r?.data) onNavigate(r.data.newJobId)
 		},
 		onError: () => toast.error("Failed to re-scan"),
 	})
 
 	const gradingMutation = useMutation({
-		mutationFn: () => retriggerGrading(jobId),
+		mutationFn: () => retriggerGrading({ jobId }),
 		onSuccess: (r) => {
-			if (!r.ok) return toast.error(r.error)
-			onNavigate(r.newJobId)
+			if (r?.serverError) return toast.error(r.serverError)
+			if (r?.data) onNavigate(r.data.newJobId)
 		},
 		onError: () => toast.error("Failed to re-grade"),
 	})

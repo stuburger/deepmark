@@ -1,7 +1,8 @@
 "use server"
 
+import { resourceAction } from "@/lib/authz"
 import { db } from "@/lib/db"
-import { auth } from "../../auth"
+import { z } from "zod"
 import { deriveScanStatus } from "../../marking/status"
 import { type BatchIngestJobData, parsePageKeys } from "../types"
 
@@ -50,47 +51,44 @@ function mapSubmission(s: SubRow): BatchIngestJobData["student_jobs"][number] {
 	}
 }
 
-// ─── getBatchIngestJob ──────────────────────────────────────────────────────
-
-export type GetBatchIngestJobResult =
-	| { ok: true; batch: BatchIngestJobData }
-	| { ok: false; error: string }
-
-export async function getBatchIngestJob(
-	batchJobId: string,
-): Promise<GetBatchIngestJobResult> {
-	const session = await auth()
-	if (!session) return { ok: false, error: "Not authenticated" }
-
-	const batch = await db.batchIngestJob.findFirst({
-		where: { id: batchJobId },
-		include: {
-			staged_scripts: {
-				orderBy: { created_at: "asc" },
+export const getBatchIngestJob = resourceAction({
+	type: "batch",
+	role: "viewer",
+	schema: z.object({ batchJobId: z.string() }),
+	id: ({ batchJobId }) => batchJobId,
+}).action(
+	async ({
+		parsedInput: { batchJobId },
+	}): Promise<{ batch: BatchIngestJobData | null }> => {
+		const batch = await db.batchIngestJob.findFirst({
+			where: { id: batchJobId },
+			include: {
+				staged_scripts: {
+					orderBy: { created_at: "asc" },
+				},
+				...submissionInclude,
 			},
-			...submissionInclude,
-		},
-	})
+		})
 
-	if (!batch) return { ok: false, error: "Batch job not found" }
+		if (!batch) return { batch: null }
 
-	return {
-		ok: true,
-		batch: {
-			id: batch.id,
-			status: batch.status,
-			total_student_jobs: batch.total_student_jobs,
-			notification_sent_at: batch.notification_sent_at,
-			error: batch.error,
-			staged_scripts: batch.staged_scripts.map((s) => ({
-				id: s.id,
-				page_keys: parsePageKeys(s.page_keys),
-				proposed_name: s.proposed_name,
-				confirmed_name: s.confirmed_name,
-				confidence: s.confidence,
-				status: s.status,
-			})),
-			student_jobs: batch.student_submissions.map(mapSubmission),
-		},
-	}
-}
+		return {
+			batch: {
+				id: batch.id,
+				status: batch.status,
+				total_student_jobs: batch.total_student_jobs,
+				notification_sent_at: batch.notification_sent_at,
+				error: batch.error,
+				staged_scripts: batch.staged_scripts.map((s) => ({
+					id: s.id,
+					page_keys: parsePageKeys(s.page_keys),
+					proposed_name: s.proposed_name,
+					confirmed_name: s.confirmed_name,
+					confidence: s.confidence,
+					status: s.status,
+				})),
+				student_jobs: batch.student_submissions.map(mapSubmission),
+			},
+		}
+	},
+)

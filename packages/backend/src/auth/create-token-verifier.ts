@@ -10,6 +10,7 @@ export const AuthInfoSchema = z.object({
 	expiresAt: z.number().optional(),
 	extra: z.object({
 		userId: z.string(),
+		email: z.string().nullable(),
 	}),
 })
 
@@ -18,7 +19,9 @@ export const createTokenVerifier = () => {
 	return {
 		verifyAccessToken: async (
 			token: string,
-		): Promise<AuthInfo & { extra: { userId: string } }> => {
+		): Promise<
+			AuthInfo & { extra: { userId: string; email: string | null } }
+		> => {
 			const introspectEndpoint = `${Resource.AuthUrl.url}/introspect`
 
 			try {
@@ -52,7 +55,7 @@ export const createTokenVerifier = () => {
 					scopes: data.scope ? data.scope.split(" ") : [],
 					expiresAt: data.exp,
 					// resource: todo
-					extra: { userId: data.sub },
+					extra: { userId: data.sub, email: data.email ?? null },
 				})
 			} catch (error) {
 				if (error instanceof AuthError) {

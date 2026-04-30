@@ -138,6 +138,7 @@ function QuestionRow({ q }: { q: QuestionListItem }) {
 
 export default async function QuestionsPage() {
 	const result = await listQuestions()
+	const questions = result?.data?.questions
 
 	return (
 		<div className="space-y-6">
@@ -152,9 +153,9 @@ export default async function QuestionsPage() {
 				<CardHeader>
 					<CardTitle>
 						All questions
-						{result.ok && (
+						{questions && (
 							<span className="ml-2 text-base font-normal text-muted-foreground">
-								({result.questions.length})
+								({questions.length})
 							</span>
 						)}
 					</CardTitle>
@@ -164,9 +165,9 @@ export default async function QuestionsPage() {
 					</CardDescription>
 				</CardHeader>
 				<CardContent>
-					{!result.ok ? (
-						<p className="text-sm text-destructive">{result.error}</p>
-					) : result.questions.length === 0 ? (
+					{result?.serverError ? (
+						<p className="text-sm text-destructive">{result.serverError}</p>
+					) : !questions || questions.length === 0 ? (
 						<p className="text-sm text-muted-foreground py-8 text-center">
 							No questions yet.
 						</p>
@@ -186,7 +187,7 @@ export default async function QuestionsPage() {
 								</TableRow>
 							</TableHeader>
 							<TableBody>
-								{result.questions.map((q) => (
+								{questions.map((q) => (
 									<QuestionRow key={q.id} q={q} />
 								))}
 							</TableBody>

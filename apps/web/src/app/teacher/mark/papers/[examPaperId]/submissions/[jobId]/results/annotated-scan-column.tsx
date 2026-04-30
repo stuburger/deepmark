@@ -10,7 +10,7 @@ import type {
 	ScanPage,
 	StudentPaperAnnotation,
 } from "@/lib/marking/types"
-import { scanProxyUrl } from "@/lib/scan-url"
+import { submissionScanPageUrl } from "@/lib/scan-url"
 import { useEffect, useRef } from "react"
 
 /**
@@ -88,6 +88,7 @@ function annotationsForPage(
  * showRegions: toggles grading answer-region overlays (score badges on scan)
  */
 export function AnnotatedScanColumn({
+	submissionId,
 	pages,
 	pageTokens = [],
 	showHighlights,
@@ -101,6 +102,7 @@ export function AnnotatedScanColumn({
 	highlightedTokenIds,
 	showZoomControls = false,
 }: {
+	submissionId: string
 	pages: ScanPage[]
 	/** Cloud Vision word-level tokens for all pages — filtered per page internally. */
 	pageTokens?: PageToken[]
@@ -158,7 +160,7 @@ export function AnnotatedScanColumn({
 		<div ref={containerRef} className="flex flex-col gap-2 px-3 py-2">
 			{pages.map((page, i) => {
 				const isPdf = page.mimeType === "application/pdf"
-				const pageUrl = scanProxyUrl(page.key)
+				const pageUrl = submissionScanPageUrl(submissionId, page.order)
 				const label =
 					pages.length > 1 ? `Page ${i + 1} of ${pages.length}` : null
 				const gradingAnns = annotationsForPage(gradingResults, page.order)

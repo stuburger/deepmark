@@ -8,10 +8,9 @@ export default async function ExamPaperUploadPage({
 	params: Promise<{ id: string }>
 }) {
 	const { id } = await params
-	const result = await getExamPaperDetail(id)
-	if (!result.ok) notFound()
-
-	const { paper } = result
+	const result = await getExamPaperDetail({ id })
+	const paper = result?.data?.paper
+	if (!paper) notFound()
 
 	return (
 		<LinkedPdfUploadClient

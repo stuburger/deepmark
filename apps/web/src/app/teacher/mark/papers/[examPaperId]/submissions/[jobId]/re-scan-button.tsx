@@ -14,13 +14,14 @@ export function ReScanButton({
 	onNavigateToJob: (newJobId: string) => void
 }) {
 	const { mutate, isPending } = useMutation({
-		mutationFn: () => retriggerOcr(jobId),
+		mutationFn: () => retriggerOcr({ jobId }),
 		onSuccess: (result) => {
-			if (!result.ok) {
-				toast.error(result.error)
+			if (result?.serverError) {
+				toast.error(result.serverError)
 				return
 			}
-			onNavigateToJob(result.newJobId)
+			if (!result?.data) return
+			onNavigateToJob(result.data.newJobId)
 		},
 		onError: () => toast.error("Failed to re-scan"),
 	})

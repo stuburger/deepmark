@@ -29,6 +29,29 @@ const client_id = `${Resource.App.name}_${Resource.App.stage}`
 
 const db_map = new Map()
 
+function normaliseEmail(raw: string): string {
+	return raw.trim().toLowerCase()
+}
+
+async function attachPendingResourceGrantsForSignup(user: {
+	id: string
+	email: string | null
+}): Promise<void> {
+	if (!user.email) return
+	await db.resourceGrant.updateMany({
+		where: {
+			principal_email: normaliseEmail(user.email),
+			principal_user_id: null,
+			principal_type: "user",
+			revoked_at: null,
+		},
+		data: {
+			principal_user_id: user.id,
+			accepted_at: new Date(),
+		},
+	})
+}
+
 const app = issuer({
 	subjects,
 	storage: DynamoStorage({
@@ -69,17 +92,19 @@ const app = issuer({
 			if (!user) {
 				user = await db.user.create({
 					data: {
-						role: "admin",
+						role: "teacher",
 						avatar_url: gh_user.avatar_url,
 						github_id: gh_user.id,
-						name: "Admin User",
+						name: gh_user.login,
 						email: gh_user.email,
 					},
 				})
+				await attachPendingResourceGrantsForSignup(user)
 			}
 
 			return ctx.subject("user", {
 				userId: user.id,
+				email: user.email,
 			})
 		}
 
@@ -95,16 +120,18 @@ const app = issuer({
 			if (!user) {
 				user = await db.user.create({
 					data: {
-						role: "admin",
+						role: "teacher",
 						avatar_url: googleUser.avatar_url,
 						name: googleUser.login,
 						email: googleUser.email,
 					},
 				})
+				await attachPendingResourceGrantsForSignup(user)
 			}
 
 			return ctx.subject("user", {
 				userId: user.id,
+				email: user.email,
 			})
 		}
 
@@ -193,6 +220,7 @@ app.post("/introspect", async (c) => {
 					client_id: client_id,
 					scope: "openid profile email", // Based on your GitHub provider scopes
 					sub: tokenInfo.subject.properties?.userId,
+					email: tokenInfo.subject.properties?.email,
 					exp: tokenInfo.tokens?.expiresIn,
 					iat: Math.floor(Date.now() / 1000),
 					token_type: "access_token",

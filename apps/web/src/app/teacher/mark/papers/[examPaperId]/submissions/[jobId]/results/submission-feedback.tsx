@@ -43,9 +43,9 @@ export function SubmissionFeedbackButton({
 	const { data: feedback } = useQuery({
 		queryKey: queryKeys.submissionFeedback(submissionId),
 		queryFn: async () => {
-			const result = await getSubmissionFeedback(submissionId)
-			if (!result.ok) throw new Error(result.error)
-			return result.feedback
+			const result = await getSubmissionFeedback({ submissionId })
+			if (result?.serverError) throw new Error(result.serverError)
+			return result?.data?.feedback ?? null
 		},
 	})
 
@@ -59,7 +59,7 @@ export function SubmissionFeedbackButton({
 
 	const mutation = useMutation({
 		mutationFn: (input: UpsertSubmissionFeedbackInput) =>
-			upsertSubmissionFeedback(submissionId, input),
+			upsertSubmissionFeedback({ submissionId, input }),
 		onMutate: async (input) => {
 			await queryClient.cancelQueries({
 				queryKey: queryKeys.submissionFeedback(submissionId),
@@ -84,8 +84,8 @@ export function SubmissionFeedbackButton({
 			return { previous }
 		},
 		onSuccess: (result) => {
-			if (!result.ok) {
-				toast.error(result.error)
+			if (result?.serverError) {
+				toast.error(result.serverError)
 				return
 			}
 			setDialogOpen(false)

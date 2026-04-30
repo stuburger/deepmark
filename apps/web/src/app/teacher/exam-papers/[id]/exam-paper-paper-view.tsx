@@ -133,12 +133,12 @@ export function ExamPaperPaperView({
 			const newOrder = arrayMove(sections, oldIndex, newIndex)
 			setOptimisticSections(newOrder)
 
-			const result = await reorderSections(
-				paper.id,
-				newOrder.map((s) => s.id),
-			)
-			if (!result.ok) {
-				toast.error(result.error)
+			const result = await reorderSections({
+				examPaperId: paper.id,
+				orderedSectionIds: newOrder.map((s) => s.id),
+			})
+			if (result?.serverError) {
+				toast.error(result.serverError)
 			}
 			setOptimisticSections(null)
 			void queryClient.invalidateQueries({
@@ -164,12 +164,12 @@ export function ExamPaperPaperView({
 				),
 			)
 
-			const result = await reorderQuestionsInSection(
-				section.id,
-				newQuestions.map((q) => q.id),
-			)
-			if (!result.ok) {
-				toast.error(result.error)
+			const result = await reorderQuestionsInSection({
+				sectionId: section.id,
+				orderedQuestionIds: newQuestions.map((q) => q.id),
+			})
+			if (result?.serverError) {
+				toast.error(result.serverError)
 			}
 			setOptimisticSections(null)
 			void queryClient.invalidateQueries({

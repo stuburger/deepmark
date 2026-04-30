@@ -68,9 +68,10 @@ export function useSubmissionData({
 	const { data: stages = initialStages } = useQuery<JobStages>({
 		queryKey: queryKeys.jobStages(jobId),
 		queryFn: async () => {
-			const r = await getJobStages(jobId)
-			if (!r.ok) throw new Error(r.error)
-			return r.stages
+			const r = await getJobStages({ jobId })
+			if (r?.serverError) throw new Error(r.serverError)
+			if (!r?.data?.stages) throw new Error("Job not found")
+			return r.data.stages
 		},
 		initialData: initialStages,
 		staleTime: Number.POSITIVE_INFINITY,
@@ -79,8 +80,8 @@ export function useSubmissionData({
 	const { data: scanPages } = useQuery({
 		queryKey: queryKeys.jobScanPages(jobId),
 		queryFn: async () => {
-			const r = await getJobScanPages(jobId)
-			return r.ok ? r.pages : []
+			const r = await getJobScanPages({ jobId })
+			return r?.data?.pages ?? []
 		},
 		initialData: initialScanPages,
 		staleTime: Number.POSITIVE_INFINITY,
@@ -89,8 +90,8 @@ export function useSubmissionData({
 	const { data: pageTokens } = useQuery({
 		queryKey: queryKeys.jobPageTokens(jobId),
 		queryFn: async () => {
-			const r = await getJobPageTokens(jobId)
-			return r.ok ? r.tokens : []
+			const r = await getJobPageTokens({ jobId })
+			return r?.data?.tokens ?? []
 		},
 		initialData: initialPageTokens,
 		staleTime: Number.POSITIVE_INFINITY,
@@ -105,8 +106,8 @@ export function useSubmissionData({
 	const { data: annotations = [] } = useQuery<StudentPaperAnnotation[]>({
 		queryKey: queryKeys.jobAnnotations(jobId),
 		queryFn: async () => {
-			const r = await getJobAnnotations(jobId)
-			return r.ok ? r.annotations : []
+			const r = await getJobAnnotations({ jobId })
+			return r?.data?.annotations ?? []
 		},
 		staleTime: 0,
 	})

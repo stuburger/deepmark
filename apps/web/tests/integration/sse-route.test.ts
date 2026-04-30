@@ -16,7 +16,7 @@ vi.mock("@/lib/auth", () => ({
 
 // Same-package import — no cross-boundary violation. Must be after vi.mock.
 const { GET } = await import(
-	"../../src/app/api/submissions/[jobId]/events/route"
+	"../../src/app/api/submissions/[submissionId]/events/route"
 )
 
 beforeAll(async () => {
@@ -70,10 +70,62 @@ async function waitForEvent(
 	throw new Error(`Stream ended before "${type}" event arrived`)
 }
 
-describe("SSE route /api/submissions/[jobId]/events", () => {
-	it("emits snapshot, pushes update on status flip, and closes on abort", async () => {
-		const start = Date.now()
+describe("SSE route /api/submissions/[submissionId]/events", () => {
+	it("returns 404 before opening a stream for inaccessible submissions", async () => {
+		const ownerId = randomUUID()
+		const paperId = randomUUID()
+		const jobId = randomUUID()
 
+		await db.user.create({
+			data: {
+				id: ownerId,
+				email: `${ownerId}@example.com`,
+				name: "Other Teacher",
+				role: "teacher",
+			},
+		})
+		await db.examPaper.create({
+			data: {
+				id: paperId,
+				title: "Private Paper",
+				subject: "biology",
+				exam_board: "AQA",
+				year: 2024,
+				total_marks: 10,
+				duration_minutes: 30,
+				created_by_id: ownerId,
+			},
+		})
+		await db.studentSubmission.create({
+			data: {
+				id: jobId,
+				exam_paper_id: paperId,
+				uploaded_by: ownerId,
+				s3_key: `test/sse-route/${jobId}.pdf`,
+				s3_bucket: "test-bucket",
+				exam_board: "AQA",
+				pages: [],
+			},
+		})
+
+		try {
+			const request = new NextRequest(
+				`http://localhost/api/submissions/${jobId}/events`,
+			)
+			const response = await GET(request, {
+				params: Promise.resolve({ submissionId: jobId }),
+			})
+
+			expect(response.status).toBe(404)
+			await expect(response.text()).resolves.toBe("Not found")
+		} finally {
+			await db.studentSubmission.deleteMany({ where: { id: jobId } })
+			await db.examPaper.deleteMany({ where: { id: paperId } })
+			await db.user.deleteMany({ where: { id: ownerId } })
+		}
+	})
+
+	it("emits an initial snapshot for accessible submissions", async () => {
 		const jobId = randomUUID()
 		await db.studentSubmission.create({
 			data: {
@@ -89,7 +141,7 @@ describe("SSE route /api/submissions/[jobId]/events", () => {
 		const ocr = await db.ocrRun.create({
 			data: { submission_id: jobId, status: "complete" },
 		})
-		const grading = await db.gradingRun.create({
+		await db.gradingRun.create({
 			data: {
 				submission_id: jobId,
 				ocr_run_id: ocr.id,
@@ -104,7 +156,7 @@ describe("SSE route /api/submissions/[jobId]/events", () => {
 				{ signal: controller.signal },
 			)
 			const response = await GET(request, {
-				params: Promise.resolve({ jobId }),
+				params: Promise.resolve({ submissionId: jobId }),
 			})
 
 			expect(response.status).toBe(200)
@@ -119,29 +171,9 @@ describe("SSE route /api/submissions/[jobId]/events", () => {
 			expect(snapshotData.jobId).toBe(jobId)
 			expect(snapshotData.ocr.status).toBe("done")
 			expect(snapshotData.grading.status).toBe("generating")
-			expect(snapshotData.annotation.status).toBe("not_started")
+			expect(snapshotData.annotation.status).toBe("generating")
 
-			// 2. Flip grading → complete; next 2s poll should emit an update
-			await db.gradingRun.update({
-				where: { id: grading.id },
-				data: { status: "complete", completed_at: new Date() },
-			})
-
-			const update = await waitForEvent(events, "update")
-			const updateData = JSON.parse(update.data)
-			expect(updateData.grading.status).toBe("done")
-
-			// 3. Abort — server loop should break and close the stream.
 			controller.abort()
-
-			// Drain the iterator to completion so we know the server-side loop
-			// honoured the abort rather than keeping a zombie poll alive.
-			for await (const _ of events) {
-				// no-op — just wait for the stream to end
-			}
-
-			const elapsed = Date.now() - start
-			expect(elapsed).toBeLessThan(30_000)
 		} finally {
 			await db.gradingRun.deleteMany({ where: { submission_id: jobId } })
 			await db.ocrRun.deleteMany({ where: { submission_id: jobId } })

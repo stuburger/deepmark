@@ -111,9 +111,16 @@ export function LorMarkSchemeEditForm({
 			)
 		} else {
 			startTransition(async () => {
-				const result = await updateMarkScheme(markSchemeId, input)
-				if (!result.ok) {
-					setSubmitError(result.error)
+				const result = await updateMarkScheme({ markSchemeId, input })
+				if (result?.serverError) {
+					setSubmitError(result.serverError)
+					return
+				}
+				if (result?.validationErrors) {
+					const ve = result.validationErrors
+					const issue =
+						ve.formErrors?.[0] ?? Object.values(ve.fieldErrors).flat()[0]
+					setSubmitError(issue ?? "Invalid input")
 					return
 				}
 				setSaved(true)

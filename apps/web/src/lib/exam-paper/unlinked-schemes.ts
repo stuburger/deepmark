@@ -1,31 +1,24 @@
 "use server"
 
+import { resourceAction, resourcesAction } from "@/lib/authz"
 import { db } from "@/lib/db"
-import { auth } from "../auth"
-import { log } from "../logger"
-
+import { z } from "zod"
 import type { UnlinkedMarkScheme } from "./types"
-
-const TAG = "exam-paper/unlinked-schemes"
-
-// ─── Query ───────────────────────────────────────────────────────────────────
-
-export type GetUnlinkedMarkSchemesResult =
-	| { ok: true; items: UnlinkedMarkScheme[] }
-	| { ok: false; error: string }
 
 /**
  * Returns questions in the paper whose mark scheme has link_status = "unlinked".
  * These are "ghost" questions created by the ingestion pipeline that couldn't
  * be matched to an existing question paper question.
  */
-export async function getUnlinkedMarkSchemes(
-	examPaperId: string,
-): Promise<GetUnlinkedMarkSchemesResult> {
-	const session = await auth()
-	if (!session) return { ok: false, error: "Not authenticated" }
-
-	try {
+export const getUnlinkedMarkSchemes = resourceAction({
+	type: "examPaper",
+	role: "viewer",
+	schema: z.object({ examPaperId: z.string() }),
+	id: ({ examPaperId }) => examPaperId,
+}).action(
+	async ({
+		parsedInput: { examPaperId },
+	}): Promise<{ items: UnlinkedMarkScheme[] }> => {
 		const rows = await db.examSectionQuestion.findMany({
 			where: {
 				exam_section: { exam_paper_id: examPaperId },
@@ -66,44 +59,46 @@ export async function getUnlinkedMarkSchemes(
 			}
 		}
 
-		return { ok: true, items }
-	} catch (err) {
-		log.error(TAG, "getUnlinkedMarkSchemes failed", {
-			examPaperId,
-			error: String(err),
-		})
-		return { ok: false, error: "Failed to load unlinked mark schemes" }
-	}
-}
-
-// ─── Mutation ────────────────────────────────────────────────────────────────
-
-export type LinkMarkSchemeToQuestionResult =
-	| { ok: true }
-	| { ok: false; error: string }
+		return { items }
+	},
+)
 
 /**
- * Re-parents an unlinked mark scheme onto the chosen target question,
- * then cleans up the ghost question that was holding it.
+ * Re-parents an unlinked mark scheme onto the chosen target question, then
+ * cleans up the ghost question that was holding it.
  */
-export async function linkMarkSchemeToQuestion(
-	ghostQuestionId: string,
-	targetQuestionId: string,
-): Promise<LinkMarkSchemeToQuestionResult> {
-	const session = await auth()
-	if (!session) return { ok: false, error: "Not authenticated" }
-
-	if (ghostQuestionId === targetQuestionId) {
-		return { ok: false, error: "Ghost and target question cannot be the same" }
-	}
-
-	log.info(TAG, "linkMarkSchemeToQuestion called", {
-		userId: session.userId,
-		ghostQuestionId,
-		targetQuestionId,
+const linkInput = z
+	.object({
+		ghostQuestionId: z.string(),
+		targetQuestionId: z.string(),
+	})
+	.refine((v) => v.ghostQuestionId !== v.targetQuestionId, {
+		message: "Ghost and target question cannot be the same",
+		path: ["targetQuestionId"],
 	})
 
-	try {
+export const linkMarkSchemeToQuestion = resourcesAction({
+	schema: linkInput,
+	resources: [
+		{
+			type: "question",
+			role: "editor",
+			ids: ({ ghostQuestionId, targetQuestionId }) => [
+				ghostQuestionId,
+				targetQuestionId,
+			],
+		},
+	],
+}).action(
+	async ({
+		parsedInput: { ghostQuestionId, targetQuestionId },
+		ctx,
+	}): Promise<{ ok: true }> => {
+		ctx.log.info("linkMarkSchemeToQuestion called", {
+			ghostQuestionId,
+			targetQuestionId,
+		})
+
 		await db.$transaction(async (tx) => {
 			await tx.markScheme.updateMany({
 				where: { question_id: ghostQuestionId, link_status: "unlinked" },
@@ -117,20 +112,11 @@ export async function linkMarkSchemeToQuestion(
 			await tx.question.delete({ where: { id: ghostQuestionId } })
 		})
 
-		log.info(TAG, "Mark scheme linked to question", {
-			userId: session.userId,
+		ctx.log.info("Mark scheme linked to question", {
 			ghostQuestionId,
 			targetQuestionId,
 		})
 
 		return { ok: true }
-	} catch (err) {
-		log.error(TAG, "linkMarkSchemeToQuestion failed", {
-			userId: session.userId,
-			ghostQuestionId,
-			targetQuestionId,
-			error: String(err),
-		})
-		return { ok: false, error: "Failed to link mark scheme" }
-	}
-}
+	},
+)

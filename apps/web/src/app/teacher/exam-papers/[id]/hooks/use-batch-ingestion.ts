@@ -51,8 +51,8 @@ export function useBatchIngestion(paperId: string) {
 		useQuery<ActiveBatchInfo>({
 			queryKey: queryKeys.activeBatch(paperId),
 			queryFn: async () => {
-				const r = await getActiveBatchForPaper(paperId)
-				return r.ok ? r.batch : null
+				const r = await getActiveBatchForPaper({ examPaperId: paperId })
+				return r?.data?.batch ?? null
 			},
 			refetchInterval: (q) => {
 				const b = q.state.data
@@ -80,9 +80,9 @@ export function useBatchIngestion(paperId: string) {
 
 	const commitBatchMutation = useMutation({
 		mutationFn: async (currentBatchId: string) => {
-			const r = await commitBatch(currentBatchId)
-			if (!r.ok) throw new Error(r.error)
-			return r
+			const r = await commitBatch({ batchJobId: currentBatchId })
+			if (r?.serverError) throw new Error(r.serverError)
+			return r?.data
 		},
 		onError: (err) =>
 			toast.error(
@@ -119,9 +119,9 @@ export function useBatchIngestion(paperId: string) {
 			scriptId: string
 			splitAfterIndex: number
 		}) => {
-			const r = await splitStagedScript(scriptId, splitAfterIndex)
-			if (!r.ok) throw new Error(r.error)
-			return r
+			const r = await splitStagedScript({ scriptId, splitAfterIndex })
+			if (r?.serverError) throw new Error(r.serverError)
+			return r?.data
 		},
 		onError: (err) =>
 			toast.error(
@@ -138,9 +138,9 @@ export function useBatchIngestion(paperId: string) {
 
 	const addScriptMutation = useMutation({
 		mutationFn: async (currentBatchId: string) => {
-			const r = await createEmptyStagedScript(currentBatchId)
-			if (!r.ok) throw new Error(r.error)
-			return r
+			const r = await createEmptyStagedScript({ batchJobId: currentBatchId })
+			if (r?.serverError) throw new Error(r.serverError)
+			return r?.data
 		},
 		onError: (err) =>
 			toast.error(err instanceof Error ? err.message : "Failed to add script"),
@@ -166,8 +166,11 @@ export function useBatchIngestion(paperId: string) {
 			scriptId: string
 			name: string
 		}) => {
-			const r = await updateStagedScript(scriptId, { confirmedName: name })
-			if (!r.ok) throw new Error(r.error)
+			const r = await updateStagedScript({
+				scriptId,
+				updates: { confirmedName: name },
+			})
+			if (r?.serverError) throw new Error(r.serverError)
 		},
 		onError: (err) =>
 			toast.error(err instanceof Error ? err.message : "Failed to update name"),
@@ -199,8 +202,11 @@ export function useBatchIngestion(paperId: string) {
 				currentStatus === "confirmed"
 					? ("excluded" as const)
 					: ("confirmed" as const)
-			const r = await updateStagedScript(scriptId, { status: newStatus })
-			if (!r.ok) throw new Error(r.error)
+			const r = await updateStagedScript({
+				scriptId,
+				updates: { status: newStatus },
+			})
+			if (r?.serverError) throw new Error(r.serverError)
 		},
 		onMutate: async ({ scriptId, currentStatus }) => {
 			const queryKey = queryKeys.activeBatch(paperId)
@@ -259,8 +265,11 @@ export function useBatchIngestion(paperId: string) {
 			batchId: string
 			targetStatus: "confirmed" | "excluded"
 		}) => {
-			const r = await bulkUpdateStagedScriptStatus(batchId, targetStatus)
-			if (!r.ok) throw new Error(r.error)
+			const r = await bulkUpdateStagedScriptStatus({
+				batchId,
+				status: targetStatus,
+			})
+			if (r?.serverError) throw new Error(r.serverError)
 		},
 		onMutate: async ({ targetStatus }) => {
 			const queryKey = queryKeys.activeBatch(paperId)

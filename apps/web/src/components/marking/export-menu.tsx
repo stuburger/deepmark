@@ -70,33 +70,36 @@ export function ExportMenu({
 		mutationFn: async (scope: Scope) => {
 			const ids = effectiveIds(submissions, scope, selectedIds)
 			if (ids.length === 0) {
-				return {
-					ok: false as const,
-					error:
-						scope === "selected"
-							? "No marked submissions selected"
-							: "No marked submissions to export",
-				}
+				const error =
+					scope === "selected"
+						? "No marked submissions selected"
+						: "No marked submissions to export"
+				return { serverError: error, data: undefined } as const
 			}
-			return exportSubmissionsForPaper(
-				paperId,
-				scope === "selected" ? ids : undefined,
-			)
+			return exportSubmissionsForPaper({
+				examPaperId: paperId,
+				submissionIds: scope === "selected" ? ids : undefined,
+			})
 		},
 		onSuccess: (result) => {
-			if (!result.ok) {
-				toast.error(result.error)
+			if (result?.serverError) {
+				toast.error(result.serverError)
 				return
 			}
-			if (result.data.rows.length === 0) {
+			const data = result?.data?.data
+			if (!data) {
+				toast.error("Failed to export submissions")
+				return
+			}
+			if (data.rows.length === 0) {
 				toast.error("No marked submissions to export")
 				return
 			}
-			const csv = buildCsv(result.data)
+			const csv = buildCsv(data)
 			const date = new Date().toISOString().slice(0, 10)
-			const filename = `submissions-${slugify(result.data.paper_title)}-${date}.csv`
+			const filename = `submissions-${slugify(data.paper_title)}-${date}.csv`
 			triggerBlobDownload(csv, filename)
-			toast.success(`Exported ${result.data.rows.length} submissions`)
+			toast.success(`Exported ${data.rows.length} submissions`)
 		},
 		onError: () => toast.error("Failed to export submissions"),
 	})
@@ -113,9 +116,10 @@ export function ExportMenu({
 			const ids = effectiveIds(submissions, scope, selectedIds)
 			if (ids.length === 0) {
 				return {
-					ok: false as const,
-					error: "No marked submissions to export",
-				}
+					serverError: "No marked submissions to export",
+					data: undefined,
+					validationErrors: undefined,
+				} as const
 			}
 
 			return exportClassReport({
@@ -128,21 +132,33 @@ export function ExportMenu({
 			})
 		},
 		onSuccess: (result) => {
-			if (!result.ok) {
-				toast.error(result.error)
+			if (result?.serverError) {
+				toast.error(result.serverError)
+				return
+			}
+			if (result?.validationErrors) {
+				const ve = result.validationErrors
+				const issue =
+					ve.formErrors?.[0] ?? Object.values(ve.fieldErrors).flat()[0]
+				toast.error(issue ?? "Invalid input")
+				return
+			}
+			const data = result?.data
+			if (!data) {
+				toast.error("Failed to export class report")
 				return
 			}
 			// Trigger the download via an anchor click — keeps the user on the
 			// page (window.location.href would navigate away momentarily).
 			const link = document.createElement("a")
-			link.href = result.url
-			link.download = result.filename
+			link.href = data.url
+			link.download = data.filename
 			document.body.appendChild(link)
 			link.click()
 			document.body.removeChild(link)
 			setPdfDialogOpen(false)
 			toast.success(
-				`Exported ${result.count} submission${result.count !== 1 ? "s" : ""}`,
+				`Exported ${data.count} submission${data.count !== 1 ? "s" : ""}`,
 			)
 		},
 		onError: () => toast.error("Failed to generate PDF"),

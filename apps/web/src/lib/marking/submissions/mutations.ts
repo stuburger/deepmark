@@ -1,99 +1,85 @@
 "use server"
 
+import { resourceAction } from "@/lib/authz"
 import { db } from "@/lib/db"
-import { auth } from "../../auth"
-import { log } from "../../logger"
-import type {
-	DeleteSubmissionResult,
-	LinkStudentToJobResult,
-	SubmissionFeedback,
-	SubmissionFeedbackRating,
-	UpdateExtractedAnswerResult,
-	UpdateStudentNameResult,
-	UpsertSubmissionFeedbackResult,
-} from "../types"
+import { z } from "zod"
+import type { SubmissionFeedback, SubmissionFeedbackRating } from "../types"
 import { toSubmissionFeedback } from "./feedback-mapper"
 
-const TAG = "mark-actions"
-
-export async function updateStudentName(
-	jobId: string,
-	name: string,
-): Promise<UpdateStudentNameResult> {
-	const session = await auth()
-	if (!session) return { ok: false, error: "Not authenticated" }
-
+export const updateStudentName = resourceAction({
+	type: "submission",
+	role: "editor",
+	schema: z.object({ jobId: z.string(), name: z.string() }),
+	id: ({ jobId }) => jobId,
+}).action(async ({ parsedInput: { jobId, name } }): Promise<{ ok: true }> => {
 	const sub = await db.studentSubmission.findFirst({
 		where: { id: jobId },
 		select: { id: true },
 	})
-	if (!sub) return { ok: false, error: "Job not found" }
+	if (!sub) throw new Error("Job not found")
 
 	await db.studentSubmission.update({
 		where: { id: jobId },
 		data: { student_name: name },
 	})
 	return { ok: true }
-}
+})
 
 /**
  * Associates a Student record with a submission so that graded answers
  * are subsequently written to the normalised Answer / MarkingResult tables.
  * Also syncs student_name from the Student record.
  */
-export async function linkStudentToJob(
-	jobId: string,
-	studentId: string,
-): Promise<LinkStudentToJobResult> {
-	const session = await auth()
-	if (!session) return { ok: false, error: "Not authenticated" }
+export const linkStudentToJob = resourceAction({
+	type: "submission",
+	role: "editor",
+	schema: z.object({ jobId: z.string(), studentId: z.string() }),
+	id: ({ jobId }) => jobId,
+}).action(
+	async ({ parsedInput: { jobId, studentId }, ctx }): Promise<{ ok: true }> => {
+		const [sub, student] = await Promise.all([
+			db.studentSubmission.findFirst({
+				where: { id: jobId },
+				select: { id: true },
+			}),
+			db.student.findFirst({
+				where: { id: studentId },
+			}),
+		])
+		if (!sub) throw new Error("Job not found")
+		if (!student) throw new Error("Student not found")
 
-	const [sub, student] = await Promise.all([
-		db.studentSubmission.findFirst({
+		await db.studentSubmission.update({
 			where: { id: jobId },
-			select: { id: true },
-		}),
-		db.student.findFirst({
-			where: { id: studentId },
-		}),
-	])
-	if (!sub) return { ok: false, error: "Job not found" }
-	if (!student) return { ok: false, error: "Student not found" }
+			data: { student_id: studentId, student_name: student.name },
+		})
 
-	await db.studentSubmission.update({
-		where: { id: jobId },
-		data: { student_id: studentId, student_name: student.name },
-	})
+		ctx.log.info("Student linked to job", { jobId, studentId })
+		return { ok: true }
+	},
+)
 
-	log.info(TAG, "Student linked to job", {
-		userId: session.userId,
-		jobId,
-		studentId,
-	})
-	return { ok: true }
-}
-
-export async function deleteSubmission(
-	jobId: string,
-): Promise<DeleteSubmissionResult> {
-	const session = await auth()
-	if (!session) return { ok: false, error: "Not authenticated" }
-
+export const deleteSubmission = resourceAction({
+	type: "submission",
+	role: "owner",
+	schema: z.object({ jobId: z.string() }),
+	id: ({ jobId }) => jobId,
+}).action(async ({ parsedInput: { jobId } }): Promise<{ ok: true }> => {
 	const sub = await db.studentSubmission.findUnique({
 		where: { id: jobId },
 		select: { batch_job_id: true, superseded_at: true },
 	})
 
-	if (!sub) return { ok: false, error: "Submission not found" }
+	if (!sub) throw new Error("Submission not found")
 
 	await db.$transaction(async (tx) => {
-		// Delete child runs then submission. AI annotations cascade-delete with
-		// their grading run (FK onDelete: Cascade on grading_run_id).
 		await tx.gradingRun.deleteMany({ where: { submission_id: jobId } })
 		await tx.ocrRun.deleteMany({ where: { submission_id: jobId } })
+		await tx.resourceGrant.deleteMany({
+			where: { resource_type: "student_submission", resource_id: jobId },
+		})
 		await tx.studentSubmission.delete({ where: { id: jobId } })
 
-		// Keep batch counter in sync — only count non-superseded submissions
 		if (sub.batch_job_id && sub.superseded_at === null) {
 			await tx.batchIngestJob.update({
 				where: { id: sub.batch_job_id },
@@ -105,69 +91,87 @@ export async function deleteSubmission(
 	})
 
 	return { ok: true }
-}
+})
 
 /**
  * Edits a single answer in extracted_answers_raw by question number.
  * The change is persisted so that a subsequent re-mark uses the corrected text.
  */
-export async function updateExtractedAnswer(
-	jobId: string,
-	questionNumber: string,
-	newText: string,
-): Promise<UpdateExtractedAnswerResult> {
-	const session = await auth()
-	if (!session) return { ok: false, error: "Not authenticated" }
-
-	const sub = await db.studentSubmission.findFirst({
-		where: { id: jobId },
-		include: {
-			ocr_runs: {
-				orderBy: { created_at: "desc" },
-				take: 1,
-				select: { id: true, extracted_answers_raw: true },
+export const updateExtractedAnswer = resourceAction({
+	type: "submission",
+	role: "editor",
+	schema: z.object({
+		jobId: z.string(),
+		questionNumber: z.string(),
+		newText: z.string(),
+	}),
+	id: ({ jobId }) => jobId,
+}).action(
+	async ({
+		parsedInput: { jobId, questionNumber, newText },
+	}): Promise<{ ok: true }> => {
+		const sub = await db.studentSubmission.findFirst({
+			where: { id: jobId },
+			include: {
+				ocr_runs: {
+					orderBy: { created_at: "desc" },
+					take: 1,
+					select: { id: true, extracted_answers_raw: true },
+				},
 			},
-		},
-	})
-	if (!sub) return { ok: false, error: "Job not found" }
+		})
+		if (!sub) throw new Error("Job not found")
 
-	const ocrRun = sub.ocr_runs[0]
-	if (!ocrRun?.extracted_answers_raw)
-		return { ok: false, error: "No extracted answers to edit" }
+		const ocrRun = sub.ocr_runs[0]
+		if (!ocrRun?.extracted_answers_raw) {
+			throw new Error("No extracted answers to edit")
+		}
 
-	type RawExtracted = {
-		student_name?: string | null
-		answers: Array<{ question_number: string; answer_text: string }>
-	}
-	const raw = ocrRun.extracted_answers_raw as RawExtracted
-	const updated = {
-		...raw,
-		answers: raw.answers.map((a) =>
-			a.question_number === questionNumber ? { ...a, answer_text: newText } : a,
-		),
-	}
+		type RawExtracted = {
+			student_name?: string | null
+			answers: Array<{ question_number: string; answer_text: string }>
+		}
+		const raw = ocrRun.extracted_answers_raw as RawExtracted
+		const updated = {
+			...raw,
+			answers: raw.answers.map((a) =>
+				a.question_number === questionNumber
+					? { ...a, answer_text: newText }
+					: a,
+			),
+		}
 
-	await db.ocrRun.update({
-		where: { id: ocrRun.id },
-		data: { extracted_answers_raw: updated },
-	})
+		await db.ocrRun.update({
+			where: { id: ocrRun.id },
+			data: { extracted_answers_raw: updated },
+		})
 
-	return { ok: true }
-}
-
-export async function upsertSubmissionFeedback(
-	submissionId: string,
-	input: {
-		rating: SubmissionFeedbackRating
-		categories?: SubmissionFeedback["categories"]
-		comment?: string | null
+		return { ok: true }
 	},
-): Promise<UpsertSubmissionFeedbackResult> {
-	try {
-		const session = await auth()
-		if (!session) return { ok: false, error: "Not authenticated" }
+)
 
-		// Find the latest grading run for this submission to link the feedback
+const submissionFeedbackInput = z.object({
+	submissionId: z.string(),
+	input: z.object({
+		rating: z.enum([
+			"positive",
+			"negative",
+		]) as z.ZodType<SubmissionFeedbackRating>,
+		categories: z.array(z.string()).optional(),
+		comment: z.string().nullable().optional(),
+	}),
+})
+
+export const upsertSubmissionFeedback = resourceAction({
+	type: "submission",
+	role: "viewer",
+	schema: submissionFeedbackInput,
+	id: ({ submissionId }) => submissionId,
+}).action(
+	async ({
+		parsedInput: { submissionId, input },
+		ctx,
+	}): Promise<{ feedback: SubmissionFeedback }> => {
 		const latestGradingRun = await db.gradingRun.findFirst({
 			where: { submission_id: submissionId },
 			orderBy: { created_at: "desc" },
@@ -183,7 +187,7 @@ export async function upsertSubmissionFeedback(
 			where: {
 				submission_id_created_by: {
 					submission_id: submissionId,
-					created_by: session.userId,
+					created_by: ctx.user.id,
 				},
 			},
 			create: {
@@ -194,7 +198,7 @@ export async function upsertSubmissionFeedback(
 				>[0]["data"]["categories"],
 				comment: input.comment?.trim() || null,
 				grading_run_id: latestGradingRun?.id ?? null,
-				created_by: session.userId,
+				created_by: ctx.user.id,
 			},
 			update: {
 				rating: input.rating,
@@ -206,8 +210,6 @@ export async function upsertSubmissionFeedback(
 			},
 		})
 
-		return { ok: true, feedback: toSubmissionFeedback(row) }
-	} catch {
-		return { ok: false, error: "Failed to save feedback" }
-	}
-}
+		return { feedback: toSubmissionFeedback(row) }
+	},
+)

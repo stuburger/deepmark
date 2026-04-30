@@ -9,9 +9,8 @@ export function useUnlinkedSchemes(paperId: string) {
 	return useQuery<UnlinkedMarkScheme[]>({
 		queryKey: queryKeys.unlinkedMarkSchemes(paperId),
 		queryFn: async () => {
-			const r = await getUnlinkedMarkSchemes(paperId)
-			if (!r.ok) return []
-			return r.items
+			const r = await getUnlinkedMarkSchemes({ examPaperId: paperId })
+			return r?.data?.items ?? []
 		},
 	})
 }

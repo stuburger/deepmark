@@ -9,9 +9,8 @@ export function useSimilarQuestions(paperId: string) {
 	return useQuery<SimilarPair[]>({
 		queryKey: queryKeys.similarQuestions(paperId),
 		queryFn: async () => {
-			const r = await getSimilarQuestionsForPaper(paperId)
-			if (!r.ok) return []
-			return r.pairs
+			const r = await getSimilarQuestionsForPaper({ examPaperId: paperId })
+			return r?.data?.pairs ?? []
 		},
 	})
 }

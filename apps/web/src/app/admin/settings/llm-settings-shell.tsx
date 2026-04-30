@@ -113,23 +113,25 @@ export function LlmSettingsShell({
 		queryKey: queryKeys.llmCallSites(),
 		queryFn: async () => {
 			const result = await listLlmCallSites()
-			if (!result.ok) throw new Error(result.error)
-			return result.callSites
+			if (result?.serverError) throw new Error(result.serverError)
+			return result?.data?.callSites ?? []
 		},
 		initialData: initialCallSites,
 	})
 
 	const seedMutation = useMutation({
-		mutationFn: seedLlmCallSites,
+		mutationFn: () => seedLlmCallSites(),
 		onSuccess: (result) => {
-			if (!result.ok) {
-				toast.error(result.error)
+			if (result?.serverError) {
+				toast.error(result.serverError)
 				return
 			}
+			const data = result?.data
+			if (!data) return
 			const parts = [
-				result.created > 0 && `${result.created} created`,
-				result.updated > 0 && `${result.updated} updated`,
-				result.deleted > 0 && `${result.deleted} removed`,
+				data.created > 0 && `${data.created} created`,
+				data.updated > 0 && `${data.updated} updated`,
+				data.deleted > 0 && `${data.deleted} removed`,
 			].filter(Boolean)
 			toast.success(`Synced defaults: ${parts.join(", ") || "no changes"}`)
 			queryClient.invalidateQueries({ queryKey: queryKeys.llmCallSites() })
@@ -139,7 +141,7 @@ export function LlmSettingsShell({
 
 	const updateMutation = useMutation({
 		mutationFn: ({ id, models }: { id: string; models: LlmModelEntry[] }) =>
-			updateLlmCallSiteModels(id, models),
+			updateLlmCallSiteModels({ id, models }),
 		onMutate: async ({ id, models }) => {
 			await queryClient.cancelQueries({ queryKey: queryKeys.llmCallSites() })
 			const previous = queryClient.getQueryData<LlmCallSiteRow[]>(
@@ -155,8 +157,8 @@ export function LlmSettingsShell({
 			return { previous }
 		},
 		onSuccess: (result) => {
-			if (!result.ok) {
-				toast.error(result.error)
+			if (result?.serverError) {
+				toast.error(result.serverError)
 				return
 			}
 			toast.success("Model configuration updated")
@@ -172,10 +174,10 @@ export function LlmSettingsShell({
 	})
 
 	const resetMutation = useMutation({
-		mutationFn: resetLlmCallSiteToDefault,
+		mutationFn: (id: string) => resetLlmCallSiteToDefault({ id }),
 		onSuccess: (result) => {
-			if (!result.ok) {
-				toast.error(result.error)
+			if (result?.serverError) {
+				toast.error(result.serverError)
 				return
 			}
 			toast.success("Reset to defaults")
@@ -186,16 +188,19 @@ export function LlmSettingsShell({
 	})
 
 	const bulkMutation = useMutation({
-		mutationFn: bulkUpdateLlmCallSiteModels,
+		mutationFn: (models: LlmModelEntry[]) =>
+			bulkUpdateLlmCallSiteModels({ models }),
 		onSuccess: (result) => {
-			if (!result.ok) {
-				toast.error(result.error)
+			if (result?.serverError) {
+				toast.error(result.serverError)
 				return
 			}
+			const data = result?.data
+			if (!data) return
 			const msg =
-				result.skipped > 0
-					? `Updated ${result.updated} call sites (${result.skipped} skipped — PDF sites incompatible with OpenAI)`
-					: `Updated ${result.updated} call sites`
+				data.skipped > 0
+					? `Updated ${data.updated} call sites (${data.skipped} skipped — PDF sites incompatible with OpenAI)`
+					: `Updated ${data.updated} call sites`
 			toast.success(msg)
 			setBulkUpdateOpen(false)
 			queryClient.invalidateQueries({ queryKey: queryKeys.llmCallSites() })

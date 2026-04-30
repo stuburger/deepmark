@@ -150,11 +150,11 @@ export function ExamPaperPageShell({
 	// Delete exam paper
 	const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
 	const { mutate: doDeletePaper, isPending: deleting } = useMutation({
-		mutationFn: () => deleteExamPaper(paper.id),
+		mutationFn: () => deleteExamPaper({ id: paper.id }),
 		onMutate: () => setDeleteDialogOpen(false),
 		onSuccess: (result) => {
-			if (!result.ok) {
-				toast.error(result.error)
+			if (result?.serverError) {
+				toast.error(result.serverError)
 				return
 			}
 			router.push("/teacher/exam-papers")

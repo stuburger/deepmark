@@ -1,8 +1,20 @@
 /**
- * Build the in-app proxy URL for an S3 scan object.
- * Path segments are encoded individually so slashes stay as path
- * separators while special characters in filenames are escaped.
+ * Scan image URL for a committed student submission page (authz-bound).
  */
-export function scanProxyUrl(s3Key: string): string {
-	return `/api/scans/${s3Key.split("/").map(encodeURIComponent).join("/")}`
+export function submissionScanPageUrl(
+	submissionId: string,
+	pageOrder: number,
+): string {
+	return `/api/submissions/${encodeURIComponent(submissionId)}/scan-pages/${pageOrder}`
+}
+
+/**
+ * Scan image URL for a staged script page during batch review (authz-bound).
+ */
+export function stagedScriptScanPageUrl(
+	batchId: string,
+	scriptId: string,
+	pageOrder: number,
+): string {
+	return `/api/batch/${encodeURIComponent(batchId)}/staged-scripts/${encodeURIComponent(scriptId)}/scan-pages/${pageOrder}`
 }

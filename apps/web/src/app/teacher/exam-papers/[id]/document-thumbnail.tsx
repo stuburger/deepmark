@@ -126,11 +126,15 @@ export function DocumentThumbnail({
 				document_type: documentType,
 				run_adversarial_loop: false,
 			})
-			if (!result.ok) {
-				toast.error(result.error)
+			if (result?.serverError) {
+				toast.error(result.serverError)
 				return
 			}
-			const putRes = await fetch(result.url, {
+			if (!result?.data) {
+				toast.error("Upload failed")
+				return
+			}
+			const putRes = await fetch(result.data.url, {
 				method: "PUT",
 				body: file,
 				headers: { "Content-Type": "application/pdf" },

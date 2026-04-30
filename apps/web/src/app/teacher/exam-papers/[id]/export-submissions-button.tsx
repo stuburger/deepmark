@@ -84,21 +84,26 @@ function triggerDownload(csv: string, filename: string) {
 
 export function ExportSubmissionsButton({ paperId }: { paperId: string }) {
 	const mutation = useMutation({
-		mutationFn: () => exportSubmissionsForPaper(paperId),
+		mutationFn: () => exportSubmissionsForPaper({ examPaperId: paperId }),
 		onSuccess: (result) => {
-			if (!result.ok) {
-				toast.error(result.error)
+			if (result?.serverError) {
+				toast.error(result.serverError)
 				return
 			}
-			if (result.data.rows.length === 0) {
+			const data = result?.data?.data
+			if (!data) {
+				toast.error("Failed to export submissions")
+				return
+			}
+			if (data.rows.length === 0) {
 				toast.error("No marked submissions to export")
 				return
 			}
-			const csv = buildCsv(result.data)
+			const csv = buildCsv(data)
 			const date = new Date().toISOString().slice(0, 10)
-			const filename = `submissions-${slugify(result.data.paper_title)}-${date}.csv`
+			const filename = `submissions-${slugify(data.paper_title)}-${date}.csv`
 			triggerDownload(csv, filename)
-			toast.success(`Exported ${result.data.rows.length} submissions`)
+			toast.success(`Exported ${data.rows.length} submissions`)
 		},
 		onError: () => toast.error("Failed to export submissions"),
 	})

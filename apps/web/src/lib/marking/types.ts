@@ -132,21 +132,13 @@ export type UpdateStudentNameResult =
 
 export type ScanPage = {
 	order: number
-	/** S3 object key. Consumers build the proxy URL with `scanProxyUrl(key)`. */
+	/** S3 object key retained for diagnostics; page images stream via submission-scoped routes. */
 	key: string
 	mimeType: string
 	/** Per-page OCR analysis (transcript + observations). Present for jobs
 	 *  processed after the OCR pipeline was added; absent for older jobs. */
 	analysis?: HandwritingAnalysis
 }
-
-export type GetJobScanPagesResult =
-	| { ok: true; pages: ScanPage[] }
-	| { ok: false; error: string }
-
-export type GetJobPageTokensResult =
-	| { ok: true; tokens: PageToken[] }
-	| { ok: false; error: string }
 
 export type LinkStudentToJobResult = { ok: true } | { ok: false; error: string }
 

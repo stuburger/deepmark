@@ -160,32 +160,87 @@ Query keys live in `apps/web/src/lib/query-keys.ts` — always use them, never i
 
 ---
 
-### Server Actions — Result Pattern
+### Server Actions — next-safe-action
 
-All server actions return a discriminated union. Never throw to the client.
+All server actions are built from one of six action clients in `@/lib/authz`. **Never write a bare `export async function …` in a `"use server"` module** — the `lint:authz` check blocks it. The action client wires session resolution + per-resource authz + a `userId`-bound logger into the action handler's `ctx`, so forgetting auth becomes a typecheck error rather than a code-review catch.
+
+| Client | Use for | What ctx contains |
+|---|---|---|
+| `publicAction` | login, logout, public callbacks | `{ log }` |
+| `authenticatedAction` | requires session, no resource | `{ user, log }` |
+| `adminAction` | systemRole === "admin" | `{ user, log }` |
+| `resourceAction({...})` | one resource (factory: spec carries type/role/id resolver) | `{ user, log }` |
+| `resourcesAction({...})` | multiple resources | `{ user, log }` |
+| `scopedAction({...})` | list query filtered by user's accessible rows | `{ user, log, accessWhere }` |
+
+The factory clients (`resourceAction`, `resourcesAction`, `scopedAction`) take a per-action spec because the resource id is resolved from the typed input — putting that resolver in metadata would lose typing.
+
+Throwing from an action handler is fine and expected: typed errors (`AccessDeniedError`, `NotFoundError`, `AuthRequiredError`) are mapped to `serverError` strings by `handleServerError`. Plain `throw new Error("…")` is also fine — it shows up as the user-facing `serverError`.
 
 ```ts
-// ✅ Correct
-return { ok: true, data: ... }
-return { ok: false, error: "Human-readable message" }
+"use server"
 
-// ❌ Never
-throw new Error("Something failed")
+import { resourceAction } from "@/lib/authz"
+import { z } from "zod"
+
+const updateQuestionInput = z.object({
+  questionId: z.string(),
+  input: z.object({
+    text: z.string().optional(),
+    points: z.number().int().min(0).optional(),
+  }),
+})
+
+export const updateQuestion = resourceAction({
+  type: "question",
+  role: "editor",
+  schema: updateQuestionInput,
+  id: ({ questionId }) => questionId,
+}).action(async ({ parsedInput: { questionId, input }, ctx }) => {
+  ctx.log.info("updateQuestion called", { questionId })
+  // ... actual work
+  return { embeddingUpdated: true }
+})
+```
+
+For form-action targets that don't fit the wrapped shape (`<form action={…}>` requires `(formData) => Promise<void>`), wrap the call in a thin local server action inside the page/layout file:
+
+```tsx
+async function logoutFormAction() {
+  "use server"
+  await logout()
+}
 ```
 
 ### Frontend Error Handling
 
-Server action errors surface as Sonner toasts — never as inline React state.
+Server actions return next-safe-action's native shape — `{ data?, serverError?, validationErrors? }` — never the old `{ ok, error }` Result wrapper. Read the three branches at the call site:
 
 ```tsx
 import { toast } from "sonner"
 
-const result = await someServerAction()
-if (!result.ok) {
-  toast.error(result.error)
+const result = await updateQuestion({ questionId, input })
+if (result?.serverError) {
+  toast.error(result.serverError)
+  return
+}
+if (result?.validationErrors) {
+  // pass to react-hook-form via setError, see "Forms" below
   return
 }
 toast.success("Done.")
+```
+
+Server errors → Sonner toast. Validation errors → inline next to the field. Never store either in component state for JSX rendering.
+
+For TanStack Query, do the same translation inside `queryFn` / `mutationFn`:
+
+```ts
+queryFn: async () => {
+  const r = await listExamPapers()
+  if (r?.serverError) throw new Error(r.serverError)
+  return r?.data?.papers ?? []
+}
 ```
 
 ### Forms
@@ -243,16 +298,29 @@ export function MarkSchemeForm({ initialValue, onSubmit }: Props) {
 
 **Validation errors** (field-level, from Zod) are displayed inline using the `Field` / `FieldError` / `FieldLabel` components from `@/components/ui/field`.
 
-**Server errors** (from a failed server action) are always shown as a Sonner toast — never stored in state and rendered as JSX. The `onSubmit` prop is the right boundary:
+**Server errors** (from a failed server action) are always shown as a Sonner toast — never stored in state and rendered as JSX. **Validation errors from the action's Zod schema** map straight back onto the form via `setError`, so the inline UI stays consistent whether the schema lives client-side (zodResolver) or server-side (the action's `inputSchema`):
 
 ```tsx
 // In the parent — not inside the form
 async function handleSubmit(values: MarkSchemeFormValues) {
-  const result = await createMarkScheme(values)
-  if (!result.ok) {
-    toast.error(result.error)   // server error → toast
+  const result = await createMarkScheme({ questionId, input: values })
+
+  if (result?.serverError) {
+    toast.error(result.serverError)
     return
   }
+  if (result?.validationErrors) {
+    // next-safe-action 8.x with `defaultValidationErrorsShape: "flattened"`
+    // returns { formErrors: string[], fieldErrors: Record<string, string[]> }
+    for (const [field, msgs] of Object.entries(result.validationErrors.fieldErrors)) {
+      const msg = msgs?.[0]
+      if (msg) form.setError(field as keyof MarkSchemeFormValues, { message: msg })
+    }
+    const formErr = result.validationErrors.formErrors?.[0]
+    if (formErr) toast.error(formErr)
+    return
+  }
+
   toast.success("Mark scheme saved")
   onClose()
 }

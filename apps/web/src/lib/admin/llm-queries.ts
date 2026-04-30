@@ -1,5 +1,6 @@
 "use server"
 
+import { adminAction } from "@/lib/authz"
 import { db } from "@/lib/db"
 import { LLM_CALL_SITE_DEFAULTS } from "@mcp-gcse/shared"
 import type { LlmCallSiteRow, LlmModelEntry } from "./llm-types"
@@ -7,12 +8,8 @@ import type { LlmCallSiteRow, LlmModelEntry } from "./llm-types"
 /** Canonical sort order: matches the phase + temporal order in LLM_CALL_SITE_DEFAULTS. */
 const KEY_ORDER = new Map(LLM_CALL_SITE_DEFAULTS.map((d, i) => [d.key, i]))
 
-export type ListLlmCallSitesResult =
-	| { ok: true; callSites: LlmCallSiteRow[] }
-	| { ok: false; error: string }
-
-export async function listLlmCallSites(): Promise<ListLlmCallSitesResult> {
-	try {
+export const listLlmCallSites = adminAction.action(
+	async (): Promise<{ callSites: LlmCallSiteRow[] }> => {
 		const rows = await db.llmCallSite.findMany()
 		const callSites: LlmCallSiteRow[] = rows
 			.map((r) => ({
@@ -29,8 +26,6 @@ export async function listLlmCallSites(): Promise<ListLlmCallSitesResult> {
 			.sort(
 				(a, b) => (KEY_ORDER.get(a.key) ?? 999) - (KEY_ORDER.get(b.key) ?? 999),
 			)
-		return { ok: true, callSites }
-	} catch {
-		return { ok: false, error: "Failed to load LLM call sites" }
-	}
-}
+		return { callSites }
+	},
+)

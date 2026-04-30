@@ -3,7 +3,7 @@ import { LlmSettingsShell } from "./llm-settings-shell"
 
 export default async function AdminSettingsPage() {
 	const result = await listLlmCallSites()
-	const initialCallSites = result.ok ? result.callSites : []
+	const initialCallSites = result?.data?.callSites ?? []
 
 	return (
 		<div className="space-y-8">

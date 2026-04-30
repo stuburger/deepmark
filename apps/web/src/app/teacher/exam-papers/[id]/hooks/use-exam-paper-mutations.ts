@@ -80,9 +80,9 @@ export function useUpdateQuestion(paperId: string) {
 			questionId: string
 			input: UpdateQuestionInput
 		}) => {
-			const result = await updateQuestion(questionId, input)
-			if (!result.ok) throw new Error(result.error)
-			return result
+			const result = await updateQuestion({ questionId, input })
+			if (result?.serverError) throw new Error(result.serverError)
+			return result?.data
 		},
 		onMutate: async ({ questionId, input }) => {
 			await queryClient.cancelQueries({
@@ -125,9 +125,9 @@ export function useDeleteQuestion(paperId: string) {
 
 	return useMutation({
 		mutationFn: async (questionId: string) => {
-			const result = await deleteQuestion(questionId)
-			if (!result.ok) throw new Error(result.error)
-			return result
+			const result = await deleteQuestion({ questionId })
+			if (result?.serverError) throw new Error(result.serverError)
+			return result?.data
 		},
 		onMutate: async (questionId) => {
 			await queryClient.cancelQueries({
@@ -165,9 +165,9 @@ export function useCreateMarkScheme(paperId: string) {
 			questionId: string
 			input: MarkSchemeInput
 		}) => {
-			const result = await createMarkScheme(questionId, input)
-			if (!result.ok) throw new Error(result.error)
-			return result
+			const result = await createMarkScheme({ questionId, input })
+			if (result?.serverError) throw new Error(result.serverError)
+			return result?.data
 		},
 		onMutate: async ({ questionId }) => {
 			await queryClient.cancelQueries({
@@ -208,9 +208,9 @@ export function useUpdateMarkScheme(paperId: string) {
 			questionId: string
 			input: MarkSchemeInput
 		}) => {
-			const result = await updateMarkScheme(markSchemeId, input)
-			if (!result.ok) throw new Error(result.error)
-			return result
+			const result = await updateMarkScheme({ markSchemeId, input })
+			if (result?.serverError) throw new Error(result.serverError)
+			return result?.data
 		},
 		onError: (err) => {
 			toast.error(err.message || "Failed to update mark scheme")
@@ -236,12 +236,12 @@ export function useLinkMarkScheme(paperId: string) {
 			ghostQuestionId: string
 			targetQuestionId: string
 		}) => {
-			const result = await linkMarkSchemeToQuestion(
+			const result = await linkMarkSchemeToQuestion({
 				ghostQuestionId,
 				targetQuestionId,
-			)
-			if (!result.ok) throw new Error(result.error)
-			return result
+			})
+			if (result?.serverError) throw new Error(result.serverError)
+			return result?.data
 		},
 		onMutate: async ({ targetQuestionId }) => {
 			await queryClient.cancelQueries({

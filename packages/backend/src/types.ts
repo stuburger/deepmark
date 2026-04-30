@@ -10,7 +10,7 @@ import type { LambdaContext, LambdaEvent } from "hono/aws-lambda"
 // }
 
 export type HonoVariables = {
-	auth: AuthInfo & { extra: { userId: string } }
+	auth: AuthInfo & { extra: { userId: string; email: string | null } }
 }
 
 export type Bindings = {

@@ -124,19 +124,23 @@ export function MarkSchemeBody(props: MarkSchemeBodyProps) {
 		setAutofilling(true)
 		setAutofillError(null)
 
-		const result = await autofillMarkScheme(
-			props.questionId,
-			effectiveMarkingMethod,
-		)
+		const result = await autofillMarkScheme({
+			questionId: props.questionId,
+			markingMethod: effectiveMarkingMethod,
+		})
 
 		setAutofilling(false)
 
-		if (!result.ok) {
-			setAutofillError(result.error)
+		if (result?.serverError) {
+			setAutofillError(result.serverError)
+			return
+		}
+		if (!result?.data?.suggestion) {
+			setAutofillError("Autofill failed")
 			return
 		}
 
-		setAutofillValues(result.suggestion)
+		setAutofillValues(result.data.suggestion)
 		setFormKey((k) => k + 1)
 	}
 

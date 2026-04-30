@@ -1,12 +1,14 @@
 "use client"
 
 import { Badge } from "@/components/ui/badge"
-import { scanProxyUrl } from "@/lib/scan-url"
+import { stagedScriptScanPageUrl } from "@/lib/scan-url"
 import { motion } from "framer-motion"
 import { Undo2 } from "lucide-react"
 import { PAGE_THUMB_H, PAGE_THUMB_W } from "./exam-paper-helpers"
 
 type ListViewLockedStackProps = {
+	batchId: string
+	scriptId: string
 	pageKeys: Array<{ s3_key: string; order: number }>
 	onUnlock: () => void
 	onOpenCarousel: () => void
@@ -17,6 +19,8 @@ type ListViewLockedStackProps = {
 const MAX_VISIBLE_PAGES = 5
 
 export function ListViewLockedStack({
+	batchId,
+	scriptId,
 	pageKeys,
 	onUnlock,
 	onOpenCarousel,
@@ -72,7 +76,7 @@ export function ListViewLockedStack({
 						>
 							{/* eslint-disable-next-line @next/next/no-img-element */}
 							<img
-								src={scanProxyUrl(pk.s3_key)}
+								src={stagedScriptScanPageUrl(batchId, scriptId, pk.order)}
 								alt={`Page ${index + 1}`}
 								draggable={false}
 								loading="lazy"

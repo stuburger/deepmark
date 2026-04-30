@@ -19,7 +19,7 @@ export function StudentNameEditor({
 
 	async function save() {
 		setSaving(true)
-		await updateStudentName(jobId, name)
+		await updateStudentName({ jobId, name })
 		setSaving(false)
 		setEditing(false)
 	}

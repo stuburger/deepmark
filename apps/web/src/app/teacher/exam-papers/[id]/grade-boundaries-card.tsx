@@ -106,10 +106,10 @@ export function GradeBoundariesCard({
 			tier?: Tier | null
 			grade_boundaries?: GradeBoundary[] | null
 			grade_boundary_mode?: BoundaryMode | null
-		}) => updatePaperSettings(paperId, input),
+		}) => updatePaperSettings({ examPaperId: paperId, ...input }),
 		onSuccess: (result) => {
-			if (!result.ok) {
-				toast.error(result.error)
+			if (result?.serverError) {
+				toast.error(result.serverError)
 				return
 			}
 			void queryClient.invalidateQueries({
@@ -142,7 +142,7 @@ export function GradeBoundariesCard({
 			{ grade_boundaries: parsed },
 			{
 				onSuccess: (result) => {
-					if (result.ok) setDialogOpen(false)
+					if (!result?.serverError) setDialogOpen(false)
 				},
 			},
 		)
@@ -370,10 +370,7 @@ export function GradeBoundariesCard({
 							>
 								Cancel
 							</Button>
-							<Button
-								onClick={handleSave}
-								disabled={!isDirty || saving}
-							>
+							<Button onClick={handleSave} disabled={!isDirty || saving}>
 								<Save className="h-3.5 w-3.5 mr-1.5" />
 								{saving ? "Saving…" : "Save"}
 							</Button>

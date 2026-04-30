@@ -1,50 +1,49 @@
 "use server"
 
+import { authenticatedAction } from "@/lib/authz"
 import { db } from "@/lib/db"
 import { Resource } from "sst"
-import { auth } from "../auth"
+import { z } from "zod"
 
 // ─── getVapidPublicKey ────────────────────────────────────────────────────────
 
-export async function getVapidPublicKey(): Promise<string> {
-	return Resource.VapidPublicKey.value
-}
+export const getVapidPublicKey = authenticatedAction.action(
+	async (): Promise<{ key: string }> => {
+		return { key: Resource.VapidPublicKey.value }
+	},
+)
 
 // ─── registerPushSubscription ─────────────────────────────────────────────────
 
-export type RegisterPushSubscriptionResult =
-	| { ok: true }
-	| { ok: false; error: string }
+const registerInput = z.object({
+	endpoint: z.string().url(),
+	p256dh: z.string(),
+	auth: z.string(),
+	userAgent: z.string().optional(),
+})
 
-export async function registerPushSubscription({
-	endpoint,
-	p256dh,
-	auth: authKey,
-	userAgent,
-}: {
-	endpoint: string
-	p256dh: string
-	auth: string
-	userAgent?: string
-}): Promise<RegisterPushSubscriptionResult> {
-	const session = await auth()
-	if (!session) return { ok: false, error: "Not authenticated" }
-
-	await db.userPushSubscription.upsert({
-		where: { endpoint },
-		create: {
-			user_id: session.userId,
-			endpoint,
-			p256dh,
-			auth: authKey,
-			user_agent: userAgent,
+export const registerPushSubscription = authenticatedAction
+	.inputSchema(registerInput)
+	.action(
+		async ({
+			parsedInput: { endpoint, p256dh, auth: authKey, userAgent },
+			ctx,
+		}): Promise<{ ok: true }> => {
+			await db.userPushSubscription.upsert({
+				where: { endpoint },
+				create: {
+					user_id: ctx.user.id,
+					endpoint,
+					p256dh,
+					auth: authKey,
+					user_agent: userAgent,
+				},
+				update: {
+					p256dh,
+					auth: authKey,
+					user_agent: userAgent,
+				},
+			})
+			return { ok: true }
 		},
-		update: {
-			p256dh,
-			auth: authKey,
-			user_agent: userAgent,
-		},
-	})
-
-	return { ok: true }
-}
+	)

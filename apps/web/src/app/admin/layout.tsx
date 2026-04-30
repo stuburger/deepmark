@@ -15,6 +15,11 @@ import { Shield } from "lucide-react"
 import Link from "next/link"
 import { redirect } from "next/navigation"
 
+async function logoutFormAction() {
+	"use server"
+	await logout()
+}
+
 export default async function AdminLayout({
 	children,
 }: {
@@ -47,7 +52,7 @@ export default async function AdminLayout({
 					>
 						Switch to teacher
 					</Link>
-					<form action={logout}>
+					<form action={logoutFormAction}>
 						<Button
 							type="submit"
 							variant="ghost"

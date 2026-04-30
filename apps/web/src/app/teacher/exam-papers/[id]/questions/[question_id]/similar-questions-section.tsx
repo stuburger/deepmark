@@ -46,9 +46,9 @@ export function SimilarQuestionsSection({
 	const { data: similarIds } = useQuery({
 		queryKey: queryKeys.similarQuestions(examPaperId),
 		queryFn: async () => {
-			const r = await getSimilarQuestionsForPaper(examPaperId)
-			if (!r.ok) return []
-			return r.pairs
+			const r = await getSimilarQuestionsForPaper({ examPaperId })
+			const pairs = r?.data?.pairs ?? []
+			return pairs
 				.filter(
 					(p) => p.questionId === questionId || p.similarToId === questionId,
 				)

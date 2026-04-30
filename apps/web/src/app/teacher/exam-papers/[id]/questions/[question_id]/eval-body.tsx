@@ -33,14 +33,22 @@ export function EvalBody({
 		setLoading(true)
 		setResult(null)
 
-		const res = await evaluateStudentAnswer(questionId, answer, markSchemeDraft)
+		const res = await evaluateStudentAnswer({
+			questionId,
+			studentAnswer: answer,
+			markSchemeDraft,
+		})
 		setLoading(false)
 
-		if (!res.ok) {
-			toast.error(res.error)
+		if (res?.serverError) {
+			toast.error(res.serverError)
 			return
 		}
-		setResult(res.result)
+		if (!res?.data) {
+			toast.error("Evaluation failed")
+			return
+		}
+		setResult(res.data.result)
 	}
 
 	const scorePercent = result

@@ -4,6 +4,8 @@ import { CollaboratorAvatars } from "@/components/annotated-answer/collaborator-
 import { useCollaborators } from "@/components/annotated-answer/use-collaborators"
 import { useDocScoreTotals } from "@/components/annotated-answer/use-doc-score-totals"
 import { useYDoc } from "@/components/annotated-answer/use-y-doc"
+import { ShareDialog } from "@/components/sharing/share-dialog"
+import { Button } from "@/components/ui/button"
 import {
 	Tooltip,
 	TooltipContent,
@@ -17,7 +19,7 @@ import type {
 	StudentPaperJobPayload,
 } from "@/lib/marking/types"
 import { computeGrade } from "@mcp-gcse/shared"
-import { ChevronRight, X } from "lucide-react"
+import { ChevronRight, Share2, X } from "lucide-react"
 import Link from "next/link"
 import { ReScanButton } from "./re-scan-button"
 import { DownloadPdfButton } from "./results/download-pdf-button"
@@ -121,6 +123,17 @@ export function SubmissionToolbar({
 
 				<div className="ml-auto flex items-center gap-3">
 					<CollaboratorAvatars users={collaborators} />
+					{data.submission_id && (
+						<ShareDialog
+							submissionIds={[data.submission_id]}
+							trigger={
+								<Button variant="ghost" size="sm" className="h-7 gap-1.5">
+									<Share2 className="h-3.5 w-3.5" />
+									Share
+								</Button>
+							}
+						/>
+					)}
 					{onClose && (
 						<Tooltip>
 							<TooltipTrigger

@@ -1,11 +1,34 @@
 import { Database } from "@hocuspocus/extension-database"
 import { Server } from "@hocuspocus/server"
 import { parseDocumentName } from "@mcp-gcse/shared/collab"
+import { Resource } from "sst"
 import { AuthFailure, verifyOpenAuthToken } from "./auth"
 import { CollabLogger } from "./logger"
 import { loadSnapshot, saveSnapshot } from "./persistence"
 
 const port = Number(process.env.PORT ?? 1234)
+const collabAuthzUrl = process.env.COLLAB_AUTHZ_URL
+
+async function authorizeUserDocument(
+	userId: string,
+	documentName: string,
+): Promise<void> {
+	if (!collabAuthzUrl) {
+		throw new AuthFailure("missing collab authorization endpoint")
+	}
+
+	const response = await fetch(collabAuthzUrl, {
+		method: "POST",
+		headers: {
+			Authorization: `Bearer ${Resource.CollabServiceSecret.value}`,
+			"Content-Type": "application/json",
+		},
+		body: JSON.stringify({ userId, documentName, access: "editor" }),
+	})
+	if (!response.ok) {
+		throw new AuthFailure(`collab authorization returned ${response.status}`)
+	}
+}
 
 const server = new Server({
 	port,
@@ -28,10 +51,7 @@ const server = new Server({
 			return { userId: claims.userId, role: "service" as const }
 		}
 
-		// TODO(K-2): per-submission ACL check for user tokens. For the demo a
-		// valid OpenAuth user token is sufficient; revisit before paid rollout.
-		// Shape: call an internal `/api/collab/authorize` endpoint on the Next.js
-		// app with { userId, submissionId } and expect 200/403.
+		await authorizeUserDocument(claims.userId, documentName)
 
 		return { userId: claims.userId, role: "user" as const }
 	},

@@ -1,4 +1,4 @@
-import { auth } from "@/lib/auth"
+import { assertPdfIngestionJobAccess, requireSessionUser } from "@/lib/authz"
 import { db } from "@/lib/db"
 import { GetObjectCommand, S3Client } from "@aws-sdk/client-s3"
 
@@ -8,24 +8,24 @@ export async function GET(
 	request: Request,
 	{ params }: { params: Promise<{ jobId: string }> },
 ) {
-	const session = await auth()
-	if (!session) {
+	const session = await requireSessionUser()
+	if (!session.ok) {
 		return new Response("Unauthorized", { status: 401 })
 	}
 
 	const { jobId } = await params
-	const job = await db.pdfIngestionJob.findFirst({
-		where: {
-			id: jobId,
-			OR: [
-				{ uploaded_by: session.userId },
-				{ exam_paper: { created_by_id: session.userId } },
-			],
-		},
-		select: {
-			s3_bucket: true,
-			s3_key: true,
-		},
+	const access = await assertPdfIngestionJobAccess(
+		session.user,
+		jobId,
+		"viewer",
+	)
+	if (!access.ok) {
+		return new Response("Not found", { status: 404 })
+	}
+
+	const job = await db.pdfIngestionJob.findUnique({
+		where: { id: jobId },
+		select: { s3_bucket: true, s3_key: true },
 	})
 
 	if (!job?.s3_key) {

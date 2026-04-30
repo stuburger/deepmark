@@ -30,10 +30,10 @@ export function EditableTitle({
 			return
 		}
 		setPending(true)
-		const result = await updateExamPaperTitle(id, trimmed)
+		const result = await updateExamPaperTitle({ id, title: trimmed })
 		setPending(false)
 		setEditing(false)
-		if (result.ok) {
+		if (!result?.serverError) {
 			void queryClient.invalidateQueries({ queryKey: queryKeys.examPaper(id) })
 		}
 	}

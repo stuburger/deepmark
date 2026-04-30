@@ -9,11 +9,13 @@ import { ListViewLockedStack } from "./list-view-locked-stack"
 import { PageCarousel } from "./page-carousel"
 
 type PaperTrayPanelProps = {
+	batchId: string
 	confirmedScripts: StagedScript[]
 	onToggleExclude: (id: string, status: StagedScriptStatus) => Promise<void>
 }
 
 export function PaperTrayPanel({
+	batchId,
 	confirmedScripts,
 	onToggleExclude,
 }: PaperTrayPanelProps) {
@@ -26,7 +28,7 @@ export function PaperTrayPanel({
 	function openCarousel(script: StagedScript, startIndex: number) {
 		const name =
 			script.confirmed_name ?? script.proposed_name ?? "Unnamed student"
-		openPageCarousel(script, startIndex, name)
+		openPageCarousel(batchId, script, startIndex, name)
 	}
 
 	const count = confirmedScripts.length
@@ -88,6 +90,8 @@ export function PaperTrayPanel({
 										className="relative group/card w-fit"
 									>
 										<ListViewLockedStack
+											batchId={batchId}
+											scriptId={script.id}
 											pageKeys={sortedPageKeys}
 											showUndo={false}
 											showPageCount={false}

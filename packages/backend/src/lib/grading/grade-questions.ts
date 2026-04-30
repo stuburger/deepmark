@@ -2,10 +2,6 @@ import { db } from "@/db"
 import { annotateOneResult } from "@/lib/annotations/annotate-result"
 import type { AnnotationContext } from "@/lib/annotations/data-loading"
 import type { PendingAnnotation } from "@/lib/annotations/types"
-import {
-	type QuestionGradeAttrs,
-	setQuestionGrade,
-} from "@mcp-gcse/shared"
 import type { HeadlessEditor } from "@/lib/collab/headless-editor"
 import type {
 	ExamPaperWithSections,
@@ -16,6 +12,7 @@ import type { CancellationToken } from "@/lib/infra/cancellation"
 import { logger } from "@/lib/infra/logger"
 import { dispatchAnnotationsForQuestion } from "@/processors/student-paper-grade/annotations-to-editor"
 import { logGradingRunEvent } from "@mcp-gcse/db"
+import { type QuestionGradeAttrs, setQuestionGrade } from "@mcp-gcse/shared"
 import {
 	type LlmRunner,
 	type MarkerContext,
@@ -147,7 +144,11 @@ export async function gradeAndAnnotateAll(
 			// happens here — the projection picks up the change on the
 			// next Hocuspocus snapshot debounce (~2s).
 			editor.transact((view) =>
-				setQuestionGrade(view, result.question_id, gradingResultToAttrs(result)),
+				setQuestionGrade(
+					view,
+					result.question_id,
+					gradingResultToAttrs(result),
+				),
 			)
 
 			if (cancellation.isCancelled()) return

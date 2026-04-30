@@ -1,7 +1,9 @@
 "use server"
 
+import { publicAction, resourceAction, scopedAction } from "@/lib/authz"
 import { db } from "@/lib/db"
 import { type GradeBoundary, gradeBoundariesSchema } from "@mcp-gcse/shared"
+import { z } from "zod"
 import type {
 	CatalogExamPaper,
 	ExamPaperDetail,
@@ -16,49 +18,46 @@ function parseStoredBoundaries(raw: unknown): GradeBoundary[] | null {
 
 // ─── Exam paper list ──────────────────────────────────────────────────────────
 
-export type ListExamPapersResult =
-	| { ok: true; papers: ExamPaperListItem[] }
-	| { ok: false; error: string }
-
-export async function listExamPapers(): Promise<ListExamPapersResult> {
-	try {
-		const papers = await db.examPaper.findMany({
-			orderBy: [{ year: "desc" }, { created_at: "desc" }],
-			select: {
-				id: true,
-				title: true,
-				subject: true,
-				exam_board: true,
-				year: true,
-				paper_number: true,
-				total_marks: true,
-				duration_minutes: true,
-				is_active: true,
-				created_at: true,
-				_count: {
-					select: {
-						sections: true,
-						pdf_ingestion_jobs: true,
-					},
+export const listExamPapers = scopedAction({
+	scope: "examPaper",
+	role: "viewer",
+}).action(async ({ ctx }): Promise<{ papers: ExamPaperListItem[] }> => {
+	const papers = await db.examPaper.findMany({
+		where: ctx.accessWhere,
+		orderBy: [{ year: "desc" }, { created_at: "desc" }],
+		select: {
+			id: true,
+			title: true,
+			subject: true,
+			exam_board: true,
+			year: true,
+			paper_number: true,
+			total_marks: true,
+			duration_minutes: true,
+			is_active: true,
+			created_at: true,
+			_count: {
+				select: {
+					sections: true,
+					pdf_ingestion_jobs: true,
 				},
 			},
-		})
-		return { ok: true, papers }
-	} catch {
-		return { ok: false, error: "Failed to load exam papers" }
-	}
-}
+		},
+	})
+	return { papers }
+})
 
 // ─── Exam paper detail ────────────────────────────────────────────────────────
 
-export type GetExamPaperDetailResult =
-	| { ok: true; paper: ExamPaperDetail }
-	| { ok: false; error: string }
-
-export async function getExamPaperDetail(
-	id: string,
-): Promise<GetExamPaperDetailResult> {
-	try {
+export const getExamPaperDetail = resourceAction({
+	type: "examPaper",
+	role: "viewer",
+	schema: z.object({ id: z.string() }),
+	id: ({ id }) => id,
+}).action(
+	async ({
+		parsedInput: { id },
+	}): Promise<{ paper: ExamPaperDetail | null }> => {
 		const paper = await db.examPaper.findUnique({
 			where: { id },
 			include: {
@@ -108,10 +107,9 @@ export async function getExamPaperDetail(
 				},
 			},
 		})
-		if (!paper) return { ok: false, error: "Exam paper not found" }
+		if (!paper) return { paper: null }
 
 		return {
-			ok: true,
 			paper: {
 				id: paper.id,
 				title: paper.title,
@@ -168,19 +166,13 @@ export async function getExamPaperDetail(
 				grade_boundary_mode: paper.grade_boundary_mode ?? null,
 			},
 		}
-	} catch {
-		return { ok: false, error: "Failed to load exam paper" }
-	}
-}
+	},
+)
 
 // ─── Public catalog ───────────────────────────────────────────────────────────
 
-export type ListCatalogExamPapersResult =
-	| { ok: true; papers: CatalogExamPaper[] }
-	| { ok: false; error: string }
-
-export async function listCatalogExamPapers(): Promise<ListCatalogExamPapersResult> {
-	try {
+export const listCatalogExamPapers = publicAction.action(
+	async (): Promise<{ papers: CatalogExamPaper[] }> => {
 		const papers = await db.examPaper.findMany({
 			where: { is_active: true },
 			orderBy: [{ subject: "asc" }, { year: "desc" }],
@@ -208,7 +200,6 @@ export async function listCatalogExamPapers(): Promise<ListCatalogExamPapersResu
 			},
 		})
 		return {
-			ok: true,
 			papers: papers.map((p) => {
 				const allQuestions = p.sections.flatMap(
 					(sec) => sec.exam_section_questions,
@@ -228,7 +219,5 @@ export async function listCatalogExamPapers(): Promise<ListCatalogExamPapersResu
 				}
 			}),
 		}
-	} catch {
-		return { ok: false, error: "Failed to load catalog" }
-	}
-}
+	},
+)

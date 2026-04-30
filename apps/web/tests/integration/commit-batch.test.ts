@@ -12,9 +12,10 @@ import { afterEach, beforeAll, describe, expect, it } from "vitest"
 
 const Y10_PAPERS = path.resolve(process.cwd(), "y10_papers")
 
-// Same-package import — no cross-boundary violation
+// Same-package import — no cross-boundary violation. commitBatchService now
+// lives outside the "use server" surface in commit-service.ts.
 const { commitBatchService } = await import(
-	"../../src/lib/batch/lifecycle/mutations"
+	"../../src/lib/batch/lifecycle/commit-service"
 )
 
 beforeAll(async () => {

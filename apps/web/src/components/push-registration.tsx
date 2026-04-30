@@ -40,8 +40,9 @@ async function registerServiceWorkerAndSubscribe() {
 		}
 		if (permission !== "granted") return
 
-		const vapidPublicKey = await getVapidPublicKey()
-		const applicationServerKey = urlBase64ToUint8Array(vapidPublicKey)
+		const vapidResult = await getVapidPublicKey()
+		if (!vapidResult?.data?.key) return
+		const applicationServerKey = urlBase64ToUint8Array(vapidResult.data.key)
 
 		const subscription = await registration.pushManager.subscribe({
 			userVisibleOnly: true,

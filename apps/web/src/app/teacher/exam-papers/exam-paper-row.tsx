@@ -54,15 +54,15 @@ export function ExamPaperRow({ paper }: { paper: ExamPaperListItem }) {
 	const [hidden, setHidden] = useState(false)
 
 	const { mutate: doDelete, isPending: deleting } = useMutation({
-		mutationFn: () => deleteExamPaper(paper.id),
+		mutationFn: () => deleteExamPaper({ id: paper.id }),
 		onMutate: () => {
 			setConfirmOpen(false)
 			setHidden(true)
 		},
 		onSuccess: (result) => {
-			if (!result.ok) {
+			if (result?.serverError) {
 				setHidden(false)
-				toast.error(result.error)
+				toast.error(result.serverError)
 				return
 			}
 			router.refresh()

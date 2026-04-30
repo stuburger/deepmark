@@ -1,30 +1,28 @@
 "use server"
 
+import { resourceAction } from "@/lib/authz"
 import { db } from "@/lib/db"
 import { sortTokensSpatially } from "@mcp-gcse/shared"
-import { auth } from "../../auth"
-import type {
-	GetJobPageTokensResult,
-	GetJobScanPagesResult,
-	HandwritingAnalysis,
-	PageToken,
-} from "../types"
+import { z } from "zod"
+import type { HandwritingAnalysis, PageToken, ScanPage } from "../types"
 
 type PageEntry = { key: string; order: number; mime_type: string }
+
+const jobIdInput = z.object({ jobId: z.string() })
 
 // ─── getJobScanPages ────────────────────────────────────────────────────────
 
 /**
  * Returns every page uploaded to a job (S3 key + mime type), merged with the
  * stored per-page OCR analysis where available. Clients build the download
- * URL via `scanProxyUrl(page.key)` — no presigned URLs are handed out.
+ * URL via submission-scoped scan routes — no presigned URLs are handed out.
  */
-export async function getJobScanPages(
-	jobId: string,
-): Promise<GetJobScanPagesResult> {
-	const session = await auth()
-	if (!session) return { ok: false, error: "Not authenticated" }
-
+export const getJobScanPages = resourceAction({
+	type: "submission",
+	role: "viewer",
+	schema: jobIdInput,
+	id: ({ jobId }) => jobId,
+}).action(async ({ parsedInput: { jobId } }) => {
 	const sub = await db.studentSubmission.findFirst({
 		where: { id: jobId },
 		select: {
@@ -36,10 +34,10 @@ export async function getJobScanPages(
 			},
 		},
 	})
-	if (!sub) return { ok: false, error: "Job not found" }
+	if (!sub) return { pages: [] as ScanPage[] }
 
 	const pages = (sub.pages ?? []) as PageEntry[]
-	if (pages.length === 0) return { ok: true, pages: [] }
+	if (pages.length === 0) return { pages: [] as ScanPage[] }
 
 	type PageAnalysisEntry = {
 		page: number
@@ -58,7 +56,14 @@ export async function getJobScanPages(
 		]),
 	)
 
-	const resolved = pages
+	return { pages: shapePages(pages, analysisByPage) }
+})
+
+function shapePages(
+	pages: PageEntry[],
+	analysisByPage: Map<number, HandwritingAnalysis>,
+): ScanPage[] {
+	return pages
 		.slice()
 		.sort((a, b) => a.order - b.order)
 		.map((p) => ({
@@ -67,8 +72,6 @@ export async function getJobScanPages(
 			mimeType: p.mime_type,
 			analysis: analysisByPage.get(p.order),
 		}))
-
-	return { ok: true, pages: resolved }
 }
 
 // ─── getJobPageTokens ───────────────────────────────────────────────────────
@@ -84,18 +87,12 @@ export async function getJobScanPages(
  * Vision's native `(para_index, line_index, word_index)` ordering breaks on
  * fragmented handwriting and is not safe to rely on for alignment.
  */
-export async function getJobPageTokens(
-	jobId: string,
-): Promise<GetJobPageTokensResult> {
-	const session = await auth()
-	if (!session) return { ok: false, error: "Not authenticated" }
-
-	const sub = await db.studentSubmission.findFirst({
-		where: { id: jobId },
-		select: { id: true },
-	})
-	if (!sub) return { ok: false, error: "Job not found" }
-
+export const getJobPageTokens = resourceAction({
+	type: "submission",
+	role: "viewer",
+	schema: jobIdInput,
+	id: ({ jobId }) => jobId,
+}).action(async ({ parsedInput: { jobId } }) => {
 	const rows = await db.studentPaperPageToken.findMany({
 		where: { submission_id: jobId },
 		select: {
@@ -140,5 +137,5 @@ export async function getJobPageTokens(
 		.sort((a, b) => a - b)
 		.flatMap((page) => sortTokensSpatially(byPage.get(page) ?? []))
 
-	return { ok: true, tokens }
-}
+	return { tokens }
+})

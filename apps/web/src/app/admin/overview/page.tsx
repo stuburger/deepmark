@@ -21,7 +21,15 @@ import { MarkingStatusChart } from "./_components/marking-status-chart"
 import { QuestionsBySubjectChart } from "./_components/questions-by-subject-chart"
 
 export default async function AdminOverviewPage() {
-	const data = await getDashboardData()
+	const result = await getDashboardData()
+	const data = result?.data
+	if (!data) {
+		return (
+			<div className="p-6 text-sm text-destructive">
+				{result?.serverError ?? "Failed to load admin dashboard"}
+			</div>
+		)
+	}
 	const { stats } = data
 
 	const statCards = [

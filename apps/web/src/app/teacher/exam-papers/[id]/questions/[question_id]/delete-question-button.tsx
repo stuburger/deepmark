@@ -22,10 +22,10 @@ export function DeleteQuestionButton({
 	async function handleConfirm() {
 		setDeleting(true)
 		setError(null)
-		const result = await deleteQuestion(questionId)
+		const result = await deleteQuestion({ questionId })
 		setDeleting(false)
-		if (!result.ok) {
-			setError(result.error)
+		if (result?.serverError) {
+			setError(result.serverError)
 			return
 		}
 		router.push(`/teacher/exam-papers/${examPaperId}`)

@@ -59,6 +59,23 @@ enum UserRole {
   examiner
 }
 
+/// Access level for shared resources (exam papers, submissions). Owner can manage grants.
+enum ResourceGrantRole {
+  owner
+  editor
+  viewer
+}
+
+enum ResourceGrantResourceType {
+  exam_paper
+  student_submission
+}
+
+enum ResourceGrantPrincipalType {
+  user
+  team
+}
+
 enum QuestionType {
   written
   multiple_choice
@@ -151,7 +168,8 @@ model User {
   id         String   @id @default(cuid())
   email      String?  @unique
   name       String?
-  role       UserRole
+  /// Global system role only. Resource permissions live in ResourceGrant.role.
+  role       UserRole @default(teacher)
   github_id  String?  @unique
   avatar_url String?
   is_active  Boolean  @default(true)
@@ -172,8 +190,36 @@ model User {
   push_subscriptions   UserPushSubscription[] @relation("UserPushSubscriptions")
   teacher_overrides    TeacherOverride[]      @relation("UserOverrides")
   submission_feedback  SubmissionFeedback[]   @relation("UserFeedback")
+  resource_grants_created   ResourceGrant[] @relation("ResourceGrantCreatedBy")
+  resource_grants_principal ResourceGrant[] @relation("ResourceGrantPrincipalUser")
 
   @@map("users")
+}
+
+/// Row-level access grants. Owner rows are backfilled from legacy created_by_id / uploaded_by.
+/// Pending shares use principal_email until the invitee signs up with a matching verified email.
+model ResourceGrant {
+  id                 String                     @id @default(cuid())
+  resource_type      ResourceGrantResourceType
+  resource_id        String
+  principal_type     ResourceGrantPrincipalType @default(user)
+  principal_user_id  String?
+  /// Normalised lowercase email for pending invites or display; optional when principal_user_id is set.
+  principal_email    String?
+  role               ResourceGrantRole
+  created_by         String
+  accepted_at        DateTime?
+  revoked_at         DateTime?
+  created_at         DateTime                   @default(now())
+  updated_at         DateTime                   @updatedAt
+
+  created_by_user User  @relation("ResourceGrantCreatedBy", fields: [created_by], references: [id])
+  principal_user  User? @relation("ResourceGrantPrincipalUser", fields: [principal_user_id], references: [id])
+
+  @@index([resource_type, resource_id])
+  @@index([principal_user_id, resource_type])
+  @@index([principal_email, resource_type])
+  @@map("resource_grants")
 }
 
 model Question {

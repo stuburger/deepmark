@@ -1,13 +1,14 @@
 "use server"
 
+import { publicAction } from "@/lib/authz"
 import { headers } from "next/headers"
 import { redirect } from "next/navigation"
 import { clearTokens, getClient } from "./auth"
 
-export async function logout() {
+export const logout = publicAction.action(async () => {
 	await clearTokens()
 	redirect("/login")
-}
+})
 
 async function authorizeWith(provider: "github" | "google") {
 	const headersList = await headers()
@@ -26,10 +27,10 @@ async function authorizeWith(provider: "github" | "google") {
 	redirect(url)
 }
 
-export async function login() {
+export const login = publicAction.action(async () => {
 	await authorizeWith("github")
-}
+})
 
-export async function loginWithGoogle() {
+export const loginWithGoogle = publicAction.action(async () => {
 	await authorizeWith("google")
-}
+})

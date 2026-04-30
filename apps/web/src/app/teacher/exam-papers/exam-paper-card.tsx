@@ -54,16 +54,16 @@ export function ExamPaperCard({ paper }: { paper: ExamPaperListItem }) {
 	const [hidden, setHidden] = useState(false)
 
 	const { mutate: doDelete, isPending: deleting } = useMutation({
-		mutationFn: () => deleteExamPaper(paper.id),
+		mutationFn: () => deleteExamPaper({ id: paper.id }),
 		onMutate: () => {
 			// Close modal and hide card immediately — revert in onError if needed
 			setConfirmOpen(false)
 			setHidden(true)
 		},
 		onSuccess: (result) => {
-			if (!result.ok) {
+			if (result?.serverError) {
 				setHidden(false)
-				toast.error(result.error)
+				toast.error(result.serverError)
 				return
 			}
 			router.refresh()

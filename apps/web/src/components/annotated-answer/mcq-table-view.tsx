@@ -21,10 +21,7 @@ import { useGradingData } from "./grading-data-context"
  * (doc attr wins, PG row fallback). Centralised in
  * `@/lib/marking/overrides/resolve` so this logic is pinned by a unit test.
  */
-function rowOverride(
-	row: McqRow,
-	pgRow: TeacherOverride | undefined,
-) {
+function rowOverride(row: McqRow, pgRow: TeacherOverride | undefined) {
 	return resolveTeacherOverride(
 		row.teacherOverride ?? null,
 		row.teacherFeedbackOverride ?? null,
@@ -149,7 +146,9 @@ export function McqTableView({
 												} else {
 													saveOverride(r.questionId, {
 														score_override:
-															(r.awardedScore ?? 0) >= r.maxScore ? 0 : r.maxScore,
+															(r.awardedScore ?? 0) >= r.maxScore
+																? 0
+																: r.maxScore,
 														reason: null,
 														feedback_override: undefined,
 													})
@@ -164,7 +163,9 @@ export function McqTableView({
 													} else {
 														saveOverride(r.questionId, {
 															score_override:
-																(r.awardedScore ?? 0) >= r.maxScore ? 0 : r.maxScore,
+																(r.awardedScore ?? 0) >= r.maxScore
+																	? 0
+																	: r.maxScore,
 															reason: null,
 															feedback_override: undefined,
 														})

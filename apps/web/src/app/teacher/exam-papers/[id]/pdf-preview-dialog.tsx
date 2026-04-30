@@ -77,8 +77,8 @@ export function PdfDocumentsPanel({ examPaperId }: { examPaperId: string }) {
 	const [documents, setDocuments] = useState<PdfDocument[] | null>(null)
 
 	useEffect(() => {
-		getPdfDocumentsForPaper(examPaperId).then((r) => {
-			if (r.ok) setDocuments(r.documents)
+		getPdfDocumentsForPaper({ examPaperId }).then((r) => {
+			if (r?.data?.documents) setDocuments(r.data.documents)
 		})
 	}, [examPaperId])
 

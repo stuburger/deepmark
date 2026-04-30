@@ -13,29 +13,31 @@ export default async function ExamPaperDetailPage({
 	const { id } = await params
 	const [result, liveStateResult, submissionsResult, statsResult] =
 		await Promise.all([
-			getExamPaperDetail(id),
-			getExamPaperIngestionLiveState(id),
+			getExamPaperDetail({ id }),
+			getExamPaperIngestionLiveState({ examPaperId: id }),
 			listMySubmissions(),
-			getExamPaperStats(id),
+			getExamPaperStats({ examPaperId: id }),
 		])
-	if (!result.ok) notFound()
+	const paper = result?.data?.paper
+	if (!paper) notFound()
 
-	const initialLiveState = liveStateResult.ok
+	const liveData = liveStateResult?.data
+	const initialLiveState = liveData
 		? {
 				ok: true as const,
-				jobs: liveStateResult.jobs,
-				documents: liveStateResult.documents,
+				jobs: liveData.jobs,
+				documents: liveData.documents,
 			}
 		: { ok: true as const, jobs: [], documents: [] }
-	const initialSubmissions = submissionsResult.ok
-		? submissionsResult.submissions.filter((s) => s.exam_paper_id === id)
+	const initialSubmissions = submissionsResult?.data?.submissions
+		? submissionsResult.data.submissions.filter((s) => s.exam_paper_id === id)
 		: []
-	const initialAnalytics = statsResult.ok ? statsResult.stats : null
+	const initialAnalytics = statsResult?.data?.stats ?? null
 
 	return (
 		<div className="space-y-6">
 			<ExamPaperPageShell
-				paper={result.paper}
+				paper={paper}
 				initialLiveState={initialLiveState}
 				initialSubmissions={initialSubmissions}
 				initialAnalytics={initialAnalytics}

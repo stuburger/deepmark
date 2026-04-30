@@ -1,5 +1,15 @@
 import { login, loginWithGoogle } from "@/lib/actions"
 import { auth } from "@/lib/auth"
+
+async function loginFormAction() {
+	"use server"
+	await login()
+}
+
+async function loginWithGoogleFormAction() {
+	"use server"
+	await loginWithGoogle()
+}
 import { Github } from "lucide-react"
 import Image from "next/image"
 import { redirect } from "next/navigation"
@@ -41,7 +51,7 @@ export default async function LoginPage() {
 				<Separator className="bg-white/15" />
 
 				<div className="flex flex-col gap-3">
-					<form action={login}>
+					<form action={loginFormAction}>
 						<Button
 							type="submit"
 							variant="outline"
@@ -52,7 +62,7 @@ export default async function LoginPage() {
 						</Button>
 					</form>
 
-					<form action={loginWithGoogle}>
+					<form action={loginWithGoogleFormAction}>
 						<Button
 							type="submit"
 							variant="outline"

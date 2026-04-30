@@ -1,15 +1,12 @@
 "use server"
 
+import { resourceAction, scopedAction } from "@/lib/authz"
 import { db } from "@/lib/db"
 import type { GradingStatus, OcrStatus } from "@mcp-gcse/db"
-import { auth } from "../../auth"
+import { z } from "zod"
 import { sumSectionPoints } from "../paper-totals"
 import { deriveScanStatus } from "../status"
-import type {
-	GradingResult,
-	ListMySubmissionsResult,
-	SubmissionHistoryItem,
-} from "../types"
+import type { GradingResult, SubmissionHistoryItem } from "../types"
 
 const listingInclude = {
 	exam_paper: { select: { id: true, title: true } },
@@ -28,13 +25,6 @@ const listingInclude = {
 	},
 } as const
 
-/**
- * Batch-fetch the total available marks for each exam paper.
- * `total_max` in the UI should reflect the paper's invariant (sum of
- * questions.points across all questions), NOT the sum across whichever
- * questions happened to be graded — otherwise a partially-graded submission
- * displays "3/3 · 100%" when the student actually earned 3 out of 43.
- */
 async function fetchPaperTotals(
 	paperIds: string[],
 ): Promise<Map<string, number>> {
@@ -103,62 +93,69 @@ function mapSubmissionToListItem(
 	}
 }
 
-export async function listMySubmissions(): Promise<ListMySubmissionsResult> {
-	const session = await auth()
-	if (!session) return { ok: false, error: "Not authenticated" }
-
-	const subs = await db.studentSubmission.findMany({
-		where: { superseded_at: null },
-		orderBy: { created_at: "desc" },
-		include: listingInclude,
-	})
-
-	const paperIds = [...new Set(subs.map((s) => s.exam_paper_id))]
-	const paperTotals = await fetchPaperTotals(paperIds)
-
-	return {
-		ok: true,
-		submissions: subs.map((sub) =>
-			mapSubmissionToListItem(sub, paperTotals.get(sub.exam_paper_id) ?? 0),
-		),
-	}
-}
-
-export async function listSubmissionsForPaper(
-	examPaperId: string,
-): Promise<ListMySubmissionsResult> {
-	const session = await auth()
-	if (!session) return { ok: false, error: "Not authenticated" }
-
-	// All three queries are independent — version counts groupBy the whole
-	// paper (including superseded rows, which the main query filters out),
-	// so it doesn't depend on the active-submissions s3_key list. Running
-	// them concurrently shaves a round-trip off the list render.
-	const [subs, paperTotals, versionCounts] = await Promise.all([
-		db.studentSubmission.findMany({
-			where: {
-				exam_paper_id: examPaperId,
-				superseded_at: null,
-			},
+export const listMySubmissions = scopedAction({
+	scope: "submission",
+	role: "viewer",
+}).action(
+	async ({ ctx }): Promise<{ submissions: SubmissionHistoryItem[] }> => {
+		const subs = await db.studentSubmission.findMany({
+			where: { superseded_at: null, ...ctx.accessWhere },
 			orderBy: { created_at: "desc" },
 			include: listingInclude,
-		}),
-		fetchPaperTotals([examPaperId]),
-		db.studentSubmission.groupBy({
-			by: ["s3_key"],
-			where: { exam_paper_id: examPaperId },
-			_count: true,
-		}),
-	])
+		})
 
-	const paperTotal = paperTotals.get(examPaperId) ?? 0
-	const countByKey = new Map(versionCounts.map((v) => [v.s3_key, v._count]))
+		const paperIds = [...new Set(subs.map((s) => s.exam_paper_id))]
+		const paperTotals = await fetchPaperTotals(paperIds)
 
-	return {
-		ok: true,
-		submissions: subs.map((sub) => ({
-			...mapSubmissionToListItem(sub, paperTotal),
-			version_count: countByKey.get(sub.s3_key) ?? 1,
-		})),
-	}
-}
+		return {
+			submissions: subs.map((sub) =>
+				mapSubmissionToListItem(sub, paperTotals.get(sub.exam_paper_id) ?? 0),
+			),
+		}
+	},
+)
+
+export const listSubmissionsForPaper = resourceAction({
+	type: "examPaper",
+	role: "viewer",
+	schema: z.object({ examPaperId: z.string() }),
+	id: ({ examPaperId }) => examPaperId,
+}).action(
+	async ({
+		parsedInput: { examPaperId },
+		ctx,
+	}): Promise<{
+		submissions: (SubmissionHistoryItem & { version_count: number })[]
+	}> => {
+		const { submissionAccessWhere } = await import("@/lib/authz")
+		const accessWhere = await submissionAccessWhere(ctx.user, "viewer")
+
+		const [subs, paperTotals, versionCounts] = await Promise.all([
+			db.studentSubmission.findMany({
+				where: {
+					exam_paper_id: examPaperId,
+					superseded_at: null,
+					...accessWhere,
+				},
+				orderBy: { created_at: "desc" },
+				include: listingInclude,
+			}),
+			fetchPaperTotals([examPaperId]),
+			db.studentSubmission.groupBy({
+				by: ["s3_key"],
+				where: { exam_paper_id: examPaperId },
+				_count: true,
+			}),
+		])
+
+		const paperTotal = paperTotals.get(examPaperId) ?? 0
+		const countByKey = new Map(versionCounts.map((v) => [v.s3_key, v._count]))
+
+		return {
+			submissions: subs.map((sub) => ({
+				...mapSubmissionToListItem(sub, paperTotal),
+				version_count: countByKey.get(sub.s3_key) ?? 1,
+			})),
+		}
+	},
+)

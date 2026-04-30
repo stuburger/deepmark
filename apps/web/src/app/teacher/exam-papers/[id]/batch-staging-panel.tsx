@@ -53,6 +53,7 @@ export function BatchStagingPanel({
 
 	return (
 		<ScriptReviewLayout
+			batchId={ingestion.batchId}
 			paperId={ingestion.paperId}
 			scripts={scripts}
 			onUpdateScriptName={onUpdateScriptName}
@@ -68,6 +69,7 @@ export function BatchStagingPanel({
 // ── Resizable two-panel review layout ────────────────────────────────────────
 
 function ScriptReviewLayout({
+	batchId,
 	paperId,
 	scripts,
 	onUpdateScriptName,
@@ -76,6 +78,7 @@ function ScriptReviewLayout({
 	onDeleteScript,
 	onAddScript,
 }: {
+	batchId: string
 	paperId: string
 	scripts: StagedScript[]
 	onUpdateScriptName: (id: string, name: string) => Promise<void>
@@ -92,6 +95,7 @@ function ScriptReviewLayout({
 			{/* LEFT — all unsubmitted scripts (checked and unchecked) */}
 			<ResizablePanel defaultSize={58} minSize={30}>
 				<ScriptReviewLeftPanel
+					batchId={batchId}
 					paperId={paperId}
 					scripts={scripts}
 					onUpdateScriptName={onUpdateScriptName}
@@ -107,6 +111,7 @@ function ScriptReviewLayout({
 			{/* RIGHT — paper tray (confirmed scripts) */}
 			<ResizablePanel defaultSize={42} minSize={25}>
 				<PaperTrayPanel
+					batchId={batchId}
 					confirmedScripts={confirmedScripts}
 					onToggleExclude={onToggleExclude}
 				/>
@@ -118,6 +123,7 @@ function ScriptReviewLayout({
 // ── Left panel: toolbar (fixed) + scrollable script list ─────────────────────
 
 function ScriptReviewLeftPanel({
+	batchId,
 	paperId,
 	scripts,
 	onUpdateScriptName,
@@ -126,6 +132,7 @@ function ScriptReviewLeftPanel({
 	onDeleteScript,
 	onAddScript,
 }: {
+	batchId: string
 	paperId: string
 	scripts: StagedScript[]
 	onUpdateScriptName: (id: string, name: string) => Promise<void>
@@ -202,6 +209,7 @@ function ScriptReviewLeftPanel({
 				) : (
 					<StagedScriptReviewList
 						ref={listRef}
+						batchId={batchId}
 						paperId={paperId}
 						scripts={scripts}
 						collapsedMap={collapsedMap}

@@ -10,6 +10,7 @@ const IntrospectResponse = z.discriminatedUnion("active", [
 	z.object({
 		active: z.literal(true),
 		sub: z.string(),
+		email: z.string().nullable().optional(),
 		exp: z.number().optional(),
 		scope: z.string().optional(),
 		client_id: z.string().optional(),

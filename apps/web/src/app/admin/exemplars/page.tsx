@@ -144,6 +144,7 @@ function ExemplarRow({ exemplar }: { exemplar: ExemplarAnswerListItem }) {
 
 export default async function ExemplarAnswersPage() {
 	const result = await listExemplarAnswers()
+	const exemplars = result?.data?.exemplars
 
 	return (
 		<div className="space-y-6">
@@ -158,9 +159,9 @@ export default async function ExemplarAnswersPage() {
 				<CardHeader>
 					<CardTitle>
 						All exemplars
-						{result.ok && (
+						{exemplars && (
 							<span className="ml-2 text-base font-normal text-muted-foreground">
-								({result.exemplars.length})
+								({exemplars.length})
 							</span>
 						)}
 					</CardTitle>
@@ -170,9 +171,9 @@ export default async function ExemplarAnswersPage() {
 					</CardDescription>
 				</CardHeader>
 				<CardContent>
-					{!result.ok ? (
-						<p className="text-sm text-destructive">{result.error}</p>
-					) : result.exemplars.length === 0 ? (
+					{result?.serverError ? (
+						<p className="text-sm text-destructive">{result.serverError}</p>
+					) : !exemplars || exemplars.length === 0 ? (
 						<p className="text-sm text-muted-foreground py-8 text-center">
 							No exemplar answers yet. Upload an exemplar PDF to get started.
 						</p>
@@ -195,7 +196,7 @@ export default async function ExemplarAnswersPage() {
 								</TableRow>
 							</TableHeader>
 							<TableBody>
-								{result.exemplars.map((exemplar) => (
+								{exemplars.map((exemplar) => (
 									<ExemplarRow key={exemplar.id} exemplar={exemplar} />
 								))}
 							</TableBody>

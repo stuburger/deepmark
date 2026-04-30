@@ -7,11 +7,12 @@ import { NewExamPaperButton } from "./new-exam-paper-button"
 async function ExamPaperGrid() {
 	const result = await listExamPapers()
 
-	if (!result.ok) {
-		return <p className="text-sm text-destructive">{result.error}</p>
+	if (result?.serverError) {
+		return <p className="text-sm text-destructive">{result.serverError}</p>
 	}
 
-	if (result.papers.length === 0) {
+	const papers = result?.data?.papers ?? []
+	if (papers.length === 0) {
 		return (
 			<p className="text-sm text-muted-foreground py-16 text-center">
 				No exam papers yet. Click &ldquo;New exam paper&rdquo; to create one.
@@ -21,7 +22,7 @@ async function ExamPaperGrid() {
 
 	return (
 		<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-			{result.papers.map((paper) => (
+			{papers.map((paper) => (
 				<ExamPaperCard key={paper.id} paper={paper} />
 			))}
 		</div>

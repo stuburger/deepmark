@@ -38,6 +38,11 @@ declare module "sst" {
       "type": "sst.sst.Secret"
       "value": string
     }
+    "CollabAuthz": {
+      "name": string
+      "type": "sst.aws.Function"
+      "url": string
+    }
     "CollabServiceSecret": {
       "type": "sst.sst.Secret"
       "value": string
@@ -67,8 +72,7 @@ declare module "sst" {
       "value": string
     }
     "HocuspocusServer": {
-      "service": string
-      "type": "sst.aws.Service"
+      "type": "sst.sst.Linkable"
       "url": string
     }
     "Interactions": {
@@ -123,9 +127,6 @@ declare module "sst" {
     "VapidPublicKey": {
       "type": "sst.sst.Secret"
       "value": string
-    }
-    "Vpc": {
-      "type": "sst.aws.Vpc"
     }
     "Web": {
       "type": "sst.aws.Nextjs"

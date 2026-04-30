@@ -8,7 +8,7 @@ import { invalidateOnStageTransitions } from "./transitions"
 import type { JobStages } from "./types"
 
 /**
- * Opens a persistent SSE connection to /api/submissions/:jobId/events and
+ * Opens a persistent SSE connection to /api/submissions/:submissionId/events and
  * mirrors every snapshot/update event into the React Query cache under
  * `queryKeys.jobStages(jobId)`. Consumers keep using `useQuery` against that
  * key — this hook just replaces polling with a push feed.

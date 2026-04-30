@@ -1,7 +1,7 @@
 "use client"
 
 import type { PageKey, StagedScript } from "@/lib/batch/types"
-import { scanProxyUrl } from "@/lib/scan-url"
+import { stagedScriptScanPageUrl } from "@/lib/scan-url"
 import { DndContext, DragOverlay, closestCenter } from "@dnd-kit/core"
 import type { DragEndEvent, DragOverEvent, DragStartEvent } from "@dnd-kit/core"
 import { arrayMove } from "@dnd-kit/sortable"
@@ -41,6 +41,7 @@ export type StagedScriptReviewListHandle = {
 // ─── Props ────────────────────────────────────────────────────────────────────
 
 type StagedScriptListProps = {
+	batchId: string
 	paperId: string
 	scripts: StagedScript[]
 	collapsedMap: Record<string, boolean>
@@ -69,6 +70,7 @@ export const StagedScriptReviewList = forwardRef<
 	StagedScriptListProps
 >(function StagedScriptReviewList(
 	{
+		batchId,
 		paperId,
 		scripts,
 		collapsedMap,
@@ -94,7 +96,7 @@ export const StagedScriptReviewList = forwardRef<
 		openCarousel,
 		persistPageKeys,
 		handleDelete,
-	} = useStagedScriptsState(paperId, scripts, onDeleteScript)
+	} = useStagedScriptsState(paperId, batchId, scripts, onDeleteScript)
 
 	// ── Multi-select ──────────────────────────────────────────────────────────
 	const [selectedPageKeys, setSelectedPageKeys] = useState<Set<string>>(
@@ -142,7 +144,7 @@ export const StagedScriptReviewList = forwardRef<
 		onPageDeleted?.({
 			pageKey,
 			pageKeyData,
-			url: scanProxyUrl(pageKey),
+			url: stagedScriptScanPageUrl(batchId, sourceScript.id, pageKeyData.order),
 			scriptId: sourceScript.id,
 			scriptName:
 				localNames[sourceScript.id] ??
@@ -176,7 +178,7 @@ export const StagedScriptReviewList = forwardRef<
 		void persistPageKeys(updated)
 	}
 
-	useImperativeHandle(ref, () => ({ restorePage: handleRestorePage }), [])
+	useImperativeHandle(ref, () => ({ restorePage: handleRestorePage }))
 
 	// ── DnD handlers ──────────────────────────────────────────────────────────
 
@@ -187,6 +189,8 @@ export const StagedScriptReviewList = forwardRef<
 			page_keys: [...s.page_keys],
 		}))
 		const key = event.active.id as string
+		const sourceScript = findScriptByPageKey(key, localScripts)
+		const sourcePage = sourceScript?.page_keys.find((pk) => pk.s3_key === key)
 
 		// Multi-drag: carry the group if the dragged key is already selected.
 		// Dragging an unselected key cancels the selection and drags only that page.
@@ -198,7 +202,10 @@ export const StagedScriptReviewList = forwardRef<
 
 		setActiveDrag({
 			key,
-			url: scanProxyUrl(key),
+			url:
+				sourceScript && sourcePage
+					? stagedScriptScanPageUrl(batchId, sourceScript.id, sourcePage.order)
+					: "",
 			count: isGroupDrag ? selectedPageKeys.size : 1,
 		})
 	}
@@ -420,6 +427,7 @@ export const StagedScriptReviewList = forwardRef<
 								}}
 							>
 								<ListViewScriptSection
+									batchId={batchId}
 									script={script}
 									localName={localNames[script.id] ?? ""}
 									selectedPageKeys={selectedPageKeys}

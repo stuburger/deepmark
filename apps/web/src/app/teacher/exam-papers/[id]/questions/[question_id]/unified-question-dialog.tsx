@@ -50,14 +50,14 @@ export function UnifiedQuestionDialog({
 		setDetail(null)
 		setMarkSchemeDraft(null)
 		setLoadingDetail(true)
-		getQuestionDetail(questionId).then((res) => {
+		getQuestionDetail({ questionId }).then((res) => {
 			if (cancelled) return
 			setLoadingDetail(false)
-			if (!res.ok) {
+			if (res?.serverError || !res?.data?.question) {
 				toast.error("Failed to load mark scheme")
 				return
 			}
-			setDetail(res.question)
+			setDetail(res.data.question)
 		})
 		return () => {
 			cancelled = true

@@ -36,9 +36,10 @@ export function useExamPaperLiveQueries({
 	const { data: paper } = useQuery({
 		queryKey: queryKeys.examPaper(initialPaper.id),
 		queryFn: async () => {
-			const r = await getExamPaperDetail(initialPaper.id)
-			if (!r.ok) throw new Error(r.error)
-			return r.paper
+			const r = await getExamPaperDetail({ id: initialPaper.id })
+			if (r?.serverError) throw new Error(r.serverError)
+			if (!r?.data?.paper) throw new Error("Exam paper not found")
+			return r.data.paper
 		},
 		initialData: initialPaper,
 	})
@@ -47,9 +48,10 @@ export function useExamPaperLiveQueries({
 	const { data: liveState } = useQuery({
 		queryKey: queryKeys.examPaperLiveState(paper.id),
 		queryFn: async () => {
-			const r = await getExamPaperIngestionLiveState(paper.id)
-			if (!r.ok) throw new Error(r.error)
-			return r
+			const r = await getExamPaperIngestionLiveState({ examPaperId: paper.id })
+			if (r?.serverError) throw new Error(r.serverError)
+			if (!r?.data) throw new Error("Failed to load ingestion state")
+			return { ok: true as const, ...r.data }
 		},
 		initialData: initialLiveState,
 		refetchInterval: (q) => {
@@ -112,9 +114,8 @@ export function useExamPaperLiveQueries({
 		useQuery<ExamPaperStats | null>({
 			queryKey: queryKeys.examPaperStats(paper.id),
 			queryFn: async () => {
-				const r = await getExamPaperStats(paper.id)
-				if (!r.ok) return null
-				return r.stats
+				const r = await getExamPaperStats({ examPaperId: paper.id })
+				return r?.data?.stats ?? null
 			},
 			initialData: initialAnalytics ?? undefined,
 			enabled: initialAnalytics != null || activeTab === "analytics",

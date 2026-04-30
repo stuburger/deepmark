@@ -24,9 +24,10 @@ export function useJobQuery(
 	return useQuery({
 		queryKey: queryKeys.studentJob(jobId),
 		queryFn: async () => {
-			const r = await getStudentPaperJob(jobId)
-			if (!r.ok) throw new Error(r.error)
-			return r.data
+			const r = await getStudentPaperJob({ jobId })
+			if (r?.serverError) throw new Error(r.serverError)
+			if (!r?.data?.data) throw new Error("Job not found")
+			return r.data.data
 		},
 		initialData,
 		staleTime: 0,

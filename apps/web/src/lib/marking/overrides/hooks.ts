@@ -20,8 +20,8 @@ export function useTeacherOverrides(submissionId: string | undefined) {
 		queryKey: queryKeys.teacherOverrides(submissionId ?? ""),
 		queryFn: async () => {
 			if (!submissionId) return []
-			const r = await getTeacherOverrides(submissionId)
-			return r.ok ? r.overrides : []
+			const r = await getTeacherOverrides({ submissionId })
+			return r?.data?.overrides ?? []
 		},
 		enabled: !!submissionId,
 		staleTime: Number.POSITIVE_INFINITY,
@@ -48,9 +48,14 @@ export function useTeacherOverrideMutations(submissionId: string | undefined) {
 			input: UpsertTeacherOverrideInput
 		}) => {
 			if (!submissionId) throw new Error("No submission")
-			const r = await upsertTeacherOverride(submissionId, questionId, input)
-			if (!r.ok) throw new Error(r.error)
-			return r.override
+			const r = await upsertTeacherOverride({
+				submissionId,
+				questionId,
+				input,
+			})
+			if (r?.serverError) throw new Error(r.serverError)
+			if (!r?.data) throw new Error("Failed to save override")
+			return r.data.override
 		},
 		onMutate: async ({ questionId, input }) => {
 			await queryClient.cancelQueries({ queryKey: key })
@@ -98,8 +103,8 @@ export function useTeacherOverrideMutations(submissionId: string | undefined) {
 	const deleteMutation = useMutation({
 		mutationFn: async (questionId: string) => {
 			if (!submissionId) throw new Error("No submission")
-			const r = await deleteTeacherOverride(submissionId, questionId)
-			if (!r.ok) throw new Error(r.error)
+			const r = await deleteTeacherOverride({ submissionId, questionId })
+			if (r?.serverError) throw new Error(r.serverError)
 		},
 		onMutate: async (questionId) => {
 			await queryClient.cancelQueries({ queryKey: key })
@@ -128,12 +133,12 @@ export function useTeacherOverrideMutations(submissionId: string | undefined) {
 			patch: { whatWentWell?: string[]; evenBetterIf?: string[] }
 		}) => {
 			if (!submissionId) throw new Error("No submission")
-			const r = await saveQuestionFeedbackBullets(
+			const r = await saveQuestionFeedbackBullets({
 				submissionId,
 				questionId,
 				patch,
-			)
-			if (!r.ok) throw new Error(r.error)
+			})
+			if (r?.serverError) throw new Error(r.serverError)
 		},
 		onError: () => toast.error("Failed to save feedback"),
 		// Doc is the source of truth; Hocuspocus echoes the change back to

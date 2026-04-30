@@ -33,8 +33,8 @@ export function MarkingJobDialog({
 		queryKey: queryKeys.studentJob(jobId ?? ""),
 		queryFn: async () => {
 			if (!jobId) return null
-			const result = await getStudentPaperJobForPaper(examPaperId, jobId)
-			return result.ok ? result.data : null
+			const result = await getStudentPaperJobForPaper({ examPaperId, jobId })
+			return result?.data?.data ?? null
 		},
 		enabled,
 		staleTime: 0,
@@ -44,8 +44,8 @@ export function MarkingJobDialog({
 		queryKey: queryKeys.jobScanPages(jobId ?? ""),
 		queryFn: async () => {
 			if (!jobId) return []
-			const result = await getJobScanPages(jobId)
-			return result.ok ? result.pages : []
+			const result = await getJobScanPages({ jobId })
+			return result?.data?.pages ?? []
 		},
 		enabled,
 		staleTime: Number.POSITIVE_INFINITY,
@@ -55,8 +55,8 @@ export function MarkingJobDialog({
 		queryKey: queryKeys.jobPageTokens(jobId ?? ""),
 		queryFn: async () => {
 			if (!jobId) return []
-			const result = await getJobPageTokens(jobId)
-			return result.ok ? result.tokens : []
+			const result = await getJobPageTokens({ jobId })
+			return result?.data?.tokens ?? []
 		},
 		enabled,
 		staleTime: Number.POSITIVE_INFINITY,
@@ -66,8 +66,8 @@ export function MarkingJobDialog({
 		queryKey: queryKeys.jobStages(jobId ?? ""),
 		queryFn: async () => {
 			if (!jobId) return null
-			const result = await getJobStages(jobId)
-			return result.ok ? result.stages : null
+			const result = await getJobStages({ jobId })
+			return result?.data?.stages ?? null
 		},
 		enabled,
 		staleTime: 0,

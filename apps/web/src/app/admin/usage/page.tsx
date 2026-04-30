@@ -15,7 +15,15 @@ import { UsageOverTimeChart } from "./_components/usage-over-time-chart"
 import { UsageStatCards } from "./_components/usage-stat-cards"
 
 export default async function UsagePage() {
-	const data = await getUsageAnalytics()
+	const result = await getUsageAnalytics()
+	const data = result?.data
+	if (!data) {
+		return (
+			<div className="p-6 text-sm text-destructive">
+				{result?.serverError ?? "Failed to load usage analytics"}
+			</div>
+		)
+	}
 
 	return (
 		<div className="space-y-6">

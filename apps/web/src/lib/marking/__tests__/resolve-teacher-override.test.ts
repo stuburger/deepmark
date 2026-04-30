@@ -3,7 +3,10 @@ import type { TeacherOverride } from "@/lib/marking/types"
 import type { TeacherOverrideAttrs } from "@mcp-gcse/shared"
 import { describe, expect, it } from "vitest"
 
-const docOverride = (score: number, feedback: string | null = null): TeacherOverrideAttrs => ({
+const docOverride = (
+	score: number,
+	feedback: string | null = null,
+): TeacherOverrideAttrs => ({
 	score,
 	reason: "doc reason",
 	feedback,

@@ -31,25 +31,25 @@ export function ReRunMenu({
 	onNavigateToJob: (newJobId: string) => void
 }) {
 	const gradingMutation = useMutation({
-		mutationFn: () => retriggerGrading(jobId),
+		mutationFn: () => retriggerGrading({ jobId }),
 		onSuccess: (result) => {
-			if (!result.ok) {
-				toast.error(result.error)
+			if (result?.serverError) {
+				toast.error(result.serverError)
 				return
 			}
-			onNavigateToJob(result.newJobId)
+			if (result?.data) onNavigateToJob(result.data.newJobId)
 		},
 		onError: () => toast.error("Failed to re-grade"),
 	})
 
 	const ocrMutation = useMutation({
-		mutationFn: () => retriggerOcr(jobId),
+		mutationFn: () => retriggerOcr({ jobId }),
 		onSuccess: (result) => {
-			if (!result.ok) {
-				toast.error(result.error)
+			if (result?.serverError) {
+				toast.error(result.serverError)
 				return
 			}
-			onNavigateToJob(result.newJobId)
+			if (result?.data) onNavigateToJob(result.data.newJobId)
 		},
 		onError: () => toast.error("Failed to re-scan"),
 	})

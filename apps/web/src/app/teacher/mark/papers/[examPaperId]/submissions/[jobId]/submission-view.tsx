@@ -222,6 +222,7 @@ export function SubmissionView({
 								className="flex-1 min-h-0 overflow-hidden m-0 p-0"
 							>
 								<ScanPanel
+									submissionId={docSubmissionId}
 									scanPages={scanPages}
 									pageTokens={pageTokens}
 									gradingResults={data.grading_results}
@@ -261,6 +262,7 @@ export function SubmissionView({
 					>
 						<ResizablePanel defaultSize={20} minSize={15}>
 							<ScanPanel
+								submissionId={docSubmissionId}
 								scanPages={scanPages}
 								pageTokens={pageTokens}
 								gradingResults={data.grading_results}

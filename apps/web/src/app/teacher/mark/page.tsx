@@ -145,7 +145,7 @@ function SubmissionRow({ sub }: { sub: SubmissionHistoryItem }) {
 
 export default async function MarkPage() {
 	const result = await listMySubmissions()
-	const submissions = result.ok ? result.submissions : []
+	const submissions = result?.data?.submissions ?? []
 	const completed = submissions.filter((s) => s.status === "ocr_complete")
 
 	return (

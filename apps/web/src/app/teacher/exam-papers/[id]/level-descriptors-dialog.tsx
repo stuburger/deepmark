@@ -41,10 +41,13 @@ export function LevelDescriptorsDialog({
 
 	async function handleSave() {
 		setSaving(true)
-		const result = await updateLevelDescriptors(examPaperId, value)
+		const result = await updateLevelDescriptors({
+			examPaperId,
+			levelDescriptors: value,
+		})
 		setSaving(false)
-		if (!result.ok) {
-			toast.error(result.error)
+		if (result?.serverError) {
+			toast.error(result.serverError)
 			return
 		}
 		const trimmed = value.trim()

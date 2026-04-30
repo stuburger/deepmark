@@ -114,7 +114,8 @@ function createEntry(submissionId: string): CacheEntry {
 			name: buildSubmissionDocumentName(STAGE, submissionId),
 			document: doc,
 			token: async () => {
-				const token = await getCollabToken()
+				const result = await getCollabToken()
+				const token = result?.data?.token
 				if (!token) {
 					throw new Error("No active session for collab connection")
 				}

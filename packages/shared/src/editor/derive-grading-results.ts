@@ -151,13 +151,17 @@ export function deriveTeacherOverridesFromDoc(
 		if (node.type.name === "mcqTable") {
 			const rows = (node.attrs.results as McqTableRow[] | undefined) ?? []
 			for (const row of rows) {
-				const o = (row as unknown as {
-					teacherOverride: TeacherOverrideShape | null
-					teacherFeedbackOverride: string | null
-				}).teacherOverride
-				const f = (row as unknown as {
-					teacherFeedbackOverride: string | null
-				}).teacherFeedbackOverride
+				const o = (
+					row as unknown as {
+						teacherOverride: TeacherOverrideShape | null
+						teacherFeedbackOverride: string | null
+					}
+				).teacherOverride
+				const f = (
+					row as unknown as {
+						teacherFeedbackOverride: string | null
+					}
+				).teacherFeedbackOverride
 				if (o == null && f == null) continue
 				out.push({
 					question_id: row.questionId,
@@ -177,7 +181,10 @@ export function deriveTeacherOverridesFromDoc(
 				teacherFeedbackOverride: string | null
 			}
 			if (attrs.questionId == null) return false
-			if (attrs.teacherOverride == null && attrs.teacherFeedbackOverride == null)
+			if (
+				attrs.teacherOverride == null &&
+				attrs.teacherFeedbackOverride == null
+			)
 				return false
 			out.push({
 				question_id: attrs.questionId,

@@ -1,48 +1,49 @@
 "use server"
 
+import { authenticatedAction, resourceAction } from "@/lib/authz"
 import { db } from "@/lib/db"
-import { auth } from "../../auth"
-import { embedText } from "../../embeddings"
-import { log } from "../../logger"
-import type { UpdateQuestionInput } from "../types"
+import { z } from "zod"
+import { embedText } from "../../server-only/embeddings"
 
-const TAG = "exam-paper/questions"
-
-// ─── Update question ──────────────────────────────────────────────────────────
-
-export type UpdateQuestionResult =
-	| { ok: true; embeddingUpdated: boolean }
-	| { ok: false; error: string }
+const updateQuestionInput = z.object({
+	questionId: z.string(),
+	input: z.object({
+		text: z.string().optional(),
+		points: z.number().int().min(0).optional(),
+		question_number: z.string().nullable().optional(),
+	}),
+})
 
 /**
  * Updates question text and/or marks. When text changes, regenerates the
  * embedding via Gemini so semantic search and mark-scheme matching stay accurate.
  */
-export async function updateQuestion(
-	questionId: string,
-	input: UpdateQuestionInput,
-): Promise<UpdateQuestionResult> {
-	const session = await auth()
-	if (!session) return { ok: false, error: "Not authenticated" }
+export const updateQuestion = resourceAction({
+	type: "question",
+	role: "editor",
+	schema: updateQuestionInput,
+	id: ({ questionId }) => questionId,
+}).action(
+	async ({
+		parsedInput: { questionId, input },
+		ctx,
+	}): Promise<{ embeddingUpdated: boolean }> => {
+		const trimmedText = input.text?.trim()
+		if (trimmedText !== undefined && trimmedText === "") {
+			throw new Error("Question text cannot be empty")
+		}
 
-	const trimmedText = input.text?.trim()
-	if (trimmedText !== undefined && trimmedText === "") {
-		return { ok: false, error: "Question text cannot be empty" }
-	}
+		ctx.log.info("updateQuestion called", {
+			questionId,
+			hasText: trimmedText !== undefined,
+			hasPoints: input.points !== undefined,
+		})
 
-	log.info(TAG, "updateQuestion called", {
-		userId: session.userId,
-		questionId,
-		hasText: trimmedText !== undefined,
-		hasPoints: input.points !== undefined,
-	})
-
-	try {
 		const existing = await db.question.findUnique({
 			where: { id: questionId },
 			select: { text: true },
 		})
-		if (!existing) return { ok: false, error: "Question not found" }
+		if (!existing) throw new Error("Question not found")
 
 		const textChanged =
 			trimmedText !== undefined && trimmedText !== existing.text
@@ -68,31 +69,19 @@ export async function updateQuestion(
 					UPDATE questions SET embedding = (${vecStr}::text)::vector WHERE id = ${questionId}
 				`
 				embeddingUpdated = true
-				log.info(TAG, "Embedding regenerated", { questionId })
+				ctx.log.info("Embedding regenerated", { questionId })
 			}
 		}
 
-		log.info(TAG, "Question updated", {
-			userId: session.userId,
+		ctx.log.info("Question updated", {
 			questionId,
 			textChanged,
 			embeddingUpdated,
 		})
 
-		return { ok: true, embeddingUpdated }
-	} catch (err) {
-		log.error(TAG, "updateQuestion failed", {
-			userId: session.userId,
-			questionId,
-			error: String(err),
-		})
-		return { ok: false, error: "Failed to update question" }
-	}
-}
-
-// ─── Delete question ──────────────────────────────────────────────────────────
-
-export type DeleteQuestionResult = { ok: true } | { ok: false; error: string }
+		return { embeddingUpdated }
+	},
+)
 
 /**
  * Fully deletes a question and all associated data in a transaction.
@@ -106,15 +95,15 @@ export type DeleteQuestionResult = { ok: true } | { ok: false; error: string }
  *  6. ExamSectionQuestion
  *  7. Question
  */
-export async function deleteQuestion(
-	questionId: string,
-): Promise<DeleteQuestionResult> {
-	const session = await auth()
-	if (!session) return { ok: false, error: "Not authenticated" }
+export const deleteQuestion = resourceAction({
+	type: "question",
+	role: "editor",
+	schema: z.object({ questionId: z.string() }),
+	id: ({ questionId }) => questionId,
+}).action(
+	async ({ parsedInput: { questionId }, ctx }): Promise<{ ok: true }> => {
+		ctx.log.info("deleteQuestion called", { questionId })
 
-	log.info(TAG, "deleteQuestion called", { userId: session.userId, questionId })
-
-	try {
 		await db.$transaction(async (tx) => {
 			const markSchemes = await tx.markScheme.findMany({
 				where: { question_id: questionId },
@@ -164,74 +153,88 @@ export async function deleteQuestion(
 			await tx.question.delete({ where: { id: questionId } })
 		})
 
-		log.info(TAG, "Question deleted", { userId: session.userId, questionId })
+		ctx.log.info("Question deleted", { questionId })
 		return { ok: true }
-	} catch (err) {
-		log.error(TAG, "deleteQuestion failed", {
-			userId: session.userId,
-			questionId,
-			error: String(err),
-		})
-		return { ok: false, error: "Failed to delete question" }
-	}
-}
+	},
+)
 
 // ─── Reorder ──────────────────────────────────────────────────────────────────
 
-export type ReorderResult = { ok: true } | { ok: false; error: string }
-
-export async function reorderQuestionsInSection(
-	sectionId: string,
-	orderedQuestionIds: string[],
-): Promise<ReorderResult> {
-	const session = await auth()
-	if (!session) return { ok: false, error: "Not authenticated" }
-	try {
-		const n = orderedQuestionIds.length
-		// Two-phase update to avoid unique constraint violations on (exam_section_id, order):
-		// Phase 1 sets orders to a safe high range (n+1..2n), Phase 2 sets final values (1..n).
-		await db.$transaction(async (tx) => {
-			await Promise.all(
-				orderedQuestionIds.map((questionId, index) =>
-					tx.examSectionQuestion.update({
-						where: {
-							exam_section_id_question_id: {
-								exam_section_id: sectionId,
-								question_id: questionId,
-							},
-						},
-						data: { order: n + index + 1 },
-					}),
-				),
+/**
+ * Reorder questions inside a section. Uses the parent paper for authz —
+ * sections aren't directly grant-bound. We resolve the paper from the section
+ * inside the handler since the section→paper hop isn't a standard resource type.
+ */
+export const reorderQuestionsInSection = authenticatedAction
+	.inputSchema(
+		z.object({
+			sectionId: z.string(),
+			orderedQuestionIds: z.array(z.string()),
+		}),
+	)
+	.action(
+		async ({
+			parsedInput: { sectionId, orderedQuestionIds },
+			ctx,
+		}): Promise<{ ok: true }> => {
+			const section = await db.examSection.findUnique({
+				where: { id: sectionId },
+				select: { exam_paper_id: true },
+			})
+			if (!section) throw new Error("Section not found")
+			const { assertExamPaperAccess } = await import("@/lib/authz")
+			const access = await assertExamPaperAccess(
+				ctx.user,
+				section.exam_paper_id,
+				"editor",
 			)
-			await Promise.all(
-				orderedQuestionIds.map((questionId, index) =>
-					tx.examSectionQuestion.update({
-						where: {
-							exam_section_id_question_id: {
-								exam_section_id: sectionId,
-								question_id: questionId,
-							},
-						},
-						data: { order: index + 1 },
-					}),
-				),
-			)
-		})
-		return { ok: true }
-	} catch (e) {
-		console.error(e)
-		return { ok: false, error: "Failed to reorder questions" }
-	}
-}
+			if (!access.ok) throw new Error(access.error)
 
-export async function reorderSections(
-	examPaperId: string,
-	orderedSectionIds: string[],
-): Promise<ReorderResult> {
-	const session = await auth()
-	if (!session) return { ok: false, error: "Not authenticated" }
-	try {
+			const n = orderedQuestionIds.length
+			// Two-phase update to avoid unique constraint violations on (exam_section_id, order):
+			// Phase 1 sets orders to a safe high range (n+1..2n), Phase 2 sets final values (1..n).
+			await db.$transaction(async (tx) => {
+				await Promise.all(
+					orderedQuestionIds.map((questionId, index) =>
+						tx.examSectionQuestion.update({
+							where: {
+								exam_section_id_question_id: {
+									exam_section_id: sectionId,
+									question_id: questionId,
+								},
+							},
+							data: { order: n + index + 1 },
+						}),
+					),
+				)
+				await Promise.all(
+					orderedQuestionIds.map((questionId, index) =>
+						tx.examSectionQuestion.update({
+							where: {
+								exam_section_id_question_id: {
+									exam_section_id: sectionId,
+									question_id: questionId,
+								},
+							},
+							data: { order: index + 1 },
+						}),
+					),
+				)
+			})
+			return { ok: true }
+		},
+	)
+
+export const reorderSections = resourceAction({
+	type: "examPaper",
+	role: "editor",
+	schema: z.object({
+		examPaperId: z.string(),
+		orderedSectionIds: z.array(z.string()),
+	}),
+	id: ({ examPaperId }) => examPaperId,
+}).action(
+	async ({ parsedInput: { orderedSectionIds } }): Promise<{ ok: true }> => {
 		const n = orderedSectionIds.length
 		await db.$transaction(async (tx) => {
 			await Promise.all(
@@ -252,7 +255,5 @@ export async function reorderSections(
 			)
 		})
 		return { ok: true }
-	} catch {
-		return { ok: false, error: "Failed to reorder sections" }
-	}
-}
+	},
+)

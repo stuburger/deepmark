@@ -1,19 +1,13 @@
 "use server"
 
+import { resourceAction, resourcesAction } from "@/lib/authz"
 import { db } from "@/lib/db"
-import { auth } from "../auth"
-import { embedText } from "../embeddings"
-import { log } from "../logger"
+import { z } from "zod"
+import { embedText } from "../server-only/embeddings"
 
 import type { SimilarPair } from "./types"
 
-const TAG = "exam-paper/similarity"
-
 // ─── Query ───────────────────────────────────────────────────────────────────
-
-export type GetSimilarQuestionsForPaperResult =
-	| { ok: true; pairs: SimilarPair[] }
-	| { ok: false; error: string }
 
 /**
  * For each question in the paper, finds the nearest neighbour within the same
@@ -22,23 +16,25 @@ export type GetSimilarQuestionsForPaperResult =
  *
  * Deduplicates symmetric pairs (A,B) == (B,A) so each pair appears once.
  */
-export async function getSimilarQuestionsForPaper(
-	examPaperId: string,
-): Promise<GetSimilarQuestionsForPaperResult> {
-	const session = await auth()
-	if (!session) return { ok: false, error: "Not authenticated" }
-
-	try {
+export const getSimilarQuestionsForPaper = resourceAction({
+	type: "examPaper",
+	role: "viewer",
+	schema: z.object({ examPaperId: z.string() }),
+	id: ({ examPaperId }) => examPaperId,
+}).action(
+	async ({
+		parsedInput: { examPaperId },
+	}): Promise<{ pairs: SimilarPair[] }> => {
 		const rows = await db.$queryRaw<{ id: string; embedding: string | null }[]>`
-			SELECT q.id, q.embedding::text AS embedding
-			FROM questions q
-			JOIN exam_section_questions esq ON esq.question_id = q.id
-			JOIN exam_sections es ON es.id = esq.exam_section_id
-			WHERE es.exam_paper_id = ${examPaperId}
-			AND q.embedding IS NOT NULL
-		`
+		SELECT q.id, q.embedding::text AS embedding
+		FROM questions q
+		JOIN exam_section_questions esq ON esq.question_id = q.id
+		JOIN exam_sections es ON es.id = esq.exam_section_id
+		WHERE es.exam_paper_id = ${examPaperId}
+		AND q.embedding IS NOT NULL
+	`
 
-		if (rows.length < 2) return { ok: true, pairs: [] }
+		if (rows.length < 2) return { pairs: [] }
 
 		const seen = new Set<string>()
 		const pairs: SimilarPair[] = []
@@ -46,16 +42,16 @@ export async function getSimilarQuestionsForPaper(
 		await Promise.all(
 			rows.map(async (row) => {
 				const nearRows = await db.$queryRaw<{ id: string; dist: number }[]>`
-					SELECT q.id, (q.embedding <=> (SELECT embedding FROM questions WHERE id = ${row.id})) AS dist
-					FROM questions q
-					JOIN exam_section_questions esq ON esq.question_id = q.id
-					JOIN exam_sections es ON es.id = esq.exam_section_id
-					WHERE es.exam_paper_id = ${examPaperId}
-					AND q.id != ${row.id}
-					AND q.embedding IS NOT NULL
-					ORDER BY dist ASC
-					LIMIT 1
-				`
+				SELECT q.id, (q.embedding <=> (SELECT embedding FROM questions WHERE id = ${row.id})) AS dist
+				FROM questions q
+				JOIN exam_section_questions esq ON esq.question_id = q.id
+				JOIN exam_sections es ON es.id = esq.exam_section_id
+				WHERE es.exam_paper_id = ${examPaperId}
+				AND q.id != ${row.id}
+				AND q.embedding IS NOT NULL
+				ORDER BY dist ASC
+				LIMIT 1
+			`
 				const near = nearRows[0]
 				if (!near || Number(near.dist) >= 0.15) return
 
@@ -70,21 +66,23 @@ export async function getSimilarQuestionsForPaper(
 			}),
 		)
 
-		return { ok: true, pairs }
-	} catch (err) {
-		log.error(TAG, "getSimilarQuestionsForPaper failed", {
-			examPaperId,
-			error: String(err),
-		})
-		return { ok: false, error: "Failed to compute similarity" }
-	}
-}
+		return { pairs }
+	},
+)
 
 // ─── Mutation ────────────────────────────────────────────────────────────────
 
-export type ConsolidateQuestionsResult =
-	| { ok: true }
-	| { ok: false; error: string }
+const consolidateInput = z
+	.object({
+		keepQuestionId: z.string(),
+		discardQuestionId: z.string(),
+		overrideText: z.string().trim().optional(),
+		discardMarkSchemeId: z.string().optional(),
+	})
+	.refine((v) => v.keepQuestionId !== v.discardQuestionId, {
+		message: "Cannot consolidate a question with itself",
+		path: ["discardQuestionId"],
+	})
 
 /**
  * Merges two duplicate questions into one:
@@ -98,49 +96,52 @@ export type ConsolidateQuestionsResult =
  *
  * Runs in a transaction to avoid partial state.
  */
-export async function consolidateQuestions(
-	keepQuestionId: string,
-	discardQuestionId: string,
-	opts?: {
-		/** Override the kept question's text (e.g. user preferred the discard's wording) */
-		overrideText?: string
-		/** Mark scheme ID on the discard question to delete rather than move */
-		discardMarkSchemeId?: string
-	},
-): Promise<ConsolidateQuestionsResult> {
-	const session = await auth()
-	if (!session) return { ok: false, error: "Not authenticated" }
+export const consolidateQuestions = resourcesAction({
+	schema: consolidateInput,
+	resources: [
+		{
+			type: "question",
+			role: "editor",
+			ids: ({ keepQuestionId, discardQuestionId }) => [
+				keepQuestionId,
+				discardQuestionId,
+			],
+		},
+	],
+}).action(
+	async ({
+		parsedInput: {
+			keepQuestionId,
+			discardQuestionId,
+			overrideText,
+			discardMarkSchemeId,
+		},
+		ctx,
+	}) => {
+		ctx.log.info("consolidateQuestions called", {
+			keepQuestionId,
+			discardQuestionId,
+			hasOverrideText: !!overrideText,
+			discardMarkSchemeId: discardMarkSchemeId ?? null,
+		})
 
-	if (keepQuestionId === discardQuestionId) {
-		return { ok: false, error: "Cannot consolidate a question with itself" }
-	}
-
-	log.info(TAG, "consolidateQuestions called", {
-		userId: session.userId,
-		keepQuestionId,
-		discardQuestionId,
-		hasOverrideText: !!opts?.overrideText,
-		discardMarkSchemeId: opts?.discardMarkSchemeId ?? null,
-	})
-
-	try {
 		await db.$transaction(async (tx) => {
-			if (opts?.overrideText) {
+			if (overrideText) {
 				await tx.question.update({
 					where: { id: keepQuestionId },
-					data: { text: opts.overrideText },
+					data: { text: overrideText },
 				})
 			}
 
-			if (opts?.discardMarkSchemeId) {
+			if (discardMarkSchemeId) {
 				await tx.markSchemeTestRun.deleteMany({
-					where: { mark_scheme_id: opts.discardMarkSchemeId },
+					where: { mark_scheme_id: discardMarkSchemeId },
 				})
 				await tx.exemplarAnswer.deleteMany({
-					where: { mark_scheme_id: opts.discardMarkSchemeId },
+					where: { mark_scheme_id: discardMarkSchemeId },
 				})
 				await tx.markScheme.delete({
-					where: { id: opts.discardMarkSchemeId },
+					where: { id: discardMarkSchemeId },
 				})
 			}
 
@@ -159,38 +160,29 @@ export async function consolidateQuestions(
 		})
 
 		// Regenerate embedding if text was overridden (outside transaction — best effort)
-		if (opts?.overrideText) {
+		if (overrideText) {
 			try {
-				const values = await embedText(opts.overrideText)
+				const values = await embedText(overrideText)
 				if (values) {
 					const vecStr = `[${values.join(",")}]`
 					await db.$executeRaw`
 						UPDATE questions SET embedding = (${vecStr}::text)::vector WHERE id = ${keepQuestionId}
 					`
-					log.info(TAG, "Embedding regenerated after merge", { keepQuestionId })
+					ctx.log.info("Embedding regenerated after merge", { keepQuestionId })
 				}
 			} catch (embErr) {
-				log.error(TAG, "Failed to regenerate embedding after merge", {
+				ctx.log.error("Failed to regenerate embedding after merge", {
 					keepQuestionId,
 					error: String(embErr),
 				})
 			}
 		}
 
-		log.info(TAG, "Questions consolidated", {
-			userId: session.userId,
+		ctx.log.info("Questions consolidated", {
 			keepQuestionId,
 			discardQuestionId,
 		})
 
-		return { ok: true }
-	} catch (err) {
-		log.error(TAG, "consolidateQuestions failed", {
-			userId: session.userId,
-			keepQuestionId,
-			discardQuestionId,
-			error: String(err),
-		})
-		return { ok: false, error: "Failed to consolidate questions" }
-	}
-}
+		return { ok: true as const }
+	},
+)

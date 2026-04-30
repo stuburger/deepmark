@@ -1,4 +1,5 @@
 import { authUrlLink } from "./auth"
+import { collabAuthz } from "./authz"
 import {
 	baseDomain,
 	collabServiceSecret,
@@ -57,6 +58,9 @@ if ($dev) {
 			directory: "packages/collab-server",
 			autostart: true,
 		},
+		environment: {
+			COLLAB_AUTHZ_URL: collabAuthz.url,
+		},
 		link: [scansBucket, authUrlLink, collabServiceSecret],
 	})
 }
@@ -76,6 +80,9 @@ export const collabServer = $dev
 					dockerfile: "packages/collab-server/Dockerfile",
 				},
 				link: [scansBucket, authUrlLink, collabServiceSecret],
+				environment: {
+					COLLAB_AUTHZ_URL: collabAuthz.url,
+				},
 				loadBalancer: {
 					ports: [{ listen: "443/https", forward: `${COLLAB_PORT}/http` }],
 					domain: {

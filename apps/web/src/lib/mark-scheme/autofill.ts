@@ -1,13 +1,10 @@
 "use server"
 
+import { resourceAction } from "@/lib/authz"
 import { db } from "@/lib/db"
 import { Output, generateText } from "ai"
 import { z } from "zod"
-import { auth } from "../auth"
 import { callLlmWithFallback } from "../llm-runtime"
-import { log } from "../logger"
-
-const TAG = "autofill-mark-scheme-actions"
 
 export type AutofillMarkPointSuggestion = {
 	criteria: string
@@ -31,10 +28,6 @@ export type AutofillMarkSchemeSuggestion =
 			description: string
 			content: string
 	  }
-
-export type AutofillMarkSchemeResult =
-	| { ok: true; suggestion: AutofillMarkSchemeSuggestion }
-	| { ok: false; error: string }
 
 const McqSchema = z.object({
 	correct_option_label: z.string(),
@@ -64,19 +57,21 @@ type McqOption = { option_label: string; option_text: string }
  * Returns suggestion data for the teacher to review in the form before saving.
  * Nothing is persisted by this action.
  */
-export async function autofillMarkScheme(
-	questionId: string,
-	markingMethod?: string,
-): Promise<AutofillMarkSchemeResult> {
-	const session = await auth()
-	if (!session) return { ok: false, error: "Not authenticated" }
+export const autofillMarkScheme = resourceAction({
+	type: "question",
+	role: "editor",
+	schema: z.object({
+		questionId: z.string(),
+		markingMethod: z.string().optional(),
+	}),
+	id: ({ questionId }) => questionId,
+}).action(
+	async ({
+		parsedInput: { questionId, markingMethod },
+		ctx,
+	}): Promise<{ suggestion: AutofillMarkSchemeSuggestion }> => {
+		ctx.log.info("autofillMarkScheme called", { questionId })
 
-	log.info(TAG, "autofillMarkScheme called", {
-		userId: session.userId,
-		questionId,
-	})
-
-	try {
 		const question = await db.question.findUnique({
 			where: { id: questionId },
 			select: {
@@ -90,7 +85,7 @@ export async function autofillMarkScheme(
 			},
 		})
 
-		if (!question) return { ok: false, error: "Question not found" }
+		if (!question) throw new Error("Question not found")
 
 		if (question.question_type === "multiple_choice") {
 			const rawOptions = Array.isArray(question.multiple_choice_options)
@@ -98,10 +93,7 @@ export async function autofillMarkScheme(
 				: []
 
 			if (rawOptions.length === 0) {
-				return {
-					ok: false,
-					error: "No multiple choice options found on this question",
-				}
+				throw new Error("No multiple choice options found on this question")
 			}
 
 			const optionsText = rawOptions
@@ -138,20 +130,12 @@ Only return the letter for both fields (e.g. "A", "B", "C", or "D").`
 			const label = output.correct_option_label.trim().toUpperCase()
 			const validLabels = rawOptions.map((o) => o.option_label.toUpperCase())
 			if (!validLabels.includes(label)) {
-				return {
-					ok: false,
-					error: `AI returned unrecognised option label "${label}"`,
-				}
+				throw new Error(`AI returned unrecognised option label "${label}"`)
 			}
 
-			log.info(TAG, "MCQ autofill complete", {
-				userId: session.userId,
-				questionId,
-				correct: label,
-			})
+			ctx.log.info("MCQ autofill complete", { questionId, correct: label })
 
 			return {
-				ok: true,
 				suggestion: {
 					marking_method: "deterministic",
 					description: label,
@@ -216,17 +200,15 @@ Rules:
 			)
 
 			if (!output.content?.trim()) {
-				return { ok: false, error: "AI did not generate mark scheme content" }
+				throw new Error("AI did not generate mark scheme content")
 			}
 
-			log.info(TAG, "LoR autofill complete", {
-				userId: session.userId,
+			ctx.log.info("LoR autofill complete", {
 				questionId,
 				contentLength: output.content.length,
 			})
 
 			return {
-				ok: true,
 				suggestion: {
 					marking_method: "level_of_response",
 					description: output.description.trim(),
@@ -274,17 +256,15 @@ Return JSON with:
 		)
 
 		if (!output.mark_points || output.mark_points.length === 0) {
-			return { ok: false, error: "AI did not generate any mark points" }
+			throw new Error("AI did not generate any mark points")
 		}
 
-		log.info(TAG, "Written autofill complete", {
-			userId: session.userId,
+		ctx.log.info("Written autofill complete", {
 			questionId,
 			mark_points_count: output.mark_points.length,
 		})
 
 		return {
-			ok: true,
 			suggestion: {
 				marking_method: "point_based",
 				description: output.description.trim(),
@@ -295,12 +275,5 @@ Return JSON with:
 				})),
 			},
 		}
-	} catch (err) {
-		log.error(TAG, "autofillMarkScheme failed", {
-			userId: session.userId,
-			questionId,
-			error: String(err),
-		})
-		return { ok: false, error: "Autofill failed. Please try again." }
-	}
-}
+	},
+)

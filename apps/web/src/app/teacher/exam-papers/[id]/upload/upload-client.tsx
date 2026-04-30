@@ -76,9 +76,8 @@ export function LinkedPdfUploadClient({
 		queryKey: queryKeys.ingestionJob(jobId ?? ""),
 		queryFn: async () => {
 			if (!jobId) return null
-			const result = await getPdfIngestionJobStatus(jobId)
-			if (!result.ok) return null
-			return result
+			const result = await getPdfIngestionJobStatus({ jobId })
+			return result?.data ?? null
 		},
 		enabled: !!jobId,
 		refetchInterval: (q) => {
@@ -114,12 +113,16 @@ export function LinkedPdfUploadClient({
 				document_type: documentType,
 				run_adversarial_loop: false,
 			})
-			if (!result.ok) {
-				setError(result.error)
+			if (result?.serverError) {
+				setError(result.serverError)
 				return
 			}
-			await putToPresignedUrl(result.url, file)
-			setJobId(result.jobId)
+			if (!result?.data) {
+				setError("Upload failed")
+				return
+			}
+			await putToPresignedUrl(result.data.url, file)
+			setJobId(result.data.jobId)
 		} catch {
 			setError("Upload failed. Please try again.")
 		} finally {

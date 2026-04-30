@@ -177,17 +177,30 @@ function useMarkSchemeSubmit({
 			}
 		} else {
 			startTransition(async () => {
+				if (!isEdit && !questionId) {
+					setSubmitError("Missing question ID")
+					return
+				}
+				if (isEdit && !markSchemeId) {
+					setSubmitError("Missing mark scheme ID")
+					return
+				}
 				const result =
 					isEdit && markSchemeId
-						? await updateMarkScheme(markSchemeId, input)
-						: questionId
-							? await createMarkScheme(questionId, input)
-							: {
-									ok: false as const,
-									error: "Missing question or mark scheme ID",
-								}
-				if (!result.ok) {
-					setSubmitError(result.error)
+						? await updateMarkScheme({ markSchemeId, input })
+						: await createMarkScheme({
+								questionId: questionId as string,
+								input,
+							})
+				if (result?.serverError) {
+					setSubmitError(result.serverError)
+					return
+				}
+				if (result?.validationErrors) {
+					const ve = result.validationErrors
+					const issue =
+						ve.formErrors?.[0] ?? Object.values(ve.fieldErrors).flat()[0]
+					setSubmitError(issue ?? "Invalid input")
 					return
 				}
 				setSaved(true)

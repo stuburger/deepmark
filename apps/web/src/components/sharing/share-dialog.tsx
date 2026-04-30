@@ -23,6 +23,7 @@ import {
 	shareSubmissionsWithEmails,
 	updateResourceGrantRole,
 } from "@/lib/sharing/actions"
+import { useCurrentUser } from "@/lib/users/use-current-user"
 import type { ResourceGrantRole } from "@mcp-gcse/db"
 import { X } from "lucide-react"
 import {
@@ -56,6 +57,7 @@ export function ShareDialog({
 	const [grants, setGrants] = useState<ResourceGrantListItem[]>([])
 	const [pending, startTransition] = useTransition()
 	const primarySubmissionId = submissionIds[0]
+	const { user: currentUser } = useCurrentUser()
 
 	const title = useMemo(
 		() =>
@@ -174,7 +176,10 @@ export function ShareDialog({
 					<p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
 						People with access
 					</p>
-					{grants.map((grant) => (
+					{grants.map((grant) => {
+						const isMe =
+							currentUser !== null && grant.principal_user_id === currentUser.id
+						return (
 						<div
 							key={grant.id}
 							className="flex items-center gap-3 rounded-lg border px-3 py-2"
@@ -182,6 +187,11 @@ export function ShareDialog({
 							<div className="min-w-0 flex-1">
 								<p className="truncate text-sm font-medium">
 									{grant.principal_name ?? grant.principal_email ?? "Unknown"}
+									{isMe && (
+										<span className="ml-1.5 text-xs font-normal text-muted-foreground">
+											(me)
+										</span>
+									)}
 								</p>
 								<p className="truncate text-xs text-muted-foreground">
 									{grant.pending ? "Pending invite" : grant.principal_email}
@@ -215,7 +225,8 @@ export function ShareDialog({
 								<X className="h-4 w-4" />
 							</Button>
 						</div>
-					))}
+						)
+					})}
 				</div>
 			</DialogContent>
 		</Dialog>

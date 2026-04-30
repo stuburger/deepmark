@@ -43,6 +43,7 @@ export function SubmissionToolbar({
 	onClose,
 	annotations,
 	pageTokens,
+	paperAccessible = true,
 }: {
 	examPaperId: string
 	jobId: string
@@ -53,6 +54,7 @@ export function SubmissionToolbar({
 	onClose?: () => void
 	annotations?: StudentPaperAnnotation[]
 	pageTokens?: PageToken[]
+	paperAccessible?: boolean
 }) {
 	// Same docKey as grading-results-panel — useYDoc's module-scope cache
 	// reference-counts, so this doesn't open a second WebSocket. The provider
@@ -78,22 +80,31 @@ export function SubmissionToolbar({
 				{!onClose && (
 					<>
 						<Link
-							href="/teacher/exam-papers"
+							href={paperAccessible ? "/teacher/exam-papers" : "/teacher/mark"}
 							className="text-muted-foreground hover:text-foreground transition-colors shrink-0"
 						>
-							Papers
+							{paperAccessible ? "Papers" : "Marking"}
 						</Link>
 
 						{data.exam_paper_title && (
 							<>
 								<ChevronRight className="h-3.5 w-3.5 text-muted-foreground/40 shrink-0" />
-								<Link
-									href={`/teacher/exam-papers/${examPaperId}`}
-									className="text-muted-foreground hover:text-foreground transition-colors truncate max-w-48"
-									title={data.exam_paper_title}
-								>
-									{data.exam_paper_title}
-								</Link>
+								{paperAccessible ? (
+									<Link
+										href={`/teacher/exam-papers/${examPaperId}`}
+										className="text-muted-foreground hover:text-foreground transition-colors truncate max-w-48"
+										title={data.exam_paper_title}
+									>
+										{data.exam_paper_title}
+									</Link>
+								) : (
+									<span
+										className="text-muted-foreground truncate max-w-48"
+										title={data.exam_paper_title}
+									>
+										{data.exam_paper_title}
+									</span>
+								)}
 							</>
 						)}
 

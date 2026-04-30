@@ -37,6 +37,7 @@ export function SubmissionView({
 	onNavigateToJob,
 	onVersionChange,
 	onClose,
+	paperAccessible = true,
 }: {
 	examPaperId: string
 	jobId: string
@@ -48,6 +49,13 @@ export function SubmissionView({
 	onNavigateToJob?: (newJobId: string) => void
 	onVersionChange?: (newJobId: string) => void
 	onClose?: () => void
+	/**
+	 * Whether the viewer can navigate to the parent exam paper. Defaults to
+	 * true (paper owners / editors / paper-level viewers). Set false for
+	 * submission-only grant holders so the breadcrumb's paper-title link
+	 * doesn't render a dead link to a 403/404 page.
+	 */
+	paperAccessible?: boolean
 }) {
 	const {
 		data,
@@ -199,6 +207,7 @@ export function SubmissionView({
 					onClose={onClose}
 					annotations={annotations}
 					pageTokens={pageTokens}
+					paperAccessible={paperAccessible}
 				/>
 
 				{/* Mobile: scan/results tabs */}

@@ -5,7 +5,6 @@ import {
 	type ResourceRole,
 	effectiveExamPaperResourceRole,
 	effectiveSubmissionResourceRole,
-	meetsResourceRole,
 } from "@mcp-gcse/shared"
 import { parseDocumentName } from "@mcp-gcse/shared/collab"
 import type {
@@ -18,7 +17,6 @@ import { z } from "zod"
 const BodySchema = z.object({
 	userId: z.string().min(1),
 	documentName: z.string().min(1),
-	access: z.literal("editor"),
 })
 
 type AuthUser = {
@@ -125,10 +123,21 @@ async function resolveSubmissionRole(
 	})
 }
 
+/**
+ * Resolves the user's effective role on the addressed collab document.
+ *
+ * Returns the role on success — collab-server uses it to decide whether to
+ * flip the connection to read-only (viewer) vs read-write (editor / owner).
+ * Doc viewers must still be able to load the doc to read it; rejecting them
+ * outright would brick the standalone submission view for any submission
+ * shared with `viewer` access.
+ */
 export async function authorizeCollabDocumentAccess(
 	repository: CollabAuthzRepository,
 	input: z.infer<typeof BodySchema>,
-): Promise<{ ok: true } | { ok: false; status: 403 | 404 }> {
+): Promise<
+	{ ok: true; role: ResourceRole } | { ok: false; status: 403 | 404 }
+> {
 	const document = parseDocumentName(input.documentName)
 	if (!document || document.kind !== "submission") {
 		return { ok: false, status: 404 }
@@ -138,11 +147,9 @@ export async function authorizeCollabDocumentAccess(
 	if (!user) return { ok: false, status: 403 }
 
 	const role = await resolveSubmissionRole(repository, user, document.id)
-	if (!meetsResourceRole(role, input.access)) {
-		return { ok: false, status: 403 }
-	}
+	if (role === null) return { ok: false, status: 403 }
 
-	return { ok: true }
+	return { ok: true, role }
 }
 
 function response(
@@ -185,7 +192,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
 
 	return {
 		statusCode: 200,
-		body: JSON.stringify({ ok: true }),
+		body: JSON.stringify({ ok: true, role: authorized.role }),
 		headers: { "Content-Type": "application/json" },
 	}
 }

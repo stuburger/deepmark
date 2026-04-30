@@ -41,17 +41,16 @@ function repo(
 }
 
 describe("collab authz", () => {
-	it("accepts an editor grant for a submission document", async () => {
+	it("returns the editor role for an editor grant", async () => {
 		await expect(
 			authorizeCollabDocumentAccess(repo(), {
 				userId: "user-1",
 				documentName: "stage:submission:submission-1",
-				access: "editor",
 			}),
-		).resolves.toEqual({ ok: true })
+		).resolves.toEqual({ ok: true, role: "editor" })
 	})
 
-	it("rejects viewer-only submission access for writable collab", async () => {
+	it("returns the viewer role for a viewer grant (collab-server flips readOnly)", async () => {
 		await expect(
 			authorizeCollabDocumentAccess(
 				repo({
@@ -69,10 +68,9 @@ describe("collab authz", () => {
 				{
 					userId: "user-1",
 					documentName: "stage:submission:submission-1",
-					access: "editor",
 				},
 			),
-		).resolves.toEqual({ ok: false, status: 403 })
+		).resolves.toEqual({ ok: true, role: "viewer" })
 	})
 
 	it("rejects users without a grant", async () => {
@@ -86,7 +84,6 @@ describe("collab authz", () => {
 				{
 					userId: "user-1",
 					documentName: "stage:submission:submission-1",
-					access: "editor",
 				},
 			),
 		).resolves.toEqual({ ok: false, status: 403 })
@@ -97,7 +94,6 @@ describe("collab authz", () => {
 			authorizeCollabDocumentAccess(repo(), {
 				userId: "user-1",
 				documentName: "not-a-doc",
-				access: "editor",
 			}),
 		).resolves.toEqual({ ok: false, status: 404 })
 	})

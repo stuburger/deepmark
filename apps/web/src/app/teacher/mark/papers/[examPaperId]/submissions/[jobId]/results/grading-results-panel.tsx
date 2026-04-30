@@ -10,6 +10,7 @@ import { useYDoc } from "@/components/annotated-answer/use-y-doc"
 import { OrganicMarkingLoader } from "@/components/marking-loader"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
+import { LockKeyhole } from "lucide-react"
 import type {
 	GradingResult,
 	StudentPaperAnnotation,
@@ -100,12 +101,22 @@ export function GradingResultsPanel({
 	// legacy jobs that predate the Submission model). The hook owns lifecycle:
 	// IndexedDB offline cache + HocuspocusProvider sync + clean teardown.
 	const docKey = data.submission_id ?? jobId
-	const { doc: ydoc, provider, synced } = useYDoc(docKey)
+	const { doc: ydoc, provider, synced, authFailed } = useYDoc(docKey)
 	const hasBlocks = useDocHasQuestionBlocks(ydoc)
-	// Show the marking loader until the OCR Lambda has projected the question
-	// skeleton. Without this, the editor mounts as soon as the empty doc syncs
-	// and the user sees blank white space mid-extraction.
-	const showLoader = !ydoc || !synced || !hasBlocks
+	// Three pre-editor states, in order of precedence:
+	//   - authFailed: collab server rejected the token; render terminal error.
+	//   - !synced: provider still hydrating IDB / WebSocket — user-facing
+	//     copy is "Loading", not "Marking" (nothing's being marked yet).
+	//   - synced && !hasBlocks: server-side OCR pipeline hasn't projected the
+	//     question skeleton yet — the actual "Marking" state.
+	const editorState: "auth-failed" | "loading" | "marking" | "ready" =
+		authFailed
+			? "auth-failed"
+			: !ydoc || !synced
+				? "loading"
+				: !hasBlocks
+					? "marking"
+					: "ready"
 
 	return (
 		<div className="space-y-4">
@@ -130,9 +141,24 @@ export function GradingResultsPanel({
 			{/* Answer sheet — gated on Y.Doc sync so AI annotations applied
 			    server-side don't race an empty initial doc. */}
 			<GradingDataProvider value={ctxValue}>
-				{showLoader ? (
+				{editorState === "auth-failed" ? (
+					<div className="flex h-[60vh] flex-col items-center justify-center gap-3 text-center">
+						<LockKeyhole className="h-10 w-10 text-muted-foreground" />
+						<div className="space-y-1">
+							<p className="text-sm font-medium">Access denied</p>
+							<p className="text-xs text-muted-foreground max-w-sm">
+								The collaboration server rejected your session for this
+								submission. Ask the owner to re-share it with you.
+							</p>
+						</div>
+					</div>
+				) : editorState === "loading" ? (
 					<div className="flex h-[60vh] items-center justify-center">
-						<OrganicMarkingLoader />
+						<OrganicMarkingLoader label="Loading" />
+					</div>
+				) : editorState === "marking" ? (
+					<div className="flex h-[60vh] items-center justify-center">
+						<OrganicMarkingLoader label="Marking" />
 					</div>
 				) : (
 					ydoc && (

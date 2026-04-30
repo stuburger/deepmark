@@ -1,5 +1,6 @@
 import { Database } from "@hocuspocus/extension-database"
 import { Server } from "@hocuspocus/server"
+import type { ResourceRole } from "@mcp-gcse/shared"
 import { parseDocumentName } from "@mcp-gcse/shared/collab"
 import { Resource } from "sst"
 import { AuthFailure, verifyOpenAuthToken } from "./auth"
@@ -12,7 +13,7 @@ const collabAuthzUrl = process.env.COLLAB_AUTHZ_URL
 async function authorizeUserDocument(
 	userId: string,
 	documentName: string,
-): Promise<void> {
+): Promise<{ role: ResourceRole }> {
 	if (!collabAuthzUrl) {
 		throw new AuthFailure("missing collab authorization endpoint")
 	}
@@ -23,18 +24,20 @@ async function authorizeUserDocument(
 			Authorization: `Bearer ${Resource.CollabServiceSecret.value}`,
 			"Content-Type": "application/json",
 		},
-		body: JSON.stringify({ userId, documentName, access: "editor" }),
+		body: JSON.stringify({ userId, documentName }),
 	})
 	if (!response.ok) {
 		throw new AuthFailure(`collab authorization returned ${response.status}`)
 	}
+	const body = (await response.json()) as { role: ResourceRole }
+	return { role: body.role }
 }
 
 const server = new Server({
 	port,
 	name: "deepmark-collab",
 
-	async onAuthenticate({ token, documentName }) {
+	async onAuthenticate({ token, documentName, connectionConfig }) {
 		if (!token) {
 			throw new AuthFailure("missing auth token")
 		}
@@ -51,9 +54,17 @@ const server = new Server({
 			return { userId: claims.userId, role: "service" as const }
 		}
 
-		await authorizeUserDocument(claims.userId, documentName)
+		const { role } = await authorizeUserDocument(claims.userId, documentName)
+		// Submission viewers can load the doc to read it but every Y.Doc update
+		// they emit is dropped by Hocuspocus — the editor on the client is also
+		// rendered read-only via SubmissionView's `readOnly` prop, but flipping
+		// connectionConfig.readOnly is the authoritative server-side guard
+		// against a tampered client trying to write.
+		if (role === "viewer") {
+			connectionConfig.readOnly = true
+		}
 
-		return { userId: claims.userId, role: "user" as const }
+		return { userId: claims.userId, role: "user" as const, resourceRole: role }
 	},
 
 	extensions: [

@@ -34,6 +34,13 @@ export type UseYDocResult = {
 	doc: Y.Doc | null
 	provider: HocuspocusProvider | null
 	synced: boolean
+	/**
+	 * Hocuspocus rejected the auth token (`onAuthenticationFailed`). The
+	 * collab provider will keep retrying in the background, but consumers
+	 * should render a terminal "no access" state rather than the marking
+	 * loader — `synced` will never flip true.
+	 */
+	authFailed: boolean
 }
 
 // ─── Module-scope cache ──────────────────────────────────────────────────────
@@ -52,6 +59,7 @@ type CacheEntry = {
 	refCount: number
 	idbSynced: boolean
 	wsSynced: boolean
+	authFailed: boolean
 	listeners: Set<() => void>
 	destroyTimer: ReturnType<typeof setTimeout> | null
 }
@@ -99,6 +107,7 @@ function createEntry(submissionId: string): CacheEntry {
 		refCount: 0,
 		idbSynced: false,
 		wsSynced: COLLAB_MODE === "indexeddb-only",
+		authFailed: false,
 		listeners: new Set(),
 		destroyTimer: null,
 	}
@@ -123,10 +132,13 @@ function createEntry(submissionId: string): CacheEntry {
 			},
 			onSynced: () => {
 				entry.wsSynced = true
+				entry.authFailed = false
 				notifyListeners(entry)
 			},
 			onAuthenticationFailed: ({ reason }) => {
 				console.warn("[useYDoc] auth failed:", reason)
+				entry.authFailed = true
+				notifyListeners(entry)
 			},
 		})
 	}
@@ -222,11 +234,12 @@ export function useYDoc(submissionId: string): UseYDocResult {
 
 	const entry = cache.get(submissionId)
 	if (!entry) {
-		return { doc: null, provider: null, synced: false }
+		return { doc: null, provider: null, synced: false, authFailed: false }
 	}
 	return {
 		doc: entry.doc,
 		provider: entry.provider,
 		synced: entry.idbSynced && entry.wsSynced,
+		authFailed: entry.authFailed,
 	}
 }

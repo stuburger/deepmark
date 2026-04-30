@@ -3,8 +3,16 @@
  * own animation duration so the silhouette never settles into a stable shape —
  * the result feels gooey rather than mechanical. `mix-blend-mode: multiply`
  * lets the colours bleed into a soft purple where they overlap.
+ *
+ * The label distinguishes user-facing state: "Loading" while the local doc /
+ * collab provider syncs, "Marking" once we're waiting on the server-side
+ * pipeline (OCR + grading) to project the question skeleton.
  */
-export function OrganicMarkingLoader() {
+export function OrganicMarkingLoader({
+	label = "Marking",
+}: {
+	label?: string
+}) {
 	return (
 		<div className="flex flex-col items-center gap-4">
 			<svg
@@ -13,7 +21,7 @@ export function OrganicMarkingLoader() {
 				className="h-32 w-32"
 				style={{ overflow: "visible" }}
 			>
-				<title>Marking</title>
+				<title>{label}</title>
 				<g style={{ mixBlendMode: "multiply" }}>
 					<path fill="rgb(96 165 250 / 0.85)">
 						<animate
@@ -51,7 +59,7 @@ export function OrganicMarkingLoader() {
 				</g>
 			</svg>
 			<span className="text-xs font-medium uppercase tracking-[0.25em] text-muted-foreground">
-				Marking
+				{label}
 			</span>
 		</div>
 	)

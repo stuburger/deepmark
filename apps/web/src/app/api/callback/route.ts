@@ -1,7 +1,8 @@
+import { routeHandler } from "@/lib/authz"
 import { getClient, setTokens } from "@/lib/auth"
-import { type NextRequest, NextResponse } from "next/server"
+import { NextResponse } from "next/server"
 
-export async function GET(req: NextRequest) {
+export const GET = routeHandler.public<Record<string, never>>(async (_ctx, req) => {
 	const url = new URL(req.url)
 	const code = url.searchParams.get("code")
 
@@ -21,4 +22,4 @@ export async function GET(req: NextRequest) {
 	await setTokens(exchanged.tokens.access, exchanged.tokens.refresh)
 
 	return NextResponse.redirect(`${url.origin}/`)
-}
+})

@@ -25,7 +25,6 @@ export {
 	submissionAccessWhere,
 } from "./where-clauses"
 export { maxGrantRole, meetsMinimum, roleRank, rolesAtLeast } from "./roles"
-export { requireSessionUser } from "./with-session"
 
 // next-safe-action surface
 export {

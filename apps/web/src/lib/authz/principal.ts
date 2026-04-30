@@ -1,6 +1,5 @@
-// Pure module — no Prisma / SST imports. Loaders that need the DB live next
-// to the resolution logic that consumes them (`effective-roles.ts`,
-// `with-session.ts`).
+// Pure module — no Prisma / SST imports. Loaders that need the DB live in
+// `effective-roles.ts` next to the resolution logic that consumes them.
 
 import type { UserRole } from "@mcp-gcse/db"
 

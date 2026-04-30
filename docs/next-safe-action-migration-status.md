@@ -90,7 +90,11 @@ Documented separately because future-you will want to know.
 
 4. **Form actions need a thin local wrapper.** `<form action={…}>` requires `(formData) => Promise<void>`; safe-action's wrapped functions return `Promise<SafeActionResult>` instead. For `logout`/`login`/`loginWithGoogle`, each consumer (`admin/layout.tsx`, `teacher/layout.tsx`, `login/page.tsx`) defines a one-line `async function …FormAction() { "use server"; await ...() }` wrapper inline. Documented in CLAUDE.md.
 
-5. **`route-handler.ts` was built but the 7 routes weren't migrated to it.** The wrapper exists, has tests, and works — but the 7 `app/api/**/route.ts` files still call `requireSessionUser` + `assertXxxAccess` directly. They're functionally correct, just not converted. Tracked under "Remaining" below.
+5. **`route-handler.ts` was built but the 7 routes weren't migrated to it.** ~~The wrapper exists, has tests, and works — but the 7 `app/api/**/route.ts` files still call `requireSessionUser` + `assertXxxAccess` directly.~~ Resolved in `b4dde4d` (or whichever follow-up commit) — all 7 routes now go through `routeHandler.{public,resource}`. `requireSessionUser` and `with-session.ts` deleted.
+
+6. **Resource routes now return 403 (not 404) for inaccessible-but-existing resources.** The original routes uniformly returned 404 to avoid existence enumeration. The wrapper distinguishes `NotFoundError`→404 and `AccessDeniedError`→403, matching the action-client semantics (where access denied surfaces as a "you do not have access" `serverError`). Net leak is no worse than what the action surface already exposes. SSE integration test updated to expect 403.
+
+7. **`logout` route is `routeHandler.public`, not `authenticated`.** The plan listed it under authenticated, but a stale-session tab needs to be able to clear cookies cleanly — gating logout behind a valid session would 401 expired sessions and trap users. The `logout` server action is also `publicAction`, so this matches.
 
 ---
 
@@ -100,16 +104,16 @@ In rough priority order:
 
 ### Required before merge
 
-- [ ] **Convert the 7 API routes to `routeHandler.{...}`.** This is an explicit acceptance-criterion line item from the plan. Routes:
-  - `app/api/scans/[...path]/route.ts` → `routeHandler.public`
-  - `app/api/callback/route.ts` → `routeHandler.public`
-  - `app/api/logout/route.ts` → `routeHandler.authenticated`
-  - `app/api/pdf-ingestion-jobs/[jobId]/document/route.ts` → `routeHandler.resource(pdfIngestionJob, viewer)`
-  - `app/api/submissions/[submissionId]/events/route.ts` → `routeHandler.resource(submission, viewer)` (SSE — verify the wrapper plays nicely with `ReadableStream`)
-  - `app/api/submissions/[submissionId]/scan-pages/[pageOrder]/route.ts` → `routeHandler.resource(submission, viewer)`
-  - `app/api/batch/[batchId]/staged-scripts/[scriptId]/scan-pages/[pageOrder]/route.ts` → `routeHandler.resource(stagedScript, viewer)` (or `batch, viewer`)
+- [x] **Convert the 7 API routes to `routeHandler.{...}`.** Done. Routes:
+  - `app/api/scans/[...path]/route.ts` → `routeHandler.public` ✅
+  - `app/api/callback/route.ts` → `routeHandler.public` ✅
+  - `app/api/logout/route.ts` → `routeHandler.public` ✅ (deviation from plan — see §Deviations)
+  - `app/api/pdf-ingestion-jobs/[jobId]/document/route.ts` → `routeHandler.resource(pdfIngestionJob, viewer)` ✅
+  - `app/api/submissions/[submissionId]/events/route.ts` → `routeHandler.resource(submission, viewer)` ✅ (SSE wrapper preserves `ReadableStream` body)
+  - `app/api/submissions/[submissionId]/scan-pages/[pageOrder]/route.ts` → `routeHandler.resource(submission, viewer)` ✅
+  - `app/api/batch/[batchId]/staged-scripts/[scriptId]/scan-pages/[pageOrder]/route.ts` → `routeHandler.resource(batch, viewer)` ✅
 
-  ~30 minutes of mechanical work. The wrapper signature is in `route-handler.ts`.
+  `requireSessionUser` and `with-session.ts` deleted — only routes used it. Behavior change: inaccessible-but-existing resources now return 403 instead of 404 (see §Deviations).
 
 - [ ] **Manual smoke test (Step 5).** This is on Stuart — listed in `migration-plan.md §5 Step 5`. Sign in (Google + GitHub), QP/MS/scripts upload, batch staging + commit, marking (OCR + grading), submission view + annotations, teacher overrides, sharing flow, page-level access denied, inline form-validation errors. Tail `next dev` logs to confirm every action emits a `userId`.
 

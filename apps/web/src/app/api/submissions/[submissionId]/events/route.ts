@@ -1,4 +1,4 @@
-import { assertSubmissionAccess, requireSessionUser } from "@/lib/authz"
+import { routeHandler } from "@/lib/authz"
 import { getJobStages } from "@/lib/marking/stages/queries"
 import {
 	fingerprint,
@@ -7,7 +7,6 @@ import {
 } from "@/lib/marking/stages/sse-utils"
 import type { JobStages } from "@/lib/marking/stages/types"
 import { allTerminal } from "@/lib/marking/stages/types"
-import type { NextRequest } from "next/server"
 
 const SSE_HEADERS = {
 	"Content-Type": "text/event-stream",
@@ -36,93 +35,88 @@ const HEARTBEAT_INTERVAL_MS = 30_000
  * a terminal state we keep polling slowly so teacher-triggered re-runs
  * (OCR / grading / annotation) surface without requiring a reconnect.
  */
-export async function GET(
-	request: NextRequest,
-	{ params }: { params: Promise<{ submissionId: string }> },
-) {
-	const session = await requireSessionUser()
-	if (!session.ok) {
-		return new Response("Unauthorized", { status: 401 })
-	}
+export const GET = routeHandler.resource<{ submissionId: string }>(
+	{
+		type: "submission",
+		role: "viewer",
+		id: async (_req, { params }) => params.submissionId,
+	},
+	async (_ctx, request, { params }) => {
+		const { submissionId } = await params
 
-	const { submissionId } = await params
-	const access = await assertSubmissionAccess(session.user, submissionId, "viewer")
-	if (!access.ok) {
-		return new Response("Not found", { status: 404 })
-	}
+		const encoder = new TextEncoder()
+		const signal = request.signal
 
-	const encoder = new TextEncoder()
-	const signal = request.signal
-
-	const stream = new ReadableStream({
-		async start(controller) {
-			const write = (event: string, data: unknown) => {
-				try {
-					controller.enqueue(encoder.encode(formatSseEvent(event, data)))
-				} catch {
-					// Controller closed — ignore
+		const stream = new ReadableStream({
+			async start(controller) {
+				const write = (event: string, data: unknown) => {
+					try {
+						controller.enqueue(encoder.encode(formatSseEvent(event, data)))
+					} catch {
+						// Controller closed — ignore
+					}
 				}
-			}
 
-			const readStages = async (): Promise<JobStages | null> => {
-				const r = await getJobStages({ jobId: submissionId })
-				return r?.data?.stages ?? null
-			}
+				const readStages = async (): Promise<JobStages | null> => {
+					const r = await getJobStages({ jobId: submissionId })
+					return r?.data?.stages ?? null
+				}
 
-			const initial = await readStages()
-			if (!initial) {
-				write("error", { message: "Job not found" })
+				const initial = await readStages()
+				if (!initial) {
+					write("error", { message: "Job not found" })
+					controller.close()
+					return
+				}
+				write("snapshot", initial)
+				console.log(
+					`[SSE:${submissionId.slice(-6)}] open`,
+					initial.ocr.status,
+					initial.grading.status,
+					initial.annotation.status,
+				)
+
+				let lastFp = fingerprint(initial)
+				let lastStages = initial
+				let lastHeartbeatAt = Date.now()
+				let tickCount = 0
+
+				while (!signal.aborted) {
+					const interval = allTerminal(lastStages)
+						? IDLE_INTERVAL_MS
+						: ACTIVE_INTERVAL_MS
+
+					const { aborted } = await sleepWithAbort(interval, signal)
+					if (aborted) break
+
+					const stages = await readStages()
+					if (!stages) continue
+					lastStages = stages
+					tickCount++
+
+					const fp = fingerprint(stages)
+					if (fp !== lastFp) {
+						write("update", stages)
+						console.log(
+							`[SSE:${submissionId.slice(-6)}] update tick=${tickCount}`,
+							stages.ocr.status,
+							stages.grading.status,
+							stages.annotation.status,
+						)
+						lastFp = fp
+					}
+
+					if (Date.now() - lastHeartbeatAt >= HEARTBEAT_INTERVAL_MS) {
+						write("ping", { t: Date.now() })
+						lastHeartbeatAt = Date.now()
+					}
+				}
+
+				console.log(`[SSE:${submissionId.slice(-6)}] closed after ${tickCount} ticks`)
 				controller.close()
-				return
-			}
-			write("snapshot", initial)
-			console.log(
-				`[SSE:${submissionId.slice(-6)}] open`,
-				initial.ocr.status,
-				initial.grading.status,
-				initial.annotation.status,
-			)
+			},
+		})
 
-			let lastFp = fingerprint(initial)
-			let lastStages = initial
-			let lastHeartbeatAt = Date.now()
-			let tickCount = 0
-
-			while (!signal.aborted) {
-				const interval = allTerminal(lastStages)
-					? IDLE_INTERVAL_MS
-					: ACTIVE_INTERVAL_MS
-
-				const { aborted } = await sleepWithAbort(interval, signal)
-				if (aborted) break
-
-				const stages = await readStages()
-				if (!stages) continue
-				lastStages = stages
-				tickCount++
-
-				const fp = fingerprint(stages)
-				if (fp !== lastFp) {
-					write("update", stages)
-					console.log(
-						`[SSE:${submissionId.slice(-6)}] update tick=${tickCount}`,
-						stages.ocr.status,
-						stages.grading.status,
-						stages.annotation.status,
-					)
-					lastFp = fp
-				}
-
-				if (Date.now() - lastHeartbeatAt >= HEARTBEAT_INTERVAL_MS) {
-					write("ping", { t: Date.now() })
-					lastHeartbeatAt = Date.now()
-				}
-			}
-
-			console.log(`[SSE:${submissionId.slice(-6)}] closed after ${tickCount} ticks`)
-			controller.close()
-		},
-	})
-
-	return new Response(stream, { headers: SSE_HEADERS })
-}
+		return new Response(stream, { headers: SSE_HEADERS })
+	},
+)

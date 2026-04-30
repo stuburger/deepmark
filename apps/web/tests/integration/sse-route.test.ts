@@ -71,7 +71,7 @@ async function waitForEvent(
 }
 
 describe("SSE route /api/submissions/[submissionId]/events", () => {
-	it("returns 404 before opening a stream for inaccessible submissions", async () => {
+	it("returns 403 before opening a stream for inaccessible submissions", async () => {
 		const ownerId = randomUUID()
 		const paperId = randomUUID()
 		const jobId = randomUUID()
@@ -116,8 +116,8 @@ describe("SSE route /api/submissions/[submissionId]/events", () => {
 				params: Promise.resolve({ submissionId: jobId }),
 			})
 
-			expect(response.status).toBe(404)
-			await expect(response.text()).resolves.toBe("Not found")
+			expect(response.status).toBe(403)
+			await expect(response.text()).resolves.toBe("Forbidden")
 		} finally {
 			await db.studentSubmission.deleteMany({ where: { id: jobId } })
 			await db.examPaper.deleteMany({ where: { id: paperId } })

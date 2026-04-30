@@ -1,5 +1,6 @@
 "use client"
 
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import {
 	Dialog,
@@ -42,6 +43,19 @@ function parseEmails(raw: string): string[] {
 		.split(/[,\s]+/)
 		.map((email) => email.trim().toLowerCase())
 		.filter(Boolean)
+}
+
+function initialsFor(grant: ResourceGrantListItem): string {
+	const source =
+		grant.principal_name?.trim() ||
+		grant.principal_email?.split("@")[0] ||
+		""
+	const parts = source.split(/[\s._-]+/).filter(Boolean).slice(0, 2)
+	const initials = parts
+		.map((p) => p[0]?.toUpperCase() ?? "")
+		.join("")
+		.slice(0, 2)
+	return initials || "?"
 }
 
 export function ShareDialog({
@@ -179,14 +193,25 @@ export function ShareDialog({
 					{grants.map((grant) => {
 						const isMe =
 							currentUser !== null && grant.principal_user_id === currentUser.id
+						const displayName =
+							grant.principal_name ?? grant.principal_email ?? "Unknown"
 						return (
 						<div
 							key={grant.id}
 							className="flex items-center gap-3 rounded-lg border px-3 py-2"
 						>
+							<Avatar size="sm">
+								{grant.principal_avatar_url && (
+									<AvatarImage
+										src={grant.principal_avatar_url}
+										alt={displayName}
+									/>
+								)}
+								<AvatarFallback>{initialsFor(grant)}</AvatarFallback>
+							</Avatar>
 							<div className="min-w-0 flex-1">
 								<p className="truncate text-sm font-medium">
-									{grant.principal_name ?? grant.principal_email ?? "Unknown"}
+									{displayName}
 									{isMe && (
 										<span className="ml-1.5 text-xs font-normal text-muted-foreground">
 											(me)

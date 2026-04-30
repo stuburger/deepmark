@@ -101,6 +101,22 @@
 	--mark-chain-evaluation-bg: rgb(254 243 199 / 0.4);
 	--mark-chain-judgement-bg: rgb(237 233 254 / 0.4);
 	--mark-chain-reasoning-bg: rgb(219 234 254 / 0.4);
+
+	/* Active-state shades — applied when the matching comment card is
+	   selected. Each is a deeper version of the base mark colour above. */
+	--mark-tick-bg-active: rgb(22 163 74 / 0.55);
+	--mark-cross-bg-active: rgb(220 38 38 / 0.55);
+	--mark-circle-bg-active: rgb(234 88 12 / 0.55);
+	--mark-box-ring-active: #6b21a8;
+	--mark-underline-active: #1d4ed8;
+	--mark-double-underline-active: #15803d;
+	--mark-chain-evaluation-bg-active: rgb(245 158 11 / 0.45);
+	--mark-chain-judgement-bg-active: rgb(139 92 246 / 0.4);
+	--mark-chain-reasoning-bg-active: rgb(59 130 246 / 0.4);
+
+	/* Cursor-style left edge on the active annotation span. Reads as an
+	   un-blinking insertion point that draws the eye to the mark range. */
+	--mark-active-cursor: var(--foreground);
 }
 
 .dark {
@@ -142,6 +158,9 @@
 	--mark-chain-evaluation-bg: rgb(120 53 15 / 0.2);
 	--mark-chain-judgement-bg: rgb(76 29 149 / 0.2);
 	--mark-chain-reasoning-bg: rgb(30 58 138 / 0.2);
+	--mark-chain-evaluation-bg-active: rgb(180 83 9 / 0.55);
+	--mark-chain-judgement-bg-active: rgb(124 58 237 / 0.5);
+	--mark-chain-reasoning-bg-active: rgb(37 99 235 / 0.5);
 }
 
 @layer base {

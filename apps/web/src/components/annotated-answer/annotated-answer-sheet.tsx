@@ -39,7 +39,10 @@ import {
 	removeAllAnnotationMarks,
 } from "./apply-annotation-mark"
 import { CommentSidebar } from "./comment-sidebar"
-import { HoverHighlightPlugin } from "./hover-highlight-plugin"
+import {
+	HoverHighlightPlugin,
+	setAnnotationHighlight,
+} from "./hover-highlight-plugin"
 import { InsertParagraphPlugin } from "./insert-paragraph-plugin"
 import { MARK_ACTIONS } from "./mark-actions"
 import { McqTableNode } from "./mcq-table-node"
@@ -104,8 +107,8 @@ export function AnnotatedAnswerSheet({
 	}, [])
 
 	// Mutable refs so plugins always read current values.
-	const onAnnotationHoverRef = useRef(setActiveAnnotationId)
-	onAnnotationHoverRef.current = setActiveAnnotationId
+	const onActiveAnnotationChangeRef = useRef(setActiveAnnotationId)
+	onActiveAnnotationChangeRef.current = setActiveAnnotationId
 	const onMarkAppliedRef = useRef(handleMarkApplied)
 	onMarkAppliedRef.current = handleMarkApplied
 
@@ -132,7 +135,7 @@ export function AnnotatedAnswerSheet({
 				OcrTokenMark,
 				AnnotationShortcuts.configure({ onMarkAppliedRef }),
 				HoverHighlightPlugin.configure({
-					onAnnotationHoverRef,
+					onActiveAnnotationChangeRef,
 				}),
 				InsertParagraphPlugin,
 				Collaboration.configure({ document: ydoc, field: "doc" }),
@@ -211,6 +214,15 @@ export function AnnotatedAnswerSheet({
 	useDerivedAnnotations(editor, stableOnDerived)
 
 	useTokenHighlight(editor, activeAnnotationId, onTokenHighlight)
+
+	// Paint the active annotation's mark range with the
+	// `is-active-annotation` decoration class so CSS can darken the mark and
+	// render the cursor-style left edge. Editor identity is stable for the
+	// lifetime of the doc; only `activeAnnotationId` actually drives repaints.
+	useEffect(() => {
+		if (!editor) return
+		setAnnotationHighlight(editor, activeAnnotationId)
+	}, [editor, activeAnnotationId])
 
 	if (!editor) return null
 
@@ -341,8 +353,8 @@ export function AnnotatedAnswerSheet({
 			<div className="w-52 shrink-0 hidden xl:block">
 				<CommentSidebar
 					editor={editor}
-					hoveredAnnotationId={activeAnnotationId}
-					onHoverAnnotation={setActiveAnnotationId}
+					activeAnnotationId={activeAnnotationId}
+					onActiveAnnotationChange={setActiveAnnotationId}
 				/>
 			</div>
 		</div>

@@ -62,12 +62,12 @@ function layoutCards(
 
 export function CommentSidebar({
 	editor,
-	hoveredAnnotationId,
-	onHoverAnnotation,
+	activeAnnotationId,
+	onActiveAnnotationChange,
 }: {
 	editor: Editor
-	hoveredAnnotationId?: string | null
-	onHoverAnnotation?: (annotationId: string | null) => void
+	activeAnnotationId?: string | null
+	onActiveAnnotationChange?: (annotationId: string | null) => void
 }) {
 	const [rawCards, setRawCards] = useState<CommentCard[]>([])
 	const containerRef = useRef<HTMLDivElement>(null)
@@ -213,15 +213,15 @@ export function CommentSidebar({
 
 	if (positioned.length === 0) return null
 
-	const activeIdx = hoveredAnnotationId
-		? positioned.findIndex(({ card }) => card.id === hoveredAnnotationId)
+	const activeIdx = activeAnnotationId
+		? positioned.findIndex(({ card }) => card.id === activeAnnotationId)
 		: -1
 	const activeTopPx = activeIdx >= 0 ? positioned[activeIdx].topPx : 0
 
 	return (
 		<div ref={containerRef} className="relative w-full min-h-full">
 			{positioned.map(({ card, topPx }, idx) => {
-				const isActive = hoveredAnnotationId === card.id
+				const isActive = activeAnnotationId === card.id
 				const offsetY =
 					activeIdx >= 0 &&
 					idx > activeIdx &&
@@ -238,16 +238,21 @@ export function CommentSidebar({
 						editor={editor}
 						onActivate={() => {
 							if (isActive) {
-								onHoverAnnotation?.(null)
-							} else {
-								editor.commands.setTextSelection({
-									from: card.from,
-									to: card.to,
-								})
-								editor.commands.focus(undefined, { scrollIntoView: false })
+								onActiveAnnotationChange?.(null)
+								return
 							}
+							// Set active id directly. We deliberately don't roundtrip
+							// through `editor.commands.setTextSelection(card.from)`:
+							// the plugin reads `$pos.marks()` at the selection
+							// boundary, which doesn't reliably resolve the annotation
+							// mark when the cursor lands at the very start of the
+							// marked text — the plugin would then call back with
+							// `null` and wipe the activation we just set. Cursor-in-
+							// mark activation still flows through the plugin when the
+							// user moves the editor caret naturally.
+							onActiveAnnotationChange?.(card.id)
 						}}
-						onDeactivate={() => onHoverAnnotation?.(null)}
+						onDeactivate={() => onActiveAnnotationChange?.(null)}
 					/>
 				)
 			})}

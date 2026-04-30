@@ -85,7 +85,6 @@ export function CommentCardView({
 }: CommentCardViewProps) {
 	const [reasonDraft, setReasonDraft] = useState(card.reason ?? "")
 	const cardRef = useRef<HTMLDivElement>(null)
-	const inputRef = useRef<HTMLTextAreaElement>(null)
 	const wasActiveRef = useRef(false)
 
 	useEffect(() => {
@@ -97,14 +96,6 @@ export function CommentCardView({
 			cardRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" })
 		}
 		wasActiveRef.current = isActive
-	}, [isActive, editor])
-
-	useEffect(() => {
-		if (!isActive) return
-		const id = setTimeout(() => {
-			if (!editor.isFocused) inputRef.current?.focus()
-		}, 50)
-		return () => clearTimeout(id)
 	}, [isActive, editor])
 
 	const hasContent =
@@ -244,7 +235,6 @@ export function CommentCardView({
 					</div>
 
 					<textarea
-						ref={inputRef}
 						value={reasonDraft}
 						onChange={(e) => setReasonDraft(e.target.value)}
 						onBlur={handleSaveReason}

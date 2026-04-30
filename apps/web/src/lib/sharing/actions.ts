@@ -23,6 +23,7 @@ export type ResourceGrantListItem = {
 	principal_user_id: string | null
 	principal_email: string | null
 	principal_name: string | null
+	principal_avatar_url: string | null
 	role: ResourceGrantRole
 	pending: boolean
 	created_at: Date
@@ -182,7 +183,11 @@ export const listResourceGrants = resourcesAction({
 				revoked_at: null,
 			},
 			orderBy: [{ role: "asc" }, { created_at: "asc" }],
-			include: { principal_user: { select: { name: true, email: true } } },
+			include: {
+				principal_user: {
+					select: { name: true, email: true, avatar_url: true },
+				},
+			},
 		})
 
 		return {
@@ -194,6 +199,7 @@ export const listResourceGrants = resourcesAction({
 				principal_email:
 					grant.principal_email ?? grant.principal_user?.email ?? null,
 				principal_name: grant.principal_user?.name ?? null,
+				principal_avatar_url: grant.principal_user?.avatar_url ?? null,
 				role: grant.role,
 				pending: grant.principal_user_id === null,
 				created_at: grant.created_at,
@@ -354,7 +360,11 @@ export const listSubmissionGrants = resourceAction({
 				revoked_at: null,
 			},
 			orderBy: [{ role: "asc" }, { created_at: "asc" }],
-			include: { principal_user: { select: { name: true, email: true } } },
+			include: {
+				principal_user: {
+					select: { name: true, email: true, avatar_url: true },
+				},
+			},
 		})
 
 		return {
@@ -366,6 +376,7 @@ export const listSubmissionGrants = resourceAction({
 				principal_email:
 					grant.principal_email ?? grant.principal_user?.email ?? null,
 				principal_name: grant.principal_user?.name ?? null,
+				principal_avatar_url: grant.principal_user?.avatar_url ?? null,
 				role: grant.role,
 				pending: grant.principal_user_id === null,
 				created_at: grant.created_at,

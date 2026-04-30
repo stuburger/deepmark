@@ -136,6 +136,82 @@
 	pointer-events: none;
 }
 
+/* ─── Active-annotation cue ───────────────────────────────────────────────
+   Painted by `setAnnotationHighlight` in hover-highlight-plugin.ts as two
+   layers of PM inline decoration:
+   - `.is-active-annotation` covers the full mark range and drives the
+     per-mark-type darker-shade rules below. PM splits this decoration at
+     every mark transition (per word, because each word carries a distinct
+     ocrToken mark), which is exactly what we want for shading.
+   - `.is-annotation-cursor` is scoped to a single character at the
+     leftmost edge of the leftmost range, so its wrapping span only ever
+     lands on one glyph — a single un-blinking cursor cue, regardless of
+     how many words the annotation spans. */
+.ProseMirror .is-annotation-cursor {
+	border-left: 2px solid var(--mark-active-cursor);
+	margin-left: -1px;
+	padding-left: 1px;
+}
+
+.ProseMirror .is-active-annotation[data-mark-type="tick"],
+.ProseMirror .is-active-annotation [data-mark-type="tick"] {
+	background-color: var(--mark-tick-bg-active);
+}
+
+.ProseMirror .is-active-annotation[data-mark-type="cross"],
+.ProseMirror .is-active-annotation [data-mark-type="cross"] {
+	background-color: var(--mark-cross-bg-active);
+}
+
+.ProseMirror .is-active-annotation[data-mark-type="circle"],
+.ProseMirror .is-active-annotation [data-mark-type="circle"] {
+	background-color: var(--mark-circle-bg-active);
+}
+
+.ProseMirror .is-active-annotation[data-mark-type="box"],
+.ProseMirror .is-active-annotation [data-mark-type="box"] {
+	box-shadow: inset 0 0 0 1px var(--mark-box-ring-active);
+}
+
+.ProseMirror .is-active-annotation[data-mark-type="underline"],
+.ProseMirror .is-active-annotation [data-mark-type="underline"] {
+	text-decoration-color: var(--mark-underline-active);
+}
+
+.ProseMirror .is-active-annotation[data-mark-type="double_underline"],
+.ProseMirror .is-active-annotation [data-mark-type="double_underline"] {
+	text-decoration-color: var(--mark-double-underline-active);
+}
+
+.ProseMirror
+	.is-active-annotation[data-mark-type="chain"][data-chain-type="evaluation"],
+.ProseMirror
+	.is-active-annotation
+	[data-mark-type="chain"][data-chain-type="evaluation"] {
+	background-color: var(--mark-chain-evaluation-bg-active);
+}
+
+.ProseMirror
+	.is-active-annotation[data-mark-type="chain"][data-chain-type="judgement"],
+.ProseMirror
+	.is-active-annotation
+	[data-mark-type="chain"][data-chain-type="judgement"] {
+	background-color: var(--mark-chain-judgement-bg-active);
+}
+
+.ProseMirror
+	.is-active-annotation[data-mark-type="chain"][data-chain-type="reasoning"],
+.ProseMirror
+	.is-active-annotation[data-mark-type="chain"]:not([data-chain-type]),
+.ProseMirror
+	.is-active-annotation
+	[data-mark-type="chain"][data-chain-type="reasoning"],
+.ProseMirror
+	.is-active-annotation
+	[data-mark-type="chain"]:not([data-chain-type]) {
+	background-color: var(--mark-chain-reasoning-bg-active);
+}
+
 /* When annotation marks overlap on the same span, ProseMirror nests their
    <span>s. The outer mark provides the visual decoration; inner marks
    suppress their own underline, ring, background, and padding so the

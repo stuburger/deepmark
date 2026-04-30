@@ -1,10 +1,8 @@
 import { effectiveExamPaperRole } from "@/lib/authz"
 import { resolveSessionUser } from "@/lib/authz/middleware/require-session"
-import { getJobPageTokens, getJobScanPages } from "@/lib/marking/scan/queries"
-import { getJobStages } from "@/lib/marking/stages/queries"
 import { getStudentPaperJob } from "@/lib/marking/submissions/queries"
 import { notFound } from "next/navigation"
-import { SubmissionView } from "../../mark/papers/[examPaperId]/submissions/[jobId]/submission-view"
+import { SubmissionPageClient } from "./submission-page-client"
 
 /**
  * Standalone submission page. Asserts only submission-level access — used by
@@ -12,8 +10,15 @@ import { SubmissionView } from "../../mark/papers/[examPaperId]/submissions/[job
  * exam paper) and by the marking-history list as the canonical "open this
  * submission" link.
  *
- * The exam-paper detail page's `?job=...` query still works for paper owners /
- * editors who want the submission opened in a dialog with full paper context.
+ * The exam-paper detail page's `?job=...` query still works for paper owners
+ * who want the submission opened in a dialog with full paper context.
+ *
+ * Server-side we resolve the submission so we can determine the parent
+ * paper's id (needed for breadcrumb routing) and whether this viewer can
+ * follow the breadcrumb to the paper. The actual submission data is loaded
+ * client-side via SubmissionPageClient — the same pattern MarkingJobDialog
+ * uses, which avoids SSR-rendering SubmissionView (Yjs / TanStack Query
+ * bundling drops them into duplicate-import territory under direct RSC).
  */
 export default async function SubmissionPage({
 	params,
@@ -22,37 +27,19 @@ export default async function SubmissionPage({
 }) {
 	const { jobId } = await params
 
-	const [jobResult, scanResult, tokensResult, stagesResult] = await Promise.all(
-		[
-			getStudentPaperJob({ jobId }),
-			getJobScanPages({ jobId }),
-			getJobPageTokens({ jobId }),
-			getJobStages({ jobId }),
-		],
-	)
-
+	const jobResult = await getStudentPaperJob({ jobId })
 	const jobData = jobResult?.data?.data
-	const stages = stagesResult?.data?.stages
-	if (!jobData || !stages) notFound()
+	if (!jobData) notFound()
 
-	// Paper-link breadcrumb only renders if the viewer can also access the
-	// parent paper. Submission-only grants (the typical sharing case) don't
-	// imply paper access, so following that link would 404.
 	const user = await resolveSessionUser()
 	const paperRole = await effectiveExamPaperRole(user, jobData.exam_paper_id)
 	const paperAccessible = paperRole !== null
 
 	return (
-		<div className="fixed inset-0 z-40 flex flex-col bg-background">
-			<SubmissionView
-				examPaperId={jobData.exam_paper_id}
-				jobId={jobId}
-				initialData={jobData}
-				scanPages={scanResult?.data?.pages ?? []}
-				pageTokens={tokensResult?.data?.tokens ?? []}
-				initialStages={stages}
-				paperAccessible={paperAccessible}
-			/>
-		</div>
+		<SubmissionPageClient
+			jobId={jobId}
+			examPaperId={jobData.exam_paper_id}
+			paperAccessible={paperAccessible}
+		/>
 	)
 }

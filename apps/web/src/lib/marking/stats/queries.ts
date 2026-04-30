@@ -1,6 +1,6 @@
 "use server"
 
-import { scopedAction } from "@/lib/authz"
+import { AccessDeniedError, scopedAction } from "@/lib/authz"
 import { db } from "@/lib/db"
 import { z } from "zod"
 import type { ExamPaperStats, GradingResult } from "../types"
@@ -30,7 +30,7 @@ export const getExamPaperStats = scopedAction({
 				examPaperId,
 				"viewer",
 			)
-			if (!access.ok) throw new Error(access.error)
+			if (!access.ok) throw new AccessDeniedError(access.error)
 
 			const subs = await db.studentSubmission.findMany({
 				where: {

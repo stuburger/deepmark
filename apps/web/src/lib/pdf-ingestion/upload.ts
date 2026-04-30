@@ -39,13 +39,15 @@ export const createPdfIngestionUpload = authenticatedAction
 			// If linked to an existing paper, assert editor access manually
 			// (resourceAction can't be used here because exam_paper_id is optional).
 			if (input.exam_paper_id) {
-				const { assertExamPaperAccess } = await import("@/lib/authz")
+				const { AccessDeniedError, assertExamPaperAccess } = await import(
+					"@/lib/authz"
+				)
 				const access = await assertExamPaperAccess(
 					ctx.user,
 					input.exam_paper_id,
 					"editor",
 				)
-				if (!access.ok) throw new Error(access.error)
+				if (!access.ok) throw new AccessDeniedError(access.error)
 			}
 
 			ctx.log.info("createPdfIngestionUpload called", {

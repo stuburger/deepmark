@@ -268,14 +268,13 @@ async function assertOwnerByGrant(
 	user: { id: string; systemRole: string },
 	grant: ResourceGrant,
 ): Promise<void> {
-	const { assertExamPaperAccess, assertSubmissionAccess } = await import(
-		"@/lib/authz"
-	)
+	const { AccessDeniedError, assertExamPaperAccess, assertSubmissionAccess } =
+		await import("@/lib/authz")
 	const principal = await db.user.findUnique({
 		where: { id: user.id },
 		select: { id: true, email: true, role: true },
 	})
-	if (!principal) throw new Error("User not found")
+	if (!principal) throw new AccessDeniedError("User not found")
 	const access =
 		grant.resource_type === ResourceGrantResourceType.exam_paper
 			? await assertExamPaperAccess(
@@ -296,7 +295,7 @@ async function assertOwnerByGrant(
 					grant.resource_id,
 					"owner",
 				)
-	if (!access.ok) throw new Error(access.error)
+	if (!access.ok) throw new AccessDeniedError(access.error)
 }
 
 // ─── shareSubmissionsWithEmails ─────────────────────────────────────────────

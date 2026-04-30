@@ -181,14 +181,15 @@ export const reorderQuestionsInSection = authenticatedAction
 				where: { id: sectionId },
 				select: { exam_paper_id: true },
 			})
-			if (!section) throw new Error("Section not found")
-			const { assertExamPaperAccess } = await import("@/lib/authz")
+			const { AccessDeniedError, NotFoundError, assertExamPaperAccess } =
+				await import("@/lib/authz")
+			if (!section) throw new NotFoundError("Section not found")
 			const access = await assertExamPaperAccess(
 				ctx.user,
 				section.exam_paper_id,
 				"editor",
 			)
-			if (!access.ok) throw new Error(access.error)
+			if (!access.ok) throw new AccessDeniedError(access.error)
 
 			const n = orderedQuestionIds.length
 			// Two-phase update to avoid unique constraint violations on (exam_section_id, order):

@@ -38,6 +38,7 @@ export function SubmissionView({
 	onVersionChange,
 	onClose,
 	paperAccessible = true,
+	readOnly = false,
 }: {
 	examPaperId: string
 	jobId: string
@@ -56,6 +57,12 @@ export function SubmissionView({
 	 * doesn't render a dead link to a 403/404 page.
 	 */
 	paperAccessible?: boolean
+	/**
+	 * Viewer has read-only access (submission viewer role, no editor/owner).
+	 * Surfaced as a badge in the toolbar so the lack of edit affordances
+	 * isn't confusing — server-side mutations will reject regardless.
+	 */
+	readOnly?: boolean
 }) {
 	const {
 		data,
@@ -208,6 +215,7 @@ export function SubmissionView({
 					annotations={annotations}
 					pageTokens={pageTokens}
 					paperAccessible={paperAccessible}
+					readOnly={readOnly}
 				/>
 
 				{/* Mobile: scan/results tabs */}

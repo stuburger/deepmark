@@ -1,4 +1,8 @@
-import { effectiveExamPaperRole } from "@/lib/authz"
+import {
+	effectiveExamPaperRole,
+	effectiveSubmissionRole,
+	meetsMinimum,
+} from "@/lib/authz"
 import { resolveSessionUser } from "@/lib/authz/middleware/require-session"
 import { getStudentPaperJob } from "@/lib/marking/submissions/queries"
 import { notFound } from "next/navigation"
@@ -32,14 +36,19 @@ export default async function SubmissionPage({
 	if (!jobData) notFound()
 
 	const user = await resolveSessionUser()
-	const paperRole = await effectiveExamPaperRole(user, jobData.exam_paper_id)
+	const [paperRole, submissionRole] = await Promise.all([
+		effectiveExamPaperRole(user, jobData.exam_paper_id),
+		effectiveSubmissionRole(user, jobId),
+	])
 	const paperAccessible = paperRole !== null
+	const readOnly = !meetsMinimum(submissionRole, "editor")
 
 	return (
 		<SubmissionPageClient
 			jobId={jobId}
 			examPaperId={jobData.exam_paper_id}
 			paperAccessible={paperAccessible}
+			readOnly={readOnly}
 		/>
 	)
 }

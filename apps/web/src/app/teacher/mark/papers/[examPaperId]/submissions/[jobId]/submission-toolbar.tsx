@@ -5,6 +5,7 @@ import { useCollaborators } from "@/components/annotated-answer/use-collaborator
 import { useDocScoreTotals } from "@/components/annotated-answer/use-doc-score-totals"
 import { useYDoc } from "@/components/annotated-answer/use-y-doc"
 import { ShareDialog } from "@/components/sharing/share-dialog"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
 	Tooltip,
@@ -19,7 +20,7 @@ import type {
 	StudentPaperJobPayload,
 } from "@/lib/marking/types"
 import { computeGrade } from "@mcp-gcse/shared"
-import { ChevronRight, Share2, X } from "lucide-react"
+import { ChevronRight, Eye, Share2, X } from "lucide-react"
 import Link from "next/link"
 import { ReScanButton } from "./re-scan-button"
 import { DownloadPdfButton } from "./results/download-pdf-button"
@@ -44,6 +45,7 @@ export function SubmissionToolbar({
 	annotations,
 	pageTokens,
 	paperAccessible = true,
+	readOnly = false,
 }: {
 	examPaperId: string
 	jobId: string
@@ -55,6 +57,7 @@ export function SubmissionToolbar({
 	annotations?: StudentPaperAnnotation[]
 	pageTokens?: PageToken[]
 	paperAccessible?: boolean
+	readOnly?: boolean
 }) {
 	// Same docKey as grading-results-panel — useYDoc's module-scope cache
 	// reference-counts, so this doesn't open a second WebSocket. The provider
@@ -133,8 +136,23 @@ export function SubmissionToolbar({
 				)}
 
 				<div className="ml-auto flex items-center gap-3">
+					{readOnly && (
+						<Tooltip>
+							<TooltipTrigger
+								render={
+									<Badge variant="outline" className="gap-1">
+										<Eye className="h-3 w-3" />
+										Read only
+									</Badge>
+								}
+							/>
+							<TooltipContent side="bottom" sideOffset={6}>
+								You have viewer access — edits are disabled
+							</TooltipContent>
+						</Tooltip>
+					)}
 					<CollaboratorAvatars users={collaborators} />
-					{data.submission_id && (
+					{data.submission_id && !readOnly && (
 						<ShareDialog
 							submissionIds={[data.submission_id]}
 							trigger={

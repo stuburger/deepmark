@@ -22,10 +22,12 @@ export function SubmissionPageClient({
 	jobId,
 	examPaperId,
 	paperAccessible,
+	readOnly,
 }: {
 	jobId: string
 	examPaperId: string
 	paperAccessible: boolean
+	readOnly: boolean
 }) {
 	const { data: jobData } = useQuery<StudentPaperJobPayload | null>({
 		queryKey: queryKeys.studentJob(jobId),
@@ -81,6 +83,7 @@ export function SubmissionPageClient({
 				pageTokens={pageTokens}
 				initialStages={stages}
 				paperAccessible={paperAccessible}
+				readOnly={readOnly}
 			/>
 		</div>
 	)

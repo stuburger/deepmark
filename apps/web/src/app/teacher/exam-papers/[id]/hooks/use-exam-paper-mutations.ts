@@ -11,6 +11,7 @@ import type {
 	UpdateQuestionInput,
 } from "@/lib/exam-paper/types"
 import { linkMarkSchemeToQuestion } from "@/lib/exam-paper/unlinked-schemes"
+import { ActionValidationError } from "@/lib/forms/apply-server-errors"
 import {
 	type MarkSchemeInput,
 	createMarkScheme,
@@ -167,6 +168,9 @@ export function useCreateMarkScheme(paperId: string) {
 		}) => {
 			const result = await createMarkScheme({ questionId, input })
 			if (result?.serverError) throw new Error(result.serverError)
+			if (result?.validationErrors) {
+				throw new ActionValidationError(result.validationErrors)
+			}
 			return result?.data
 		},
 		onMutate: async ({ questionId }) => {
@@ -184,6 +188,7 @@ export function useCreateMarkScheme(paperId: string) {
 			if (context?.previous) {
 				queryClient.setQueryData(queryKeys.examPaper(paperId), context.previous)
 			}
+			if (err instanceof ActionValidationError) return
 			toast.error(err.message || "Failed to create mark scheme")
 		},
 		onSettled: () => {
@@ -210,9 +215,15 @@ export function useUpdateMarkScheme(paperId: string) {
 		}) => {
 			const result = await updateMarkScheme({ markSchemeId, input })
 			if (result?.serverError) throw new Error(result.serverError)
+			if (result?.validationErrors) {
+				throw new ActionValidationError(result.validationErrors)
+			}
 			return result?.data
 		},
 		onError: (err) => {
+			// ActionValidationError surfaces as setError-on-form in the caller's
+			// onError; the global toast here is for serverErrors only.
+			if (err instanceof ActionValidationError) return
 			toast.error(err.message || "Failed to update mark scheme")
 		},
 		onSettled: () => {

@@ -20,9 +20,13 @@ import {
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+import {
+	type FlattenedValidationErrors,
+	applyServerValidationErrors,
+} from "@/lib/forms/apply-server-errors"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
-import { z } from "zod/v4"
+import { z } from "zod"
 
 const classExportSchema = z.object({
 	className: z.string().trim(),
@@ -68,7 +72,18 @@ type Props = {
 	onOpenChange: (open: boolean) => void
 	submissionCount: number
 	initialValue: ClassExportFormValues
-	onSubmit: (values: ClassExportFormValues) => Promise<void> | void
+	/**
+	 * Returning a `FlattenedValidationErrors` triggers per-field `setError`
+	 * inline. Returning `void`/`null` indicates success or a non-validation
+	 * error already handled (typically as a toast) by the parent.
+	 */
+	onSubmit: (
+		values: ClassExportFormValues,
+	) =>
+		| Promise<FlattenedValidationErrors | void | null>
+		| FlattenedValidationErrors
+		| void
+		| null
 	submitting?: boolean
 }
 
@@ -86,7 +101,13 @@ export function ClassExportDialog({
 	})
 
 	async function handleSubmit(values: ClassExportFormValues) {
-		await onSubmit(values)
+		const ve = await onSubmit(values)
+		if (ve) {
+			applyServerValidationErrors(form, ve, {
+				className: "className",
+				teacherName: "teacherName",
+			})
+		}
 	}
 
 	return (

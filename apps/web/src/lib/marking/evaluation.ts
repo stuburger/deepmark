@@ -11,42 +11,11 @@ import {
 	type QuestionWithMarkScheme,
 	parseMarkPointsFromPrisma,
 } from "@mcp-gcse/shared"
-import { z } from "zod/v4"
-import type { MarkSchemeInput } from "../mark-scheme/types"
-
-const markSchemeInputSchema = z.discriminatedUnion("marking_method", [
-	z.object({
-		marking_method: z.literal("point_based"),
-		description: z.string().trim().min(1, "Description is required"),
-		guidance: z.string().trim().nullable().optional(),
-		mark_points: z
-			.array(
-				z.object({
-					criteria: z.string().trim().min(1, "Mark point criteria is required"),
-					description: z.string().optional(),
-					points: z.number().int().min(0, "Mark point value is invalid"),
-				}),
-			)
-			.min(1, "At least one mark point is required"),
-	}),
-	z.object({
-		marking_method: z.literal("deterministic"),
-		description: z.string().trim().min(1, "Description is required"),
-		guidance: z.string().trim().nullable().optional(),
-		correct_option_labels: z
-			.array(z.string())
-			.min(1, "Select at least one correct answer"),
-	}),
-	z.object({
-		marking_method: z.literal("level_of_response"),
-		description: z.string().trim().min(1, "Description is required"),
-		guidance: z.string().trim().nullable().optional(),
-		content: z.string().trim().min(1, "Mark scheme content is required"),
-		points_total: z.number().int().positive("Cannot determine total marks"),
-	}),
-])
-
-type ParsedMarkSchemeInput = z.infer<typeof markSchemeInputSchema>
+import { z } from "zod"
+import {
+	type MarkSchemeInputParsed as ParsedMarkSchemeInput,
+	markSchemeInputSchema,
+} from "../mark-scheme/schema"
 
 type EvaluationMarkScheme = {
 	description: string

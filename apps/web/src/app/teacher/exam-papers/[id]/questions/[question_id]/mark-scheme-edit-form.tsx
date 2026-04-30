@@ -9,14 +9,24 @@ import {
 } from "@/components/ui/field"
 import { Spinner } from "@/components/ui/spinner"
 import { Textarea } from "@/components/ui/textarea"
+import {
+	ActionValidationError,
+	applyServerValidationErrors,
+} from "@/lib/forms/apply-server-errors"
 import { createMarkScheme, updateMarkScheme } from "@/lib/mark-scheme/manual"
 import type { MarkSchemeInput } from "@/lib/mark-scheme/types"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { CheckCircle2, Plus } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useCallback, useEffect, useState, useTransition } from "react"
-import { useFieldArray, useForm } from "react-hook-form"
-import { z } from "zod/v4"
+import {
+	type FieldPath,
+	type FieldValues,
+	type UseFormReturn,
+	useFieldArray,
+	useForm,
+} from "react-hook-form"
+import { z } from "zod"
 import {
 	useCreateMarkScheme,
 	useUpdateMarkScheme,
@@ -125,16 +135,27 @@ export type Props = (McqCreate | McqEdit | WrittenCreate | WrittenEdit) & {
 
 // ── Shared submit logic ─────────────────────────────────────────────────────
 
-function useMarkSchemeSubmit({
+/**
+ * Wraps both the TanStack-mutation path (when a `paperId` ties the form into
+ * a paper detail page's optimistic cache) and the direct-server-action path
+ * (standalone create/edit dialogs). In both cases, server-side validation
+ * failures are routed through `applyServerValidationErrors` so per-field
+ * messages land inline; only unmapped errors surface in the banner.
+ */
+function useMarkSchemeSubmit<T extends FieldValues>({
 	markSchemeId,
 	questionId,
 	paperId,
 	onSuccess,
+	form,
+	fieldMap,
 }: {
 	markSchemeId?: string
 	questionId?: string
 	paperId?: string
 	onSuccess?: () => void
+	form: UseFormReturn<T>
+	fieldMap?: Partial<Record<string, FieldPath<T>>>
 }) {
 	const isEdit = markSchemeId !== undefined
 	const router = useRouter()
@@ -147,11 +168,27 @@ function useMarkSchemeSubmit({
 	const effectivelyPending =
 		isPending || createHook.isPending || updateHook.isPending
 
+	function applyValidationErrors(err: ActionValidationError) {
+		const banner = applyServerValidationErrors(
+			form,
+			err.validationErrors,
+			fieldMap,
+		)
+		if (banner) setSubmitError(banner)
+	}
+
 	function submit(input: MarkSchemeInput) {
 		setSubmitError(null)
 		setSaved(false)
 
 		if (paperId) {
+			const onError = (err: Error) => {
+				if (err instanceof ActionValidationError) {
+					applyValidationErrors(err)
+					return
+				}
+				setSubmitError(err.message)
+			}
 			if (isEdit && markSchemeId) {
 				updateHook.mutate(
 					{ markSchemeId, questionId: "", input },
@@ -160,7 +197,7 @@ function useMarkSchemeSubmit({
 							setSaved(true)
 							onSuccess?.()
 						},
-						onError: (err) => setSubmitError(err.message),
+						onError,
 					},
 				)
 			} else if (questionId) {
@@ -171,7 +208,7 @@ function useMarkSchemeSubmit({
 							setSaved(true)
 							onSuccess?.()
 						},
-						onError: (err) => setSubmitError(err.message),
+						onError,
 					},
 				)
 			}
@@ -197,10 +234,9 @@ function useMarkSchemeSubmit({
 					return
 				}
 				if (result?.validationErrors) {
-					const ve = result.validationErrors
-					const issue =
-						ve.formErrors?.[0] ?? Object.values(ve.fieldErrors).flat()[0]
-					setSubmitError(issue ?? "Invalid input")
+					applyValidationErrors(
+						new ActionValidationError(result.validationErrors),
+					)
 					return
 				}
 				setSaved(true)
@@ -228,9 +264,6 @@ export function MarkSchemeEditForm(props: Props & { onCancel?: () => void }) {
 // ── MCQ form ────────────────────────────────────────────────────────────────
 
 function McqForm(props: Props & { onCancel?: () => void }) {
-	const { submit, saved, setSaved, submitError, effectivelyPending } =
-		useMarkSchemeSubmit(props)
-
 	const form = useForm<McqFormValues>({
 		resolver: zodResolver(mcqFormSchema),
 		defaultValues: {
@@ -239,6 +272,9 @@ function McqForm(props: Props & { onCancel?: () => void }) {
 			correctLabels: props.initialCorrectOptionLabels ?? [],
 		},
 	})
+
+	const { submit, saved, setSaved, submitError, effectivelyPending } =
+		useMarkSchemeSubmit({ ...props, form })
 
 	const toInput = useCallback((values: McqFormValues): MarkSchemeInput => {
 		return {
@@ -356,11 +392,9 @@ function McqForm(props: Props & { onCancel?: () => void }) {
 // ── Written form ────────────────────────────────────────────────────────────
 
 function WrittenForm(props: Props & { onCancel?: () => void }) {
-	const { submit, saved, setSaved, submitError, effectivelyPending, isEdit } =
-		useMarkSchemeSubmit(props)
-
+	const isEditUpfront = "markSchemeId" in props && Boolean(props.markSchemeId)
 	const showMarkPoints =
-		!isEdit ||
+		!isEditUpfront ||
 		("markingMethod" in props && props.markingMethod === "point_based")
 
 	const form = useForm<WrittenFormValues>({
@@ -381,6 +415,9 @@ function WrittenForm(props: Props & { onCancel?: () => void }) {
 			})(),
 		},
 	})
+
+	const { submit, saved, setSaved, submitError, effectivelyPending } =
+		useMarkSchemeSubmit({ ...props, form })
 
 	const markPointFields = useFieldArray({
 		control: form.control,

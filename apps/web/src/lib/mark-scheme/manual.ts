@@ -3,47 +3,9 @@
 import { resourceAction } from "@/lib/authz"
 import { db } from "@/lib/db"
 import { z } from "zod"
-import type { MarkSchemeInput } from "./types"
+import { markSchemeInputSchema } from "./schema"
 
 export type { MarkSchemeInput, MarkSchemePointInput } from "./types"
-
-const markSchemePointSchema = z.object({
-	criteria: z.string(),
-	description: z.string().optional(),
-	points: z.number().int().min(0),
-})
-
-const markSchemeInputSchema = z.discriminatedUnion("marking_method", [
-	z.object({
-		marking_method: z.literal("deterministic"),
-		description: z.string().trim().min(1, "Description is required"),
-		guidance: z.string().optional(),
-		correct_option_labels: z
-			.array(z.string())
-			.min(1, "Select at least one correct answer"),
-		mark_points: z.array(markSchemePointSchema).optional().default([]),
-		points_total: z.number().nullish(),
-		content: z.string().nullish(),
-	}),
-	z.object({
-		marking_method: z.literal("point_based"),
-		description: z.string().trim().min(1, "Description is required"),
-		guidance: z.string().optional(),
-		mark_points: z.array(markSchemePointSchema).min(1),
-		correct_option_labels: z.array(z.string()).optional().default([]),
-		points_total: z.number().nullish(),
-		content: z.string().nullish(),
-	}),
-	z.object({
-		marking_method: z.literal("level_of_response"),
-		description: z.string().trim().min(1, "Description is required"),
-		guidance: z.string().optional(),
-		content: z.string().trim().min(1, "Mark scheme content is required"),
-		points_total: z.number().int().positive(),
-		mark_points: z.array(markSchemePointSchema).optional().default([]),
-		correct_option_labels: z.array(z.string()).optional().default([]),
-	}),
-]) satisfies z.ZodType<MarkSchemeInput>
 
 // ─── Create ───────────────────────────────────────────────────────────────────
 

@@ -8,13 +8,17 @@ import {
 	FieldLabel,
 } from "@/components/ui/field"
 import { Textarea } from "@/components/ui/textarea"
+import {
+	ActionValidationError,
+	applyServerValidationErrors,
+} from "@/lib/forms/apply-server-errors"
 import { updateMarkScheme } from "@/lib/mark-scheme/manual"
 import type { MarkSchemeInput } from "@/lib/mark-scheme/types"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useRouter } from "next/navigation"
 import { useCallback, useEffect, useState, useTransition } from "react"
 import { useForm } from "react-hook-form"
-import { z } from "zod/v4"
+import { z } from "zod"
 import { useUpdateMarkScheme } from "../../hooks/use-exam-paper-mutations"
 import { FormFooter } from "./mark-scheme-edit-form"
 
@@ -92,6 +96,11 @@ export function LorMarkSchemeEditForm({
 		return () => subscription.unsubscribe()
 	}, [form, onDraftChange, toInput])
 
+	function applyValidationErrors(err: ActionValidationError) {
+		const banner = applyServerValidationErrors(form, err.validationErrors)
+		if (banner) setSubmitError(banner)
+	}
+
 	function onSubmit(values: FormValues) {
 		setSubmitError(null)
 		setSaved(false)
@@ -106,7 +115,13 @@ export function LorMarkSchemeEditForm({
 						setSaved(true)
 						onSuccess?.()
 					},
-					onError: (err) => setSubmitError(err.message),
+					onError: (err) => {
+						if (err instanceof ActionValidationError) {
+							applyValidationErrors(err)
+							return
+						}
+						setSubmitError(err.message)
+					},
 				},
 			)
 		} else {
@@ -117,10 +132,9 @@ export function LorMarkSchemeEditForm({
 					return
 				}
 				if (result?.validationErrors) {
-					const ve = result.validationErrors
-					const issue =
-						ve.formErrors?.[0] ?? Object.values(ve.fieldErrors).flat()[0]
-					setSubmitError(issue ?? "Invalid input")
+					applyValidationErrors(
+						new ActionValidationError(result.validationErrors),
+					)
 					return
 				}
 				setSaved(true)

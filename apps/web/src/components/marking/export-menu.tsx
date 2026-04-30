@@ -137,10 +137,9 @@ export function ExportMenu({
 				return
 			}
 			if (result?.validationErrors) {
-				const ve = result.validationErrors
-				const issue =
-					ve.formErrors?.[0] ?? Object.values(ve.fieldErrors).flat()[0]
-				toast.error(issue ?? "Invalid input")
+				// Inline field errors are routed through ClassExportDialog via the
+				// validationErrors returned from handlePdfSubmit. Don't toast here
+				// or the user sees the same message twice.
 				return
 			}
 			const data = result?.data
@@ -165,7 +164,8 @@ export function ExportMenu({
 	})
 
 	async function handlePdfSubmit(values: ClassExportFormValues) {
-		await pdfMutation.mutateAsync({ scope: pdfScope, values })
+		const result = await pdfMutation.mutateAsync({ scope: pdfScope, values })
+		return result?.validationErrors ?? null
 	}
 
 	function openPdfDialog(scope: Scope) {

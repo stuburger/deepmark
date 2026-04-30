@@ -124,9 +124,9 @@ In rough priority order:
 
 ### Worth considering before merge
 
-- [ ] **Schema duplication for mark-scheme input.** `mark-scheme/manual.ts` and `marking/evaluation.ts` both define a Zod `markSchemeInputSchema` discriminated union. Consider extracting once into `mark-scheme/types.ts`. Two-line import diff each side.
+- [x] **Schema duplication for mark-scheme input.** Done. Extracted to `apps/web/src/lib/mark-scheme/schema.ts` with the unified shape (manual.ts's loose superset + evaluation.ts's stricter messages). `evaluation.ts` switched from `zod/v4` import to plain `zod` for consistency with the rest of the codebase.
 
-- [ ] **Form validationErrors mapping is per-form.** The pattern in CLAUDE.md uses `form.setError(field, { message })` per Zod field. The 4 form callers don't actually wire field-level mapping yet — they fall back to setting a single submitError string. If a server-side schema diverges from client-side, the user sees a generic banner instead of an inline field error. Acceptable for alpha; tighten before paid rollout.
+- [x] **Form validationErrors mapping is per-form.** Done. Added `applyServerValidationErrors(form, validationErrors, fieldMap)` helper in `apps/web/src/lib/forms/apply-server-errors.ts` and an `ActionValidationError` class so mutationFn wrappers can preserve validationErrors through TanStack Query (previously they returned `undefined` and silently looked like success). The 4 forms now route server validationErrors through `setError` for mapped fields and fall back to a meaningful banner for the rest. Mark-scheme actions still take nested `{ questionId, input }` shape, so fieldMap is empty in those forms today — flattening the action input would unlock direct field-level mapping; tracked as future work.
 
 - [ ] **CollabAuthz Lambda redeploy verification.** After the D13 type-only refactor of `collab-authz.ts`, the Lambda recreate ran into the SST NoSuchKey error noted above. A clean `rm -rf .sst` + `sst deploy --stage=stuartbourhill` should clear it; worth confirming before the PR is opened so we don't ship a bricked collab Lambda.
 

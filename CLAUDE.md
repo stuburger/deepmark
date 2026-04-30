@@ -298,9 +298,14 @@ export function MarkSchemeForm({ initialValue, onSubmit }: Props) {
 
 **Validation errors** (field-level, from Zod) are displayed inline using the `Field` / `FieldError` / `FieldLabel` components from `@/components/ui/field`.
 
-**Server errors** (from a failed server action) are always shown as a Sonner toast — never stored in state and rendered as JSX. **Validation errors from the action's Zod schema** map straight back onto the form via `setError`, so the inline UI stays consistent whether the schema lives client-side (zodResolver) or server-side (the action's `inputSchema`):
+**Server errors** (from a failed server action) are always shown as a Sonner toast — never stored in state and rendered as JSX. **Validation errors from the action's Zod schema** map straight back onto the form via `setError` using the `applyServerValidationErrors` helper from `@/lib/forms/apply-server-errors`. The helper routes server keys listed in `fieldMap` to inline `setError`; everything else (top-level `formErrors`, unmapped fieldErrors) returns as a single banner string for toast display.
 
 ```tsx
+import {
+  ActionValidationError,
+  applyServerValidationErrors,
+} from "@/lib/forms/apply-server-errors"
+
 // In the parent — not inside the form
 async function handleSubmit(values: MarkSchemeFormValues) {
   const result = await createMarkScheme({ questionId, input: values })
@@ -310,22 +315,40 @@ async function handleSubmit(values: MarkSchemeFormValues) {
     return
   }
   if (result?.validationErrors) {
-    // next-safe-action 8.x with `defaultValidationErrorsShape: "flattened"`
-    // returns { formErrors: string[], fieldErrors: Record<string, string[]> }
-    for (const [field, msgs] of Object.entries(result.validationErrors.fieldErrors)) {
-      const msg = msgs?.[0]
-      if (msg) form.setError(field as keyof MarkSchemeFormValues, { message: msg })
-    }
-    const formErr = result.validationErrors.formErrors?.[0]
-    if (formErr) toast.error(formErr)
+    const banner = applyServerValidationErrors(form, result.validationErrors, {
+      // server key → form field name. The action's input keys are top-level
+      // (flat), so each maps directly. For nested action shapes (`{ id, input }`)
+      // leave fieldMap empty and rely on the banner fallback.
+      description: "description",
+      guidance: "guidance",
+    })
+    if (banner) toast.error(banner)
     return
   }
 
   toast.success("Mark scheme saved")
   onClose()
 }
+```
 
-<MarkSchemeForm initialValue={EMPTY_MARK_SCHEME} onSubmit={handleSubmit} />
+For mutations going through TanStack Query, mutationFn must throw `ActionValidationError` so validationErrors aren't silently swallowed (a returned `undefined` would otherwise look like success):
+
+```ts
+mutationFn: async ({ questionId, input }) => {
+  const result = await createMarkScheme({ questionId, input })
+  if (result?.serverError) throw new Error(result.serverError)
+  if (result?.validationErrors) {
+    throw new ActionValidationError(result.validationErrors)
+  }
+  return result?.data
+},
+onError: (err) => {
+  // Per-call onError in `mutate(input, { onError })` handles
+  // ActionValidationError via applyServerValidationErrors. Skip the global
+  // toast for it; let the form surface field-level messages inline.
+  if (err instanceof ActionValidationError) return
+  toast.error(err.message)
+},
 ```
 
 The form itself never calls server actions directly. The parent wires `onSubmit` to the mutation/server action and owns the success/error side-effects.

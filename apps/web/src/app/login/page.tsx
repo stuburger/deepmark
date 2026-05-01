@@ -27,7 +27,7 @@ export default async function LoginPage() {
 		<main className="relative flex min-h-screen">
 			{/* Full-bleed background image behind everything */}
 			<Image
-				src="/deepmark-login.png"
+				src="/deepmark-login.jpg"
 				alt=""
 				fill
 				priority

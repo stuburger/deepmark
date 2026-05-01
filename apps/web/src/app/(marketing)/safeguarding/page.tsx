@@ -1,18 +1,18 @@
 import type { Metadata } from "next"
 
-import { PolicyStub } from "../_components/policy-stub"
+import { PolicyLayout } from "../_components/policy-layout"
+import Content from "./content.mdx"
 
 export const metadata: Metadata = {
 	title: "Safeguarding — DeepMark",
 	description:
-		"DeepMark safeguarding and Keeping Children Safe in Education (KCSiE) policy.",
+		"How DeepMark works with schools to protect children, in line with KCSiE.",
 }
 
 export default function SafeguardingPage() {
 	return (
-		<PolicyStub
-			title="Safeguarding"
-			description="Our Keeping Children Safe in Education (KCSiE) policy — covering disclosure handling, escalation routes, and our duty of care — is in preparation and will be published here ahead of launch."
-		/>
+		<PolicyLayout title="Safeguarding Policy" lastUpdated="2026-05-01">
+			<Content />
+		</PolicyLayout>
 	)
 }

@@ -1,17 +1,17 @@
 import type { Metadata } from "next"
 
-import { PolicyStub } from "../_components/policy-stub"
+import { PolicyLayout } from "../_components/policy-layout"
+import Content from "./content.mdx"
 
 export const metadata: Metadata = {
 	title: "Terms — DeepMark",
-	description: "DeepMark terms of service.",
+	description: "Terms of service for DeepMark, the AI-assisted marking tool.",
 }
 
 export default function TermsPage() {
 	return (
-		<PolicyStub
-			title="Terms of service"
-			description="Our terms of service are in preparation and will be published here ahead of launch."
-		/>
+		<PolicyLayout title="Terms of Service" lastUpdated="2026-05-01">
+			<Content />
+		</PolicyLayout>
 	)
 }

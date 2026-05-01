@@ -1,18 +1,18 @@
 import type { Metadata } from "next"
 
-import { PolicyStub } from "../_components/policy-stub"
+import { PolicyLayout } from "../_components/policy-layout"
+import Content from "./content.mdx"
 
 export const metadata: Metadata = {
 	title: "Privacy — DeepMark",
 	description:
-		"DeepMark privacy and data-handling policy. GDPR-compliant; full policy in preparation.",
+		"How DeepMark collects, uses, and protects personal data, in accordance with UK GDPR.",
 }
 
 export default function PrivacyPage() {
 	return (
-		<PolicyStub
-			title="Privacy"
-			description="Our full GDPR / data-handling policy is in preparation and will be published here ahead of launch."
-		/>
+		<PolicyLayout title="Privacy Policy" lastUpdated="2026-05-01">
+			<Content />
+		</PolicyLayout>
 	)
 }

@@ -1,6 +1,7 @@
 import { AppNavbar } from "@/components/app-navbar"
 import { PushRegistration } from "@/components/push-registration"
 import { TeacherSidebarNav } from "@/components/teacher-sidebar-nav"
+import { TrialBanner } from "@/components/trial-banner"
 import { Button } from "@/components/ui/button"
 import {
 	Sidebar,
@@ -73,6 +74,7 @@ export default async function TeacherLayout({
 			</Sidebar>
 			<SidebarInset>
 				<AppNavbar />
+				<TrialBanner />
 				<main className="flex-1 overflow-auto px-6 pb-6">{children}</main>
 			</SidebarInset>
 			<PushRegistration />

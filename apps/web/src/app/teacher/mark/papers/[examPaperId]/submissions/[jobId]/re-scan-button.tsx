@@ -1,10 +1,10 @@
 "use client"
 
 import { Button } from "@/components/ui/button"
+import { surfaceMarkingError } from "@/lib/billing/error-toast"
 import { retriggerOcr } from "@/lib/marking/stages/mutations"
 import { useMutation } from "@tanstack/react-query"
 import { Loader2 } from "lucide-react"
-import { toast } from "sonner"
 
 export function ReScanButton({
 	jobId,
@@ -17,13 +17,13 @@ export function ReScanButton({
 		mutationFn: () => retriggerOcr({ jobId }),
 		onSuccess: (result) => {
 			if (result?.serverError) {
-				toast.error(result.serverError)
+				surfaceMarkingError(result.serverError)
 				return
 			}
 			if (!result?.data) return
 			onNavigateToJob(result.data.newJobId)
 		},
-		onError: () => toast.error("Failed to re-scan"),
+		onError: () => surfaceMarkingError("Failed to re-scan"),
 	})
 
 	return (

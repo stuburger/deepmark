@@ -37,6 +37,7 @@ export {
 	type AuthenticatedCtx,
 	type ScopedCtx,
 } from "./action-client"
+export { markingAction } from "./marking-action"
 export { routeHandler } from "./route-handler"
 export {
 	AccessDeniedError,

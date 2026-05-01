@@ -7,11 +7,11 @@ import {
 	DropdownMenuItem,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { surfaceMarkingError } from "@/lib/billing/error-toast"
 import { retriggerGrading, retriggerOcr } from "@/lib/marking/stages/mutations"
 import { cn } from "@/lib/utils"
 import { useMutation } from "@tanstack/react-query"
 import { ChevronDown, Loader2, RefreshCw, ScanText } from "lucide-react"
-import { toast } from "sonner"
 
 /**
  * Teacher-facing menu to re-run any pipeline stage from a single entry point.
@@ -34,24 +34,24 @@ export function ReRunMenu({
 		mutationFn: () => retriggerGrading({ jobId }),
 		onSuccess: (result) => {
 			if (result?.serverError) {
-				toast.error(result.serverError)
+				surfaceMarkingError(result.serverError)
 				return
 			}
 			if (result?.data) onNavigateToJob(result.data.newJobId)
 		},
-		onError: () => toast.error("Failed to re-grade"),
+		onError: () => surfaceMarkingError("Failed to re-grade"),
 	})
 
 	const ocrMutation = useMutation({
 		mutationFn: () => retriggerOcr({ jobId }),
 		onSuccess: (result) => {
 			if (result?.serverError) {
-				toast.error(result.serverError)
+				surfaceMarkingError(result.serverError)
 				return
 			}
 			if (result?.data) onNavigateToJob(result.data.newJobId)
 		},
-		onError: () => toast.error("Failed to re-scan"),
+		onError: () => surfaceMarkingError("Failed to re-scan"),
 	})
 
 	const isPending = gradingMutation.isPending || ocrMutation.isPending

@@ -1,3 +1,4 @@
+import "./billing"
 import "./storage"
 import "./queues"
 export { collabAuthz } from "./authz"

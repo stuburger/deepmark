@@ -9,6 +9,10 @@ export default $config({
 			providers: {
 				aws: { region: "eu-west-2" },
 				neon: { version: "0.9.0", apiKey: process.env.NEON_API_KEY! },
+				stripe: {
+					version: "0.0.24",
+					apiKey: process.env.StripeSecretKey,
+				},
 			},
 		}
 	},

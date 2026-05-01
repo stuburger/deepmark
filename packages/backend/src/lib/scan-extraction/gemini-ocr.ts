@@ -3,6 +3,7 @@ import { outputSchema } from "@/lib/infra/output-schema"
 import type { LlmRunner } from "@mcp-gcse/shared"
 import { generateText } from "ai"
 import { z } from "zod/v4"
+import { normalizeMcqLabel } from "./normalize-mcq-label"
 
 export type OcrMcqSelection = {
 	question_number: string
@@ -66,7 +67,7 @@ const TranscriptSchema = z.object({
 				selected_labels: z
 					.array(z.string())
 					.describe(
-						"Option letter(s) the student selected, e.g. ['C']. Empty array if the selection cannot be determined.",
+						"Option letter(s) ONLY, e.g. ['C'] or ['A','B'] for multi-select. NEVER include the option's text — ['C - Farming'] and ['Farming'] are both wrong; the correct value is ['C']. Empty array if the selection cannot be determined.",
 					),
 				mark_description: z
 					.string()
@@ -146,7 +147,7 @@ export async function runOcr(
 							},
 							{
 								type: "text",
-								text: `Transcribe all handwritten text in reading order and provide observations about the handwriting quality and style. ${focusInstruction}${metadataInstruction} If this page contains any multiple-choice questions, identify each one's question number and the option letter(s) the student selected, however the choice is indicated (tick or cross in a checkbox, circled letter or option text, filled-in box, or handwritten letter on blank space). Also classify which non-MCQ questions have answer content on this page: include those whose question number label is visible (content_type='fresh_start') AND those where the page continues an answer from the previous page with no visible question label (content_type='continuation').`,
+								text: `Transcribe all handwritten text in reading order and provide observations about the handwriting quality and style. ${focusInstruction}${metadataInstruction} If this page contains any multiple-choice questions, identify each one's question number and the option letter(s) the student selected — however the choice is indicated (tick or cross in a checkbox, circled letter, circled option text, filled-in box, or handwritten letter on blank space). Return ONLY the letter(s), e.g. selected_labels: ['C'] or ['A','B'] for multi-select. Do NOT include the option's text — ['C - Farming'] or ['Farming'] are wrong; the correct value is ['C']. Also classify which non-MCQ questions have answer content on this page: include those whose question number label is visible (content_type='fresh_start') AND those where the page continues an answer from the previous page with no visible question label (content_type='continuation').`,
 							},
 						],
 					},
@@ -166,7 +167,9 @@ export async function runOcr(
 		detectedSubject: output.detected_subject ?? null,
 		mcqSelections: (output.mcq_selections ?? []).map((s) => ({
 			question_number: s.question_number,
-			selected_labels: s.selected_labels,
+			selected_labels: s.selected_labels
+				.map(normalizeMcqLabel)
+				.filter((l) => l.length > 0),
 			mark_description: s.mark_description,
 		})),
 		questionsOnPage: (output.questions_on_page ?? []).map((q) => ({

@@ -104,6 +104,53 @@ declare module "sst" {
       "name": string
       "type": "sst.aws.Bucket"
     }
+    "StripeConfig": {
+      "foundersCouponId": string
+      "foundersSlotLimit": number
+      "plans": {
+        "pro": {
+          "description": string
+          "name": string
+          "prices": {
+            "gbp": {
+              "annual": {
+                "amount": number
+                "id": string
+              }
+              "monthly": {
+                "amount": number
+                "id": string
+              }
+            }
+            "usd": {
+              "annual": {
+                "amount": number
+                "id": string
+              }
+              "monthly": {
+                "amount": number
+                "id": string
+              }
+            }
+          }
+        }
+      }
+      "productId": string
+      "trialPaperCap": number
+      "type": "sst.sst.Linkable"
+    }
+    "StripePublishableKey": {
+      "type": "sst.sst.Secret"
+      "value": string
+    }
+    "StripeSecretKey": {
+      "type": "sst.sst.Secret"
+      "value": string
+    }
+    "StripeWebhookSecret": {
+      "secret": string
+      "type": "sst.sst.Linkable"
+    }
     "StudentPaperGradingDLQ": {
       "type": "sst.aws.Queue"
       "url": string

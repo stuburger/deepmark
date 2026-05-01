@@ -11,6 +11,7 @@ import type {
 	BatchIngestionState,
 	StagedScript,
 } from "@/lib/batch/types"
+import { surfaceMarkingError } from "@/lib/billing/error-toast"
 import { queryKeys } from "@/lib/query-keys"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useMemo } from "react"
@@ -85,8 +86,8 @@ export function useBatchIngestion(paperId: string) {
 			return r?.data
 		},
 		onError: (err) =>
-			toast.error(
-				err instanceof Error ? err.message : "Failed to start marking",
+			surfaceMarkingError(
+				err instanceof Error ? err : "Failed to start marking",
 			),
 		onSettled: () => {
 			// Invalidate both the batch (transitions to marking) and the

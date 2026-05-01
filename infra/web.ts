@@ -1,4 +1,10 @@
 import { auth, authUrl } from "./auth"
+import {
+	stripeConfig,
+	stripePublishableKey,
+	stripeSecretKey,
+	stripeWebhookSecret,
+} from "./billing"
 import { collabServer } from "./collab"
 import {
 	domain,
@@ -53,6 +59,10 @@ export const web = new sst.aws.Nextjs("Web", {
 		anthropicApiKey,
 		vapidPublicKey,
 		vapidPrivateKey,
+		stripeConfig,
+		stripeSecretKey,
+		stripePublishableKey,
+		stripeWebhookSecret,
 	],
 	dev: {
 		url: "http://localhost:3000",

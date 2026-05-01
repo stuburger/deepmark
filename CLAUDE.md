@@ -423,7 +423,25 @@ lib/
 - Types shared across sub-domains live in `types.ts` at the domain root, not scattered across files. Sub-domain-specific types can live in `<subdomain>/types.ts` as that sub-domain grows.
 - Prompts and LLM schemas live in `processors/<name>/prompts.ts` + `schema.ts` sibling files, never inline in handlers.
 - Do not create barrel re-export files. Import directly from the specific file — `"use server"` barrels cause problems in Next.js.
-- **Never import across package boundaries.** Tests must not import from `apps/web/` — if a test needs a function, that function belongs in `packages/backend/` or `packages/shared/`. Web server actions should be thin auth wrappers that delegate to backend services.
+
+### Test Colocation
+
+Tests live next to the code they test, in a `__tests__/` folder alongside the source. Import from `../<module>`. Reference: `apps/web/src/lib/authz/__tests__/` and `apps/web/src/lib/billing/__tests__/`.
+
+```
+lib/billing/
+  webhook-translation.ts
+  transient-error.ts
+  checkout-options.ts
+  __tests__/
+    webhook-translation.test.ts
+    transient-error.test.ts
+    checkout-options.test.ts
+```
+
+Vitest's `web:unit` project picks up `src/**/__tests__/**/*.test.ts` automatically — no per-test config needed. `bun test:unit` runs them; `bun test:unit --project web:unit` filters to just the web package.
+
+When a test needs Prisma / SST / external services, prefer extracting the pure logic to a sibling file and testing that. The impure orchestrator (a handler that reads, calls a translator, writes to the DB) typically becomes small enough not to need its own unit test — its logic lives in the pure helpers.
 
 ### Tables, Grids & Dialogs — Always Extracted
 

@@ -176,6 +176,21 @@ model User {
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
+  // ─── Billing ──────────────────────────────────────────────────────────────
+  /// Stripe Customer id, set on first paid checkout. Null = trial user.
+  stripe_customer_id     String?  @unique
+  /// Stripe Subscription id, set when an active sub exists. Null = trial.
+  stripe_subscription_id String?  @unique
+  /// "pro_monthly" | "pro_annual" — null while user is on free trial.
+  plan                   String?
+  /// Mirrors Stripe subscription.status: "active" | "trialing" | "past_due" |
+  /// "canceled" | "incomplete" | "incomplete_expired" | "unpaid" | "paused".
+  /// Updated by the Stripe webhook handler.
+  subscription_status    String?
+  /// End of the current paid billing period — used to grant access until then
+  /// even after a cancel-at-period-end.
+  current_period_end     DateTime?
+
   created_questions      Question[]
   created_exam_papers    ExamPaper[]
   created_mark_schemes   MarkScheme[]

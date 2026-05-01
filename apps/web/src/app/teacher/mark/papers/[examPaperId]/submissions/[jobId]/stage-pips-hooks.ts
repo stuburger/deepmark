@@ -1,5 +1,6 @@
 "use client"
 
+import { surfaceMarkingError } from "@/lib/billing/error-toast"
 import { retriggerGrading, retriggerOcr } from "@/lib/marking/stages/mutations"
 import { getJobStages } from "@/lib/marking/stages/queries"
 import { type JobStages, allTerminal } from "@/lib/marking/stages/types"
@@ -9,7 +10,6 @@ import {
 	useMutation,
 	useQuery,
 } from "@tanstack/react-query"
-import { toast } from "sonner"
 
 /**
  * Reads the JobStages cache entry maintained by the SSE stream (mounted
@@ -64,19 +64,19 @@ export function useStageMutations(
 	const ocrMutation = useMutation({
 		mutationFn: () => retriggerOcr({ jobId }),
 		onSuccess: (r) => {
-			if (r?.serverError) return toast.error(r.serverError)
+			if (r?.serverError) return surfaceMarkingError(r.serverError)
 			if (r?.data) onNavigate(r.data.newJobId)
 		},
-		onError: () => toast.error("Failed to re-scan"),
+		onError: () => surfaceMarkingError("Failed to re-scan"),
 	})
 
 	const gradingMutation = useMutation({
 		mutationFn: () => retriggerGrading({ jobId }),
 		onSuccess: (r) => {
-			if (r?.serverError) return toast.error(r.serverError)
+			if (r?.serverError) return surfaceMarkingError(r.serverError)
 			if (r?.data) onNavigate(r.data.newJobId)
 		},
-		onError: () => toast.error("Failed to re-grade"),
+		onError: () => surfaceMarkingError("Failed to re-grade"),
 	})
 
 	return { ocrMutation, gradingMutation }

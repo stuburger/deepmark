@@ -1,6 +1,7 @@
 "use server"
 
-import { resourceAction, resourcesAction } from "@/lib/authz"
+import { resourceAction } from "@/lib/authz"
+import { enforcePapersQuota } from "@/lib/billing/entitlement"
 import { db } from "@/lib/db"
 import { SQSClient, SendMessageCommand } from "@aws-sdk/client-sqs"
 import {
@@ -12,70 +13,6 @@ import { Resource } from "sst"
 import { z } from "zod"
 
 const sqs = new SQSClient({})
-
-/**
- * Sets the exam paper on the submission and enqueues it for grading. Requires
- * OCR to have completed first.
- */
-export const triggerGrading = resourcesAction({
-	schema: z.object({ jobId: z.string(), examPaperId: z.string() }),
-	resources: [
-		{ type: "submission", role: "editor", id: ({ jobId }) => jobId },
-		{ type: "examPaper", role: "viewer", id: ({ examPaperId }) => examPaperId },
-	],
-}).action(
-	async ({
-		parsedInput: { jobId, examPaperId },
-		ctx,
-	}): Promise<{ ok: true }> => {
-		const sub = await db.studentSubmission.findFirst({
-			where: { id: jobId },
-			include: {
-				ocr_runs: {
-					orderBy: { created_at: "desc" },
-					take: 1,
-					select: { extracted_answers_raw: true },
-				},
-			},
-		})
-		if (!sub) throw new Error("Job not found")
-		if (!sub.ocr_runs[0]?.extracted_answers_raw) {
-			throw new Error("OCR must complete before marking")
-		}
-
-		const examPaper = await db.examPaper.findFirst({
-			where: { id: examPaperId, is_active: true },
-			select: {
-				id: true,
-				title: true,
-				exam_board: true,
-				subject: true,
-				year: true,
-			},
-		})
-		if (!examPaper) throw new Error("Exam paper not found")
-
-		await db.studentSubmission.update({
-			where: { id: jobId },
-			data: {
-				exam_paper_id: examPaperId,
-				exam_board: examPaper.exam_board ?? "Unknown",
-				subject: examPaper.subject,
-				year: examPaper.year,
-			},
-		})
-
-		await sqs.send(
-			new SendMessageCommand({
-				QueueUrl: Resource.StudentPaperQueue.url,
-				MessageBody: JSON.stringify({ job_id: jobId }),
-			}),
-		)
-
-		ctx.log.info("Grading triggered", { jobId, examPaperId })
-		return { ok: true }
-	},
-)
 
 /**
  * Creates a new submission from the same OCR data, then marks the old one as
@@ -109,6 +46,8 @@ export const retriggerGrading = resourceAction({
 		if (!latestOcr?.extracted_answers_raw) {
 			throw new Error("No extracted answers — run OCR first")
 		}
+
+		await enforcePapersQuota({ user: ctx.user, additionalPapers: 1 })
 
 		const newSub = await db.$transaction(async (tx) => {
 			const created = await tx.studentSubmission.create({
@@ -227,6 +166,8 @@ export const retriggerOcr = resourceAction({
 		if (pages.length === 0) {
 			throw new Error("No pages uploaded — cannot re-scan")
 		}
+
+		await enforcePapersQuota({ user: ctx.user, additionalPapers: 1 })
 
 		const newSub = await db.$transaction(async (tx) => {
 			const created = await tx.studentSubmission.create({

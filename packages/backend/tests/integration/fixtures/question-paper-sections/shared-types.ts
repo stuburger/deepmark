@@ -37,6 +37,25 @@ export type FixtureStimulusExpectation = {
 	questionTextMustNotContain?: string[]
 }
 
+/**
+ * Expected marks extraction for a single question. Used by the marks
+ * extraction eval to catch the regression where the LLM bleeds a 12-mark
+ * total from a sibling onto a 2-mark question (the franchising/Quality
+ * Wallpaper case).
+ *
+ *  - `marks`: the marks the extractor MUST produce in `total_marks`.
+ *  - `printedInParens`: when true, the paper has "(N marks)" printed next
+ *    to this question and the extractor MUST also populate `printed_marks`
+ *    with the same value. When false, the paper omits the parenthetical
+ *    (e.g. MCQs marked "(1 mark)" inline-only) and `printed_marks` may be
+ *    null — the eval skips the printed-side assertion.
+ */
+export type FixtureMarksExpectation = {
+	questionNumber: string
+	marks: number
+	printedInParens: boolean
+}
+
 export type QuestionPaperSectionsFixture = {
 	name: string
 	/** Absolute path to the fixture dir — used to load document.pdf. */
@@ -45,6 +64,8 @@ export type QuestionPaperSectionsFixture = {
 	pdf_filename: string
 	/** Paper-level total (all sections combined). */
 	total_marks: number
+	/** Whether the paper-wide total is printed verbatim on the cover/front matter. */
+	paperTotalPrintedOnCover?: boolean
 	sections: FixtureSectionExpectation[]
 	/**
 	 * Per-question stimulus expectations. Only include entries for questions
@@ -52,4 +73,10 @@ export type QuestionPaperSectionsFixture = {
 	 * unchecked by the stimulus evals.
 	 */
 	stimulusExpectations?: FixtureStimulusExpectation[]
+	/**
+	 * Per-question marks expectations. Used by the marks-extraction eval to
+	 * assert both `total_marks` and (when printed) `printed_marks`. Questions
+	 * not listed here are unchecked by the marks eval.
+	 */
+	marksExpectations?: FixtureMarksExpectation[]
 }

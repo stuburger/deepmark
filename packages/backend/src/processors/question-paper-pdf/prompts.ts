@@ -11,8 +11,16 @@ Return a \`sections\` array in the order sections appear on the paper. Each sect
 - title: the section header as printed (e.g. "Section A"). If the paper has no section dividers at all, return a single section titled "Section 1".
 - description: optional section-level instructions printed under the header (NOT the per-question instruction like "Read Item A" — that goes in stimulus_labels).
 - total_marks: the section total as printed on the paper (e.g. "Mark for Section A / 25" on a cover page, or "Total for Section A: 25 marks" at the end of a block). If no per-section total is printed, use the sum of the section's question marks.
+- printed_total_marks: the section total EXACTLY as printed (e.g. 25), or null if no section total is printed. NEVER sum the questions yourself — this field is ONLY the literal printed value. It is used downstream to verify the per-question marks add up correctly.
 - stimuli: case studies / sources / figures introduced in this section (see STIMULUS EXTRACTION below).
 - questions: the questions within that section, in paper order.
+
+PRINTED MARKS (verification field — required on every question):
+For each question you MUST set \`printed_marks\` to:
+- The integer printed in parentheses next to that specific question (e.g. 2 from "(2 marks)", 12 from "(12 marks)"), OR
+- null if no parenthetical mark count is printed adjacent to that question.
+
+CRITICAL: \`printed_marks\` is a literal-copy field for verification. NEVER infer it from context, the marks of nearby questions, the section total, or the question's apparent difficulty. If the parenthetical isn't there next to the specific question, it is null. \`total_marks\` and \`printed_marks\` will both be checked downstream — if you copy the wrong number, the discrepancy will be flagged for human review, so accuracy here matters more than coverage.
 
 STIMULUS EXTRACTION (required when a question references a case study):
 Many questions reference a "case study" block — labelled variously as "Item A", "Source B", "Extract 1", "Figure 1", "Table 2". You MUST:
@@ -39,5 +47,8 @@ GENERAL RULES:
 - For written questions provide: question_text (full text including sub-parts), question_type ("written"), total_marks, question_number if visible.
 - Preserve the exact question_number as printed (e.g. "01.1", "2", "02.", "Q1") — do not normalise formats across sections.`
 
-export const EXTRACT_METADATA_PROMPT =
-	"From the document header or cover, extract: title (exam paper title), subject, exam_board, total_marks, duration_minutes, year if visible, paper_number if visible, and tier ('foundation' or 'higher' only if the cover explicitly states it; null otherwise). Return only these fields."
+export const EXTRACT_METADATA_PROMPT = `From the document header or cover, extract: title (exam paper title), subject, exam_board, total_marks, printed_total_marks, duration_minutes, year if visible, paper_number if visible, and tier ('foundation' or 'higher' only if the cover explicitly states it; null otherwise).
+
+\`printed_total_marks\` is the paper-wide total EXACTLY as printed on the cover or front matter — e.g. 43 from "The maximum mark for this paper is 43" or "Total Mark / 43". Null if no paper-wide total is explicitly printed. NEVER sum sections yourself — this field is ONLY the literal printed value, used downstream to verify the section subtotals add up.
+
+Return only these fields.`

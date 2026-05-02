@@ -8,8 +8,8 @@ import { domain } from "./config"
  * tax-registration overhead (Stripe Tax flags it, but we still have to file).
  *
  * Pricing (2026-05-01):
- *   GBP £29/mo, £312/yr (~10% off)
- *   USD $35/mo, $378/yr (~10% off)
+ *   GBP £24/mo, £259/yr (~10% off)
+ *   USD $30/mo, $324/yr (~10% off)
  *
  * Founders' offer: ONE Coupon, 50% off, repeating 12 months,
  * max_redemptions 100. Server-side gate counts active Pro subs and only
@@ -43,28 +43,28 @@ const proProduct = new stripe.Product("ProProduct", {
 
 const proGbpMonthly = new stripe.Price("ProGbpMonthly", {
 	product: proProduct.id,
-	unitAmount: 2900, // £29.00
+	unitAmount: 2400, // £24.00
 	currency: "gbp",
 	recurring: { interval: "month", intervalCount: 1 },
 })
 
 const proGbpAnnual = new stripe.Price("ProGbpAnnual", {
 	product: proProduct.id,
-	unitAmount: 31200, // £312.00 — 10.3% off £348
+	unitAmount: 25900, // £259.00 — 10.1% off £288
 	currency: "gbp",
 	recurring: { interval: "year", intervalCount: 1 },
 })
 
 const proUsdMonthly = new stripe.Price("ProUsdMonthly", {
 	product: proProduct.id,
-	unitAmount: 3500, // $35.00
+	unitAmount: 3000, // $30.00
 	currency: "usd",
 	recurring: { interval: "month", intervalCount: 1 },
 })
 
 const proUsdAnnual = new stripe.Price("ProUsdAnnual", {
 	product: proProduct.id,
-	unitAmount: 37800, // $378.00 — 10% off $420
+	unitAmount: 32400, // $324.00 — 10% off $360
 	currency: "usd",
 	recurring: { interval: "year", intervalCount: 1 },
 })
@@ -109,12 +109,12 @@ export const stripeConfig = new sst.Linkable("StripeConfig", {
 				description: "Examiner-quality marking for GCSE teachers.",
 				prices: {
 					gbp: {
-						monthly: { id: proGbpMonthly.id, amount: 2900 },
-						annual: { id: proGbpAnnual.id, amount: 31200 },
+						monthly: { id: proGbpMonthly.id, amount: 2400 },
+						annual: { id: proGbpAnnual.id, amount: 25900 },
 					},
 					usd: {
-						monthly: { id: proUsdMonthly.id, amount: 3500 },
-						annual: { id: proUsdAnnual.id, amount: 37800 },
+						monthly: { id: proUsdMonthly.id, amount: 3000 },
+						annual: { id: proUsdAnnual.id, amount: 32400 },
 					},
 				},
 			},

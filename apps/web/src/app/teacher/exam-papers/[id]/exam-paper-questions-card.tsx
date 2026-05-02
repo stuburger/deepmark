@@ -19,6 +19,7 @@ import {
 } from "lucide-react"
 import { useState } from "react"
 import {
+	ExtractionWarningIndicator,
 	TableRowDeleteButton,
 	originBadgeVariant,
 	originLabel,
@@ -230,7 +231,17 @@ export function ExamPaperQuestionsCard({
 												{originLabel(q.origin)}
 											</Badge>
 										</TableCell>
-										<TableCell>{q.points ?? "—"}</TableCell>
+										<TableCell>
+											<div className="flex items-center gap-1.5">
+												<span>{q.points ?? "—"}</span>
+												{q.extraction_warning && (
+													<ExtractionWarningIndicator
+														questionId={q.id}
+														message={q.extraction_warning}
+													/>
+												)}
+											</div>
+										</TableCell>
 										<TableCell>{schemeBadge(q.mark_scheme_status)}</TableCell>
 										<TableCell />
 										<TableCell>

@@ -31,6 +31,10 @@ import {
 	QuestionPaperMetadataSchema,
 	QuestionPaperSchema,
 } from "./question-paper-pdf/schema"
+import {
+	validateMarks,
+	warningForQuestion,
+} from "./question-paper-pdf/validate-marks"
 
 const TAG = "question-paper-pdf"
 
@@ -170,6 +174,7 @@ export async function handler(
 					title: string
 					description?: string | null
 					total_marks: number
+					printed_total_marks?: number | null
 					stimuli?: Array<{
 						label: string
 						content: string
@@ -179,6 +184,7 @@ export async function handler(
 						question_text: string
 						question_type?: string
 						total_marks: number
+						printed_marks?: number | null
 						question_number?: string
 						stimulus_labels?: string[]
 						options?: Array<{ option_label: string; option_text: string }>
@@ -191,6 +197,7 @@ export async function handler(
 				subject?: string
 				exam_board?: string
 				total_marks?: number
+				printed_total_marks?: number | null
 				duration_minutes?: number
 				year?: number | null
 				paper_number?: number | null
@@ -215,16 +222,38 @@ export async function handler(
 				detected_title: detectedMetadata?.title ?? null,
 			})
 
+			const marksDiscrepancies = validateMarks({
+				paper_printed_total_marks:
+					detectedMetadata?.printed_total_marks ?? null,
+				sections: sections.map((s) => ({
+					title: s.title,
+					total_marks: s.total_marks,
+					printed_total_marks: s.printed_total_marks ?? null,
+					questions: s.questions.map((q) => ({
+						total_marks: q.total_marks,
+						printed_marks: q.printed_marks ?? null,
+						question_number: q.question_number,
+					})),
+				})),
+			})
+			if (marksDiscrepancies.length > 0) {
+				logger.warn(TAG, "Marks discrepancies detected during extraction", {
+					jobId,
+					count: marksDiscrepancies.length,
+					discrepancies: marksDiscrepancies,
+				})
+			}
+
 			const sectionInputs: LinkSectionInput[] = []
 			let questionIndex = 0
-			for (const section of sections) {
+			for (const [section_index, section] of sections.entries()) {
 				if (cancellation.isCancelled()) break
 				const questionsForLink: Array<{
 					question_id: string
 					stimulus_labels?: string[]
 				}> = []
 
-				for (const q of section.questions) {
+				for (const [question_index, q] of section.questions.entries()) {
 					if (cancellation.isCancelled()) {
 						logger.info(TAG, "Job cancelled mid-processing — stopping loop", {
 							jobId,
@@ -238,6 +267,11 @@ export async function handler(
 					const canonicalNumber = q.question_number
 						? normalizeQuestionNumber(q.question_number)
 						: null
+					const extractionWarning = warningForQuestion(
+						marksDiscrepancies,
+						section_index,
+						question_index,
+					)
 					logger.info(TAG, "Creating question", {
 						jobId,
 						section: section.title,
@@ -245,8 +279,10 @@ export async function handler(
 						total: questionCount,
 						question_number: canonicalNumber,
 						marks: q.total_marks,
+						printed_marks: q.printed_marks ?? null,
 						type: q.question_type ?? "written",
 						stimulus_labels: q.stimulus_labels ?? [],
+						extraction_warning: extractionWarning,
 					})
 					const embeddingVec = await embedQuestionText(questionText)
 					const vecStr = embeddingToVectorStr(embeddingVec)
@@ -269,6 +305,7 @@ export async function handler(
 							source_pdf_ingestion_job_id: jobId,
 							origin: "question_paper",
 							question_number: canonicalNumber,
+							extraction_warning: extractionWarning,
 						},
 					})
 

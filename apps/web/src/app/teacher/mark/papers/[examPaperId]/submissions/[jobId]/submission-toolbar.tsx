@@ -19,6 +19,7 @@ import type {
 	StudentPaperAnnotation,
 	StudentPaperJobPayload,
 } from "@/lib/marking/types"
+import { useCurrentUser } from "@/lib/users/use-current-user"
 import { computeGrade } from "@mcp-gcse/shared"
 import { ChevronRight, Eye, Share2, X } from "lucide-react"
 import Link from "next/link"
@@ -66,6 +67,7 @@ export function SubmissionToolbar({
 	const docKey = data.submission_id ?? jobId
 	const { doc, provider } = useYDoc(docKey)
 	const collaborators = useCollaborators(provider)
+	const { isAdmin, cursorUser } = useCurrentUser()
 
 	// Live totals from the Y.Doc — overrides the server payload so teacher
 	// edits in the editor reflect immediately. Falls back to `data.*` until
@@ -151,7 +153,7 @@ export function SubmissionToolbar({
 							</TooltipContent>
 						</Tooltip>
 					)}
-					<CollaboratorAvatars users={collaborators} />
+					<CollaboratorAvatars users={collaborators} self={cursorUser} />
 					{data.submission_id && !readOnly && (
 						<ShareDialog
 							submissionIds={[data.submission_id]}
@@ -189,12 +191,14 @@ export function SubmissionToolbar({
 			<div className="shrink-0 flex items-center gap-2 border-b bg-background px-4 h-11">
 				<div className="flex-1" />
 
-				{/* LLM spend */}
-				<LlmSpendButton
-					ocrSnapshot={data.ocr_llm_snapshot}
-					gradingSnapshot={data.grading_llm_snapshot}
-					annotationSnapshot={data.annotation_llm_snapshot}
-				/>
+				{/* LLM spend — admin-only (exposes model + per-call costs) */}
+				{isAdmin && (
+					<LlmSpendButton
+						ocrSnapshot={data.ocr_llm_snapshot}
+						gradingSnapshot={data.grading_llm_snapshot}
+						annotationSnapshot={data.annotation_llm_snapshot}
+					/>
+				)}
 
 				{/* Pipeline stage pips */}
 				<StagePips

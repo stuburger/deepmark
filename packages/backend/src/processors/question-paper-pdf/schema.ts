@@ -8,6 +8,13 @@ const QuestionSchema = z.object({
 		),
 	question_type: z.string().optional().describe("written | multiple_choice"),
 	total_marks: z.number().int(),
+	printed_marks: z
+		.number()
+		.int()
+		.nullable()
+		.describe(
+			"The marks number printed in parentheses next to this question on the page, e.g. 2 from '(2 marks)'. Null if no parenthetical mark count is printed next to this specific question. Do NOT infer from context, surrounding questions, or section totals — copy ONLY what is literally printed adjacent to this question.",
+		),
 	question_number: z.string().optional(),
 	stimulus_labels: z
 		.array(z.string())
@@ -72,6 +79,13 @@ export const QuestionPaperSchema = z.object({
 					.describe(
 						"Section total as printed on the paper (e.g. 'Mark for Section A / 25' or 'Total for Section A: 25 marks'). If no section total is printed, use the sum of this section's question marks.",
 					),
+				printed_total_marks: z
+					.number()
+					.int()
+					.nullable()
+					.describe(
+						"The section total EXACTLY as printed on the paper — e.g. 25 from 'Mark for Section A / 25' or 'Total for Section A: 25 marks'. Null if no section total is explicitly printed. Do NOT sum the questions yourself; this field is ONLY the literal printed value, used to verify the per-question marks add up correctly.",
+					),
 				stimuli: z
 					.array(StimulusSchema)
 					.optional()
@@ -96,6 +110,13 @@ export const QuestionPaperMetadataSchema = z.object({
 	subject: z.string(),
 	exam_board: z.string(),
 	total_marks: z.number().int(),
+	printed_total_marks: z
+		.number()
+		.int()
+		.nullable()
+		.describe(
+			"The paper-wide total EXACTLY as printed on the cover or front matter — e.g. 43 from 'The maximum mark for this paper is 43' or 'Total Mark / 43'. Null if no paper total is explicitly printed. Do NOT sum sections yourself; this field is ONLY the literal printed value, used to verify the section subtotals add up correctly.",
+		),
 	duration_minutes: z.number().int(),
 	year: z.number().int().nullable().optional(),
 	paper_number: z.number().int().nullable().optional(),

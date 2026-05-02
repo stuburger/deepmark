@@ -41,6 +41,8 @@ export type ExamPaperQuestion = {
 	order: number
 	question_number: string | null
 	multiple_choice_options: { option_label: string; option_text: string }[]
+	/** Non-null when the QP-extraction validators flagged a marks-total mismatch (e.g. paper prints "(2 marks)" but extraction recorded 12). The teacher resolves it via the question editor, which clears the warning. */
+	extraction_warning: string | null
 	/** Stimuli referenced by this question, in display order. Empty when the question is standalone. */
 	stimuli: ExamPaperQuestionStimulus[]
 }

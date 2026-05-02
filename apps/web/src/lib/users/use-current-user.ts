@@ -72,6 +72,7 @@ export type CursorUser = {
 export function useCurrentUser(): {
 	user: CurrentUserProfile | null
 	cursorUser: CursorUser | null
+	isAdmin: boolean
 } {
 	const { data } = useQuery({
 		queryKey: queryKeys.currentUser(),
@@ -82,7 +83,7 @@ export function useCurrentUser(): {
 		staleTime: Number.POSITIVE_INFINITY,
 	})
 
-	if (!data) return { user: null, cursorUser: null }
+	if (!data) return { user: null, cursorUser: null, isAdmin: false }
 
 	const displayName =
 		data.name?.trim() || data.email?.split("@")[0] || "Teacher"
@@ -94,5 +95,6 @@ export function useCurrentUser(): {
 			selectionColor: selectionColorForUserId(data.id),
 			image: data.avatar_url,
 		},
+		isAdmin: data.role === "admin",
 	}
 }

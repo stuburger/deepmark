@@ -26,6 +26,7 @@ export const GCSE_BUSINESS_YR9_GWA_2_FIXTURE: QuestionPaperSectionsFixture = {
 	dir: path.resolve(__dirname),
 	pdf_filename: "document.pdf",
 	total_marks: 43,
+	paperTotalPrintedOnCover: true,
 	sections: [
 		{
 			title: "Section A",
@@ -53,6 +54,29 @@ export const GCSE_BUSINESS_YR9_GWA_2_FIXTURE: QuestionPaperSectionsFixture = {
 			question_count: 2,
 			question_numbers: ["1", "02."],
 		},
+	],
+	marksExpectations: [
+		// Section A — MCQs print "(1 mark)" beside each question
+		{ questionNumber: "01.1", marks: 1, printedInParens: true },
+		{ questionNumber: "01.2", marks: 1, printedInParens: true },
+		{ questionNumber: "01.3", marks: 1, printedInParens: true },
+		// 01.4 prints "(2 marks)" inline with the prompt
+		{ questionNumber: "01.4", marks: 2, printedInParens: true },
+		// 2 — "Explain organic growth (2 marks)" — the canary for the bug we are
+		// fixing. Historically the LLM bled 12 marks from the franchising 02.
+		// onto this row; the validator + parenthetical now make that detectable.
+		{ questionNumber: "2", marks: 2, printedInParens: true },
+		{ questionNumber: "3", marks: 4, printedInParens: true },
+		{ questionNumber: "4", marks: 2, printedInParens: true },
+		{ questionNumber: "5", marks: 2, printedInParens: true },
+		{ questionNumber: "6", marks: 2, printedInParens: true },
+		{ questionNumber: "7", marks: 2, printedInParens: true },
+		{ questionNumber: "8", marks: 2, printedInParens: true },
+		{ questionNumber: "9", marks: 2, printedInParens: true },
+		{ questionNumber: "10", marks: 2, printedInParens: true },
+		// Section B — both questions print marks in parens
+		{ questionNumber: "Q1.", marks: 6, printedInParens: true },
+		{ questionNumber: "02.", marks: 12, printedInParens: true },
 	],
 	stimulusExpectations: [
 		{

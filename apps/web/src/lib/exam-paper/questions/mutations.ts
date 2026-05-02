@@ -56,6 +56,10 @@ export const updateQuestion = resourceAction({
 				...(input.question_number !== undefined
 					? { question_number: input.question_number || null }
 					: {}),
+				// A teacher edit is the resolution signal for any extraction
+				// warning that was attached to this row — they've seen it and
+				// acted. Clear it so the warning UI disappears.
+				extraction_warning: null,
 			},
 		})
 

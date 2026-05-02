@@ -265,6 +265,12 @@ model Question {
   // Sub-question designator (e.g., "a", "b", "i", "ii")
   part_label                  String?
 
+  // Populated when QP-extraction validators detect a marks-total discrepancy
+  // (e.g. paper prints "(2 marks)" but the LLM recorded 12). Null when the
+  // extraction passes verification or no signal was available. The teacher
+  // sees this in the exam-paper UI and resolves it via the question editor.
+  extraction_warning          String?
+
   created_by               User                  @relation(fields: [created_by_id], references: [id])
   mark_schemes             MarkScheme[]
   answers                  Answer[]

@@ -75,6 +75,7 @@ export const getExamPaperDetail = resourceAction({
 										points: true,
 										origin: true,
 										question_number: true,
+										extraction_warning: true,
 										multiple_choice_options: true,
 										mark_schemes: {
 											select: {
@@ -141,6 +142,7 @@ export const getExamPaperDetail = resourceAction({
 							points: esq.question.points,
 							origin: esq.question.origin,
 							question_number: esq.question.question_number,
+							extraction_warning: esq.question.extraction_warning,
 							multiple_choice_options: mcqOptions,
 							mark_scheme_count: esq.question.mark_schemes.length,
 							mark_scheme_status: ms?.link_status ?? null,

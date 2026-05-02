@@ -48,10 +48,10 @@ export function priceTiers(currency: Currency): {
 
 /**
  * Format an integer minor-unit amount for display.
- *  2900  GBP → "£29"
- *  31200 GBP → "£312"
- *  1450  GBP → "£14.50"   (founders 50%-off can produce halves)
- *  3500  USD → "$35"
+ *  2400  GBP → "£24"
+ *  25900 GBP → "£259"
+ *  1200  GBP → "£12"      (founders 50%-off — falls on a whole here)
+ *  3000  USD → "$30"
  * Shows decimals only when the value isn't whole — keeps round prices clean
  * but doesn't silently misrepresent halves.
  */

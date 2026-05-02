@@ -3,8 +3,15 @@
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
+import {
+	Tooltip,
+	TooltipContent,
+	TooltipProvider,
+	TooltipTrigger,
+} from "@/components/ui/tooltip"
 import type { StagedScript } from "@/lib/batch/types"
-import { Trash2 } from "lucide-react"
+import { AlertTriangle, Trash2 } from "lucide-react"
+import { parseAsString, useQueryState } from "nuqs"
 import { useState } from "react"
 import { useDeleteQuestion } from "./hooks/use-exam-paper-mutations"
 
@@ -118,5 +125,44 @@ export function TableRowDeleteButton({
 				}
 			/>
 		</>
+	)
+}
+
+/**
+ * Inline warning shown next to the marks number in the table view when the
+ * QP-extraction validator flagged a mismatch. Click to open the question
+ * editor — the existing edit flow clears `extraction_warning` on save.
+ */
+export function ExtractionWarningIndicator({
+	questionId,
+	message,
+}: {
+	questionId: string
+	message: string
+}) {
+	const [, setEditQuestionId] = useQueryState("edit_question", parseAsString)
+
+	return (
+		<TooltipProvider>
+			<Tooltip>
+				<TooltipTrigger
+					onClick={(e) => {
+						e.stopPropagation()
+						void setEditQuestionId(questionId)
+					}}
+					className="text-amber-600 hover:text-amber-700 dark:text-amber-400"
+					aria-label="Marks couldn't be verified — review and fix"
+				>
+					<AlertTriangle className="h-3.5 w-3.5" />
+				</TooltipTrigger>
+				<TooltipContent>
+					<div className="max-w-xs space-y-1">
+						<p className="font-medium">Marks couldn&apos;t be verified</p>
+						<p className="text-xs opacity-90">{message}</p>
+						<p className="text-xs underline">Click to review and fix</p>
+					</div>
+				</TooltipContent>
+			</Tooltip>
+		</TooltipProvider>
 	)
 }

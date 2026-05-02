@@ -16,6 +16,7 @@ import type {
 	StudentPaperAnnotation,
 	StudentPaperJobPayload,
 } from "@/lib/marking/types"
+import { useCurrentUser } from "@/lib/users/use-current-user"
 import { parseAsString, useQueryState } from "nuqs"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { EventLog } from "./event-log"
@@ -116,6 +117,8 @@ export function SubmissionView({
 	// distracting at normal marking speed.
 	const { settings, toggle, set } = useScanViewSettings()
 	const inspectMode = settings.viewMode === "inspect"
+
+	const { isAdmin } = useCurrentUser()
 
 	// Hover word linking — bidirectional between scan and PM editor.
 	// In focus mode we throw away highlight events at the boundary so the
@@ -310,7 +313,9 @@ export function SubmissionView({
 					</ResizablePanelGroup>
 				)}
 
-				<EventLog events={data.job_events} isPolling={!isTerminal} />
+				{isAdmin && (
+					<EventLog events={data.job_events} isPolling={!isTerminal} />
+				)}
 			</div>
 		</DocOpsProvider>
 	)

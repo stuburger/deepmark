@@ -2,6 +2,7 @@
 
 import { McqOptions } from "@/components/mcq-options"
 import { StimulusDisclosure } from "@/components/stimulus-disclosure"
+import { Button } from "@/components/ui/button"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import {
 	Tooltip,
@@ -138,6 +139,30 @@ export function SortableQuestion({
 							)}
 						</div>
 					</div>
+
+					{/* Extraction warning — shown when QP-extraction validators flagged a marks mismatch */}
+					{question.extraction_warning && (
+						<div className="mt-2.5 flex items-start gap-2 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-xs dark:border-amber-700/60 dark:bg-amber-950/30">
+							<AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-600 mt-0.5 dark:text-amber-400" />
+							<div className="flex-1 min-w-0">
+								<p className="font-medium text-amber-900 dark:text-amber-200">
+									We couldn&apos;t verify the marks for this question
+								</p>
+								<p className="mt-0.5 text-amber-800/90 dark:text-amber-300/90">
+									{question.extraction_warning} Please review and correct if
+									needed — sorry for the friction.
+								</p>
+							</div>
+							<Button
+								variant="outline"
+								size="sm"
+								className="h-7 shrink-0 border-amber-300 bg-white text-amber-900 hover:bg-amber-100 hover:text-amber-900 dark:border-amber-700 dark:bg-amber-950/50 dark:text-amber-200"
+								onClick={() => void setEditQuestionId(question.id)}
+							>
+								Review and fix
+							</Button>
+						</div>
+					)}
 
 					{/* MCQ options */}
 					{isMultipleChoice && question.multiple_choice_options.length > 0 && (

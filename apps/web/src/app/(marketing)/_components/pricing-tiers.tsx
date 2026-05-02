@@ -32,15 +32,15 @@ type TierData = {
 }
 
 const FEATURES = [
-	"Unlimited subjects",
-	"Examiner-quality marks",
+	"Unlimited question papers, mark schemes and scripts",
+	"Every GCSE specification supported",
 	"Inline annotations on the original script",
-	"Re-mark and re-scan as many times as you like",
-	"Class-set exports",
+	"Class analytics and per-student insights",
+	"Direct line to the team — what you ask for, we build",
 ]
 
 export function PricingTiers(props: TierData) {
-	const [interval, setInterval] = useState<"monthly" | "annual">("annual")
+	const [interval, setInterval] = useState<"monthly" | "annual">("monthly")
 	const [submitting, setSubmitting] = useState<"monthly" | "annual" | null>(
 		null,
 	)
@@ -75,7 +75,7 @@ export function PricingTiers(props: TierData) {
 	const showFounders = props.foundersAvailable && active.foundersLabel !== null
 
 	return (
-		<div className="mx-auto max-w-md">
+		<div className="flex h-full flex-col">
 			<div className="mb-8 flex justify-center">
 				<div className="inline-flex rounded-full border border-border/60 bg-muted/40 p-1 text-sm">
 					<IntervalButton
@@ -95,16 +95,19 @@ export function PricingTiers(props: TierData) {
 			  Card has overflow-hidden baked in (for image children); override here so
 			  the founders' badge that floats above the top edge isn't clipped.
 			*/}
-			<Card className="relative overflow-visible border-border/60">
+			<Card className="relative flex h-full flex-col overflow-visible border-border/60">
 				{props.foundersAvailable ? (
 					<Badge className="absolute -top-3 left-1/2 -translate-x-1/2 whitespace-nowrap">
 						Founders' pricing — 50% off year one
 					</Badge>
 				) : null}
 				<CardHeader>
-					<CardTitle className="text-2xl">Pro</CardTitle>
+					<CardTitle className="text-2xl">Monthly</CardTitle>
+					<p className="text-sm text-muted-foreground">
+						For the teacher whose marking pile never empties.
+					</p>
 				</CardHeader>
-				<CardContent className="space-y-6">
+				<CardContent className="flex flex-1 flex-col space-y-6">
 					<div>
 						<div className="flex items-baseline gap-3">
 							{showFounders ? (
@@ -154,7 +157,7 @@ export function PricingTiers(props: TierData) {
 						))}
 					</ul>
 					<Button
-						className="w-full"
+						className="mt-auto w-full"
 						size="lg"
 						onClick={() => startCheckout(interval)}
 						disabled={submitting !== null}

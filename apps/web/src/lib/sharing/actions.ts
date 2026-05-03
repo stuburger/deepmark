@@ -3,7 +3,6 @@
 import {
 	authenticatedAction,
 	normaliseEmail,
-	resourceAction,
 	resourcesAction,
 } from "@/lib/authz"
 import { db } from "@/lib/db"
@@ -303,85 +302,3 @@ async function assertOwnerByGrant(
 				)
 	if (!access.ok) throw new AccessDeniedError(access.error)
 }
-
-// ─── shareSubmissionsWithEmails ─────────────────────────────────────────────
-
-const shareSubsInput = z.object({
-	submissionIds: z.array(z.string()).min(1),
-	emails: z.array(z.string().email()).min(1),
-	role: roleEnum,
-})
-
-export const shareSubmissionsWithEmails = resourcesAction({
-	schema: shareSubsInput,
-	resources: [
-		{
-			type: "submission",
-			role: "owner",
-			ids: (i) => i.submissionIds,
-		},
-	],
-}).action(
-	async ({
-		parsedInput: { submissionIds, emails, role },
-		ctx,
-	}): Promise<{ grantIds: string[] }> => {
-		const grantIds: string[] = []
-		for (const submissionId of submissionIds) {
-			const result = await shareResourceWithEmails({
-				resourceType: "student_submission",
-				resourceId: submissionId,
-				emails,
-				role,
-			})
-			if (result?.serverError) throw new Error(result.serverError)
-			if (result?.data?.grantIds) grantIds.push(...result.data.grantIds)
-		}
-		ctx.log.info("submissions shared", { count: submissionIds.length })
-		return { grantIds }
-	},
-)
-
-// ─── listSubmissionGrants ───────────────────────────────────────────────────
-
-export const listSubmissionGrants = resourceAction({
-	type: "submission",
-	role: "viewer",
-	schema: z.object({ submissionId: z.string() }),
-	id: ({ submissionId }) => submissionId,
-}).action(
-	async ({
-		parsedInput: { submissionId },
-	}): Promise<{ grants: ResourceGrantListItem[] }> => {
-		const grants = await db.resourceGrant.findMany({
-			where: {
-				resource_type: ResourceGrantResourceType.student_submission,
-				resource_id: submissionId,
-				revoked_at: null,
-			},
-			orderBy: [{ role: "asc" }, { created_at: "asc" }],
-			include: {
-				principal_user: {
-					select: { name: true, email: true, avatar_url: true },
-				},
-			},
-		})
-
-		return {
-			grants: grants.map((grant) => ({
-				id: grant.id,
-				resource_type: grant.resource_type,
-				resource_id: grant.resource_id,
-				principal_user_id: grant.principal_user_id,
-				principal_email:
-					grant.principal_email ?? grant.principal_user?.email ?? null,
-				principal_name: grant.principal_user?.name ?? null,
-				principal_avatar_url: grant.principal_user?.avatar_url ?? null,
-				role: grant.role,
-				pending: grant.principal_user_id === null,
-				created_at: grant.created_at,
-				accepted_at: grant.accepted_at,
-			})),
-		}
-	},
-)

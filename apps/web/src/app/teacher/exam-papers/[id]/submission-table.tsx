@@ -139,7 +139,8 @@ export function SubmissionTable({
 												View
 											</Button>
 											<ShareDialog
-												submissionIds={[sub.id]}
+												resourceType="student_submission"
+												resourceId={sub.id}
 												trigger={
 													<Button
 														type="button"

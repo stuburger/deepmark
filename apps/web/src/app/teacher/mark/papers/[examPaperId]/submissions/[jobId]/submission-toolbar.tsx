@@ -156,7 +156,8 @@ export function SubmissionToolbar({
 					<CollaboratorAvatars users={collaborators} self={cursorUser} />
 					{data.submission_id && !readOnly && (
 						<ShareDialog
-							submissionIds={[data.submission_id]}
+							resourceType="student_submission"
+							resourceId={data.submission_id}
 							trigger={
 								<Button variant="ghost" size="sm" className="h-7 gap-1.5">
 									<Share2 className="h-3.5 w-3.5" />

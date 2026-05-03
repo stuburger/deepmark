@@ -19,24 +19,23 @@ import {
 } from "@/components/ui/select"
 import {
 	type ResourceGrantListItem,
-	listSubmissionGrants,
+	listResourceGrants,
 	revokeResourceGrant,
-	shareSubmissionsWithEmails,
+	shareResourceWithEmails,
 	updateResourceGrantRole,
 } from "@/lib/sharing/actions"
 import { useCurrentUser } from "@/lib/users/use-current-user"
-import type { ResourceGrantRole } from "@mcp-gcse/db"
+import type { ResourceGrantResourceType, ResourceGrantRole } from "@mcp-gcse/db"
 import { X } from "lucide-react"
-import {
-	type ReactElement,
-	useEffect,
-	useMemo,
-	useState,
-	useTransition,
-} from "react"
+import { type ReactElement, useEffect, useState, useTransition } from "react"
 import { toast } from "sonner"
 
 const INVITE_ROLES: ResourceGrantRole[] = ["owner", "editor", "viewer"]
+
+const RESOURCE_LABEL: Record<ResourceGrantResourceType, string> = {
+	exam_paper: "exam paper",
+	student_submission: "submission",
+}
 
 function parseEmails(raw: string): string[] {
 	return raw
@@ -47,10 +46,11 @@ function parseEmails(raw: string): string[] {
 
 function initialsFor(grant: ResourceGrantListItem): string {
 	const source =
-		grant.principal_name?.trim() ||
-		grant.principal_email?.split("@")[0] ||
-		""
-	const parts = source.split(/[\s._-]+/).filter(Boolean).slice(0, 2)
+		grant.principal_name?.trim() || grant.principal_email?.split("@")[0] || ""
+	const parts = source
+		.split(/[\s._-]+/)
+		.filter(Boolean)
+		.slice(0, 2)
 	const initials = parts
 		.map((p) => p[0]?.toUpperCase() ?? "")
 		.join("")
@@ -59,10 +59,12 @@ function initialsFor(grant: ResourceGrantListItem): string {
 }
 
 export function ShareDialog({
-	submissionIds,
+	resourceType,
+	resourceId,
 	trigger,
 }: {
-	submissionIds: string[]
+	resourceType: ResourceGrantResourceType
+	resourceId: string
 	trigger: ReactElement
 }) {
 	const [open, setOpen] = useState(false)
@@ -70,35 +72,25 @@ export function ShareDialog({
 	const [role, setRole] = useState<ResourceGrantRole>("editor")
 	const [grants, setGrants] = useState<ResourceGrantListItem[]>([])
 	const [pending, startTransition] = useTransition()
-	const primarySubmissionId = submissionIds[0]
 	const { user: currentUser } = useCurrentUser()
 
-	const title = useMemo(
-		() =>
-			submissionIds.length === 1 ? "Share Submission" : "Share Submissions",
-		[submissionIds.length],
-	)
+	const title = `Share ${RESOURCE_LABEL[resourceType]}`
 
 	useEffect(() => {
-		if (!open || !primarySubmissionId) return
+		if (!open) return
 		startTransition(async () => {
-			const result = await listSubmissionGrants({
-				submissionId: primarySubmissionId,
-			})
+			const result = await listResourceGrants({ resourceType, resourceId })
 			if (result?.serverError) {
 				toast.error(result.serverError)
 				return
 			}
 			if (result?.data?.grants) setGrants(result.data.grants)
 		})
-	}, [open, primarySubmissionId])
+	}, [open, resourceType, resourceId])
 
 	function refreshGrants() {
-		if (!primarySubmissionId) return
 		startTransition(async () => {
-			const result = await listSubmissionGrants({
-				submissionId: primarySubmissionId,
-			})
+			const result = await listResourceGrants({ resourceType, resourceId })
 			if (result?.data?.grants) setGrants(result.data.grants)
 		})
 	}
@@ -106,8 +98,9 @@ export function ShareDialog({
 	function handleShare() {
 		const emails = parseEmails(emailInput)
 		startTransition(async () => {
-			const result = await shareSubmissionsWithEmails({
-				submissionIds,
+			const result = await shareResourceWithEmails({
+				resourceType,
+				resourceId,
 				emails,
 				role,
 			})
@@ -146,7 +139,7 @@ export function ShareDialog({
 	return (
 		<Dialog open={open} onOpenChange={setOpen}>
 			<DialogTrigger render={trigger} />
-			<DialogContent>
+			<DialogContent className="sm:max-w-lg">
 				<DialogHeader>
 					<DialogTitle>{title}</DialogTitle>
 				</DialogHeader>
@@ -196,60 +189,60 @@ export function ShareDialog({
 						const displayName =
 							grant.principal_name ?? grant.principal_email ?? "Unknown"
 						return (
-						<div
-							key={grant.id}
-							className="flex items-center gap-3 rounded-lg border px-3 py-2"
-						>
-							<Avatar size="sm">
-								{grant.principal_avatar_url && (
-									<AvatarImage
-										src={grant.principal_avatar_url}
-										alt={displayName}
-									/>
-								)}
-								<AvatarFallback>{initialsFor(grant)}</AvatarFallback>
-							</Avatar>
-							<div className="min-w-0 flex-1">
-								<p className="truncate text-sm font-medium">
-									{displayName}
-									{isMe && (
-										<span className="ml-1.5 text-xs font-normal text-muted-foreground">
-											(me)
-										</span>
+							<div
+								key={grant.id}
+								className="flex items-center gap-3 rounded-lg border px-3 py-2"
+							>
+								<Avatar size="sm">
+									{grant.principal_avatar_url && (
+										<AvatarImage
+											src={grant.principal_avatar_url}
+											alt={displayName}
+										/>
 									)}
-								</p>
-								<p className="truncate text-xs text-muted-foreground">
-									{grant.pending ? "Pending invite" : grant.principal_email}
-								</p>
+									<AvatarFallback>{initialsFor(grant)}</AvatarFallback>
+								</Avatar>
+								<div className="min-w-0 flex-1">
+									<p className="truncate text-sm font-medium">
+										{displayName}
+										{isMe && (
+											<span className="ml-1.5 text-xs font-normal text-muted-foreground">
+												(me)
+											</span>
+										)}
+									</p>
+									<p className="truncate text-xs text-muted-foreground">
+										{grant.pending ? "Pending invite" : grant.principal_email}
+									</p>
+								</div>
+								<Select
+									value={grant.role}
+									onValueChange={(value) =>
+										handleRoleChange(grant.id, value as ResourceGrantRole)
+									}
+								>
+									<SelectTrigger size="sm" className="w-32">
+										<SelectValue />
+									</SelectTrigger>
+									<SelectContent>
+										{INVITE_ROLES.map((option) => (
+											<SelectItem key={option} value={option}>
+												{option}
+											</SelectItem>
+										))}
+									</SelectContent>
+								</Select>
+								<Button
+									type="button"
+									size="icon"
+									variant="ghost"
+									onClick={() => handleRevoke(grant.id)}
+									disabled={pending}
+									aria-label="Remove access"
+								>
+									<X className="h-4 w-4" />
+								</Button>
 							</div>
-							<Select
-								value={grant.role}
-								onValueChange={(value) =>
-									handleRoleChange(grant.id, value as ResourceGrantRole)
-								}
-							>
-								<SelectTrigger size="sm" className="w-32">
-									<SelectValue />
-								</SelectTrigger>
-								<SelectContent>
-									{INVITE_ROLES.map((option) => (
-										<SelectItem key={option} value={option}>
-											{option}
-										</SelectItem>
-									))}
-								</SelectContent>
-							</Select>
-							<Button
-								type="button"
-								size="icon"
-								variant="ghost"
-								onClick={() => handleRevoke(grant.id)}
-								disabled={pending}
-								aria-label="Remove access"
-							>
-								<X className="h-4 w-4" />
-							</Button>
-						</div>
 						)
 					})}
 				</div>

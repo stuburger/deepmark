@@ -1,5 +1,6 @@
 "use client"
 
+import { ShareDialog } from "@/components/sharing/share-dialog"
 import { Badge } from "@/components/ui/badge"
 import {
 	Breadcrumb,
@@ -35,7 +36,7 @@ import type {
 } from "@/lib/pdf-ingestion/queries"
 import { queryKeys } from "@/lib/query-keys"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
-import { AlertTriangle, Copy, Trash2, Upload } from "lucide-react"
+import { AlertTriangle, Copy, Share2, Trash2, Upload } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { parseAsString, parseAsStringEnum, useQueryState } from "nuqs"
@@ -268,7 +269,8 @@ export function ExamPaperPageShell({
 											) ?? null
 										}
 										activeJob={
-											jobs.find((j) => j.document_type === "mark_scheme") ?? null
+											jobs.find((j) => j.document_type === "mark_scheme") ??
+											null
 										}
 										onJobStarted={() =>
 											void queryClient.invalidateQueries({
@@ -337,6 +339,21 @@ export function ExamPaperPageShell({
 									</PopoverContent>
 								</Popover>
 							)}
+							<ShareDialog
+								resourceType="exam_paper"
+								resourceId={paper.id}
+								trigger={
+									<Button
+										type="button"
+										size="sm"
+										variant="ghost"
+										className="gap-1.5 text-muted-foreground hover:text-foreground"
+									>
+										<Share2 className="h-3.5 w-3.5" />
+										Share
+									</Button>
+								}
+							/>
 							<TooltipProvider>
 								<Tooltip>
 									<TooltipTrigger

@@ -1,11 +1,5 @@
 "use client"
 
-import {
-	Dialog,
-	DialogContent,
-	DialogHeader,
-	DialogTitle,
-} from "@/components/ui/dialog"
 import { Spinner } from "@/components/ui/spinner"
 import type { PdfDocument } from "@/lib/pdf-ingestion/queries"
 import { createLinkedPdfUpload } from "@/lib/pdf-ingestion/upload"
@@ -20,6 +14,7 @@ import {
 } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
+import { DocumentPdfPreviewDialog } from "./document-pdf-preview-dialog"
 
 type DocType = "question_paper" | "mark_scheme"
 
@@ -50,6 +45,17 @@ type Props = {
 	onJobStarted: () => void
 	/** "default" = full upload card with labels; "compact" = small header thumbnail with tooltip-only labels. */
 	size?: "default" | "compact"
+	/**
+	 * Replaces the built-in `size` width/height classes when set (other frame
+	 * styles like border and hover states still apply).
+	 */
+	thumbnailClassName?: string
+	/**
+	 * Target width in CSS pixels when rasterising the first PDF page to the
+	 * canvas. Default 640 (2× the previous 320) so thumbnails stay sharp at
+	 * the larger default layout.
+	 */
+	pdfPreviewCanvasWidth?: number
 }
 
 export function DocumentThumbnail({
@@ -59,6 +65,8 @@ export function DocumentThumbnail({
 	activeJob,
 	onJobStarted,
 	size = "default",
+	thumbnailClassName,
+	pdfPreviewCanvasWidth = 640,
 }: Props) {
 	const compact = size === "compact"
 	const fileInputRef = useRef<HTMLInputElement>(null)
@@ -94,7 +102,7 @@ export function DocumentThumbnail({
 				const page = await doc.getPage(1)
 				if (cancelled) return
 				const baseViewport = page.getViewport({ scale: 1 })
-				const scale = 320 / baseViewport.width
+				const scale = pdfPreviewCanvasWidth / baseViewport.width
 				const viewport = page.getViewport({ scale })
 				canvas.width = Math.floor(viewport.width)
 				canvas.height = Math.floor(viewport.height)
@@ -111,7 +119,7 @@ export function DocumentThumbnail({
 		return () => {
 			cancelled = true
 		}
-	}, [pdfUrl])
+	}, [pdfUrl, pdfPreviewCanvasWidth])
 
 	async function handleFile(file: File) {
 		const validation = validatePdfFile(file)
@@ -184,7 +192,7 @@ export function DocumentThumbnail({
 				}
 				className={cn(
 					"group relative shrink-0 overflow-hidden rounded-md border bg-muted/30 transition-all",
-					compact ? "h-24 w-17" : "aspect-3/4 w-32",
+					thumbnailClassName ?? (compact ? "h-48 w-34" : "aspect-3/4 w-64"),
 					isAcquired
 						? "border-border shadow-sm hover:shadow-md cursor-zoom-in"
 						: isFailed
@@ -219,12 +227,12 @@ export function DocumentThumbnail({
 					!isFailed &&
 					(compact ? (
 						<div className="absolute inset-0 flex flex-col items-center justify-center gap-1 text-muted-foreground">
-							<Icon className="h-5 w-5" />
-							<Upload className="h-3 w-3 opacity-60" />
+							<Icon className="h-6 w-6" />
+							<Upload className="h-3.5 w-3.5 opacity-60" />
 						</div>
 					) : (
 						<div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 px-2 text-center text-muted-foreground">
-							<Icon className="h-6 w-6" />
+							<Icon className="h-7 w-7" />
 							<span className="text-[11px] font-medium leading-tight">
 								{label}
 							</span>
@@ -239,11 +247,11 @@ export function DocumentThumbnail({
 				{isFailed &&
 					(compact ? (
 						<div className="absolute inset-0 flex items-center justify-center text-destructive">
-							<XCircle className="h-5 w-5" />
+							<XCircle className="h-6 w-6" />
 						</div>
 					) : (
 						<div className="absolute inset-0 flex flex-col items-center justify-center gap-1 px-2 text-center text-destructive">
-							<XCircle className="h-5 w-5" />
+							<XCircle className="h-6 w-6" />
 							<span className="text-[10px] font-medium">Failed</span>
 							<span className="text-[10px] text-muted-foreground">
 								Click to retry
@@ -254,15 +262,15 @@ export function DocumentThumbnail({
 				{/* Pre-render fallback while PDF loads */}
 				{isAcquired && !thumbReady && (
 					<div className="absolute inset-0 flex items-center justify-center text-muted-foreground">
-						<Icon className="h-5 w-5" />
+						<Icon className={compact ? "h-6 w-6" : "h-7 w-7"} />
 					</div>
 				)}
 
 				{/* Status badge — bottom-right corner */}
 				{(isAcquired || isProcessing || uploading) && (
-					<div className="absolute bottom-1 right-1 flex h-5 w-5 items-center justify-center rounded-full bg-background shadow-sm ring-1 ring-border">
+					<div className="absolute bottom-1.5 right-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-background shadow-sm ring-1 ring-border">
 						{isProcessing || uploading ? (
-							<Spinner className="h-3 w-3 text-muted-foreground" />
+							<Spinner className="h-3.5 w-3.5 text-muted-foreground" />
 						) : (
 							<CheckCircle2 className="h-4 w-4 text-green-500" />
 						)}
@@ -283,20 +291,12 @@ export function DocumentThumbnail({
 			/>
 
 			{isAcquired && pdfUrl && (
-				<Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
-					<DialogContent className="max-w-5xl w-full h-[90vh] flex flex-col p-0 gap-0">
-						<DialogHeader className="px-4 py-3 border-b shrink-0">
-							<DialogTitle className="text-base">{label}</DialogTitle>
-						</DialogHeader>
-						<div className="flex-1 min-h-0">
-							<iframe
-								src={pdfUrl}
-								className="w-full h-full border-0"
-								title={label}
-							/>
-						</div>
-					</DialogContent>
-				</Dialog>
+				<DocumentPdfPreviewDialog
+					open={previewOpen}
+					onOpenChange={setPreviewOpen}
+					title={label}
+					pdfUrl={pdfUrl}
+				/>
 			)}
 		</>
 	)

@@ -1,15 +1,28 @@
 import type { Metadata } from "next"
-import { Indie_Flower, Plus_Jakarta_Sans } from "next/font/google"
+import { Geist, Geist_Mono, Indie_Flower, Lora } from "next/font/google"
 import localFont from "next/font/local"
 
 import { Providers } from "@/components/providers"
 
 import "./globals.css"
 
-const plusJakartaSans = Plus_Jakarta_Sans({
-	variable: "--font-plus-jakarta-sans",
+const geist = Geist({
+	variable: "--font-geist",
 	subsets: ["latin"],
-	weight: ["300", "400", "500", "600", "700", "800"],
+	weight: ["300", "400", "500", "600"],
+})
+
+const geistMono = Geist_Mono({
+	variable: "--font-geist-mono",
+	subsets: ["latin"],
+	weight: ["300", "400"],
+})
+
+const lora = Lora({
+	variable: "--font-lora",
+	subsets: ["latin"],
+	weight: ["400"],
+	display: "swap",
 })
 
 const indieFlower = Indie_Flower({
@@ -56,7 +69,7 @@ export default function RootLayout({
 	return (
 		<html
 			lang="en"
-			className={`${plusJakartaSans.variable} ${indieFlower.variable} ${haveIdea.variable}`}
+			className={`${geist.variable} ${geistMono.variable} ${lora.variable} ${indieFlower.variable} ${haveIdea.variable}`}
 			suppressHydrationWarning
 		>
 			<body className="antialiased">

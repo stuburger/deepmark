@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DeepMark — Design System v1.1</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@300;400&family=Playfair+Display:wght@400&display=swap" rel="stylesheet">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Geist', sans-serif; background: #F5F4F0; color: #1A1A1A; line-height: 1.6; }
+.page { max-width: 960px; margin: 0 auto; padding: 64px 48px 100px; }
+
+.doc-header { border-bottom: 2px solid #1A1A1A; padding-bottom: 36px; margin-bottom: 64px; }
+.doc-eyebrow { font-family: 'Geist Mono', monospace; font-size: 10px; color: rgba(0,0,0,0.3); text-transform: uppercase; letter-spacing: 0.18em; margin-bottom: 12px; }
+.doc-title { font-family: 'Playfair Display', serif; font-size: 52px; font-weight: 400; color: #1A1A1A; letter-spacing: -0.01em; margin-bottom: 10px; }
+.doc-subtitle { font-size: 14px; color: rgba(0,0,0,0.42); max-width: 560px; line-height: 1.7; margin-bottom: 20px; }
+.doc-tags { display: flex; gap: 8px; flex-wrap: wrap; }
+.doc-tag { font-family: 'Geist Mono', monospace; font-size: 10px; padding: 3px 10px; border-radius: 4px; background: rgba(1,173,208,0.08); color: #016E88; border: 1px solid rgba(1,173,208,0.2); }
+.doc-tag.warn { background: rgba(196,136,58,0.08); color: #7A4A10; border-color: rgba(196,136,58,0.2); }
+
+.section { margin-bottom: 72px; }
+.section-eyebrow { font-family: 'Geist Mono', monospace; font-size: 9px; color: rgba(0,0,0,0.28); text-transform: uppercase; letter-spacing: 0.18em; margin-bottom: 6px; }
+.section-title { font-size: 24px; font-weight: 600; color: #1A1A1A; letter-spacing: -0.02em; margin-bottom: 8px; }
+.section-desc { font-size: 13px; color: rgba(0,0,0,0.42); margin-bottom: 28px; max-width: 640px; line-height: 1.7; }
+hr.rule { border: none; border-top: 1px solid rgba(0,0,0,0.09); margin-bottom: 28px; }
+
+.intent { background: rgba(1,173,208,0.05); border-left: 3px solid #01ADD0; border-radius: 0 5px 5px 0; padding: 14px 18px; margin-bottom: 28px; }
+.intent-label { font-family: 'Geist Mono', monospace; font-size: 9px; text-transform: uppercase; letter-spacing: 0.14em; color: #016E88; margin-bottom: 5px; }
+.intent-text { font-size: 13px; color: rgba(0,0,0,0.55); line-height: 1.65; }
+
+.warn-box { background: rgba(196,136,58,0.05); border-left: 3px solid #C4883A; border-radius: 0 5px 5px 0; padding: 14px 18px; margin-bottom: 28px; }
+.warn-label { font-family: 'Geist Mono', monospace; font-size: 9px; text-transform: uppercase; letter-spacing: 0.14em; color: #7A4A10; margin-bottom: 5px; }
+.warn-text { font-size: 13px; color: rgba(0,0,0,0.55); line-height: 1.65; }
+
+/* Colours */
+.colour-grid { display: grid; grid-template-columns: repeat(5,1fr); gap: 10px; margin-bottom: 20px; }
+.colour-grid-3 { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; margin-bottom: 20px; }
+.colour-card { border-radius: 5px; overflow: hidden; box-shadow: 2px 2px 0px rgba(0,0,0,0.09); }
+.colour-swatch { height: 64px; }
+.colour-info { background: white; padding: 10px 12px; border: 1px solid rgba(0,0,0,0.08); border-top: none; }
+.colour-name { font-size: 11px; font-weight: 600; color: #1A1A1A; margin-bottom: 3px; }
+.colour-hex { font-family: 'Geist Mono', monospace; font-size: 10px; color: rgba(0,0,0,0.38); }
+.colour-use { font-size: 10px; color: rgba(0,0,0,0.38); margin-top: 4px; line-height: 1.4; }
+
+.grade-grid { display: grid; grid-template-columns: repeat(9,1fr); gap: 6px; margin-bottom: 24px; }
+.grade-chip { border-radius: 4px; padding: 8px 4px; text-align: center; }
+.grade-chip-label { font-family: 'Geist Mono', monospace; font-size: 10px; font-weight: 500; }
+.grade-chip-pct { font-family: 'Geist Mono', monospace; font-size: 8px; opacity: 0.65; margin-top: 2px; }
+
+/* Tables */
+.table-wrap { background: white; border: 1px solid rgba(0,0,0,0.08); border-radius: 5px; overflow: hidden; box-shadow: 2px 2px 0px rgba(0,0,0,0.07); margin-bottom: 24px; }
+table { width: 100%; border-collapse: collapse; }
+th { font-family: 'Geist Mono', monospace; font-size: 9px; text-transform: uppercase; letter-spacing: 0.12em; color: rgba(0,0,0,0.3); font-weight: 400; text-align: left; padding: 10px 16px; border-bottom: 1px solid rgba(0,0,0,0.08); }
+td { font-size: 12px; color: #1A1A1A; padding: 10px 16px; border-bottom: 1px solid rgba(0,0,0,0.05); vertical-align: top; }
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: rgba(0,0,0,0.015); }
+.mono { font-family: 'Geist Mono', monospace; font-size: 11px; color: #016E88; }
+.muted { color: rgba(0,0,0,0.38); font-size: 11px; }
+
+/* Typography */
+.type-row { background: white; border: 1px solid rgba(0,0,0,0.08); border-radius: 5px; padding: 20px 24px; margin-bottom: 8px; box-shadow: 2px 2px 0px rgba(0,0,0,0.07); display: grid; grid-template-columns: 1fr 220px; align-items: center; gap: 24px; }
+.type-meta-label { font-family: 'Geist Mono', monospace; font-size: 9px; color: rgba(0,0,0,0.28); text-transform: uppercase; letter-spacing: 0.12em; margin-bottom: 5px; }
+.type-meta-detail { font-size: 11px; color: rgba(0,0,0,0.38); line-height: 1.6; }
+
+/* Shadows */
+.shadow-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 16px; margin-bottom: 24px; }
+.shadow-card { padding: 24px 20px; background: white; border-radius: 5px; display: flex; flex-direction: column; gap: 8px; }
+.shadow-name { font-size: 12px; font-weight: 500; color: #1A1A1A; }
+.shadow-use { font-size: 11px; color: rgba(0,0,0,0.38); }
+.shadow-val { font-family: 'Geist Mono', monospace; font-size: 9px; color: rgba(0,0,0,0.35); line-height: 1.6; }
+
+/* Radius */
+.radius-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 14px; margin-bottom: 24px; }
+.radius-card { background: white; border: 1px solid rgba(0,0,0,0.08); border-radius: 5px; padding: 22px; box-shadow: 2px 2px 0px rgba(0,0,0,0.07); display: flex; flex-direction: column; gap: 8px; }
+.radius-box { height: 50px; background: rgba(1,173,208,0.1); border: 2px solid #01ADD0; }
+.radius-name { font-size: 11px; font-weight: 500; color: #1A1A1A; }
+.radius-val { font-family: 'Geist Mono', monospace; font-size: 10px; color: rgba(0,0,0,0.38); }
+.radius-use { font-size: 10px; color: rgba(0,0,0,0.38); }
+
+/* Buttons */
+.btn-group { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 20px; }
+.btn-wrap { display: flex; flex-direction: column; gap: 6px; }
+.btn-wrap-label { font-family: 'Geist Mono', monospace; font-size: 9px; color: rgba(0,0,0,0.3); text-transform: uppercase; letter-spacing: 0.1em; }
+.btn-primary { display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 22px; border-radius: 5px; border: none; background: #01ADD0; color: white; font-size: 13px; font-weight: 500; font-family: 'Geist', sans-serif; letter-spacing: -0.01em; box-shadow: 3px 3px 0px rgba(0,0,0,0.2); cursor: pointer; }
+.btn-secondary { display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 22px; border-radius: 5px; border: 1px solid rgba(0,0,0,0.1); background: white; color: #1A1A1A; font-size: 13px; font-weight: 500; font-family: 'Geist', sans-serif; letter-spacing: -0.01em; box-shadow: 3px 3px 0px rgba(0,0,0,0.12); cursor: pointer; }
+.btn-confirm { display: inline-flex; align-items: center; gap: 8px; height: 34px; padding: 0 18px; border-radius: 5px; border: none; background: #01ADD0; color: white; font-size: 12px; font-weight: 600; font-family: 'Geist', sans-serif; box-shadow: 2px 2px 0px rgba(0,90,110,0.28); cursor: pointer; }
+.btn-muted { display: inline-flex; align-items: center; gap: 8px; height: 28px; padding: 0 12px; border-radius: 5px; border: none; background: #6B7280; color: white; font-size: 11px; font-weight: 400; font-family: 'Geist', sans-serif; cursor: pointer; }
+.btn-nav { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 14px; border-radius: 5px; border: 1px solid rgba(0,0,0,0.1); background: transparent; color: rgba(0,0,0,0.45); font-size: 11px; font-family: 'Geist', sans-serif; cursor: pointer; }
+
+/* Badges */
+.badge-group { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 16px; }
+.badge { font-family: 'Geist Mono', monospace; font-size: 9px; font-weight: 500; padding: 3px 9px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.06em; }
+.badge-marking { background: rgba(255,0,0,0.1); color: rgba(160,0,0,0.85); border: 1px solid rgba(255,0,0,0.25); }
+.badge-review  { background: rgba(127,255,167,0.2); color: #1A5E3A; border: 1px solid rgba(127,255,167,0.5); }
+.badge-done    { background: rgba(0,0,0,0.05); color: rgba(0,0,0,0.4); border: 1px solid rgba(0,0,0,0.1); }
+.badge-grade   { background: rgba(1,173,208,0.08); color: #016E88; border: 1px solid rgba(1,173,208,0.2); }
+.badge-ao1 { background: rgba(1,173,208,0.1); color: #016E88; border: 1px solid rgba(1,173,208,0.22); }
+.badge-ao2 { background: rgba(107,79,160,0.08); color: #4A2D8E; border: 1px solid rgba(107,79,160,0.18); }
+.badge-ao3 { background: rgba(60,138,98,0.09); color: #1F5E38; border: 1px solid rgba(60,138,98,0.2); }
+.badge-www { background: rgba(60,138,98,0.1); color: #1F5E38; border: 1px solid rgba(60,138,98,0.2); }
+.badge-ebi { background: rgba(196,136,58,0.1); color: #7A4A10; border: 1px solid rgba(196,136,58,0.2); }
+.score-full { font-size: 11px; font-weight: 700; padding: 3px 12px; border-radius: 4px; background: #3C8A62; color: white; }
+.score-part { font-size: 11px; font-weight: 700; padding: 3px 12px; border-radius: 4px; background: #C4883A; color: white; }
+.score-low  { font-size: 11px; font-weight: 700; padding: 3px 12px; border-radius: 4px; background: #C04444; color: white; }
+
+/* Kanban chips — always white bg */
+.chip-group { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+.chip { background: white; border-radius: 5px; padding: 7px 10px; border: 1px solid rgba(0,0,0,0.12); box-shadow: 1px 1px 0px rgba(0,0,0,0.07); min-width: 110px; }
+.chip.extract  { border-color: #E8A83A; }
+.chip.grading  { border-color: #01ADD0; }
+.chip.annotate { border-color: #9B6DD4; }
+.chip.g9 { border-color: #2E7D32; border-width: 1.5px; }
+.chip.g8 { border-color: #1565C0; border-width: 1.5px; }
+.chip.g7 { border-color: #00838F; border-width: 1.5px; }
+.chip.g5 { border-color: #F9A825; border-width: 1.5px; }
+.chip.g3 { border-color: #C62828; border-width: 1.5px; }
+.chip-name { font-size: 11px; font-weight: 500; color: #1A1A1A; }
+.chip-sub { font-family: 'Geist Mono', monospace; font-size: 10px; color: rgba(0,0,0,0.4); margin-top: 3px; display: flex; gap: 4px; }
+.chip-pct { font-weight: 700; color: #1A1A1A; }
+.chip-grade { font-weight: 400; color: rgba(0,0,0,0.38); }
+.chip-phase { font-family: 'Geist Mono', monospace; font-size: 9px; color: rgba(0,0,0,0.3); margin-top: 2px; }
+
+/* Toolbar */
+.floating-toolbar { display: flex; align-items: center; gap: 2px; background: rgba(28,24,36,0.84); backdrop-filter: blur(12px); border-radius: 10px; padding: 5px 8px; border: 1px solid rgba(1,173,208,0.4); box-shadow: 0 4px 16px rgba(0,0,0,0.22), 0 1px 4px rgba(1,173,208,0.18); width: fit-content; margin-bottom: 16px; }
+.tb-btn { width: 28px; height: 28px; border-radius: 5px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: rgba(255,255,255,0.55); font-size: 12px; font-weight: 500; position: relative; font-family: 'Geist', sans-serif; }
+.tb-btn.active { background: rgba(1,173,208,0.4); color: white; }
+.tb-btn svg { width: 13px; height: 13px; stroke: currentColor; fill: none; stroke-width: 1.5; }
+.tb-num { position: absolute; bottom: 1px; right: 2px; font-size: 7px; color: rgba(255,255,255,0.28); font-family: 'Geist Mono', monospace; line-height: 1; }
+.tb-sep { width: 1px; height: 14px; background: rgba(255,255,255,0.12); margin: 0 3px; }
+.tb-hint { font-size: 9px; color: rgba(255,255,255,0.25); padding: 0 4px; white-space: nowrap; font-family: 'Geist Mono', monospace; }
+
+/* Background */
+.bg-preview { height: 80px; border-radius: 5px; background-color: #E8E6E0; background-image: radial-gradient(circle, rgba(0,0,0,0.18) 1px, transparent 1px); background-size: 22px 22px; margin-bottom: 12px; box-shadow: 2px 2px 0px rgba(0,0,0,0.09); }
+
+/* Surface taxonomy */
+.surface-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 24px; }
+.surface-card { background: white; border: 1px solid rgba(0,0,0,0.08); border-radius: 5px; padding: 16px 18px; box-shadow: 2px 2px 0px rgba(0,0,0,0.07); }
+.surface-name { font-size: 13px; font-weight: 600; color: #1A1A1A; margin-bottom: 4px; }
+.surface-rule { font-size: 11px; color: rgba(0,0,0,0.4); line-height: 1.6; margin-bottom: 6px; }
+.surface-example { font-family: 'Geist Mono', monospace; font-size: 10px; color: #016E88; }
+
+/* Icons */
+.icon-grid { display: grid; grid-template-columns: repeat(6,1fr); gap: 10px; margin-bottom: 24px; }
+.icon-card { background: white; border: 1px solid rgba(0,0,0,0.08); border-radius: 5px; padding: 16px 10px 12px; display: flex; flex-direction: column; align-items: center; gap: 8px; box-shadow: 2px 2px 0px rgba(0,0,0,0.07); }
+.icon-name { font-size: 10px; font-weight: 500; color: #1A1A1A; text-align: center; line-height: 1.3; }
+
+/* Code block */
+.code-block { background: #1A1A1A; border-radius: 5px; padding: 20px 24px; margin-bottom: 20px; overflow-x: auto; }
+.code-block pre { font-family: 'Geist Mono', monospace; font-size: 11px; line-height: 1.8; color: rgba(255,255,255,0.75); white-space: pre; }
+.cc { color: rgba(255,255,255,0.25); }
+.cv { color: #01ADD0; }
+.ca { color: #9B9BFF; }
+</style>
+</head>
+<body>
+<div class="page">
+
+<div class="doc-header">
+  <div class="doc-eyebrow">Internal Reference — Design + Engineering · v1.1</div>
+  <div class="doc-title">DeepMark<br>Design System</div>
+  <div class="doc-subtitle">Single source of truth for DeepMark's visual language. Covers colours, typography, spacing, shadows, components, icons, and surface taxonomy. Reference before building anything.</div>
+  <div class="doc-tags">
+    <span class="doc-tag">v1.1 · May 2026</span>
+    <span class="doc-tag">Geist + Playfair</span>
+    <span class="doc-tag">Anti vibe-code</span>
+    <span class="doc-tag warn">No Inter · No pill radius · No soft glow · No purple</span>
+  </div>
+</div>
+
+<!-- 00 PRINCIPLES -->
+<div class="section">
+  <div class="section-eyebrow">00 · Principles</div>
+  <div class="section-title">Anti vibe-code principles</div>
+  <div class="section-desc">DeepMark is a professional tool for teachers — not a consumer app. Every decision should read as intentional.</div>
+  <hr class="rule">
+  <div class="warn-box">
+    <div class="warn-label">Never use these</div>
+    <div class="warn-text">
+      <strong>Inter</strong> — the most common AI-generated UI font. Replaced with Geist everywhere.<br>
+      <strong>Pill radius (20px+)</strong> — everywhere in consumer apps. All radii are 5px maximum. No exceptions.<br>
+      <strong>Soft brand-coloured glows</strong> — all shadows are hard SE offset in black only.<br>
+      <strong>Purple #6B4FA0</strong> — the AI default colour of 2025–26. Replaced with teal #01ADD0.<br>
+      <strong>Uniform stroke weight icons</strong> — Lucide/Heroicons default. Use the custom DeepMark set.
+    </div>
+  </div>
+  <div class="intent">
+    <div class="intent-label">Design intent</div>
+    <div class="intent-text">Brand identity is carried by typography and texture — not colour fills. Teal appears as punctuation only. The paper texture and Playfair Display greeting do the identity work. Everything else should feel like a serious professional tool.</div>
+  </div>
+</div>
+
+<!-- 01 COLOUR -->
+<div class="section">
+  <div class="section-eyebrow">01 · Colour</div>
+  <div class="section-title">Colour system</div>
+  <div class="section-desc">Deliberately restrained. Teal is the only brand accent and appears sparingly. All other colours are semantic.</div>
+  <hr class="rule">
+
+  <div class="colour-grid">
+    <div class="colour-card"><div class="colour-swatch" style="background:#01ADD0;"></div><div class="colour-info"><div class="colour-name">Accent</div><div class="colour-hex">#01ADD0</div><div class="colour-use">Primary CTA · active states · toolbar border · confirm buttons</div></div></div>
+    <div class="colour-card"><div class="colour-swatch" style="background:#0190AE;"></div><div class="colour-info"><div class="colour-name">Accent Dark</div><div class="colour-hex">#0190AE</div><div class="colour-use">Hover on primary buttons only</div></div></div>
+    <div class="colour-card"><div class="colour-swatch" style="background:#1A1A1A;"></div><div class="colour-info"><div class="colour-name">Ink</div><div class="colour-hex">#1A1A1A</div><div class="colour-use">All text · headings · wordmark. Not pure black — warm.</div></div></div>
+    <div class="colour-card"><div class="colour-swatch" style="background:#C23B3B;"></div><div class="colour-info"><div class="colour-name">Error</div><div class="colour-hex">#C23B3B</div><div class="colour-use">Destructive actions and error states only. Never brand.</div></div></div>
+    <div class="colour-card"><div class="colour-swatch" style="background:#E8E6E0;background-image:radial-gradient(circle,rgba(0,0,0,0.18) 1px,transparent 1px);background-size:22px 22px;"></div><div class="colour-info"><div class="colour-name">Page Background</div><div class="colour-hex">#E8E6E0 + dot grid</div><div class="colour-use">Full bleed. CSS generated — see Background section.</div></div></div>
+  </div>
+
+  <p style="font-size:12px;font-weight:600;color:#1A1A1A;margin-bottom:12px;">Status colours — paper cards and kanban</p>
+  <div class="colour-grid-3">
+    <div class="colour-card"><div class="colour-swatch" style="background:rgba(255,0,0,0.5);"></div><div class="colour-info"><div class="colour-name">Marking</div><div class="colour-hex">rgba(255,0,0,0.5)</div><div class="colour-use">Card border + badge — actively marking</div></div></div>
+    <div class="colour-card"><div class="colour-swatch" style="background:#7FFFA7;"></div><div class="colour-info"><div class="colour-name">Review</div><div class="colour-hex">#7FFFA7</div><div class="colour-use">Card border + badge — ready for teacher review</div></div></div>
+    <div class="colour-card"><div class="colour-swatch" style="background:rgba(0,0,0,0.09);border:1px solid rgba(0,0,0,0.1);"></div><div class="colour-info"><div class="colour-name">Done</div><div class="colour-hex">rgba(0,0,0,0.09)</div><div class="colour-use">Neutral. Done is quiet.</div></div></div>
+  </div>
+
+  <p style="font-size:12px;font-weight:600;color:#1A1A1A;margin-bottom:12px;">9-grade colour system — kanban Done lane + results list</p>
+  <div class="grade-grid">
+    <div class="grade-chip" style="background:#E8F5E9;border:1.5px solid #2E7D32;"><div class="grade-chip-label" style="color:#1B5E20;">9</div><div class="grade-chip-pct" style="color:#2E7D32;">90%+</div></div>
+    <div class="grade-chip" style="background:#E3F2FD;border:1.5px solid #1565C0;"><div class="grade-chip-label" style="color:#0D47A1;">8</div><div class="grade-chip-pct" style="color:#1565C0;">80%+</div></div>
+    <div class="grade-chip" style="background:#E0F7FA;border:1.5px solid #00838F;"><div class="grade-chip-label" style="color:#006064;">7</div><div class="grade-chip-pct" style="color:#00838F;">70%+</div></div>
+    <div class="grade-chip" style="background:#F3E5F5;border:1.5px solid #7B1FA2;"><div class="grade-chip-label" style="color:#4A148C;">6</div><div class="grade-chip-pct" style="color:#7B1FA2;">60%+</div></div>
+    <div class="grade-chip" style="background:#FFF8E1;border:1.5px solid #F9A825;"><div class="grade-chip-label" style="color:#7A5100;">5</div><div class="grade-chip-pct" style="color:#F9A825;">50%+</div></div>
+    <div class="grade-chip" style="background:#FFF3E0;border:1.5px solid #E65100;"><div class="grade-chip-label" style="color:#BF360C;">4</div><div class="grade-chip-pct" style="color:#E65100;">40%+</div></div>
+    <div class="grade-chip" style="background:#FCE4EC;border:1.5px solid #C62828;"><div class="grade-chip-label" style="color:#880E4F;">3</div><div class="grade-chip-pct" style="color:#C62828;">30%+</div></div>
+    <div class="grade-chip" style="background:#EFEBE9;border:1.5px solid #795548;"><div class="grade-chip-label" style="color:#3E2723;">2</div><div class="grade-chip-pct" style="color:#795548;">20%+</div></div>
+    <div class="grade-chip" style="background:#F5F5F5;border:1.5px solid #9E9E9E;"><div class="grade-chip-label" style="color:#616161;">1</div><div class="grade-chip-pct" style="color:#9E9E9E;">&lt;20%</div></div>
+  </div>
+</div>
+
+<!-- 02 TYPOGRAPHY -->
+<div class="section">
+  <div class="section-eyebrow">02 · Typography</div>
+  <div class="section-title">Typography system</div>
+  <div class="section-desc">Three fonts only. Each has a specific role. Do not substitute or extend.</div>
+  <hr class="rule">
+  <div class="warn-box"><div class="warn-label">Critical</div><div class="warn-text"><strong>Do not use Inter.</strong> Geist replaces it everywhere. Geist Mono replaces DM Mono. Playfair Display is used for the greeting only — one moment, one purpose.</div></div>
+
+  <div class="type-row">
+    <div style="font-family:'Playfair Display',serif;font-size:36px;font-weight:400;color:#1A1A1A;letter-spacing:-0.01em;">Good morning, Sarah.</div>
+    <div><div class="type-meta-label">Playfair Display 400</div><div class="type-meta-detail">Dashboard greeting only. 36–52px. Not italic. One use.</div></div>
+  </div>
+  <div class="type-row">
+    <div style="font-family:'Geist',sans-serif;font-size:24px;font-weight:600;color:#1A1A1A;letter-spacing:-0.02em;">Mark new paper</div>
+    <div><div class="type-meta-label">Geist 600 — Headings</div><div class="type-meta-detail">Section titles, modal headings. letter-spacing: -0.02em. 22–28px.</div></div>
+  </div>
+  <div class="type-row">
+    <div style="font-family:'Geist',sans-serif;font-size:15px;font-weight:500;color:#1A1A1A;letter-spacing:-0.01em;">Paper 2 — Macroeconomics</div>
+    <div><div class="type-meta-label">Geist 500 — UI Labels</div><div class="type-meta-detail">Card titles, nav items, button text. letter-spacing: -0.01em. 12–15px.</div></div>
+  </div>
+  <div class="type-row">
+    <div style="font-family:'Geist',sans-serif;font-size:13px;font-weight:400;color:rgba(0,0,0,0.45);">28 scripts · Awaiting review</div>
+    <div><div class="type-meta-label">Geist 400 — Body</div><div class="type-meta-detail">Supporting text, descriptions. 11–13px. rgba(0,0,0,0.45).</div></div>
+  </div>
+  <div class="type-row">
+    <div style="font-family:'Geist Mono',monospace;font-size:13px;font-weight:400;color:#1A1A1A;letter-spacing:0.14em;text-transform:uppercase;">Monday, 28 April 2025</div>
+    <div><div class="type-meta-label">Geist Mono 400 — Eyebrows</div><div class="type-meta-detail">Date labels, section eyebrows. Uppercase. letter-spacing: 0.14–0.18em. 9–11px.</div></div>
+  </div>
+  <div class="type-row">
+    <div style="font-family:'Geist Mono',monospace;font-size:13px;font-weight:400;color:#1A1A1A;">34/43 · 79% · Script 1 of 24</div>
+    <div><div class="type-meta-label">Geist Mono 400 — Data</div><div class="type-meta-detail">All numbers, scores, counts, percentages. 10–13px.</div></div>
+  </div>
+</div>
+
+<!-- 03 RADIUS -->
+<div class="section">
+  <div class="section-eyebrow">03 · Spacing &amp; Radius</div>
+  <div class="section-title">Border radius — strict</div>
+  <div class="section-desc">5px is the universal radius. No exceptions except the floating toolbar.</div>
+  <hr class="rule">
+  <div class="warn-box"><div class="warn-label">Hard rule</div><div class="warn-text">No element may have border-radius above 10px. Pills (20px+) are strictly forbidden. If you write border-radius above 10px — stop.</div></div>
+  <div class="radius-grid">
+    <div class="radius-card"><div class="radius-box" style="border-radius:5px;"></div><div class="radius-name">--radius-sm · 5px</div><div class="radius-val">border-radius: 5px</div><div class="radius-use">Buttons · inputs · badges · chips · cards · all UI. Universal default.</div></div>
+    <div class="radius-card"><div class="radius-box" style="border-radius:8px;"></div><div class="radius-name">--radius-md · 8px</div><div class="radius-val">border-radius: 8px</div><div class="radius-use">Upload zones · callout panels · expandable feedback panels.</div></div>
+    <div class="radius-card"><div class="radius-box" style="border-radius:10px;"></div><div class="radius-name">--radius-lg · 10px</div><div class="radius-val">border-radius: 10px</div><div class="radius-use">Dialogs · modals · floating toolbar only. Nothing else.</div></div>
+  </div>
+</div>
+
+<!-- 04 SHADOWS -->
+<div class="section">
+  <div class="section-eyebrow">04 · Shadows</div>
+  <div class="section-title">Shadow system</div>
+  <div class="section-desc">Hard SE offset shadows only. No brand-coloured glows. No diffuse drop shadows.</div>
+  <hr class="rule">
+  <div class="shadow-grid">
+    <div class="shadow-card" style="box-shadow:3px 3px 0px rgba(0,0,0,0.12),1px 1px 4px rgba(0,0,0,0.07);"><div class="shadow-name">--shadow-tile</div><div class="shadow-use">Cards, tiles, AO annotation items, thumbnails</div><div class="shadow-val">3px 3px 0px rgba(0,0,0,0.12),<br>1px 1px 4px rgba(0,0,0,0.07)</div></div>
+    <div class="shadow-card" style="box-shadow:3px 3px 0px rgba(0,0,0,0.2);"><div class="shadow-name">--shadow-btn</div><div class="shadow-use">Primary and secondary buttons</div><div class="shadow-val">3px 3px 0px rgba(0,0,0,0.2)</div></div>
+    <div class="shadow-card" style="box-shadow:2px 2px 0px rgba(0,90,110,0.28);"><div class="shadow-name">--shadow-confirm</div><div class="shadow-use">Confirm marking button only</div><div class="shadow-val">2px 2px 0px rgba(0,90,110,0.28)</div></div>
+    <div class="shadow-card" style="box-shadow:0 20px 60px rgba(0,0,0,0.18),0 6px 20px rgba(0,0,0,0.10);"><div class="shadow-name">--shadow-float</div><div class="shadow-use">Modals and dialogs over the dot grid</div><div class="shadow-val">0 20px 60px rgba(0,0,0,0.18),<br>0 6px 20px rgba(0,0,0,0.10)</div></div>
+    <div class="shadow-card" style="box-shadow:0 4px 16px rgba(0,0,0,0.22),0 1px 4px rgba(1,173,208,0.18);"><div class="shadow-name">--shadow-toolbar</div><div class="shadow-use">Floating editing toolbar only</div><div class="shadow-val">0 4px 16px rgba(0,0,0,0.22),<br>0 1px 4px rgba(1,173,208,0.18)</div></div>
+    <div class="shadow-card" style="box-shadow:4px 0 24px rgba(0,0,0,0.14),2px 0 6px rgba(0,0,0,0.07);"><div class="shadow-name">--shadow-sidebar</div><div class="shadow-use">Expanded sidebar sliding over content</div><div class="shadow-val">4px 0 24px rgba(0,0,0,0.14),<br>2px 0 6px rgba(0,0,0,0.07)</div></div>
+  </div>
+</div>
+
+<!-- 05 BACKGROUND -->
+<div class="section">
+  <div class="section-eyebrow">05 · Background</div>
+  <div class="section-title">Page background — dot grid</div>
+  <div class="section-desc">Full bleed behind all content. Never contain it in a box. White tiles sit on top.</div>
+  <hr class="rule">
+  <div class="bg-preview"></div>
+  <div class="code-block"><pre><span class="cc">/* Apply to body or root container */</span>
+<span class="cv">background-color</span>: <span class="ca">#E8E6E0</span>;
+<span class="cv">background-image</span>: radial-gradient(circle, <span class="ca">rgba(0,0,0,0.18) 1px</span>, transparent 1px);
+<span class="cv">background-size</span>: <span class="ca">22px 22px</span>;</pre></div>
+</div>
+
+<!-- 06 COMPONENTS -->
+<div class="section">
+  <div class="section-eyebrow">06 · Components</div>
+  <div class="section-title">Button system — 5 variants</div>
+  <div class="section-desc">22 button classes in the prototypes collapse to 5 real variants. Do not create new ones.</div>
+  <hr class="rule">
+  <div class="btn-group">
+    <div class="btn-wrap"><div class="btn-wrap-label">Primary hero</div><button class="btn-primary">+ Mark new paper</button></div>
+    <div class="btn-wrap"><div class="btn-wrap-label">Secondary</div><button class="btn-secondary">Resume marking</button></div>
+    <div class="btn-wrap"><div class="btn-wrap-label">Confirm (accent)</div><button class="btn-confirm">Confirm marking ✓</button></div>
+    <div class="btn-wrap"><div class="btn-wrap-label">Muted / Review</div><button class="btn-muted">Review</button></div>
+    <div class="btn-wrap"><div class="btn-wrap-label">Nav</div><button class="btn-nav">← Previous</button></div>
+  </div>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Variant</th><th>Background</th><th>Text</th><th>Shadow token</th><th>Use when</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">primary-hero</td><td class="mono">#01ADD0</td><td class="mono">white</td><td class="mono">--shadow-btn</td><td class="muted">Primary page-level CTA</td></tr>
+      <tr><td class="mono">secondary</td><td class="mono">white</td><td class="mono">#1A1A1A</td><td class="mono">--shadow-btn (lighter)</td><td class="muted">Supporting actions</td></tr>
+      <tr><td class="mono">confirm</td><td class="mono">#01ADD0</td><td class="mono">white</td><td class="mono">--shadow-confirm</td><td class="muted">Confirm marking — topbar and footer</td></tr>
+      <tr><td class="mono">muted</td><td class="mono">#6B7280</td><td class="mono">white</td><td class="muted">none</td><td class="muted">Review buttons in results list</td></tr>
+      <tr><td class="mono">nav</td><td class="mono">transparent</td><td class="mono">rgba(0,0,0,0.45)</td><td class="muted">none</td><td class="muted">Previous / Next / Back</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="section-title" style="font-size:18px;margin-top:36px;margin-bottom:8px;">Badges</div>
+  <p style="font-size:11px;font-weight:600;color:#1A1A1A;margin-bottom:8px;">Paper status</p>
+  <div class="badge-group"><span class="badge badge-marking">Marking</span><span class="badge badge-review">Review</span><span class="badge badge-done">Done</span></div>
+  <p style="font-size:11px;font-weight:600;color:#1A1A1A;margin-bottom:8px;">Score pills — inline editable in script reader</p>
+  <div class="badge-group"><span class="score-full">3/3</span><span class="score-part">5/6</span><span class="score-low">0/4</span></div>
+  <p style="font-size:11px;font-weight:600;color:#1A1A1A;margin-bottom:8px;">AO annotation tags + feedback tags</p>
+  <div class="badge-group"><span class="badge badge-ao1">AO1</span><span class="badge badge-ao2">AO2</span><span class="badge badge-ao3">AO3</span><span class="badge badge-www">WWW</span><span class="badge badge-ebi">EBI</span><span class="badge badge-grade">Grade 7</span></div>
+
+  <div class="section-title" style="font-size:18px;margin-top:36px;margin-bottom:8px;">Kanban chips</div>
+  <div class="intent"><div class="intent-label">Critical rule</div><div class="intent-text"><strong>Kanban chips always have a white background — in every phase, including Done.</strong> Only the border colour changes. The % is bold for instant at-a-glance reading. Grade label is lighter weight alongside it.</div></div>
+  <div class="chip-group">
+    <div class="chip"><div class="chip-name">Rhys Taylor</div><div class="chip-phase">Queued</div></div>
+    <div class="chip extract"><div class="chip-name">Aryan Patel</div><div class="chip-phase">Extracting</div></div>
+    <div class="chip grading"><div class="chip-name">Sophie H.</div><div class="chip-phase">Grading</div></div>
+    <div class="chip annotate"><div class="chip-name">Kieran Sear</div><div class="chip-phase">Annotating</div></div>
+    <div class="chip g8"><div class="chip-name">Priya Sharma</div><div class="chip-sub"><span class="chip-pct">86%</span><span class="chip-grade">· Grade 8</span></div></div>
+    <div class="chip g5"><div class="chip-name">Jake Morrison</div><div class="chip-sub"><span class="chip-pct">52%</span><span class="chip-grade">· Grade 5</span></div></div>
+    <div class="chip g3"><div class="chip-name">Daniel Park</div><div class="chip-sub"><span class="chip-pct">31%</span><span class="chip-grade">· Grade 3</span></div></div>
+  </div>
+
+  <div class="section-title" style="font-size:18px;margin-top:36px;margin-bottom:8px;">Floating toolbar</div>
+  <div class="intent"><div class="intent-label">Toolbar spec</div><div class="intent-text">The floating toolbar uses a dark semi-transparent background with teal hairline border — it is physically distinct from the content beneath it. Elements in order: <strong>B I U</strong> | <strong>✓(1) ✗(2) U(3) »(4) cube(5) circle(6) link(7)</strong> | eraser | hint text. Physics drift on scroll is required.</div></div>
+  <div class="floating-toolbar">
+    <div class="tb-btn" style="font-weight:700;">B</div>
+    <div class="tb-btn" style="font-style:italic;font-family:Georgia,serif;">I</div>
+    <div class="tb-btn" style="text-decoration:underline;">U</div>
+    <div class="tb-sep"></div>
+    <div class="tb-btn active"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg><div class="tb-num">1</div></div>
+    <div class="tb-btn"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg><div class="tb-num">2</div></div>
+    <div class="tb-btn"><svg viewBox="0 0 24 24"><path d="M6 3v7a6 6 0 0 0 6 6 6 6 0 0 0 6-6V3"/><line x1="4" y1="21" x2="20" y2="21"/></svg><div class="tb-num">3</div></div>
+    <div class="tb-btn"><svg viewBox="0 0 24 24"><polyline points="13 17 18 12 13 7"/><polyline points="6 17 11 12 6 7"/></svg><div class="tb-num">4</div></div>
+    <div class="tb-btn"><svg viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg><div class="tb-num">5</div></div>
+    <div class="tb-btn"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/></svg><div class="tb-num">6</div></div>
+    <div class="tb-btn"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg><div class="tb-num">7</div></div>
+    <div class="tb-sep"></div>
+    <div class="tb-btn"><svg viewBox="0 0 24 24"><path d="M20 20H7L3 16l9.5-9.5 2 2L7 16h13v4z"/><path d="M14.5 4.5l5 5"/></svg></div>
+    <div class="tb-sep"></div>
+    <div class="tb-hint">Select text · 1–7</div>
+  </div>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Property</th><th>Value</th></tr></thead>
+    <tbody>
+      <tr><td>Background</td><td class="mono">rgba(28,24,36,0.84) + backdrop-filter: blur(12px)</td></tr>
+      <tr><td>Border</td><td class="mono">1px solid rgba(1,173,208,0.4)</td></tr>
+      <tr><td>Border radius</td><td class="mono">10px — the one exception to the 5px rule</td></tr>
+      <tr><td>Shadow</td><td class="mono">--shadow-toolbar</td></tr>
+      <tr><td>Position</td><td class="mono">position: sticky; top: 10px</td></tr>
+      <tr><td>Physics drift</td><td class="muted">On scroll: translateY ±3px, easing back after 160ms. Required.</td></tr>
+    </tbody>
+  </table></div>
+</div>
+
+<!-- 07 ICONS -->
+<div class="section">
+  <div class="section-eyebrow">07 · Icons</div>
+  <div class="section-title">Custom icon set</div>
+  <div class="section-desc">Fully original SVG icons — no Lucide, no Heroicons. Each icon is a concept, not a literal representation. Teal appears in exactly one element per icon.</div>
+  <hr class="rule">
+  <div class="icon-grid">
+    <div class="icon-card"><svg width="36" height="36" viewBox="0 0 36 36" fill="none"><rect x="4" y="4" width="13" height="13" rx="1" fill="#1A1A1A"/><rect x="19" y="4" width="13" height="13" rx="1" fill="#1A1A1A" opacity="0.18"/><rect x="4" y="19" width="13" height="13" rx="1" fill="#1A1A1A" opacity="0.18"/><rect x="19" y="19" width="13" height="13" rx="1" fill="#01ADD0" opacity="0.7"/></svg><div class="icon-name">Dashboard</div></div>
+    <div class="icon-card"><svg width="36" height="36" viewBox="0 0 36 36" fill="none"><rect x="10" y="8" width="18" height="22" rx="1.5" fill="#1A1A1A" opacity="0.1" transform="rotate(-4 10 8)"/><rect x="7" y="6" width="18" height="22" rx="1.5" fill="#1A1A1A" opacity="0.15" transform="rotate(-1.5 7 6)"/><rect x="5" y="5" width="18" height="22" rx="1.5" fill="white" stroke="#1A1A1A" stroke-width="1.5"/><line x1="9" y1="11" x2="19" y2="11" stroke="#1A1A1A" stroke-width="1.5" stroke-linecap="round"/><line x1="9" y1="15" x2="19" y2="15" stroke="#1A1A1A" stroke-width="1" stroke-linecap="round" opacity="0.4"/></svg><div class="icon-name">Papers</div></div>
+    <div class="icon-card"><svg width="36" height="36" viewBox="0 0 36 36" fill="none"><rect x="4" y="22" width="6" height="10" rx="0.5" fill="#1A1A1A" opacity="0.2"/><rect x="13" y="16" width="6" height="16" rx="0.5" fill="#1A1A1A" opacity="0.35"/><rect x="22" y="9" width="6" height="23" rx="0.5" fill="#01ADD0" opacity="0.85"/><line x1="3" y1="32" x2="30" y2="32" stroke="#1A1A1A" stroke-width="1.5" stroke-linecap="round" opacity="0.25"/></svg><div class="icon-name">Analytics</div></div>
+    <div class="icon-card"><svg width="36" height="36" viewBox="0 0 36 36" fill="none"><line x1="6" y1="13" x2="24" y2="13" stroke="#1A1A1A" stroke-width="3" stroke-linecap="round"/><line x1="6" y1="20" x2="20" y2="20" stroke="#1A1A1A" stroke-width="1.8" stroke-linecap="round" opacity="0.4"/><line x1="6" y1="26" x2="14" y2="26" stroke="#1A1A1A" stroke-width="1.2" stroke-linecap="round" opacity="0.22"/><circle cx="30" cy="13" r="6" fill="#01ADD0"/><circle cx="30" cy="13" r="2.5" fill="white"/></svg><div class="icon-name">Talk to DeepMark</div></div>
+    <div class="icon-card"><svg width="36" height="36" viewBox="0 0 36 36" fill="none"><rect x="4" y="6" width="28" height="5" rx="0.5" fill="#1A1A1A" opacity="0.82"/><rect x="4" y="15" width="28" height="5" rx="0.5" fill="#1A1A1A" opacity="0.35"/><rect x="4" y="24" width="18" height="5" rx="0.5" fill="#1A1A1A" opacity="0.18"/><circle cx="29" cy="27" r="7" fill="#01ADD0" opacity="0.9"/><line x1="26" y1="27" x2="32" y2="27" stroke="white" stroke-width="2" stroke-linecap="round"/><line x1="29" y1="24" x2="29" y2="30" stroke="white" stroke-width="2" stroke-linecap="round"/></svg><div class="icon-name">All Papers</div></div>
+    <div class="icon-card"><svg width="36" height="36" viewBox="0 0 36 36" fill="none"><polygon points="18,4 32,18 18,32 4,18" stroke="#1A1A1A" stroke-width="2" fill="none" stroke-linejoin="round"/><polygon points="18,11 25,18 18,25 11,18" fill="#1A1A1A" opacity="0.07" stroke="#1A1A1A" stroke-width="1.2" stroke-linejoin="round"/><circle cx="18" cy="18" r="4" fill="#01ADD0"/><circle cx="18" cy="18" r="1.8" fill="white"/></svg><div class="icon-name">Learn</div></div>
+    <div class="icon-card"><svg width="36" height="36" viewBox="0 0 36 36" fill="none"><circle cx="18" cy="12" r="8" stroke="#1A1A1A" stroke-width="2.5" fill="none"/><path d="M5 34 C5 26 11 22 18 22 C25 22 31 26 31 34" stroke="#1A1A1A" stroke-width="2.5" stroke-linecap="round" fill="none"/><circle cx="18" cy="12" r="3.5" fill="#01ADD0"/></svg><div class="icon-name">Our Story</div></div>
+    <div class="icon-card"><svg width="36" height="36" viewBox="0 0 36 36" fill="none"><polygon points="18,3 32,11 32,27 18,35 4,27 4,11" stroke="#1A1A1A" stroke-width="2" fill="none" stroke-linejoin="round"/><circle cx="18" cy="18" r="7" fill="none" stroke="#1A1A1A" stroke-width="1.8"/><circle cx="18" cy="18" r="3" fill="#1A1A1A"/></svg><div class="icon-name">Settings</div></div>
+    <div class="icon-card"><svg width="36" height="36" viewBox="0 0 36 36" fill="none"><rect x="13" y="4" width="10" height="8" rx="1" fill="#1A1A1A" opacity="0.82"/><rect x="17" y="14" width="8" height="8" rx="1" fill="#1A1A1A" opacity="0.5"/><rect x="13" y="24" width="10" height="8" rx="1" fill="#01ADD0" opacity="0.88"/></svg><div class="icon-name">FAQ</div></div>
+    <div class="icon-card"><svg width="36" height="36" viewBox="0 0 36 36" fill="none"><path d="M6 2 L28 2 L34 8 L34 34 A2 2 0 0 1 32 36 L6 36 A2 2 0 0 1 4 34 L4 4 A2 2 0 0 1 6 2Z" fill="white" stroke="#1A1A1A" stroke-width="2" stroke-linejoin="round"/><path d="M28 2 L28 8 L34 8" stroke="#1A1A1A" stroke-width="1.4" opacity="0.4"/><line x1="10" y1="18" x2="28" y2="18" stroke="#01ADD0" stroke-width="2.5" stroke-linecap="round"/><line x1="10" y1="24" x2="28" y2="24" stroke="#1A1A1A" stroke-width="1.2" stroke-linecap="round" opacity="0.3"/></svg><div class="icon-name">Reports</div></div>
+    <div class="icon-card"><svg width="36" height="36" viewBox="0 0 36 36" fill="none"><line x1="4" y1="24" x2="32" y2="24" stroke="#1A1A1A" stroke-width="1.5" stroke-linecap="round" opacity="0.22" stroke-dasharray="3 2"/><line x1="18" y1="32" x2="18" y2="12" stroke="#01ADD0" stroke-width="3" stroke-linecap="round"/><polyline points="11,18 18,10 25,18" stroke="#01ADD0" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/><circle cx="18" cy="10" r="6" fill="#01ADD0" opacity="0.18"/></svg><div class="icon-name">Upgrade</div></div>
+    <div class="icon-card"><svg width="36" height="36" viewBox="0 0 36 36" fill="none"><rect x="3" y="8" width="18" height="22" rx="2" fill="#1A1A1A" opacity="0.07" transform="rotate(-6 3 8)"/><circle cx="24" cy="22" r="11" fill="white" stroke="#1A1A1A" stroke-width="2.2"/><line x1="24" y1="15" x2="24" y2="22" stroke="#1A1A1A" stroke-width="2.5" stroke-linecap="round"/><line x1="24" y1="22" x2="30" y2="26" stroke="#01ADD0" stroke-width="2.5" stroke-linecap="round"/><circle cx="24" cy="22" r="2" fill="#1A1A1A"/></svg><div class="icon-name">Recent Marking</div></div>
+  </div>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Spec</th><th>Value</th></tr></thead>
+    <tbody>
+      <tr><td>ViewBox</td><td class="mono">36×36px</td></tr>
+      <tr><td>Render size</td><td class="mono">16–22px typical · 36px for empty states</td></tr>
+      <tr><td>Accent rule</td><td class="muted">Teal in exactly one element per icon — the focal point. Never more than one.</td></tr>
+      <tr><td>Active state</td><td class="muted">Nav item active: tint all opacity toward the teal ramp. Icon recolours, not just label.</td></tr>
+      <tr><td>Format</td><td class="mono">Inline SVG — no icon font, no sprite sheet</td></tr>
+    </tbody>
+  </table></div>
+</div>
+
+<!-- 08 SURFACE TAXONOMY -->
+<div class="section">
+  <div class="section-eyebrow">08 · Architecture</div>
+  <div class="section-title">Surface taxonomy</div>
+  <div class="section-desc">Agreed with Stu Bourhill. Every screen must be one of these four types — determines routing, mounting behaviour, and parent lifecycle.</div>
+  <hr class="rule">
+  <div class="surface-grid">
+    <div class="surface-card"><div class="surface-name">Page (URL route)</div><div class="surface-rule">Has its own IA below it. Sub-routes, nested state, child pages. Parent unmounts on navigate.</div><div class="surface-example">Dashboard · All papers · Analytics</div></div>
+    <div class="surface-card"><div class="surface-name">URL-state dialog</div><div class="surface-rule">Focused destination, parent stays mounted. Linkable via nuqs query param (?job=…). Survives refresh.</div><div class="surface-example">Script viewer (?script=...) · Marking job (?job=...)</div></div>
+    <div class="surface-card"><div class="surface-name">Plain dialog</div><div class="surface-rule">Short, scoped, ≤2 steps. Fully reversible by closing. Not linkable.</div><div class="surface-example">Mark new paper · Grade boundaries · Delete confirm</div></div>
+    <div class="surface-card"><div class="surface-name">Sheet / Drawer</div><div class="surface-rule">Deep secondary context, user keeps their place. Slides over content.</div><div class="surface-example">Sidebar nav · AO breakdown panel</div></div>
+  </div>
+</div>
+
+<!-- 09 CSS TOKENS -->
+<div class="section">
+  <div class="section-eyebrow">09 · Tokens</div>
+  <div class="section-title">CSS custom properties</div>
+  <div class="section-desc">Drop into :root. Every component references these — never hardcode hex values in component files.</div>
+  <hr class="rule">
+  <div class="code-block"><pre><span class="cc">/* DeepMark Design Tokens v1.1 */</span>
+:root {
+
+  <span class="cc">/* ── Colour ── */</span>
+  <span class="cv">--color-accent</span>:           <span class="ca">#01ADD0</span>;
+  <span class="cv">--color-accent-dark</span>:      <span class="ca">#0190AE</span>;
+  <span class="cv">--color-accent-light</span>:     <span class="ca">rgba(1, 173, 208, 0.08)</span>;
+  <span class="cv">--color-accent-border</span>:    <span class="ca">rgba(1, 173, 208, 0.25)</span>;
+  <span class="cv">--color-ink</span>:              <span class="ca">#1A1A1A</span>;
+  <span class="cv">--color-ink-secondary</span>:   <span class="ca">rgba(0, 0, 0, 0.45)</span>;
+  <span class="cv">--color-ink-tertiary</span>:    <span class="ca">rgba(0, 0, 0, 0.28)</span>;
+  <span class="cv">--color-error</span>:            <span class="ca">#C23B3B</span>;
+  <span class="cv">--color-success</span>:          <span class="ca">#3C8A62</span>;
+  <span class="cv">--color-warning</span>:          <span class="ca">#C4883A</span>;
+
+  <span class="cc">/* ── Status ── */</span>
+  <span class="cv">--status-marking</span>:         <span class="ca">rgba(255, 0, 0, 0.5)</span>;
+  <span class="cv">--status-review</span>:          <span class="ca">#7FFFA7</span>;
+  <span class="cv">--status-done</span>:            <span class="ca">rgba(0, 0, 0, 0.09)</span>;
+
+  <span class="cc">/* ── Kanban phase border colours ── */</span>
+  <span class="cv">--phase-queued</span>:           <span class="ca">rgba(0, 0, 0, 0.12)</span>;
+  <span class="cv">--phase-extract</span>:          <span class="ca">#E8A83A</span>;
+  <span class="cv">--phase-grading</span>:          <span class="ca">#01ADD0</span>;
+  <span class="cv">--phase-annotate</span>:         <span class="ca">#9B6DD4</span>;
+
+  <span class="cc">/* ── Background ── */</span>
+  <span class="cv">--bg-page</span>:                <span class="ca">#E8E6E0</span>;
+  <span class="cv">--bg-surface</span>:             <span class="ca">#F5F4F0</span>;
+  <span class="cv">--bg-white</span>:               <span class="ca">#FFFFFF</span>;
+
+  <span class="cc">/* ── Borders ── */</span>
+  <span class="cv">--border-default</span>:         <span class="ca">rgba(0, 0, 0, 0.10)</span>;
+  <span class="cv">--border-subtle</span>:          <span class="ca">rgba(0, 0, 0, 0.08)</span>;
+  <span class="cv">--border-quiet</span>:           <span class="ca">rgba(0, 0, 0, 0.07)</span>;
+
+  <span class="cc">/* ── Shadows — hard SE offset only ── */</span>
+  <span class="cv">--shadow-tile</span>:    <span class="ca">3px 3px 0px rgba(0,0,0,0.12), 1px 1px 4px rgba(0,0,0,0.07)</span>;
+  <span class="cv">--shadow-btn</span>:     <span class="ca">3px 3px 0px rgba(0,0,0,0.2)</span>;
+  <span class="cv">--shadow-confirm</span>: <span class="ca">2px 2px 0px rgba(0,90,110,0.28)</span>;
+  <span class="cv">--shadow-float</span>:   <span class="ca">0 20px 60px rgba(0,0,0,0.18), 0 6px 20px rgba(0,0,0,0.10)</span>;
+  <span class="cv">--shadow-toolbar</span>: <span class="ca">0 4px 16px rgba(0,0,0,0.22), 0 1px 4px rgba(1,173,208,0.18)</span>;
+  <span class="cv">--shadow-sidebar</span>: <span class="ca">4px 0 24px rgba(0,0,0,0.14), 2px 0 6px rgba(0,0,0,0.07)</span>;
+
+  <span class="cc">/* ── Border radius — 5px universal, no pills ── */</span>
+  <span class="cv">--radius-sm</span>:      <span class="ca">5px</span>;
+  <span class="cv">--radius-md</span>:      <span class="ca">8px</span>;
+  <span class="cv">--radius-lg</span>:      <span class="ca">10px</span>;
+
+  <span class="cc">/* ── Typography ── */</span>
+  <span class="cv">--font-ui</span>:        <span class="ca">'Geist', sans-serif</span>;
+  <span class="cv">--font-mono</span>:      <span class="ca">'Geist Mono', monospace</span>;
+  <span class="cv">--font-editorial</span>: <span class="ca">'Playfair Display', Georgia, serif</span>;
+
+  <span class="cc">/* ── Background texture ── */</span>
+  <span class="cv">--texture-color</span>:  <span class="ca">#E8E6E0</span>;
+  <span class="cv">--texture-image</span>:  <span class="ca">radial-gradient(circle, rgba(0,0,0,0.18) 1px, transparent 1px)</span>;
+  <span class="cv">--texture-size</span>:   <span class="ca">22px 22px</span>;
+
+}</pre></div>
+</div>
+
+<!-- FOOTER -->
+<div style="border-top:1px solid rgba(0,0,0,0.08);padding-top:28px;display:flex;align-items:center;justify-content:space-between;">
+  <div>
+    <div style="font-family:'Geist Mono',monospace;font-size:10px;color:rgba(0,0,0,0.28);">DeepMark Design System · v1.1 · May 2026</div>
+    <div style="font-size:12px;color:rgba(0,0,0,0.35);margin-top:4px;">Geoff (design) · Stu Bourhill (engineering)</div>
+  </div>
+  <div style="font-family:'Playfair Display',serif;font-size:22px;color:#1A1A1A;opacity:0.25;">DeepMark</div>
+</div>
+
+</div>
+</body>
+</html>

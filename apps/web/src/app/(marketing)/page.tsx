@@ -21,7 +21,7 @@ export const metadata: Metadata = {
 export default async function LandingPage() {
 	const session = await auth()
 	if (session) {
-		redirect("/teacher/mark")
+		redirect("/teacher")
 	}
 
 	const papersMarked = await getPapersMarkedCount()

@@ -20,7 +20,7 @@ import { Separator } from "@/components/ui/separator"
 export default async function LoginPage() {
 	const session = await auth()
 	if (session) {
-		redirect("/teacher/mark")
+		redirect("/teacher")
 	}
 
 	return (

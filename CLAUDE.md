@@ -101,6 +101,43 @@ When touching a file that has vanilla `<button>` where `<Button>` should be used
 
 ---
 
+### Design System — DeepMark v1.1
+
+The DeepMark design system is owned by Geoff. The source of truth lives at:
+
+- `geoff_ui_claude_design/v2/deepmark_design_system.html` — visual reference (open in a browser)
+- `geoff_ui_claude_design/v2/deepmark_tokens.json` — token values
+- `geoff_ui_claude_design/v2/deepmark_icons.svg` — custom icon set
+
+Treat these files as authoritative. When the spec and an earlier conversation disagree, the spec wins.
+
+**No hex / rgb / rgba literals in component code.** Every colour, shadow, radius, and font must reference a CSS variable defined in `apps/web/src/app/globals.css`. The `bun lint:tokens` check enforces this — adding `bg-[#01ADD0]` or `style={{ color: "#1A1A1A" }}` will fail review. If you need a colour the tokens don't cover, add a token to `globals.css` first.
+
+**Spec → shadcn translation** (the spec uses different names; code uses shadcn's):
+
+| Spec name | shadcn var | Tailwind utility |
+|---|---|---|
+| `--color-accent` (teal) | `--primary` | `bg-primary`, `text-primary`, `border-primary` |
+| `--color-accent-dark` | — | `bg-teal-dark` (hover only) |
+| `--color-ink` | `--foreground` | `text-foreground` |
+| `--color-ink-secondary` | `--muted-foreground` | `text-muted-foreground` |
+| `--bg-page` (paper) | `--background` | `bg-background` |
+| `--bg-white` (tile) | `--card` | `bg-card` |
+| `--bg-surface` | `--muted` | `bg-muted` |
+| `--color-error` | `--destructive` | `bg-destructive`, `text-destructive` |
+
+DeepMark-specific utilities with no shadcn equivalent (use directly): `shadow-tile`, `shadow-btn`, `shadow-confirm`, `shadow-float`, `shadow-toolbar`, `shadow-sidebar`, `bg-status-{marking,review,done}`, `bg-phase-{queued,extract,grading,annotate}`, `font-editorial` (Lora, dashboard greeting only), `font-handwriting` (Indie Flower, student answer rendering only).
+
+**Hard rules from the spec:**
+- Geist for UI, Geist Mono for data/numbers, Lora for the dashboard greeting only. Never Inter.
+- Maximum border radius is 10px (dialogs/toolbar). 5px universal everywhere else. No pills (`rounded-full` on text content is forbidden) — single named exception: `rounded-pill` (24px) on the dashboard "Ask anything" input only.
+- Hard SE-offset shadows only — no diffuse/glow shadows. The brand-tinted shadow exception is `shadow-toolbar` (floating editing toolbar) and `shadow-confirm` (confirm marking button).
+- Teal appears as punctuation only — single primary CTA, active states, confirm buttons, one accent element per icon. Never as a large filled chrome surface.
+
+**Lint:** `bun lint:tokens` runs the hex-literal check. The allowlist (in `apps/web/scripts/checks/no-hex-color-literal.ts`) lists files where raw hex is unavoidable (PDF rendering via `@react-pdf`, third-party brand SVGs, recharts internals). Adding a file to that allowlist needs a clear justification.
+
+---
+
 ### State Management
 
 **Minimise `useState`.** Before reaching for local state, ask:

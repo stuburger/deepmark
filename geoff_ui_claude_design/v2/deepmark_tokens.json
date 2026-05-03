@@ -1,0 +1,115 @@
+{
+  "$schema": "https://deepmark.ai/tokens/v1",
+  "version": "1.1",
+  "description": "DeepMark Design Tokens — drop into Tailwind config or CSS :root",
+
+  "color": {
+    "accent":         { "value": "#01ADD0",              "usage": "Primary CTA, active states, toolbar border, confirm buttons" },
+    "accent-dark":    { "value": "#0190AE",              "usage": "Hover state on primary buttons only" },
+    "accent-light":   { "value": "rgba(1,173,208,0.08)", "usage": "Subtle tinted backgrounds behind accent elements" },
+    "accent-border":  { "value": "rgba(1,173,208,0.25)", "usage": "Accent-coloured borders" },
+    "ink":            { "value": "#1A1A1A",              "usage": "All body text, headings, wordmark — not pure black" },
+    "ink-secondary":  { "value": "rgba(0,0,0,0.45)",    "usage": "Supporting text, descriptions" },
+    "ink-tertiary":   { "value": "rgba(0,0,0,0.28)",    "usage": "Labels, eyebrows, metadata" },
+    "ink-disabled":   { "value": "rgba(0,0,0,0.18)",    "usage": "Disabled states" },
+    "error":          { "value": "#C23B3B",              "usage": "Destructive actions and error states only — never brand" },
+    "success":        { "value": "#3C8A62",              "usage": "Confirmed / complete states" },
+    "warning":        { "value": "#C4883A",              "usage": "Warning states" }
+  },
+
+  "status": {
+    "marking":  { "value": "rgba(255,0,0,0.5)", "usage": "Paper card border + badge — actively marking" },
+    "review":   { "value": "#7FFFA7",           "usage": "Paper card border + badge — ready for review" },
+    "done":     { "value": "rgba(0,0,0,0.09)", "usage": "Neutral — done is quiet" }
+  },
+
+  "kanban-phase": {
+    "queued":   { "value": "rgba(0,0,0,0.12)", "usage": "Chip border — queued phase" },
+    "extract":  { "value": "#E8A83A",           "usage": "Chip border — extracting phase" },
+    "grading":  { "value": "#01ADD0",           "usage": "Chip border — grading phase" },
+    "annotate": { "value": "#9B6DD4",           "usage": "Chip border — annotating phase" }
+  },
+
+  "grade": {
+    "9": { "border": "#2E7D32", "bg": "#E8F5E9", "text": "#1B5E20", "threshold": "90%" },
+    "8": { "border": "#1565C0", "bg": "#E3F2FD", "text": "#0D47A1", "threshold": "80%" },
+    "7": { "border": "#00838F", "bg": "#E0F7FA", "text": "#006064", "threshold": "70%" },
+    "6": { "border": "#7B1FA2", "bg": "#F3E5F5", "text": "#4A148C", "threshold": "60%" },
+    "5": { "border": "#F9A825", "bg": "#FFF8E1", "text": "#7A5100", "threshold": "50%" },
+    "4": { "border": "#E65100", "bg": "#FFF3E0", "text": "#BF360C", "threshold": "40%" },
+    "3": { "border": "#C62828", "bg": "#FCE4EC", "text": "#880E4F", "threshold": "30%" },
+    "2": { "border": "#795548", "bg": "#EFEBE9", "text": "#3E2723", "threshold": "20%" },
+    "1": { "border": "#9E9E9E", "bg": "#F5F5F5", "text": "#616161", "threshold": "<20%" }
+  },
+
+  "background": {
+    "page":         { "value": "#E8E6E0",       "usage": "Page background — used with dot grid texture" },
+    "surface":      { "value": "#F5F4F0",       "usage": "Surface / sidebar panel background" },
+    "white":        { "value": "#FFFFFF",       "usage": "Cards, tiles, chips — always white" },
+    "texture-image":{ "value": "radial-gradient(circle, rgba(0,0,0,0.18) 1px, transparent 1px)", "usage": "Dot grid overlay" },
+    "texture-size": { "value": "22px 22px",     "usage": "Background-size for dot grid" }
+  },
+
+  "border": {
+    "default":  { "value": "rgba(0,0,0,0.10)", "usage": "Default border on inputs, cards" },
+    "subtle":   { "value": "rgba(0,0,0,0.08)", "usage": "Cards, tiles" },
+    "quiet":    { "value": "rgba(0,0,0,0.07)", "usage": "Section dividers, footers" },
+    "accent":   { "value": "rgba(1,173,208,0.35)", "usage": "Floating toolbar border — teal" }
+  },
+
+  "shadow": {
+    "tile":    { "value": "3px 3px 0px rgba(0,0,0,0.12), 1px 1px 4px rgba(0,0,0,0.07)", "usage": "Cards, tiles, AO annotation items" },
+    "btn":     { "value": "3px 3px 0px rgba(0,0,0,0.2)",                                  "usage": "Primary and secondary buttons" },
+    "confirm": { "value": "2px 2px 0px rgba(0,90,110,0.28)",                              "usage": "Confirm marking button only" },
+    "float":   { "value": "0 20px 60px rgba(0,0,0,0.18), 0 6px 20px rgba(0,0,0,0.10)",   "usage": "Modals and dialogs over dot grid" },
+    "toolbar": { "value": "0 4px 16px rgba(0,0,0,0.22), 0 1px 4px rgba(1,173,208,0.18)", "usage": "Floating editing toolbar only" },
+    "sidebar": { "value": "4px 0 24px rgba(0,0,0,0.14), 2px 0 6px rgba(0,0,0,0.07)",     "usage": "Expanded sidebar" }
+  },
+
+  "radius": {
+    "sm":  { "value": "5px",  "usage": "Universal default — buttons, inputs, badges, chips, cards, all UI" },
+    "md":  { "value": "8px",  "usage": "Upload zones, callout panels, expandable feedback panels" },
+    "lg":  { "value": "10px", "usage": "Dialogs, modals, floating toolbar — nothing else" }
+  },
+
+  "typography": {
+    "font-ui":       { "value": "'Geist', sans-serif",              "usage": "All UI text — replaces Inter everywhere" },
+    "font-mono":     { "value": "'Geist Mono', monospace",          "usage": "Numbers, scores, eyebrows, data labels" },
+    "font-editorial":{ "value": "'Playfair Display', Georgia, serif","usage": "Dashboard greeting only — one use" },
+
+    "size": {
+      "xs":   { "value": "9px",  "usage": "Eyebrows, badges, tiny labels" },
+      "sm":   { "value": "11px", "usage": "Secondary labels, metadata" },
+      "base": { "value": "12px", "usage": "Body text, card content" },
+      "md":   { "value": "13px", "usage": "Standard UI text, button labels" },
+      "lg":   { "value": "15px", "usage": "Nav items, prominent labels" },
+      "xl":   { "value": "22px", "usage": "Section headings" },
+      "2xl":  { "value": "24px", "usage": "Dialog titles" },
+      "hero": { "value": "44px", "usage": "Playfair Display greeting only" }
+    },
+
+    "weight": {
+      "normal":  { "value": "400" },
+      "medium":  { "value": "500" },
+      "semibold":{ "value": "600" }
+    },
+
+    "tracking": {
+      "tight":  { "value": "-0.02em", "usage": "Headings in Geist" },
+      "snug":   { "value": "-0.01em", "usage": "UI labels, button text" },
+      "wide":   { "value": "0.14em",  "usage": "Eyebrows, uppercase labels in Geist Mono" },
+      "wider":  { "value": "0.18em",  "usage": "Section eyebrows" }
+    }
+  },
+
+  "rules": {
+    "no-inter":        "Do not use Inter. Use Geist for UI, Geist Mono for data, Playfair Display for the greeting only.",
+    "no-pill-radius":  "Maximum border-radius is 10px (dialogs/toolbar only). 5px everywhere else. No 20px+ pills.",
+    "no-soft-glow":    "No brand-coloured box shadows. Hard SE offset shadows in black only (except --shadow-toolbar which has a minimal teal glow).",
+    "no-purple":       "Purple #6B4FA0 is forbidden. Accent is teal #01ADD0 only.",
+    "chip-bg-always-white": "Kanban chips always have white background in every phase including Done. Only border colour changes.",
+    "chip-pct-bold":   "In Done chips, the percentage is font-weight: 700. Grade label is font-weight: 400 alongside it.",
+    "toolbar-elements": "Floating toolbar element order: B I U | tick(1) cross(2) underline(3) arrows(4) cube(5) circle(6) link(7) | eraser | hint",
+    "teal-as-punctuation": "Teal appears as punctuation only — one primary CTA, active states, confirm buttons, one element per icon."
+  }
+}

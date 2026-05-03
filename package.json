@@ -12,7 +12,7 @@
 		"@hono/swagger-ui": "^0.5.2",
 		"@modelcontextprotocol/sdk": "^1.17.1",
 		"@openauthjs/openauth": "0.4.3",
-		"ai": "^6.0.158",
+		"ai": "^6.0.174",
 		"mongodb": "7.1.0",
 		"sst": "^4.6.11",
 		"ts-node": "^10.9.2",
@@ -35,6 +35,7 @@
 	"scripts": {
 		"test:unit": "vitest run --project shared:unit --project backend:unit --project web:unit",
 		"lint:authz": "bun --cwd apps/web scripts/checks/action-conventions.ts",
+		"lint:tokens": "bun --cwd apps/web scripts/checks/no-hex-color-literal.ts",
 		"test:integration": "sst shell -- vitest run --project 'backend:integration' --project 'web:integration'",
 		"process-logo": "bun scripts/process-logo.ts",
 		"build": "turbo build",

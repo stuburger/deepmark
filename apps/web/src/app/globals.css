@@ -4,85 +4,201 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/*
+ * DeepMark v1.1 design system → shadcn semantic mapping.
+ *
+ * Spec: geoff_ui_claude_design/v2/deepmark_design_system.html
+ * Tokens: geoff_ui_claude_design/v2/deepmark_tokens.json
+ *
+ * The spec uses --color-accent (teal) for primary CTAs. In code that
+ * maps to shadcn's --primary — use bg-primary, text-primary, border-primary.
+ * Spec → shadcn translation:
+ *   spec --color-accent        → shadcn --primary           (bg-primary)
+ *   spec --color-ink           → shadcn --foreground        (text-foreground)
+ *   spec --color-ink-secondary → shadcn --muted-foreground  (text-muted-foreground)
+ *   spec --bg-page             → shadcn --background        (bg-background)
+ *   spec --bg-white            → shadcn --card              (bg-card)
+ *   spec --bg-surface          → shadcn --muted             (bg-muted)
+ *   spec --color-error         → shadcn --destructive       (bg-destructive)
+ *
+ * Spec tokens with no shadcn equivalent get DeepMark-specific utilities:
+ *   shadow-{tile,btn,confirm,float,toolbar,sidebar}
+ *   bg-status-{marking,review,done}
+ *   bg-phase-{queued,extract,grading,annotate}
+ *   font-editorial (Lora, dashboard greeting only)
+ *   font-handwriting (Indie Flower, student answer rendering only)
+ *
+ * No hex literals in component files. If you need a colour the system
+ * doesn't provide, add a token here first.
+ */
+
 @theme inline {
+	/* shadcn-mapped colour utilities */
 	--color-background: var(--background);
 	--color-foreground: var(--foreground);
-	--font-sans: var(--font-plus-jakarta-sans), ui-sans-serif, system-ui,
-		sans-serif;
-	--font-handwriting: var(--font-indie-flower), cursive;
-	--font-mono: ui-monospace, "SFMono-Regular", Menlo, Monaco, Consolas,
-		"Liberation Mono", "Courier New", monospace;
-	--color-sidebar-ring: var(--sidebar-ring);
-	--color-sidebar-border: var(--sidebar-border);
-	--color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-	--color-sidebar-accent: var(--sidebar-accent);
-	--color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-	--color-sidebar-primary: var(--sidebar-primary);
-	--color-sidebar-foreground: var(--sidebar-foreground);
-	--color-sidebar: var(--sidebar);
-	--color-chart-5: var(--chart-5);
-	--color-chart-4: var(--chart-4);
-	--color-chart-3: var(--chart-3);
-	--color-chart-2: var(--chart-2);
-	--color-chart-1: var(--chart-1);
-	--color-ring: var(--ring);
-	--color-input: var(--input);
-	--color-border: var(--border);
-	--color-destructive: var(--destructive);
-	--color-accent-foreground: var(--accent-foreground);
-	--color-accent: var(--accent);
-	--color-muted-foreground: var(--muted-foreground);
-	--color-muted: var(--muted);
-	--color-secondary-foreground: var(--secondary-foreground);
-	--color-secondary: var(--secondary);
-	--color-primary-foreground: var(--primary-foreground);
-	--color-primary: var(--primary);
-	--color-popover-foreground: var(--popover-foreground);
-	--color-popover: var(--popover);
-	--color-card-foreground: var(--card-foreground);
 	--color-card: var(--card);
-	--radius-sm: calc(var(--radius) * 0.6);
-	--radius-md: calc(var(--radius) * 0.8);
-	--radius-lg: var(--radius);
-	--radius-xl: calc(var(--radius) * 1.4);
-	--radius-2xl: calc(var(--radius) * 1.8);
-	--radius-3xl: calc(var(--radius) * 2.2);
-	--radius-4xl: calc(var(--radius) * 2.6);
+	--color-card-foreground: var(--card-foreground);
+	--color-popover: var(--popover);
+	--color-popover-foreground: var(--popover-foreground);
+	--color-primary: var(--primary);
+	--color-primary-foreground: var(--primary-foreground);
+	--color-secondary: var(--secondary);
+	--color-secondary-foreground: var(--secondary-foreground);
+	--color-muted: var(--muted);
+	--color-muted-foreground: var(--muted-foreground);
+	--color-accent: var(--accent);
+	--color-accent-foreground: var(--accent-foreground);
+	--color-destructive: var(--destructive);
+	--color-border: var(--border);
+	--color-input: var(--input);
+	--color-ring: var(--ring);
+	--color-sidebar: var(--sidebar);
+	--color-sidebar-foreground: var(--sidebar-foreground);
+	--color-sidebar-primary: var(--sidebar-primary);
+	--color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+	--color-sidebar-accent: var(--sidebar-accent);
+	--color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+	--color-sidebar-border: var(--sidebar-border);
+	--color-sidebar-ring: var(--sidebar-ring);
+	--color-chart-1: var(--chart-1);
+	--color-chart-2: var(--chart-2);
+	--color-chart-3: var(--chart-3);
+	--color-chart-4: var(--chart-4);
+	--color-chart-5: var(--chart-5);
+
+	/* DeepMark-specific colour utilities (no shadcn equivalent) */
+	--color-ink: var(--ink);
+	--color-ink-secondary: var(--ink-secondary);
+	--color-ink-tertiary: var(--ink-tertiary);
+	--color-ink-disabled: var(--ink-disabled);
+	--color-teal-dark: var(--teal-dark);
+	--color-success: var(--success);
+	--color-warning: var(--warning);
+	--color-status-marking: var(--status-marking);
+	--color-status-review: var(--status-review);
+	--color-status-done: var(--status-done);
+	--color-phase-queued: var(--phase-queued);
+	--color-phase-extract: var(--phase-extract);
+	--color-phase-grading: var(--phase-grading);
+	--color-phase-annotate: var(--phase-annotate);
+
+	/* Border utilities for the DeepMark border scale (in addition to
+	   shadcn's --border which maps to --border-default). */
+	--color-border-subtle: var(--border-subtle);
+	--color-border-quiet: var(--border-quiet);
+
+	/* Shadows — hard SE offset only, no soft brand glows */
+	--shadow-tile: 3px 3px 0px rgba(0, 0, 0, 0.12), 1px 1px 4px
+		rgba(0, 0, 0, 0.07);
+	--shadow-tile-quiet: 3px 3px 0px rgba(0, 0, 0, 0.05), 1px 1px 4px
+		rgba(0, 0, 0, 0.04);
+	--shadow-btn: 3px 3px 0px rgba(0, 0, 0, 0.2);
+	--shadow-confirm: 2px 2px 0px rgba(0, 90, 110, 0.28);
+	--shadow-float: 0 20px 60px rgba(0, 0, 0, 0.18), 0 6px 20px rgba(0, 0, 0, 0.1);
+	--shadow-toolbar: 0 4px 16px rgba(0, 0, 0, 0.22), 0 1px 4px
+		rgba(1, 173, 208, 0.18);
+	--shadow-sidebar: 4px 0 24px rgba(0, 0, 0, 0.14), 2px 0 6px
+		rgba(0, 0, 0, 0.07);
+
+	/* Radius — universal 5px. Dialogs/modals/toolbar 10px. No pills. */
+	--radius: 5px;
+	--radius-sm: 3px;
+	--radius-md: 5px;
+	--radius-lg: 8px;
+	--radius-xl: 10px;
+	--radius-2xl: 10px;
+	--radius-3xl: 10px;
+	--radius-4xl: 10px;
+	/* Single named exception to the no-pills rule: the dashboard "Ask anything"
+	   input. Geoff v2 deliberately breaks the angular system here so the chat
+	   anchor stands out. Do not introduce other usages without a spec change. */
+	--radius-pill: 24px;
+
+	/* Fonts */
+	--font-sans: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
+	--font-mono: var(--font-geist-mono), ui-monospace, "SFMono-Regular", Menlo,
+		Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+	--font-editorial: var(--font-lora), Georgia, serif;
+	--font-handwriting: var(--font-indie-flower), cursive;
 }
 
 :root {
-	--background: oklch(1 0 0);
-	--foreground: oklch(0.145 0 0);
-	--card: oklch(1 0 0);
-	--card-foreground: oklch(0.145 0 0);
-	--popover: oklch(1 0 0);
-	--popover-foreground: oklch(0.145 0 0);
-	--primary: oklch(0.205 0 0);
-	--primary-foreground: oklch(0.985 0 0);
-	--secondary: oklch(0.97 0 0);
-	--secondary-foreground: oklch(0.205 0 0);
-	--muted: oklch(0.97 0 0);
-	--muted-foreground: oklch(0.556 0 0);
-	--accent: oklch(0.97 0 0);
-	--accent-foreground: oklch(0.205 0 0);
-	--destructive: oklch(0.577 0.245 27.325);
-	--border: oklch(0.922 0 0);
-	--input: oklch(0.922 0 0);
-	--ring: oklch(0.708 0 0);
+	/* DeepMark primitives — exact values from spec */
+	--ink: #1a1a1a;
+	--ink-secondary: rgba(0, 0, 0, 0.45);
+	--ink-tertiary: rgba(0, 0, 0, 0.28);
+	--ink-disabled: rgba(0, 0, 0, 0.18);
+	--teal: #01add0;
+	--teal-dark: #0190ae;
+	--teal-light: rgba(1, 173, 208, 0.08);
+	--teal-ring: rgba(1, 173, 208, 0.25);
+	--paper: #ebebeb;
+	--paper-surface: #f5f4f0;
+	--paper-white: #ffffff;
+	--success: #3c8a62;
+	--warning: #c4883a;
+	--status-marking: rgba(255, 0, 0, 0.5);
+	--status-review: #7fffa7;
+	--status-done: rgba(0, 0, 0, 0.09);
+	--phase-queued: rgba(0, 0, 0, 0.12);
+	--phase-extract: #e8a83a;
+	--phase-grading: #01add0;
+	--phase-annotate: #9b6dd4;
+
+	/* Page texture — applied to body in light mode. Tight 10px grid matching
+	   Geoff's dot-grid.png asset (the slide-over menu uses the same texture so
+	   the menu reads as a continuation of the page). */
+	--texture-image: radial-gradient(
+		circle,
+		rgba(0, 0, 0, 0.14) 0.6px,
+		transparent 0.6px
+	);
+	--texture-size: 10px 10px;
+
+	/* shadcn semantic vars — mapped onto DeepMark primitives.
+	   Component code references these (bg-primary, bg-card, etc.) */
+	--background: var(--paper);
+	--foreground: var(--ink);
+	--card: var(--paper-white);
+	--card-foreground: var(--ink);
+	--popover: var(--paper-white);
+	--popover-foreground: var(--ink);
+	--primary: var(--teal);
+	--primary-foreground: var(--paper-white);
+	--secondary: var(--paper-white);
+	--secondary-foreground: var(--ink);
+	--muted: var(--paper-surface);
+	--muted-foreground: var(--ink-secondary);
+	--accent: var(--teal-light);
+	--accent-foreground: var(--ink);
+	--destructive: #c23b3b;
+	--border: rgba(0, 0, 0, 0.1);
+	/* Lighter steps in the border scale. `--border-quiet` is for low-emphasis
+	   chrome (the icon-rail dotted divider, empty-state placeholders, slide-
+	   over footer separators). `--border-subtle` is even fainter — reserved
+	   for hairlines that should barely register. Both must stay clearly
+	   below `--border` so the visual hierarchy reads. */
+	--border-quiet: rgba(0, 0, 0, 0.07);
+	--border-subtle: rgba(0, 0, 0, 0.04);
+	--input: rgba(0, 0, 0, 0.1);
+	--ring: var(--teal-ring);
+
+	--sidebar: var(--paper-surface);
+	--sidebar-foreground: var(--ink);
+	--sidebar-primary: var(--teal);
+	--sidebar-primary-foreground: var(--paper-white);
+	--sidebar-accent: var(--teal-light);
+	--sidebar-accent-foreground: var(--ink);
+	--sidebar-border: rgba(0, 0, 0, 0.08);
+	--sidebar-ring: var(--teal-ring);
+
+	/* Charts — design system silent on these. Keeping shadcn defaults
+	   until Geoff has an opinion. */
 	--chart-1: oklch(0.646 0.222 41.116);
 	--chart-2: oklch(0.6 0.118 184.704);
 	--chart-3: oklch(0.398 0.07 227.392);
 	--chart-4: oklch(0.828 0.189 84.429);
 	--chart-5: oklch(0.769 0.188 70.08);
-	--radius: 0.625rem;
-	--sidebar: oklch(0.985 0 0);
-	--sidebar-foreground: oklch(0.145 0 0);
-	--sidebar-primary: oklch(0.205 0 0);
-	--sidebar-primary-foreground: oklch(0.985 0 0);
-	--sidebar-accent: oklch(0.97 0 0);
-	--sidebar-accent-foreground: oklch(0.205 0 0);
-	--sidebar-border: oklch(0.922 0 0);
-	--sidebar-ring: oklch(0.708 0 0);
 
 	/* Annotation mark colours — single source of truth for editor visuals
 	   (.ProseMirror) and any scan-side decorations that grow from them.
@@ -123,38 +239,42 @@
 }
 
 .dark {
-	--background: oklch(0.145 0 0);
-	--foreground: oklch(0.985 0 0);
-	--card: oklch(0.205 0 0);
-	--card-foreground: oklch(0.985 0 0);
-	--popover: oklch(0.205 0 0);
-	--popover-foreground: oklch(0.985 0 0);
-	--primary: oklch(0.985 0 0);
-	--primary-foreground: oklch(0.205 0 0);
-	--secondary: oklch(0.269 0 0);
-	--secondary-foreground: oklch(0.985 0 0);
-	--muted: oklch(0.269 0 0);
-	--muted-foreground: oklch(0.708 0 0);
-	--accent: oklch(0.269 0 0);
-	--accent-foreground: oklch(0.985 0 0);
-	--destructive: oklch(0.704 0.191 22.216);
-	--border: oklch(1 0 0 / 10%);
-	--input: oklch(1 0 0 / 15%);
-	--ring: oklch(0.556 0 0);
+	/* Inverted ink/paper — same world, dark side. Teal accent unchanged. */
+	--background: #1a1a1a;
+	--foreground: #ebebeb;
+	--card: #232323;
+	--card-foreground: #ebebeb;
+	--popover: #232323;
+	--popover-foreground: #ebebeb;
+	--primary: var(--teal);
+	--primary-foreground: #1a1a1a;
+	--secondary: #232323;
+	--secondary-foreground: #ebebeb;
+	--muted: #2a2a2a;
+	--muted-foreground: rgba(232, 230, 224, 0.55);
+	--accent: rgba(1, 173, 208, 0.15);
+	--accent-foreground: #ebebeb;
+	--destructive: #e04848;
+	--border: rgba(255, 255, 255, 0.1);
+	--border-quiet: rgba(255, 255, 255, 0.07);
+	--border-subtle: rgba(255, 255, 255, 0.04);
+	--input: rgba(255, 255, 255, 0.15);
+	--ring: rgba(1, 173, 208, 0.35);
+
+	--sidebar: #232323;
+	--sidebar-foreground: #ebebeb;
+	--sidebar-primary: var(--teal);
+	--sidebar-primary-foreground: #1a1a1a;
+	--sidebar-accent: rgba(1, 173, 208, 0.15);
+	--sidebar-accent-foreground: #ebebeb;
+	--sidebar-border: rgba(255, 255, 255, 0.1);
+	--sidebar-ring: rgba(1, 173, 208, 0.35);
+
 	--chart-1: oklch(0.488 0.243 264.376);
 	--chart-2: oklch(0.696 0.17 162.48);
 	--chart-3: oklch(0.769 0.188 70.08);
 	--chart-4: oklch(0.627 0.265 303.9);
 	--chart-5: oklch(0.645 0.246 16.439);
-	/* Sidebar keeps transparent values — it sits over the image with backdrop-filter */
-	--sidebar: oklch(0 0 0 / 0.7);
-	--sidebar-foreground: oklch(0.985 0 0);
-	--sidebar-primary: oklch(0.488 0.243 264.376);
-	--sidebar-primary-foreground: oklch(0.985 0 0);
-	--sidebar-accent: oklch(0 0 0 / 0.65);
-	--sidebar-accent-foreground: oklch(0.985 0 0);
-	--sidebar-border: oklch(1 0 0 / 10%);
-	--sidebar-ring: oklch(0.556 0 0);
 
 	/* Chain marks fade to deeper tints in dark mode so they remain
 	   readable against the dark editor surface. */
@@ -171,25 +291,24 @@
 		@apply border-border outline-ring/50;
 	}
 	body {
-		/* Light mode: clean solid sage — no image */
-		@apply bg-background text-foreground;
+		/* Light mode: warm paper + dot grid, full bleed. White tiles sit on top. */
+		background-color: var(--background);
+		background-image: var(--texture-image);
+		background-size: var(--texture-size);
+		@apply text-foreground;
 	}
 	html {
 		@apply font-sans;
 	}
 }
 
-/* Dark mode only: mountain image sits on body so backdrop-filter on the sidebar can reach it */
+/* Dark mode: drop the dot grid, solid bg only */
 .dark body {
-	background-color: transparent;
-	background-image: url("/desktop-mountain.jpg");
-	background-size: cover;
-	background-position: center;
-	background-attachment: fixed;
+	background-image: none;
 }
 
-/* Content area: transparent in light mode (body provides the solid sage bg).
-   In dark mode we set a solid background — the image is only visible behind the sidebar. */
+/* Sidebar inset stays transparent in light mode so the page texture
+   shows through; solid in dark mode. */
 [data-slot="sidebar-inset"] {
 	background-color: transparent;
 }
@@ -197,17 +316,111 @@
 	background-color: var(--background);
 }
 
-/* Sidebar: frosted glass over the image */
-[data-slot="sidebar-inner"] {
-	backdrop-filter: blur(72px);
-	-webkit-backdrop-filter: blur(72px);
+/* Teacher slide-over menu: blur the page chrome (icon rail + main content)
+   while the sheet is open. The shadcn Sheet's backdrop-blur sits between the
+   page and the overlay; this rule blurs the page itself, which is what
+   Geoff's v2 design calls for. The icon rail and main element have
+   `transition: filter` set inline so the blur eases in/out. */
+body.teacher-nav-open .icon-rail,
+body.teacher-nav-open [data-teacher-content] {
+	filter: blur(3px);
 }
 
-/* Navbar: blurs content that scrolls beneath it */
-[data-slot="sidebar-inset"] > header {
-	backdrop-filter: blur(64px);
-	-webkit-backdrop-filter: blur(64px);
+/* Icon rail — subtle layering effect per Geoff's v2 design notes
+   ("very subtle depth/curvature effect near the mini sidebar to give a
+   slight sense of layering, barely noticeable but improves overall feel").
+   Mirrors the design system's hard-offset + soft-halo shadow pattern
+   (cf. --shadow-tile) but right-only and at a much lower alpha so it
+   never reads as a real elevation. The dotted right border stays. */
+.icon-rail {
+	box-shadow: 2px 0 0 rgba(0, 0, 0, 0.04), 4px 0 12px rgba(0, 0, 0, 0.04);
 }
-.dark [data-slot="sidebar-inset"] > header {
-	background-color: oklch(0.145 0 0 / 0.85);
+
+/* Disable scroll anchoring on the teacher main scroll container. Pages with
+   a shrink-on-scroll sticky header (e.g. exam-paper detail) hit a feedback
+   loop with the browser's default `overflow-anchor: auto`: the sticky
+   shrinking would prompt scrollTop to re-adjust to preserve visual position,
+   which could re-trigger the IntersectionObserver and bounce the header back
+   to full height. Letting content slide up smoothly is the intended UX —
+   the user scrolled down precisely to free up vertical space. */
+[data-teacher-content] {
+	overflow-anchor: none;
+}
+
+/* Exam paper detail page — sticky header shrink on scroll.
+   Uses CSS scroll-driven animations (animation-timeline: scroll(nearest)).
+   The browser ties animation progress to the scroll position of the nearest
+   scrollable ancestor — `<main data-teacher-content>` here. No JS, no React
+   state, no scroll listener. Browsers without support fall through to the
+   `from` state (full-size header) by virtue of `@supports`. */
+@supports (animation-timeline: scroll()) {
+	@keyframes exam-hdr-pad {
+		to {
+			padding-top: 6px;
+			padding-bottom: 4px;
+		}
+	}
+	@keyframes exam-hdr-collapse {
+		to {
+			max-height: 0;
+			opacity: 0;
+			padding-top: 0;
+			padding-bottom: 0;
+			margin-top: 0;
+			margin-bottom: 0;
+		}
+	}
+	@keyframes exam-hdr-row {
+		to {
+			gap: 8px;
+			margin-top: 0;
+			padding-bottom: 4px;
+		}
+	}
+	@keyframes exam-hdr-row-inner {
+		to {
+			gap: 8px;
+		}
+	}
+	@keyframes exam-hdr-thumb-stack {
+		to {
+			gap: 6px;
+		}
+	}
+	@keyframes exam-hdr-thumb {
+		to {
+			width: 60px;
+			height: 80px;
+		}
+	}
+
+	.exam-hdr,
+	.exam-hdr-collapse,
+	.exam-hdr-row,
+	.exam-hdr-row-inner,
+	.exam-hdr-thumb-stack,
+	.exam-hdr-thumb {
+		animation-timeline: scroll(nearest);
+		animation-range: 0 120px;
+		animation-timing-function: linear;
+		animation-fill-mode: both;
+	}
+	.exam-hdr {
+		animation-name: exam-hdr-pad;
+	}
+	.exam-hdr-collapse {
+		animation-name: exam-hdr-collapse;
+	}
+	.exam-hdr-row {
+		animation-name: exam-hdr-row;
+	}
+	.exam-hdr-row-inner {
+		animation-name: exam-hdr-row-inner;
+	}
+	.exam-hdr-thumb-stack {
+		animation-name: exam-hdr-thumb-stack;
+	}
+	.exam-hdr-thumb {
+		animation-name: exam-hdr-thumb;
+	}
 }

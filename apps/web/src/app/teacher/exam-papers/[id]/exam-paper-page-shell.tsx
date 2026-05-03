@@ -193,6 +193,14 @@ export function ExamPaperPageShell({
 	const tabTriggerClass =
 		"rounded-none px-4 h-full after:bg-primary data-active:text-primary data-active:bg-transparent data-active:shadow-none"
 
+	// Sticky header shrink-on-scroll is driven entirely by CSS scroll-driven
+	// animations (animation-timeline: scroll(nearest)) — see `.exam-hdr*`
+	// classes in globals.css. No JS, no React state, no scroll listener;
+	// the browser ties animation progress directly to scroll position of
+	// the nearest scrollable ancestor. Browsers without animation-timeline
+	// support fall through to the keyframe `from` state (the static full
+	// header) via @supports.
+
 	return (
 		<>
 			<Tabs
@@ -202,9 +210,10 @@ export function ExamPaperPageShell({
 				}
 				className="gap-0"
 			>
-				{/* Sticky frosted-glass header: title + tabs bar */}
-				<div className="sticky top-0 z-0 -mx-6 px-6 pt-3 pb-2 backdrop-blur-xl bg-background/60 border-b">
-					<div className="pb-4">
+				{/* Sticky header: solid bg, shrinks via CSS scroll-driven animation */}
+				<div className="exam-hdr sticky top-0 z-20 -mx-6 border-b bg-background px-6 pt-3 pb-2">
+					{/* Breadcrumb — collapses to zero on scroll */}
+					<div className="exam-hdr-collapse max-h-10 overflow-hidden pb-2 opacity-100">
 						<Breadcrumb>
 							<BreadcrumbList>
 								<BreadcrumbItem>
@@ -220,9 +229,15 @@ export function ExamPaperPageShell({
 								</BreadcrumbItem>
 							</BreadcrumbList>
 						</Breadcrumb>
-						<div className="mt-3 flex items-start justify-between gap-4">
-							<div className="flex items-start gap-4 min-w-0">
-								<div className="flex items-start gap-2 shrink-0">
+					</div>
+
+					<div className="exam-hdr-row mt-1 flex items-start justify-between gap-4 pb-2">
+						<div className="exam-hdr-row-inner flex min-w-0 items-start gap-4">
+							<div className="exam-hdr-thumb-stack flex shrink-0 items-start gap-2">
+								<div
+									className="exam-hdr-thumb shrink-0 overflow-hidden"
+									style={{ width: "136px", height: "192px" }}
+								>
 									<DocumentThumbnail
 										examPaperId={paper.id}
 										documentType="question_paper"
@@ -237,7 +252,13 @@ export function ExamPaperPageShell({
 											})
 										}
 										size="compact"
+										thumbnailClassName="h-full w-full"
 									/>
+								</div>
+								<div
+									className="exam-hdr-thumb shrink-0 overflow-hidden"
+									style={{ width: "136px", height: "192px" }}
+								>
 									<DocumentThumbnail
 										examPaperId={paper.id}
 										documentType="mark_scheme"
@@ -247,8 +268,7 @@ export function ExamPaperPageShell({
 											) ?? null
 										}
 										activeJob={
-											jobs.find((j) => j.document_type === "mark_scheme") ??
-											null
+											jobs.find((j) => j.document_type === "mark_scheme") ?? null
 										}
 										onJobStarted={() =>
 											void queryClient.invalidateQueries({
@@ -256,88 +276,89 @@ export function ExamPaperPageShell({
 											})
 										}
 										size="compact"
+										thumbnailClassName="h-full w-full"
 									/>
 								</div>
-								<div className="min-w-0">
-									<EditableTitle id={paper.id} initialTitle={paper.title} />
-									<div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-										<Badge variant="secondary">
-											{capitalize(paper.subject)}
-										</Badge>
-										{paper.exam_board && <span>{paper.exam_board}</span>}
-										<span>{paper.year}</span>
-										{paper.paper_number && (
-											<span>Paper {paper.paper_number}</span>
-										)}
-									</div>
+							</div>
+							<div className="min-w-0">
+								<EditableTitle id={paper.id} initialTitle={paper.title} />
+								{/* Subtitle badges — collapse on scroll */}
+								<div className="exam-hdr-collapse mt-1 flex max-h-10 flex-wrap items-center gap-2 overflow-hidden text-sm text-muted-foreground opacity-100">
+									<Badge variant="secondary">{capitalize(paper.subject)}</Badge>
+									{paper.exam_board && <span>{paper.exam_board}</span>}
+									<span>{paper.year}</span>
+									{paper.paper_number && (
+										<span>Paper {paper.paper_number}</span>
+									)}
 								</div>
 							</div>
-							<div className="flex shrink-0 items-center gap-1">
-								<MarkingGuidanceButton
-									examPaperId={paper.id}
-									initialValue={paper.level_descriptors}
-								/>
-								{similarPairs.length > 0 && !duplicateBannerDismissed && (
-									<Popover>
-										<PopoverTrigger
-											render={
-												<Button
-													type="button"
-													variant="ghost"
-													size="sm"
-													className="relative text-muted-foreground hover:text-foreground"
-												>
-													<Copy className="h-3.5 w-3.5" />
-													<span className="absolute top-1 right-1 h-1.5 w-1.5 rounded-full bg-amber-500" />
-													<span className="sr-only">
-														{similarPairs.length} potential duplicate
-														{similarPairs.length !== 1 ? "s" : ""}
-													</span>
-												</Button>
-											}
-										/>
-										<PopoverContent className="w-72 text-xs">
-											<p className="text-amber-800 dark:text-amber-200">
-												<span className="font-medium">
-													{similarPairs.length} potential duplicate question
-													{similarPairs.length !== 1 ? "s" : ""}
-												</span>{" "}
-												detected. Rows marked with a dot may need review — sort
-												by the similarity column to group them.
-											</p>
+						</div>
+						<div className="flex shrink-0 items-center gap-1">
+							<MarkingGuidanceButton
+								examPaperId={paper.id}
+								initialValue={paper.level_descriptors}
+							/>
+							{similarPairs.length > 0 && !duplicateBannerDismissed && (
+								<Popover>
+									<PopoverTrigger
+										render={
 											<Button
+												type="button"
 												variant="ghost"
-												size="xs"
-												className="mt-2 -ml-2 text-muted-foreground hover:text-foreground"
-												onClick={() => setDuplicateBannerDismissed(true)}
+												size="sm"
+												className="relative text-muted-foreground hover:text-foreground"
 											>
-												Dismiss
+												<Copy className="h-3.5 w-3.5" />
+												<span className="absolute top-1 right-1 h-1.5 w-1.5 rounded-full bg-amber-500" />
+												<span className="sr-only">
+													{similarPairs.length} potential duplicate
+													{similarPairs.length !== 1 ? "s" : ""}
+												</span>
 											</Button>
-										</PopoverContent>
-									</Popover>
-								)}
-								<TooltipProvider>
-									<Tooltip>
-										<TooltipTrigger
-											render={
-												<Button
-													type="button"
-													size="sm"
-													variant="ghost"
-													className="text-muted-foreground hover:text-destructive"
-													onClick={() => setDeleteDialogOpen(true)}
-												>
-													<Trash2 className="h-3.5 w-3.5" />
-													<span className="sr-only">Delete paper</span>
-												</Button>
-											}
-										/>
-										<TooltipContent>Delete paper</TooltipContent>
-									</Tooltip>
-								</TooltipProvider>
-							</div>
+										}
+									/>
+									<PopoverContent className="w-72 text-xs">
+										<p className="text-amber-800 dark:text-amber-200">
+											<span className="font-medium">
+												{similarPairs.length} potential duplicate question
+												{similarPairs.length !== 1 ? "s" : ""}
+											</span>{" "}
+											detected. Rows marked with a dot may need review — sort by
+											the similarity column to group them.
+										</p>
+										<Button
+											variant="ghost"
+											size="xs"
+											className="mt-2 -ml-2 text-muted-foreground hover:text-foreground"
+											onClick={() => setDuplicateBannerDismissed(true)}
+										>
+											Dismiss
+										</Button>
+									</PopoverContent>
+								</Popover>
+							)}
+							<TooltipProvider>
+								<Tooltip>
+									<TooltipTrigger
+										render={
+											<Button
+												type="button"
+												size="sm"
+												variant="ghost"
+												className="text-muted-foreground hover:text-destructive"
+												onClick={() => setDeleteDialogOpen(true)}
+											>
+												<Trash2 className="h-3.5 w-3.5" />
+												<span className="sr-only">Delete paper</span>
+											</Button>
+										}
+									/>
+									<TooltipContent>Delete paper</TooltipContent>
+								</Tooltip>
+							</TooltipProvider>
 						</div>
 					</div>
+
 					<TabsList
 						variant="line"
 						className="w-auto rounded-none h-10 gap-0 p-0"

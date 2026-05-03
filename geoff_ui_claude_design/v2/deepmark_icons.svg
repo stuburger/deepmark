@@ -1,0 +1,124 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 420" width="900" height="420">
+  <rect width="900" height="420" fill="#F5F4F0"/>
+  <text x="40" y="40" font-family="'Geist Mono', monospace" font-size="10" fill="rgba(0,0,0,0.3)" letter-spacing="3">DEEPMARK ICON SET v1.1 — 36×36px viewBox · Accent #01ADD0 · Ink #1A1A1A</text>
+  <line x1="40" y1="50" x2="860" y2="50" stroke="rgba(0,0,0,0.1)" stroke-width="1"/>
+
+  <!-- Row 1 -->
+  <!-- Dashboard -->
+  <g transform="translate(40,64)">
+    <rect width="120" height="145" rx="5" fill="white" stroke="rgba(0,0,0,0.08)" stroke-width="1"/>
+    <g transform="translate(42,24)"><rect x="0" y="0" width="16" height="16" rx="1" fill="#1A1A1A"/><rect x="20" y="0" width="16" height="16" rx="1" fill="#1A1A1A" opacity="0.18"/><rect x="0" y="20" width="16" height="16" rx="1" fill="#1A1A1A" opacity="0.18"/><rect x="20" y="20" width="16" height="16" rx="1" fill="#01ADD0" opacity="0.7"/></g>
+    <text x="60" y="96" font-family="Geist, sans-serif" font-size="11" font-weight="500" fill="#1A1A1A" text-anchor="middle">Dashboard</text>
+    <text x="60" y="110" font-family="Geist Mono, monospace" font-size="8" fill="rgba(0,0,0,0.3)" text-anchor="middle">four fields,</text>
+    <text x="60" y="122" font-family="Geist Mono, monospace" font-size="8" fill="rgba(0,0,0,0.3)" text-anchor="middle">one accent</text>
+  </g>
+
+  <!-- Papers -->
+  <g transform="translate(175,64)">
+    <rect width="120" height="145" rx="5" fill="white" stroke="rgba(0,0,0,0.08)" stroke-width="1"/>
+    <g transform="translate(38,20)"><rect x="8" y="6" width="24" height="30" rx="2" fill="#1A1A1A" opacity="0.1" transform="rotate(-4 8 6)"/><rect x="4" y="3" width="24" height="30" rx="2" fill="#1A1A1A" opacity="0.15" transform="rotate(-1.5 4 3)"/><rect x="0" y="0" width="24" height="30" rx="2" fill="white" stroke="#1A1A1A" stroke-width="2"/><line x1="4" y1="8" x2="20" y2="8" stroke="#1A1A1A" stroke-width="2" stroke-linecap="round"/><line x1="4" y1="13" x2="20" y2="13" stroke="#1A1A1A" stroke-width="1.2" stroke-linecap="round" opacity="0.4"/><line x1="4" y1="18" x2="14" y2="18" stroke="#1A1A1A" stroke-width="1.2" stroke-linecap="round" opacity="0.28"/></g>
+    <text x="60" y="96" font-family="Geist, sans-serif" font-size="11" font-weight="500" fill="#1A1A1A" text-anchor="middle">Papers</text>
+    <text x="60" y="110" font-family="Geist Mono, monospace" font-size="8" fill="rgba(0,0,0,0.3)" text-anchor="middle">stacked depth,</text>
+    <text x="60" y="122" font-family="Geist Mono, monospace" font-size="8" fill="rgba(0,0,0,0.3)" text-anchor="middle">physical feel</text>
+  </g>
+
+  <!-- Analytics -->
+  <g transform="translate(310,64)">
+    <rect width="120" height="145" rx="5" fill="white" stroke="rgba(0,0,0,0.08)" stroke-width="1"/>
+    <g transform="translate(28,16)"><rect x="0" y="28" width="10" height="16" rx="0.5" fill="#1A1A1A" opacity="0.18"/><rect x="14" y="20" width="10" height="24" rx="0.5" fill="#1A1A1A" opacity="0.32"/><rect x="28" y="10" width="10" height="34" rx="0.5" fill="#01ADD0" opacity="0.85"/><line x1="0" y1="44" x2="44" y2="44" stroke="#1A1A1A" stroke-width="1.5" stroke-linecap="round" opacity="0.25"/><polyline points="5,28 19,20 33,10" stroke="#1A1A1A" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="2 2" fill="none" opacity="0.28"/></g>
+    <text x="60" y="96" font-family="Geist, sans-serif" font-size="11" font-weight="500" fill="#1A1A1A" text-anchor="middle">Analytics</text>
+    <text x="60" y="110" font-family="Geist Mono, monospace" font-size="8" fill="rgba(0,0,0,0.3)" text-anchor="middle">trend implied,</text>
+    <text x="60" y="122" font-family="Geist Mono, monospace" font-size="8" fill="rgba(0,0,0,0.3)" text-anchor="middle">accent on peak</text>
+  </g>
+
+  <!-- Talk to DeepMark -->
+  <g transform="translate(445,64)">
+    <rect width="120" height="145" rx="5" fill="white" stroke="rgba(0,0,0,0.08)" stroke-width="1"/>
+    <g transform="translate(20,22)"><line x1="0" y1="8" x2="52" y2="8" stroke="#1A1A1A" stroke-width="3" stroke-linecap="round"/><line x1="0" y1="18" x2="42" y2="18" stroke="#1A1A1A" stroke-width="1.8" stroke-linecap="round" opacity="0.4"/><line x1="0" y1="26" x2="28" y2="26" stroke="#1A1A1A" stroke-width="1.2" stroke-linecap="round" opacity="0.22"/><circle cx="62" cy="8" r="7" fill="#01ADD0"/><circle cx="62" cy="8" r="3" fill="white"/></g>
+    <text x="60" y="96" font-family="Geist, sans-serif" font-size="11" font-weight="500" fill="#1A1A1A" text-anchor="middle">Talk to DeepMark</text>
+    <text x="60" y="110" font-family="Geist Mono, monospace" font-size="8" fill="rgba(0,0,0,0.3)" text-anchor="middle">message lines,</text>
+    <text x="60" y="122" font-family="Geist Mono, monospace" font-size="8" fill="rgba(0,0,0,0.3)" text-anchor="middle">AI node accent</text>
+  </g>
+
+  <!-- All Papers -->
+  <g transform="translate(580,64)">
+    <rect width="120" height="145" rx="5" fill="white" stroke="rgba(0,0,0,0.08)" stroke-width="1"/>
+    <g transform="translate(26,18)"><rect x="0" y="0" width="48" height="7" rx="0.5" fill="#1A1A1A" opacity="0.82"/><rect x="0" y="12" width="48" height="7" rx="0.5" fill="#1A1A1A" opacity="0.35"/><rect x="0" y="24" width="30" height="7" rx="0.5" fill="#1A1A1A" opacity="0.18"/><circle cx="40" cy="38" r="9" fill="#01ADD0" opacity="0.9"/><line x1="36" y1="38" x2="44" y2="38" stroke="white" stroke-width="2" stroke-linecap="round"/><line x1="40" y1="34" x2="40" y2="42" stroke="white" stroke-width="2" stroke-linecap="round"/></g>
+    <text x="60" y="96" font-family="Geist, sans-serif" font-size="11" font-weight="500" fill="#1A1A1A" text-anchor="middle">All Papers</text>
+    <text x="60" y="110" font-family="Geist Mono, monospace" font-size="8" fill="rgba(0,0,0,0.3)" text-anchor="middle">list with</text>
+    <text x="60" y="122" font-family="Geist Mono, monospace" font-size="8" fill="rgba(0,0,0,0.3)" text-anchor="middle">add action</text>
+  </g>
+
+  <!-- Learn -->
+  <g transform="translate(715,64)">
+    <rect width="120" height="145" rx="5" fill="white" stroke="rgba(0,0,0,0.08)" stroke-width="1"/>
+    <g transform="translate(24,14)"><polygon points="36,4 64,32 36,60 8,32" stroke="#1A1A1A" stroke-width="2.2" fill="none" stroke-linejoin="round"/><polygon points="36,14 54,32 36,50 18,32" fill="#1A1A1A" opacity="0.07" stroke="#1A1A1A" stroke-width="1.2" stroke-linejoin="round"/><circle cx="36" cy="32" r="6" fill="#01ADD0"/><circle cx="36" cy="32" r="2.5" fill="white"/><line x1="36" y1="4" x2="36" y2="14" stroke="#1A1A1A" stroke-width="2" opacity="0.4"/><line x1="64" y1="32" x2="54" y2="32" stroke="#1A1A1A" stroke-width="2" opacity="0.2"/><line x1="36" y1="60" x2="36" y2="50" stroke="#1A1A1A" stroke-width="2" opacity="0.2"/><line x1="8" y1="32" x2="18" y2="32" stroke="#1A1A1A" stroke-width="2" opacity="0.2"/></g>
+    <text x="60" y="96" font-family="Geist, sans-serif" font-size="11" font-weight="500" fill="#1A1A1A" text-anchor="middle">Learn</text>
+    <text x="60" y="110" font-family="Geist Mono, monospace" font-size="8" fill="rgba(0,0,0,0.3)" text-anchor="middle">orientation,</text>
+    <text x="60" y="122" font-family="Geist Mono, monospace" font-size="8" fill="rgba(0,0,0,0.3)" text-anchor="middle">centred knowledge</text>
+  </g>
+
+  <!-- Row 2 -->
+  <!-- Our Story — Option B: classic outline person, teal core -->
+  <g transform="translate(40,228)">
+    <rect width="120" height="145" rx="5" fill="white" stroke="rgba(0,0,0,0.08)" stroke-width="1"/>
+    <g transform="translate(26,14)">
+      <circle cx="34" cy="20" r="13" stroke="#1A1A1A" stroke-width="2.5" fill="none"/>
+      <path d="M4 68 C4 52 16 44 34 44 C52 44 64 52 64 68" stroke="#1A1A1A" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+      <circle cx="34" cy="20" r="5" fill="#01ADD0"/>
+    </g>
+    <text x="60" y="100" font-family="Geist, sans-serif" font-size="11" font-weight="500" fill="#1A1A1A" text-anchor="middle">Our Story</text>
+    <text x="60" y="114" font-family="Geist Mono, monospace" font-size="8" fill="rgba(0,0,0,0.3)" text-anchor="middle">outline person,</text>
+    <text x="60" y="126" font-family="Geist Mono, monospace" font-size="8" fill="rgba(0,0,0,0.3)" text-anchor="middle">teal core</text>
+  </g>
+
+  <!-- Settings -->
+  <g transform="translate(175,228)">
+    <rect width="120" height="145" rx="5" fill="white" stroke="rgba(0,0,0,0.08)" stroke-width="1"/>
+    <g transform="translate(26,14)"><polygon points="34,4 58,18 58,46 34,60 10,46 10,18" stroke="#1A1A1A" stroke-width="2.2" fill="none" stroke-linejoin="round"/><circle cx="34" cy="32" r="10" fill="none" stroke="#1A1A1A" stroke-width="1.8"/><circle cx="34" cy="32" r="4" fill="#1A1A1A"/></g>
+    <text x="60" y="100" font-family="Geist, sans-serif" font-size="11" font-weight="500" fill="#1A1A1A" text-anchor="middle">Settings</text>
+    <text x="60" y="114" font-family="Geist Mono, monospace" font-size="8" fill="rgba(0,0,0,0.3)" text-anchor="middle">system within</text>
+    <text x="60" y="126" font-family="Geist Mono, monospace" font-size="8" fill="rgba(0,0,0,0.3)" text-anchor="middle">a system</text>
+  </g>
+
+  <!-- FAQ -->
+  <g transform="translate(310,228)">
+    <rect width="120" height="145" rx="5" fill="white" stroke="rgba(0,0,0,0.08)" stroke-width="1"/>
+    <g transform="translate(36,12)"><rect x="0" y="0" width="20" height="10" rx="1" fill="#1A1A1A" opacity="0.82"/><rect x="10" y="13" width="14" height="10" rx="1" fill="#1A1A1A" opacity="0.5"/><rect x="0" y="26" width="20" height="10" rx="1" fill="#1A1A1A" opacity="0.22"/><rect x="0" y="42" width="20" height="9" rx="1" fill="#01ADD0" opacity="0.88"/></g>
+    <text x="60" y="100" font-family="Geist, sans-serif" font-size="11" font-weight="500" fill="#1A1A1A" text-anchor="middle">FAQ</text>
+    <text x="60" y="114" font-family="Geist Mono, monospace" font-size="8" fill="rgba(0,0,0,0.3)" text-anchor="middle">question resolved</text>
+    <text x="60" y="126" font-family="Geist Mono, monospace" font-size="8" fill="rgba(0,0,0,0.3)" text-anchor="middle">to an answer</text>
+  </g>
+
+  <!-- Reports -->
+  <g transform="translate(445,228)">
+    <rect width="120" height="145" rx="5" fill="white" stroke="rgba(0,0,0,0.08)" stroke-width="1"/>
+    <g transform="translate(24,12)"><path d="M4 0 L44 0 L58 14 L58 64 A2 2 0 0 1 56 66 L4 66 A2 2 0 0 1 2 64 L2 2 A2 2 0 0 1 4 0Z" fill="white" stroke="#1A1A1A" stroke-width="2" stroke-linejoin="round"/><path d="M44 0 L44 14 L58 14" stroke="#1A1A1A" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" opacity="0.45"/><line x1="12" y1="32" x2="46" y2="32" stroke="#01ADD0" stroke-width="2.5" stroke-linecap="round"/><line x1="12" y1="42" x2="46" y2="42" stroke="#1A1A1A" stroke-width="1.2" stroke-linecap="round" opacity="0.32"/><line x1="12" y1="51" x2="32" y2="51" stroke="#1A1A1A" stroke-width="1.2" stroke-linecap="round" opacity="0.22"/></g>
+    <text x="60" y="100" font-family="Geist, sans-serif" font-size="11" font-weight="500" fill="#1A1A1A" text-anchor="middle">Reports</text>
+    <text x="60" y="114" font-family="Geist Mono, monospace" font-size="8" fill="rgba(0,0,0,0.3)" text-anchor="middle">document with</text>
+    <text x="60" y="126" font-family="Geist Mono, monospace" font-size="8" fill="rgba(0,0,0,0.3)" text-anchor="middle">headline stat</text>
+  </g>
+
+  <!-- Upgrade -->
+  <g transform="translate(580,228)">
+    <rect width="120" height="145" rx="5" fill="white" stroke="rgba(0,0,0,0.08)" stroke-width="1"/>
+    <g transform="translate(28,14)"><line x1="0" y1="44" x2="60" y2="44" stroke="#1A1A1A" stroke-width="1.5" stroke-linecap="round" opacity="0.22" stroke-dasharray="3 2"/><line x1="30" y1="60" x2="30" y2="20" stroke="#01ADD0" stroke-width="3" stroke-linecap="round"/><polyline points="14,30 30,12 46,30" stroke="#01ADD0" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/><circle cx="30" cy="12" r="8" fill="#01ADD0" opacity="0.18"/></g>
+    <text x="60" y="100" font-family="Geist, sans-serif" font-size="11" font-weight="500" fill="#1A1A1A" text-anchor="middle">Upgrade</text>
+    <text x="60" y="114" font-family="Geist Mono, monospace" font-size="8" fill="rgba(0,0,0,0.3)" text-anchor="middle">breaking through</text>
+    <text x="60" y="126" font-family="Geist Mono, monospace" font-size="8" fill="rgba(0,0,0,0.3)" text-anchor="middle">a threshold</text>
+  </g>
+
+  <!-- Recent Marking -->
+  <g transform="translate(715,228)">
+    <rect width="120" height="145" rx="5" fill="white" stroke="rgba(0,0,0,0.08)" stroke-width="1"/>
+    <g transform="translate(20,12)"><rect x="0" y="6" width="30" height="40" rx="2" fill="#1A1A1A" opacity="0.07" transform="rotate(-6 0 6)"/><circle cx="54" cy="36" r="22" fill="white" stroke="#1A1A1A" stroke-width="2.2"/><line x1="54" y1="20" x2="54" y2="36" stroke="#1A1A1A" stroke-width="2.5" stroke-linecap="round"/><line x1="54" y1="36" x2="64" y2="42" stroke="#01ADD0" stroke-width="2.5" stroke-linecap="round"/><circle cx="54" cy="36" r="3" fill="#1A1A1A"/></g>
+    <text x="60" y="100" font-family="Geist, sans-serif" font-size="11" font-weight="500" fill="#1A1A1A" text-anchor="middle">Recent Marking</text>
+    <text x="60" y="114" font-family="Geist Mono, monospace" font-size="8" fill="rgba(0,0,0,0.3)" text-anchor="middle">paper behind,</text>
+    <text x="60" y="126" font-family="Geist Mono, monospace" font-size="8" fill="rgba(0,0,0,0.3)" text-anchor="middle">time in front</text>
+  </g>
+
+  <!-- Footer -->
+  <line x1="40" y1="392" x2="860" y2="392" stroke="rgba(0,0,0,0.08)" stroke-width="1"/>
+  <text x="40" y="410" font-family="Geist Mono, monospace" font-size="9" fill="rgba(0,0,0,0.25)">DeepMark Icon Set v1.1 · Original SVG · 36×36 viewBox · Teal accent #01ADD0 · Ink #1A1A1A · Our Story = Option B person</text>
+  <text x="860" y="410" font-family="Geist Mono, monospace" font-size="9" fill="rgba(0,0,0,0.25)" text-anchor="end">May 2026</text>
+</svg>

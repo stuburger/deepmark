@@ -58,7 +58,7 @@ export function PdfIngestionProgressView({
 		<div className="space-y-4 py-2">
 			<div className="flex items-center gap-3">
 				{step.progress === 100 ? (
-					<CheckCircle2 className="h-5 w-5 shrink-0 text-green-500" />
+					<CheckCircle2 className="h-5 w-5 shrink-0 text-success" />
 				) : (
 					<Spinner className="h-5 w-5 shrink-0" />
 				)}
@@ -79,7 +79,7 @@ export function PdfIngestionProgressView({
 								<span
 									className={`h-1.5 w-1.5 shrink-0 rounded-full ${
 										isComplete
-											? "bg-green-500"
+											? "bg-success"
 											: isActive
 												? "bg-primary"
 												: "bg-muted-foreground/30"

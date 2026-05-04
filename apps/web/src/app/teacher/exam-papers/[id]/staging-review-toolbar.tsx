@@ -58,7 +58,7 @@ export function StagingReviewToolbar({
 					checked={allConfirmed}
 					disabled={!canToggleIncludeAll}
 					onCheckedChange={() => void onToggleIncludeAll()}
-					className="data-checked:border-green-600 data-checked:bg-green-600 dark:data-checked:bg-green-600"
+					className="data-checked:border-success-600 data-checked:bg-success-600 dark:data-checked:bg-success-600"
 					aria-label={
 						allConfirmed ? "Exclude all scripts" : "Include all scripts"
 					}

@@ -12,28 +12,28 @@ export function UsageStatCards({ summary }: { summary: UsageSummary }) {
 			value: formatTokens(summary.total_tokens),
 			description: `${formatTokens(summary.total_prompt_tokens)} prompt · ${formatTokens(summary.total_completion_tokens)} completion`,
 			icon: Zap,
-			color: "text-blue-500",
+			color: "text-primary",
 		},
 		{
 			title: "Estimated Cost",
 			value: formatCost(summary.estimated_cost),
 			description: "Based on published model pricing",
 			icon: Coins,
-			color: "text-emerald-500",
+			color: "text-success",
 		},
 		{
 			title: "Papers Marked",
 			value: summary.papers_marked.toLocaleString(),
 			description: "Completed grading runs",
 			icon: FileText,
-			color: "text-purple-500",
+			color: "text-ink-500",
 		},
 		{
 			title: "Avg Tokens / Paper",
 			value: formatTokens(summary.avg_tokens_per_paper),
 			description: "Across all pipeline stages",
 			icon: TrendingDown,
-			color: "text-orange-500",
+			color: "text-warning",
 		},
 	]
 

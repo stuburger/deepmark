@@ -17,7 +17,8 @@ export function DashboardActions() {
 	return (
 		<div className="flex min-w-[220px] flex-col gap-2 pt-2">
 			<Button
-				variant="primary-hero"
+				variant="default"
+				size="lg"
 				className="w-full justify-start"
 				onClick={() => setNewPaperOpen(true)}
 			>

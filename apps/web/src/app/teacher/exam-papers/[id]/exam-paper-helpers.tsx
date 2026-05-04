@@ -150,7 +150,7 @@ export function ExtractionWarningIndicator({
 						e.stopPropagation()
 						void setEditQuestionId(questionId)
 					}}
-					className="text-amber-600 hover:text-amber-700 dark:text-amber-400"
+					className="text-warning-600 hover:text-warning-700 dark:text-warning-400"
 					aria-label="Marks couldn't be verified — review and fix"
 				>
 					<AlertTriangle className="h-3.5 w-3.5" />

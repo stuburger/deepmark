@@ -206,7 +206,12 @@ export function SubmissionView({
 
 	return (
 		<DocOpsProvider submissionId={docSubmissionId}>
-			<div className="flex flex-col overflow-hidden h-full">
+			{/* Page-card chrome — lifts the editor off the page's dot-grid texture
+			    as a single tile, per Geoff's v5 framing. The rounded corners +
+			    --shadow-float here are the "modal-styled-as-route" pattern: the
+			    surface reads as a focused workspace without being an actual
+			    overlay (deep-linkable, share-able, prev/next navigable). */}
+			<div className="flex flex-col overflow-hidden h-full rounded-xl border border-border bg-card shadow-float">
 				<SubmissionToolbar
 					examPaperId={examPaperId}
 					jobId={jobId}

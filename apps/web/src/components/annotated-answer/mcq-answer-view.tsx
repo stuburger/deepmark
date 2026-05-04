@@ -38,19 +38,19 @@ export function McqAnswerView({
 	const isActive = activeQuestionNumber === qNum
 
 	const badgeColor = override
-		? "bg-blue-500"
+		? "bg-primary"
 		: pct >= 70
-			? "bg-green-500"
+			? "bg-success"
 			: pct >= 40
-				? "bg-amber-500"
-				: "bg-red-500"
+				? "bg-warning"
+				: "bg-destructive"
 
 	return (
 		<NodeViewWrapper
 			id={qNum ? `question-${qNum}` : undefined}
 			className={cn(
 				"py-4 border-b border-dashed border-zinc-200 dark:border-zinc-700 last:border-0 transition-all duration-300",
-				isActive && "bg-blue-500/20",
+				isActive && "bg-primary/20",
 			)}
 		>
 			<div contentEditable={false}>

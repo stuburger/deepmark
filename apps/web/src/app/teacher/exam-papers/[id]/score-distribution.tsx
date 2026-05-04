@@ -90,7 +90,7 @@ export function ScoreDistribution({
 
 					{/* Track */}
 					<div
-						className="absolute inset-x-0 h-1.5 rounded-full bg-gradient-to-r from-red-500/20 via-amber-500/25 to-emerald-500/35"
+						className="absolute inset-x-0 h-1.5 rounded-full bg-gradient-to-r from-error-500/20 via-warning-500/25 to-success-500/35"
 						style={{ bottom: "24px" }}
 					/>
 

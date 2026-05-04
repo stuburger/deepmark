@@ -62,7 +62,7 @@ export function ProcessingStatus({
 		<div className="space-y-4 py-2">
 			<div className="flex items-center gap-3">
 				{step.progress === 100 ? (
-					<CheckCircle2 className="h-5 w-5 shrink-0 text-green-500" />
+					<CheckCircle2 className="h-5 w-5 shrink-0 text-success" />
 				) : (
 					<Spinner className="h-5 w-5 shrink-0" />
 				)}
@@ -84,7 +84,7 @@ export function ProcessingStatus({
 							<span
 								className={`h-1.5 w-1.5 rounded-full shrink-0 ${
 									isComplete
-										? "bg-green-500"
+										? "bg-success"
 										: isActive
 											? "bg-primary"
 											: isPending

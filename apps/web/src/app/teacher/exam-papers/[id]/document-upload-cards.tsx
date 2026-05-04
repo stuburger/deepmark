@@ -138,7 +138,7 @@ function DocCard({
 			className={[
 				"rounded-xl border p-4 flex flex-col gap-3 transition-colors",
 				isAcquired
-					? "border-green-500/40 bg-green-500/5"
+					? "border-success/40 bg-success/5"
 					: isProcessing || uploading
 						? "border-border bg-muted/20"
 						: isFailed
@@ -149,7 +149,7 @@ function DocCard({
 			{/* Icon + title */}
 			<div className="flex items-start gap-2.5">
 				{isAcquired ? (
-					<CheckCircle2 className="h-5 w-5 text-green-500 shrink-0 mt-0.5" />
+					<CheckCircle2 className="h-5 w-5 text-success shrink-0 mt-0.5" />
 				) : isProcessing || uploading ? (
 					<Spinner className="h-5 w-5 shrink-0 mt-0.5 text-muted-foreground" />
 				) : isFailed ? (
@@ -169,7 +169,7 @@ function DocCard({
 			{isAcquired && completedDoc && (
 				<div className="flex items-center justify-between gap-2">
 					<div>
-						<span className="text-xs font-medium text-green-700 dark:text-green-400">
+						<span className="text-xs font-medium text-success-700 dark:text-success-400">
 							Acquired
 						</span>
 					</div>

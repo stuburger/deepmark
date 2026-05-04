@@ -27,8 +27,8 @@ const MARK_LABELS: Record<string, string> = {
 }
 
 const SENTIMENT_DOT: Record<string, string> = {
-	positive: "bg-green-500",
-	negative: "bg-red-500",
+	positive: "bg-success",
+	negative: "bg-destructive",
 	neutral: "bg-zinc-400",
 }
 
@@ -127,7 +127,7 @@ export function CommentCardView({
 				"absolute left-0 right-0 mx-1 rounded-md border bg-background px-2 py-1.5 text-[11px] leading-tight shadow-sm cursor-pointer",
 				"transition-[transform,box-shadow,background-color,ring-color] duration-200 ease-out",
 				isActive
-					? "ring-2 ring-blue-300 bg-blue-50 dark:bg-blue-950/30 z-20 shadow-md"
+					? "ring-2 ring-primary/40 bg-teal-50 dark:bg-teal-950/30 z-20 shadow-md"
 					: "z-10",
 			)}
 			style={{
@@ -222,9 +222,9 @@ export function CommentCardView({
 									"rounded-full px-1.5 py-0.5 text-[9px] font-medium capitalize transition-colors",
 									card.sentiment === s
 										? s === "positive"
-											? "bg-green-500 text-white"
+											? "bg-success text-white"
 											: s === "negative"
-												? "bg-red-500 text-white"
+												? "bg-destructive text-white"
 												: "bg-zinc-500 text-white"
 										: "bg-muted text-muted-foreground hover:bg-muted/80",
 								)}
@@ -250,7 +250,7 @@ export function CommentCardView({
 							}
 						}}
 						placeholder="Add a reason..."
-						className="w-full rounded border bg-background px-1.5 py-1 text-[11px] leading-snug resize-none focus:outline-none focus:ring-1 focus:ring-blue-300"
+						className="w-full rounded border bg-background px-1.5 py-1 text-[11px] leading-snug resize-none focus:outline-none focus:ring-1 focus:ring-primary/40"
 						rows={4}
 					/>
 
@@ -266,7 +266,7 @@ export function CommentCardView({
 							e.stopPropagation()
 							handleDelete()
 						}}
-						className="text-[10px] text-red-500 hover:text-red-600 font-medium"
+						className="text-[10px] text-destructive hover:text-error-600 font-medium"
 					>
 						Remove mark
 					</button>

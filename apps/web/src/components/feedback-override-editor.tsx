@@ -38,7 +38,7 @@ export function FeedbackOverrideEditor({
 					Feedback
 				</p>
 				{isOverridden && (
-					<span className="text-[9px] font-medium text-blue-500">Edited</span>
+					<span className="text-[9px] font-medium text-primary">Edited</span>
 				)}
 				{isOverridden && (
 					<Button

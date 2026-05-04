@@ -128,13 +128,55 @@ Treat these files as authoritative. When the spec and an earlier conversation di
 
 DeepMark-specific utilities with no shadcn equivalent (use directly): `shadow-tile`, `shadow-btn`, `shadow-confirm`, `shadow-float`, `shadow-toolbar`, `shadow-sidebar`, `bg-status-{marking,review,done}`, `bg-phase-{queued,extract,grading,annotate}`, `font-editorial` (Lora, dashboard greeting only), `font-handwriting` (Indie Flower, student answer rendering only).
 
+**Brand colour scales.** `apps/web/src/app/globals.tokens.css` (generated from `tokens.json` — do not hand-edit) provides 11-shade scales for the five brand colours:
+
+- `teal-{50..950}` — accent / brand
+- `success-{50..950}` — positive states (green family)
+- `warning-{50..950}` — caution states (amber family)
+- `error-{50..950}` — error states (red family); aliased as `bg-destructive`/`text-destructive`
+- `ink-{50..950}` — true greyscale (anchor `ink-950 = #1A1A1A`)
+
+To regenerate after editing `tokens.json`: `bun gen:tokens`. CI runs `bun gen:tokens:check` to fail PRs that drift the generated CSS away from the source.
+
+### Colour lookup — when in doubt, use this table
+
+| When the designer says... | Write |
+|---|---|
+| "the teal", "brand teal", "primary CTA" | `bg-primary` (= `bg-teal-500`) |
+| "teal hover", "darker teal" | `hover:bg-teal-dark` (= `bg-teal-600`) |
+| "soft teal tint", "teal background" | `bg-teal-50` or `bg-teal-100` |
+| "active state tint", "selected" | `bg-accent` (teal at 8% alpha) |
+| "white tile", "card", "paper white" | `bg-card` |
+| "page bg", "paper" | `bg-background` |
+| "muted bg", "sidebar surface" | `bg-muted` |
+| "ink", "body text" | `text-foreground` (= `text-ink-950`) |
+| "secondary text", "supporting copy" | `text-muted-foreground` |
+| "label colour", "eyebrow", "metadata" | `text-ink-tertiary` (alpha-on-paper) |
+| "near-black emphasis text" | `text-ink-900` |
+| "subtle ink for icons" | `text-ink-500` or `text-ink-700` |
+| "very light grey bg" | `bg-ink-50` |
+| "success green" — soft chip | `bg-success-50 text-success-700` (or `<SoftChip kind="success" />`) |
+| "success green" — filled / dot | `bg-success` (or `<StatusDot kind="success" />`) |
+| "success green" — icon | `<StatusIcon kind="success" />` (= `text-success`) |
+| "warning amber" — soft chip | `bg-warning-50 text-warning-800` (or `<SoftChip kind="warning" />`) |
+| "warning amber" — filled / dot | `bg-warning` (or `<StatusDot kind="warning" />`) |
+| "error red", "destructive", "fail" — filled | `bg-destructive` / `text-destructive` |
+| "error red" — soft chip | `bg-error-50 text-error-700` (or `<SoftChip kind="error" />`) |
+| "subtle border" | `border-border-quiet` |
+| "card border" | `border-border` |
+| "dotted divider" | `border-dotted border-border-quiet` |
+
+**STOP and use this table** if you're tempted to write `bg-green-500`, `bg-amber-100`, `text-red-700`, `bg-blue-500`, `bg-cyan-500`, etc. The lint will reject them anyway — and the error message will tell you the correct replacement.
+
+**Use named primitives** (`<StatusDot>`, `<StatusIcon>`, `<SoftChip>` in `@/components/ui/`) for repeating status indicators rather than re-deriving the token combination every time. Each takes a `kind` prop (`"success" | "warning" | "error" | "info" | "neutral"`).
+
 **Hard rules from the spec:**
 - Geist for UI, Geist Mono for data/numbers, Lora for the dashboard greeting only. Never Inter.
 - Maximum border radius is 10px (dialogs/toolbar). 5px universal everywhere else. No pills (`rounded-full` on text content is forbidden) — single named exception: `rounded-pill` (24px) on the dashboard "Ask anything" input only.
 - Hard SE-offset shadows only — no diffuse/glow shadows. The brand-tinted shadow exception is `shadow-toolbar` (floating editing toolbar) and `shadow-confirm` (confirm marking button).
 - Teal appears as punctuation only — single primary CTA, active states, confirm buttons, one accent element per icon. Never as a large filled chrome surface.
 
-**Lint:** `bun lint:tokens` runs the hex-literal check. The allowlist (in `apps/web/scripts/checks/no-hex-color-literal.ts`) lists files where raw hex is unavoidable (PDF rendering via `@react-pdf`, third-party brand SVGs, recharts internals). Adding a file to that allowlist needs a clear justification.
+**Lint:** `bun lint:tokens` runs two checks: the hex-literal check (no `#1A1A1A`, no `bg-[#01ADD0]`, no `style={{ color: "#fff" }}`) and the raw-Tailwind-colour check (no `bg-green-500`, `text-amber-700`, `border-red-100`, etc. — anything outside the five brand scales we own). The allowlist (in `apps/web/scripts/checks/no-hex-color-literal.ts`) lists files where raw values are unavoidable (PDF rendering via `@react-pdf`, third-party brand SVGs, recharts internals, AO palette). Adding a file to that allowlist needs a clear justification.
 
 ---
 

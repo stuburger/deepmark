@@ -17,23 +17,23 @@ function scoreTier(awarded: number, max: number): ScoreTier {
 }
 
 const TIER_BORDER: Record<ScoreTier, string> = {
-	high: "border-green-400 dark:border-green-600",
-	mid: "border-amber-400 dark:border-amber-600",
-	low: "border-red-400 dark:border-red-500",
+	high: "border-success-400 dark:border-success-600",
+	mid: "border-warning-400 dark:border-warning-600",
+	low: "border-error-400 dark:border-error-500",
 	ungraded: "border-border",
 }
 
 const TIER_SCORE_TEXT: Record<ScoreTier, string> = {
-	high: "text-green-700 dark:text-green-400",
-	mid: "text-amber-700 dark:text-amber-400",
-	low: "text-red-700 dark:text-red-400",
+	high: "text-success-700 dark:text-success-400",
+	mid: "text-warning-700 dark:text-warning-400",
+	low: "text-error-700 dark:text-error-400",
 	ungraded: "text-muted-foreground",
 }
 
 const TIER_DOT_FILLED: Record<ScoreTier, string> = {
-	high: "bg-green-500",
-	mid: "bg-amber-500",
-	low: "bg-red-500",
+	high: "bg-success",
+	mid: "bg-warning",
+	low: "bg-destructive",
 	ungraded: "bg-muted-foreground",
 }
 
@@ -235,8 +235,8 @@ export function MarkingFeedbackThread({
 											className={cn(
 												"mt-0.5 shrink-0 text-sm font-bold",
 												mp.awarded
-													? "text-green-600 dark:text-green-400"
-													: "text-red-500 dark:text-red-400",
+													? "text-success-600 dark:text-success-400"
+													: "text-error-500 dark:text-error-400",
 											)}
 										>
 											{mp.awarded ? "✓" : "✗"}

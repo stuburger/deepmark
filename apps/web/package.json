@@ -84,10 +84,12 @@
 	},
 	"devDependencies": {
 		"@tailwindcss/postcss": "^4",
+		"@types/culori": "^4.0.1",
 		"@types/node": "^20",
 		"@types/react": "^19",
 		"@types/react-dom": "^19",
 		"@types/ws": "^8.18.1",
+		"culori": "^4.0.2",
 		"tailwindcss": "^4",
 		"typescript": "^5"
 	},

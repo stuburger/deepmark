@@ -22,31 +22,31 @@ function eventIcon(type: JobEvent["type"]) {
 		case "ocr_started":
 			return <Scan className="h-3.5 w-3.5 text-muted-foreground" />
 		case "ocr_complete":
-			return <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
+			return <CheckCircle2 className="h-3.5 w-3.5 text-success" />
 		case "answers_extracted":
-			return <FileText className="h-3.5 w-3.5 text-blue-500" />
+			return <FileText className="h-3.5 w-3.5 text-primary" />
 		case "student_linked":
-			return <User className="h-3.5 w-3.5 text-violet-500" />
+			return <User className="h-3.5 w-3.5 text-ink-500" />
 		case "exam_paper_selected":
-			return <BookOpen className="h-3.5 w-3.5 text-indigo-500" />
+			return <BookOpen className="h-3.5 w-3.5 text-ink-500" />
 		case "grading_started":
-			return <Zap className="h-3.5 w-3.5 text-amber-500" />
+			return <Zap className="h-3.5 w-3.5 text-warning" />
 		case "question_graded":
-			return <CheckCircle2 className="h-3.5 w-3.5 text-green-400" />
+			return <CheckCircle2 className="h-3.5 w-3.5 text-success-400" />
 		case "region_attribution_started":
 		case "region_attribution_complete":
 			return <MapPin className="h-3.5 w-3.5 text-teal-500" />
 		case "region_attribution_failed":
-			return <AlertCircle className="h-3.5 w-3.5 text-amber-500" />
+			return <AlertCircle className="h-3.5 w-3.5 text-warning" />
 		case "grading_complete":
-			return <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />
+			return <CheckCircle2 className="h-3.5 w-3.5 text-success-600" />
 		case "token_reconciliation_complete":
 			return <CheckCircle2 className="h-3.5 w-3.5 text-teal-500" />
 		// Historical only (pre–April 2026): the enrichment step was folded into
 		// the grade Lambda, so no new submissions emit these event types.
 		case "enrich_started":
 		case "enrich_complete":
-			return <Zap className="h-3.5 w-3.5 text-purple-500" />
+			return <Zap className="h-3.5 w-3.5 text-ink-500" />
 		case "job_failed":
 			return <AlertCircle className="h-3.5 w-3.5 text-destructive" />
 	}

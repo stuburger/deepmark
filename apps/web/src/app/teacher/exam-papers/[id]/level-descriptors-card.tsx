@@ -28,14 +28,14 @@ export function LevelDescriptorsCard({
 				className={[
 					"rounded-xl border p-4 flex flex-col gap-3 transition-colors cursor-pointer",
 					hasContent
-						? "border-green-500/40 bg-green-500/5"
+						? "border-success/40 bg-success/5"
 						: "border-dashed border-border hover:bg-muted/30 hover:border-primary/40",
 				].join(" ")}
 			>
 				{/* Icon + title */}
 				<div className="flex items-start gap-2.5">
 					{hasContent ? (
-						<CheckCircle2 className="h-5 w-5 text-green-500 shrink-0 mt-0.5" />
+						<CheckCircle2 className="h-5 w-5 text-success shrink-0 mt-0.5" />
 					) : (
 						<AlignLeft className="h-5 w-5 text-muted-foreground shrink-0 mt-0.5" />
 					)}
@@ -50,7 +50,7 @@ export function LevelDescriptorsCard({
 				{/* Status line */}
 				{hasContent ? (
 					<div className="flex items-center justify-between gap-2">
-						<span className="text-xs font-medium text-green-700 dark:text-green-400">
+						<span className="text-xs font-medium text-success-700 dark:text-success-400">
 							Set
 						</span>
 						<span className="text-xs text-muted-foreground flex items-center gap-1">

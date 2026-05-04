@@ -1,0 +1,80 @@
+/*
+ * GENERATED FILE — DO NOT EDIT BY HAND.
+ *
+ * Source: geoff_ui_claude_design/v2/deepmark_tokens.json
+ * Generator: apps/web/scripts/generate-tokens.ts
+ * Run: bun gen:tokens
+ *
+ * Anchors come from Geoff's canonical brand colours.
+ * All other shades are OKLCH-derived for perceptual uniformity.
+ * To change a brand colour, edit tokens.json and re-run this script.
+ * To override a single derived shade, add e.g. `color.success-100` to
+ * tokens.json — the generator prefers explicit values over derivation.
+ */
+
+@theme inline {
+	/* TEAL — anchor: teal-500 = #01ADD0 */
+	--color-teal-50: #dfffff;
+	--color-teal-100: #d9fbff;
+	--color-teal-200: #aef4ff;
+	--color-teal-300: #9ce1f6;
+	--color-teal-400: #2ebee2;
+	--color-teal-500: #01add0;
+	--color-teal-600: #007b9c;
+	--color-teal-700: #006384;
+	--color-teal-800: #004f6f;
+	--color-teal-900: #003555;
+	--color-teal-950: #001e32;
+
+	/* SUCCESS — anchor: success-500 = #3C8A62 */
+	--color-success-50: #eafff3;
+	--color-success-100: #e4fbed;
+	--color-success-200: #c7f4d9;
+	--color-success-300: #b4e1c6;
+	--color-success-400: #72c095;
+	--color-success-500: #3c8a62;
+	--color-success-600: #2e7d56;
+	--color-success-700: #0d6540;
+	--color-success-800: #00512d;
+	--color-success-900: #003917;
+	--color-success-950: #00200a;
+
+	/* WARNING — anchor: warning-500 = #C4883A */
+	--color-warning-50: #fff7e1;
+	--color-warning-100: #fff1db;
+	--color-warning-200: #ffe0b4;
+	--color-warning-300: #f3cda2;
+	--color-warning-400: #dc9e52;
+	--color-warning-500: #c4883a;
+	--color-warning-600: #965d00;
+	--color-warning-700: #7d4600;
+	--color-warning-800: #683300;
+	--color-warning-900: #4e1900;
+	--color-warning-950: #2d0c00;
+
+	/* ERROR — anchor: error-500 = #C23B3B */
+	--color-error-50: #ffeee9;
+	--color-error-100: #ffe8e3;
+	--color-error-200: #ffcdc5;
+	--color-error-300: #ffbab2;
+	--color-error-400: #ff7a74;
+	--color-error-500: #c23b3b;
+	--color-error-600: #bb3435;
+	--color-error-700: #9f121e;
+	--color-error-800: #870006;
+	--color-error-900: #680000;
+	--color-error-950: #3e0000;
+
+	/* INK — anchor: ink-950 = #1A1A1A */
+	--color-ink-50: #fafafa;
+	--color-ink-100: #f4f4f4;
+	--color-ink-200: #e7e7e7;
+	--color-ink-300: #d4d4d4;
+	--color-ink-400: #acacac;
+	--color-ink-500: #868686;
+	--color-ink-600: #6c6c6c;
+	--color-ink-700: #555555;
+	--color-ink-800: #424242;
+	--color-ink-900: #2b2b2b;
+	--color-ink-950: #1a1a1a;
+}

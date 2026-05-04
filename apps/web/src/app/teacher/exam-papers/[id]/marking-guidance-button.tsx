@@ -37,7 +37,7 @@ export function MarkingGuidanceButton({
 							>
 								<BookText className="h-3.5 w-3.5" />
 								{hasContent && (
-									<span className="absolute top-1 right-1 h-1.5 w-1.5 rounded-full bg-green-500" />
+									<span className="absolute top-1 right-1 h-1.5 w-1.5 rounded-full bg-success" />
 								)}
 								<span className="sr-only">Marking guidance</span>
 							</Button>

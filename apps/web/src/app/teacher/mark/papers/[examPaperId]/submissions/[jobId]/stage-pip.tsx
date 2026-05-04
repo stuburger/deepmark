@@ -16,10 +16,10 @@ const LABELS: Record<StageKey, string> = {
 }
 
 const DOT_CLASS: Record<StageStatus, string> = {
-	not_started: "bg-orange-400",
-	generating: "bg-blue-500 animate-pulse",
-	done: "bg-emerald-500",
-	failed: "bg-red-500",
+	not_started: "bg-warning-400",
+	generating: "bg-primary animate-pulse",
+	done: "bg-success",
+	failed: "bg-destructive",
 	cancelled: "bg-zinc-400",
 }
 
@@ -80,7 +80,7 @@ export function StagePip({
 				</div>
 
 				{stage.error && (
-					<p className="mt-2 rounded bg-red-50 p-2 text-red-700 dark:bg-red-950/30 dark:text-red-400">
+					<p className="mt-2 rounded bg-error-50 p-2 text-error-700 dark:bg-error-950/30 dark:text-error-400">
 						{stage.error}
 					</p>
 				)}

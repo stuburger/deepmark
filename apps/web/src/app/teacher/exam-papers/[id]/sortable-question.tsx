@@ -107,7 +107,7 @@ export function SortableQuestion({
 								question.mark_scheme_status === "unlinked") && (
 								<Tooltip>
 									<TooltipTrigger>
-										<AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
+										<AlertTriangle className="h-3.5 w-3.5 text-warning" />
 									</TooltipTrigger>
 									<TooltipContent>No mark scheme</TooltipContent>
 								</Tooltip>
@@ -115,7 +115,7 @@ export function SortableQuestion({
 							{pointsMismatch && (
 								<Tooltip>
 									<TooltipTrigger>
-										<AlertTriangle className="h-3.5 w-3.5 text-orange-500" />
+										<AlertTriangle className="h-3.5 w-3.5 text-warning" />
 									</TooltipTrigger>
 									<TooltipContent>
 										Mark scheme total ({question.mark_scheme_points_total}{" "}
@@ -129,9 +129,7 @@ export function SortableQuestion({
 								<span
 									className={cn(
 										"text-xs font-medium tabular-nums",
-										pointsMismatch
-											? "text-orange-500"
-											: "text-muted-foreground",
+										pointsMismatch ? "text-warning" : "text-muted-foreground",
 									)}
 								>
 									{marksLabel}
@@ -142,13 +140,13 @@ export function SortableQuestion({
 
 					{/* Extraction warning — shown when QP-extraction validators flagged a marks mismatch */}
 					{question.extraction_warning && (
-						<div className="mt-2.5 flex items-start gap-2 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-xs dark:border-amber-700/60 dark:bg-amber-950/30">
-							<AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-600 mt-0.5 dark:text-amber-400" />
+						<div className="mt-2.5 flex items-start gap-2 rounded border border-warning-300 bg-warning-50 px-3 py-2 text-xs dark:border-warning-700/60 dark:bg-warning-950/30">
+							<AlertTriangle className="h-3.5 w-3.5 shrink-0 text-warning-600 mt-0.5 dark:text-warning-400" />
 							<div className="flex-1 min-w-0">
-								<p className="font-medium text-amber-900 dark:text-amber-200">
+								<p className="font-medium text-warning-900 dark:text-warning-200">
 									We couldn&apos;t verify the marks for this question
 								</p>
-								<p className="mt-0.5 text-amber-800/90 dark:text-amber-300/90">
+								<p className="mt-0.5 text-warning-800/90 dark:text-warning-300/90">
 									{question.extraction_warning} Please review and correct if
 									needed — sorry for the friction.
 								</p>
@@ -156,7 +154,7 @@ export function SortableQuestion({
 							<Button
 								variant="outline"
 								size="sm"
-								className="h-7 shrink-0 border-amber-300 bg-white text-amber-900 hover:bg-amber-100 hover:text-amber-900 dark:border-amber-700 dark:bg-amber-950/50 dark:text-amber-200"
+								className="h-7 shrink-0 border-warning-300 bg-white text-warning-900 hover:bg-warning-100 hover:text-warning-900 dark:border-warning-700 dark:bg-warning-950/50 dark:text-warning-200"
 								onClick={() => void setEditQuestionId(question.id)}
 							>
 								Review and fix

@@ -227,7 +227,7 @@ export function BulkUpdateModelsDialog({
 				</div>
 
 				{hasOpenAi && (
-					<p className="text-xs text-amber-600">
+					<p className="text-xs text-warning-600">
 						OpenAI does not support PDF inputs. PDF call sites will be skipped.
 					</p>
 				)}

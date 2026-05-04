@@ -326,7 +326,7 @@ export function ExamPaperPageShell({
 												className="relative text-muted-foreground hover:text-foreground"
 											>
 												<Copy className="h-3.5 w-3.5" />
-												<span className="absolute top-1 right-1 h-1.5 w-1.5 rounded-full bg-amber-500" />
+												<span className="absolute top-1 right-1 h-1.5 w-1.5 rounded-full bg-warning" />
 												<span className="sr-only">
 													{similarPairs.length} potential duplicate
 													{similarPairs.length !== 1 ? "s" : ""}
@@ -335,7 +335,7 @@ export function ExamPaperPageShell({
 										}
 									/>
 									<PopoverContent className="w-72 text-xs">
-										<p className="text-amber-800 dark:text-amber-200">
+										<p className="text-warning-800 dark:text-warning-200">
 											<span className="font-medium">
 												{similarPairs.length} potential duplicate question
 												{similarPairs.length !== 1 ? "s" : ""}
@@ -402,7 +402,7 @@ export function ExamPaperPageShell({
 							Submissions
 							{stagedCount > 0 ? (
 								<AlertTriangle
-									className="ml-1.5 h-3.5 w-3.5 shrink-0 text-amber-500"
+									className="ml-1.5 h-3.5 w-3.5 shrink-0 text-warning"
 									aria-label={`${stagedCount} staged ${stagedCount === 1 ? "script" : "scripts"} not yet sent for marking`}
 								/>
 							) : ingestion?.isProcessing ? (
@@ -421,7 +421,7 @@ export function ExamPaperPageShell({
 					{totalQuestions > 0 && !allQuestionsHaveMarkSchemes && (
 						<div className="flex items-center gap-3 rounded-lg border border-destructive/40 bg-destructive/5 px-3 py-2.5 text-sm">
 							<AlertTriangle className="h-4 w-4 shrink-0 text-destructive" />
-							<span className="flex-1 text-destructive dark:text-red-400">
+							<span className="flex-1 text-destructive dark:text-error-400">
 								<span className="font-medium">
 									{totalQuestions - questionsWithMarkScheme} of {totalQuestions}{" "}
 									{totalQuestions - questionsWithMarkScheme === 1

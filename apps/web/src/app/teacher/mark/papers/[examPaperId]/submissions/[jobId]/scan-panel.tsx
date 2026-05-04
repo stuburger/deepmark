@@ -151,7 +151,7 @@ export function ScanPanel({
 										"inline-flex items-center justify-center h-6 w-6 rounded text-muted-foreground transition-colors",
 										"hover:bg-muted hover:text-foreground",
 										!hasOcr && "opacity-40 pointer-events-none",
-										copied && "text-green-600",
+										copied && "text-success-600",
 									)}
 									aria-label="Copy transcript"
 								>

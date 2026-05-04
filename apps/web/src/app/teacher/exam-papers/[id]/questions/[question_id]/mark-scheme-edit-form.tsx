@@ -345,7 +345,7 @@ function McqForm(props: Props & { onCancel?: () => void }) {
 										key={opt.option_label}
 										className={`flex cursor-pointer items-start gap-3 rounded-lg border px-3 py-2.5 transition-colors ${
 											checked
-												? "border-green-500/60 bg-green-500/5"
+												? "border-success/60 bg-success/5"
 												: "hover:bg-muted/50"
 										}`}
 									>
@@ -599,7 +599,7 @@ export function FormFooter({
 	return (
 		<div className="shrink-0 flex items-center justify-end gap-3 border-t bg-background px-5 py-3">
 			{saved && (
-				<span className="flex items-center gap-1.5 text-sm text-green-600 dark:text-green-400">
+				<span className="flex items-center gap-1.5 text-sm text-success-600 dark:text-success-400">
 					<CheckCircle2 className="h-4 w-4" />
 					Saved
 				</span>

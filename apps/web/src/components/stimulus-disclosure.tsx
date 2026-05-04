@@ -51,9 +51,9 @@ export function StimulusDisclosure({
 					"inline-flex items-center gap-1.5 rounded-md",
 					size === "xs" ? "px-1.5 py-0.5 text-[11px]" : "px-2 py-1 text-xs",
 					"font-medium",
-					"bg-amber-50 text-amber-800 hover:bg-amber-100",
-					"dark:bg-amber-950/40 dark:text-amber-300 dark:hover:bg-amber-950/60",
-					"border border-amber-200 dark:border-amber-900",
+					"bg-warning-50 text-warning-800 hover:bg-warning-100",
+					"dark:bg-warning-950/40 dark:text-warning-300 dark:hover:bg-warning-950/60",
+					"border border-warning-200 dark:border-warning-900",
 					"transition-colors",
 				].join(" ")}
 			>

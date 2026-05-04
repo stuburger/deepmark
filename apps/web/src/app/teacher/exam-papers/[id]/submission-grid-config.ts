@@ -16,17 +16,17 @@ export function scoreColour(pct: number | null) {
 	if (pct === null) return null
 	if (pct >= 70)
 		return {
-			chip: "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300",
-			dot: "bg-green-500",
+			chip: "bg-success-50 text-success-800 dark:bg-success-900/40 dark:text-success-300",
+			dot: "bg-success",
 		}
 	if (pct >= 40)
 		return {
-			chip: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300",
-			dot: "bg-amber-500",
+			chip: "bg-warning-50 text-warning-800 dark:bg-warning-900/40 dark:text-warning-300",
+			dot: "bg-warning",
 		}
 	return {
-		chip: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300",
-		dot: "bg-red-500",
+		chip: "bg-error-50 text-error-700 dark:bg-error-900/40 dark:text-error-300",
+		dot: "bg-destructive",
 	}
 }
 
@@ -38,11 +38,11 @@ export function statusDot(status: string, pct: number | null) {
 	switch (status) {
 		case "failed":
 		case "cancelled":
-			return "bg-red-500"
+			return "bg-destructive"
 		case "ocr_complete":
-			return "bg-green-500"
+			return "bg-success"
 		default:
-			return "bg-amber-400"
+			return "bg-warning-400"
 	}
 }
 

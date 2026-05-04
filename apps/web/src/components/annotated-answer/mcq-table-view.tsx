@@ -104,7 +104,7 @@ export function McqTableView({
 										className={cn(
 											ROW_GRID,
 											"w-full text-left text-xs py-1.5 cursor-pointer rounded-sm transition-colors hover:bg-muted/50",
-											isActive && "bg-blue-500/20",
+											isActive && "bg-primary/20",
 										)}
 									>
 										<span className="font-mono text-muted-foreground">
@@ -119,12 +119,12 @@ export function McqTableView({
 												<span className="text-muted-foreground text-xs">–</span>
 											) : isCorrect ? (
 												<Check
-													className="h-3.5 w-3.5 text-emerald-500"
+													className="h-3.5 w-3.5 text-success"
 													strokeWidth={3}
 												/>
 											) : (
 												<X
-													className="h-3.5 w-3.5 text-red-500"
+													className="h-3.5 w-3.5 text-destructive"
 													strokeWidth={3}
 												/>
 											)}
@@ -180,10 +180,10 @@ export function McqTableView({
 													className={cn(
 														"font-semibold tabular-nums",
 														override
-															? "text-blue-500"
+															? "text-primary"
 															: isCorrect
-																? "text-emerald-600"
-																: "text-red-500",
+																? "text-success-600"
+																: "text-destructive",
 													)}
 												>
 													{effectiveScore}/{r.maxScore}

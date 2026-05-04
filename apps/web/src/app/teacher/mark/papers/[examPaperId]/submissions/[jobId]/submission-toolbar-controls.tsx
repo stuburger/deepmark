@@ -63,21 +63,26 @@ export function GroupToggle({
 }
 
 // ─── Score badge ──────────────────────────────────────────────────────────────
+//
+// Solid coloured pill — high-signal at a glance per Geoff's v5 script-reader
+// design (`.score-pill .full/.part/.low`). Uses our --success / --warning /
+// --destructive tokens directly so the colour space stays inside the design
+// system. Square corners (5px) per our no-pills rule, mono numerals.
 
 export function ScoreBadge({ awarded, max }: { awarded: number; max: number }) {
 	if (max === 0) return null
 	const pct = Math.round((awarded / max) * 100)
 	const colour =
 		pct >= 70
-			? "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300"
+			? "bg-success text-white"
 			: pct >= 40
-				? "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
-				: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300"
+				? "bg-warning text-white"
+				: "bg-destructive text-white"
 
 	return (
 		<span
 			className={cn(
-				"inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums",
+				"inline-flex items-center rounded-md px-3 py-0.5 font-mono text-[11px] font-bold tabular-nums",
 				colour,
 			)}
 		>
@@ -91,15 +96,15 @@ export function GradeBadge({ grade }: { grade: string }) {
 	const colour = Number.isNaN(numeric)
 		? "bg-muted text-muted-foreground"
 		: numeric >= 7
-			? "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300"
+			? "bg-success text-white"
 			: numeric >= 4
-				? "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
-				: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300"
+				? "bg-warning text-white"
+				: "bg-destructive text-white"
 
 	return (
 		<span
 			className={cn(
-				"inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold",
+				"inline-flex items-center rounded-md px-3 py-0.5 font-mono text-[11px] font-bold",
 				colour,
 			)}
 			title="Computed from grade boundaries"

@@ -110,10 +110,10 @@ export function ExamPaperAnalyticsTab({
 								{stats.question_stats.map((q) => {
 									const colour =
 										q.avg_percent >= 70
-											? "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300"
+											? "bg-success-50 text-success-800 dark:bg-success-900/40 dark:text-success-300"
 											: q.avg_percent >= 40
-												? "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
-												: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300"
+												? "bg-warning-50 text-warning-800 dark:bg-warning-900/40 dark:text-warning-300"
+												: "bg-error-50 text-error-700 dark:bg-error-900/40 dark:text-error-300"
 									return (
 										<TableRow key={q.question_id}>
 											<TableCell className="text-muted-foreground font-mono text-xs">

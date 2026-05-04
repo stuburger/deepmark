@@ -69,8 +69,8 @@ export function SimilarQuestionsSection({
 	return (
 		<div className="space-y-3">
 			<div className="flex items-center gap-2">
-				<AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-				<p className="text-sm font-medium text-amber-800 dark:text-amber-200">
+				<AlertTriangle className="h-4 w-4 text-warning-600 dark:text-warning-400" />
+				<p className="text-sm font-medium text-warning-800 dark:text-warning-200">
 					Similar question{similarQuestions.length !== 1 ? "s" : ""} detected in
 					this paper
 				</p>
@@ -84,7 +84,7 @@ export function SimilarQuestionsSection({
 				{similarQuestions.map((sq) => (
 					<div
 						key={sq.id}
-						className="rounded-lg border border-amber-400/30 bg-amber-500/5 p-3 space-y-2"
+						className="rounded-lg border border-warning-400/30 bg-warning/5 p-3 space-y-2"
 					>
 						<div className="flex items-start justify-between gap-3">
 							<div className="min-w-0 flex-1">

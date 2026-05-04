@@ -449,7 +449,7 @@ function BoundaryTimeline({
 	return (
 		<div className="px-2 pt-2 pb-1">
 			<div className="relative h-9">
-				<div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-1.5 rounded-full bg-gradient-to-r from-red-500/25 via-amber-500/30 to-emerald-500/45" />
+				<div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-1.5 rounded-full bg-gradient-to-r from-error-500/25 via-warning-500/30 to-success-500/45" />
 
 				{sorted.map((b) => {
 					const pct = Math.min(100, Math.max(0, (b.min_mark / upper) * 100))

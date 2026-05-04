@@ -12,33 +12,13 @@ import {
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { deleteExamPaper } from "@/lib/exam-paper/paper/mutations"
 import type { ExamPaperListItem } from "@/lib/exam-paper/types"
-import { SUBJECT_LABELS, type Subject } from "@/lib/subjects"
+import { SUBJECT_LABELS, type Subject, subjectColour } from "@/lib/subjects"
 import { useMutation } from "@tanstack/react-query"
 import { Clock, Layers, Trash2 } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useState } from "react"
 import { toast } from "sonner"
-
-const SUBJECT_COLOURS: Record<string, string> = {
-	biology: "bg-green-500",
-	chemistry: "bg-orange-500",
-	physics: "bg-blue-500",
-	english: "bg-rose-500",
-	english_literature: "bg-pink-500",
-	mathematics: "bg-violet-500",
-	history: "bg-amber-600",
-	geography: "bg-teal-500",
-	computer_science: "bg-cyan-500",
-	french: "bg-indigo-500",
-	spanish: "bg-yellow-500",
-	religious_studies: "bg-purple-500",
-	business: "bg-slate-500",
-}
-
-function subjectColour(subject: string) {
-	return SUBJECT_COLOURS[subject] ?? "bg-muted-foreground"
-}
 
 function formatDate(date: Date) {
 	return new Intl.DateTimeFormat("en-GB", {

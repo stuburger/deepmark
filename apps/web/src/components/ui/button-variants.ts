@@ -5,23 +5,27 @@ export const buttonVariants = cva(
 	{
 		variants: {
 			variant: {
+				/* Primary teal CTA — page-level primary actions. */
 				default:
 					"bg-primary text-primary-foreground shadow-btn hover:bg-teal-dark",
-				"primary-hero":
-					"h-10 gap-2 px-[22px] bg-primary text-primary-foreground shadow-btn tracking-[-0.01em] hover:bg-teal-dark",
+				/* White-tile + SE shadow — supporting actions, the dominant chrome. */
 				secondary:
 					"bg-card text-foreground border-border shadow-btn hover:bg-muted aria-expanded:bg-muted",
+				/* DeepMark-specific. Brand-tinted shadow signals "commits work" —
+				   used on the marking confirm button only. */
 				confirm:
 					"h-[34px] gap-2 px-[18px] bg-primary text-primary-foreground shadow-confirm font-semibold hover:bg-teal-dark",
-				muted:
-					"h-7 gap-1.5 px-3 bg-gray-500 text-white text-xs hover:bg-gray-600",
-				nav: "h-[30px] gap-1.5 px-[14px] bg-transparent text-muted-foreground border-border text-xs hover:bg-muted/40 hover:text-foreground",
+				/* Bordered + transparent bg, no shadow — used heavily inside shadcn
+				   dialogs / alerts / pagination / carousel and across teacher chrome. */
 				outline:
 					"border-border bg-background hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50",
+				/* Transparent until hover — inline / nav / toolbar buttons. */
 				ghost:
 					"hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50",
+				/* Destructive actions only — never brand. */
 				destructive:
 					"bg-destructive/10 text-destructive hover:bg-destructive/20 focus-visible:border-destructive/40 focus-visible:ring-destructive/20 dark:bg-destructive/20 dark:hover:bg-destructive/30 dark:focus-visible:ring-destructive/40",
+				/* Text-styled-as-button. Use sparingly. */
 				link: "text-primary underline-offset-4 hover:underline",
 			},
 			size: {

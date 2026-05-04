@@ -90,9 +90,9 @@ export function EvalBody({
 						<div
 							className={`flex items-center justify-center rounded-full px-4 py-1.5 text-sm font-semibold ${
 								scorePercent >= 70
-									? "bg-green-500/10 text-green-700 dark:text-green-400"
+									? "bg-success/10 text-success-700 dark:text-success-400"
 									: scorePercent >= 40
-										? "bg-amber-500/10 text-amber-700 dark:text-amber-400"
+										? "bg-warning/10 text-warning-700 dark:text-warning-400"
 										: "bg-destructive/10 text-destructive"
 							}`}
 						>
@@ -117,12 +117,12 @@ export function EvalBody({
 										key={i}
 										className={`flex items-start gap-3 rounded-lg border p-3 text-sm ${
 											mp.awarded
-												? "border-green-500/30 bg-green-500/5"
+												? "border-success/30 bg-success/5"
 												: "border-muted bg-muted/20"
 										}`}
 									>
 										{mp.awarded ? (
-											<CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5 text-green-600" />
+											<CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5 text-success-600" />
 										) : (
 											<XCircle className="h-4 w-4 shrink-0 mt-0.5 text-muted-foreground" />
 										)}

@@ -83,7 +83,7 @@ export function QuestionAnswerView({
 			id={qNum ? `question-${qNum}` : undefined}
 			className={cn(
 				"py-4 border-b border-dashed border-zinc-200 dark:border-zinc-700 last:border-0 transition-all duration-300",
-				isActive && "bg-blue-500/20",
+				isActive && "bg-primary/20",
 			)}
 		>
 			{/* Non-editable question header + score badge */}
@@ -140,8 +140,8 @@ export function QuestionAnswerView({
 								className={cn(
 									"inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide transition-colors",
 									showWww
-										? "bg-green-500 text-white"
-										: "bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-900/40 dark:text-green-400 dark:hover:bg-green-900/60",
+										? "bg-success text-white"
+										: "bg-success-100 text-success-700 hover:bg-success-200 dark:bg-success-900/40 dark:text-success-400 dark:hover:bg-success-900/60",
 								)}
 							>
 								WWW
@@ -155,8 +155,8 @@ export function QuestionAnswerView({
 								className={cn(
 									"inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide transition-colors",
 									showEbi
-										? "bg-amber-500 text-white"
-										: "bg-amber-100 text-amber-700 hover:bg-amber-200 dark:bg-amber-900/40 dark:text-amber-400 dark:hover:bg-amber-900/60",
+										? "bg-warning text-white"
+										: "bg-warning-100 text-warning-700 hover:bg-warning-200 dark:bg-warning-900/40 dark:text-warning-400 dark:hover:bg-warning-900/60",
 								)}
 							>
 								EBI

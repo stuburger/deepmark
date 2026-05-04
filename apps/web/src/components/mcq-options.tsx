@@ -79,7 +79,7 @@ function McqCheckbox({
 	if (!isGradingView) {
 		if (isCorrect) {
 			return (
-				<span className="shrink-0 h-4 w-4 border-2 border-emerald-500 bg-emerald-500 text-white flex items-center justify-center">
+				<span className="shrink-0 h-4 w-4 border-2 border-success bg-success text-white flex items-center justify-center">
 					<Check className="h-3 w-3" strokeWidth={3} />
 				</span>
 			)
@@ -92,7 +92,7 @@ function McqCheckbox({
 	// Grading view: student chose this AND it's correct
 	if (isChosen && isCorrect) {
 		return (
-			<span className="shrink-0 h-4 w-4 border-2 border-emerald-500 bg-emerald-500 text-white flex items-center justify-center">
+			<span className="shrink-0 h-4 w-4 border-2 border-success bg-success text-white flex items-center justify-center">
 				<Check className="h-3 w-3" strokeWidth={3} />
 			</span>
 		)
@@ -101,7 +101,7 @@ function McqCheckbox({
 	// Grading view: student chose this but it's wrong
 	if (isChosen && !isCorrect) {
 		return (
-			<span className="shrink-0 h-4 w-4 border-2 border-red-500 bg-red-500 text-white flex items-center justify-center">
+			<span className="shrink-0 h-4 w-4 border-2 border-destructive bg-destructive text-white flex items-center justify-center">
 				<X className="h-3 w-3" strokeWidth={3} />
 			</span>
 		)
@@ -110,7 +110,7 @@ function McqCheckbox({
 	// Grading view: student didn't choose this but it's the correct one (ghost indicator)
 	if (!isChosen && isCorrect) {
 		return (
-			<span className="shrink-0 h-4 w-4 border-2 border-emerald-400 text-emerald-400 flex items-center justify-center">
+			<span className="shrink-0 h-4 w-4 border-2 border-success-400 text-success-400 flex items-center justify-center">
 				<Check className="h-3 w-3" strokeWidth={3} />
 			</span>
 		)

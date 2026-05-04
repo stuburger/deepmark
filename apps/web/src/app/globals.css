@@ -1,6 +1,7 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
+@import "./globals.tokens.css"; /* GENERATED — do not edit. See `bun gen:tokens` */
 
 @custom-variant dark (&:is(.dark *));
 
@@ -123,20 +124,25 @@
 }
 
 :root {
-	/* DeepMark primitives — exact values from spec */
-	--ink: #1a1a1a;
+	/* DeepMark primitives — exact values from spec.
+	   Single-shade aliases (`--success`, `--teal`, `--destructive`, `--ink`)
+	   resolve to canonical scale shades from globals.tokens.css. New code
+	   should prefer the explicit scale shade (`bg-success-500`, `text-ink-900`)
+	   so the relationship to the scale is visible in the markup. The aliases
+	   stay so that existing `bg-success` / `text-ink` usages keep working. */
+	--ink: var(--color-ink-950);
 	--ink-secondary: rgba(0, 0, 0, 0.45);
 	--ink-tertiary: rgba(0, 0, 0, 0.28);
 	--ink-disabled: rgba(0, 0, 0, 0.18);
-	--teal: #01add0;
-	--teal-dark: #0190ae;
+	--teal: var(--color-teal-500);
+	--teal-dark: var(--color-teal-600);
 	--teal-light: rgba(1, 173, 208, 0.08);
 	--teal-ring: rgba(1, 173, 208, 0.25);
 	--paper: #ffffff;
 	--paper-surface: #f5f4f0;
 	--paper-white: #ffffff;
-	--success: #3c8a62;
-	--warning: #c4883a;
+	--success: var(--color-success-500);
+	--warning: var(--color-warning-500);
 	--status-marking: rgba(255, 0, 0, 0.5);
 	--status-review: #7fffa7;
 	--status-done: rgba(0, 0, 0, 0.09);
@@ -170,7 +176,7 @@
 	--muted-foreground: var(--ink-secondary);
 	--accent: var(--teal-light);
 	--accent-foreground: var(--ink);
-	--destructive: #c23b3b;
+	--destructive: var(--color-error-500);
 	--border: rgba(0, 0, 0, 0.1);
 	/* Lighter steps in the border scale. `--border-quiet` is for low-emphasis
 	   chrome (the icon-rail dotted divider, empty-state placeholders, slide-

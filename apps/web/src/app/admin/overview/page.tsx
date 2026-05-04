@@ -38,21 +38,21 @@ export default async function AdminOverviewPage() {
 			value: stats.totalUsers,
 			description: "Registered accounts",
 			icon: Users,
-			color: "text-blue-500",
+			color: "text-primary",
 		},
 		{
 			title: "Questions",
 			value: stats.totalQuestions,
 			description: "Active questions",
 			icon: BookOpen,
-			color: "text-purple-500",
+			color: "text-ink-500",
 		},
 		{
 			title: "Exam Papers",
 			value: stats.totalExamPapers,
 			description: "Active exam papers",
 			icon: FileText,
-			color: "text-orange-500",
+			color: "text-ink-500",
 		},
 		{
 			title: "Question Banks",
@@ -66,21 +66,21 @@ export default async function AdminOverviewPage() {
 			value: stats.pendingAnswers,
 			description: `${stats.completedAnswers} completed · ${stats.failedAnswers} failed`,
 			icon: Clock,
-			color: "text-yellow-500",
+			color: "text-warning",
 		},
 		{
 			title: "Submissions",
 			value: stats.totalSubmissions,
 			description: `${stats.activeSubmissions} in progress (not yet finished)`,
 			icon: FileText,
-			color: "text-pink-500",
+			color: "text-ink-500",
 		},
 		{
 			title: "Link Review",
 			value: stats.markSchemesNeedingReview,
 			description: "Mark schemes auto-linked or unlinked",
 			icon: Link2Off,
-			color: "text-amber-500",
+			color: "text-warning",
 		},
 	]
 
@@ -174,7 +174,7 @@ export default async function AdminOverviewPage() {
 						<div className="space-y-2">
 							<div className="flex items-center justify-between py-1">
 								<span className="flex items-center gap-2 text-sm">
-									<Clock className="h-4 w-4 text-yellow-500" />
+									<Clock className="h-4 w-4 text-warning" />
 									Pending
 								</span>
 								<Badge variant="outline">
@@ -183,7 +183,7 @@ export default async function AdminOverviewPage() {
 							</div>
 							<div className="flex items-center justify-between py-1">
 								<span className="flex items-center gap-2 text-sm">
-									<CheckCircle2 className="h-4 w-4 text-green-500" />
+									<CheckCircle2 className="h-4 w-4 text-success" />
 									Completed
 								</span>
 								<Badge variant="outline">

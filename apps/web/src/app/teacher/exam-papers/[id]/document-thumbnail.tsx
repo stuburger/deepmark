@@ -272,7 +272,7 @@ export function DocumentThumbnail({
 						{isProcessing || uploading ? (
 							<Spinner className="h-3.5 w-3.5 text-muted-foreground" />
 						) : (
-							<CheckCircle2 className="h-4 w-4 text-green-500" />
+							<CheckCircle2 className="h-4 w-4 text-success" />
 						)}
 					</div>
 				)}

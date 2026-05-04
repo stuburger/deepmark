@@ -133,7 +133,7 @@ export function GradingResultsPanel({
 						{scorePercent}%
 					</span>
 					{hasOverrides && (
-						<span className="text-[10px] text-blue-500 shrink-0">Adjusted</span>
+						<span className="text-[10px] text-primary shrink-0">Adjusted</span>
 					)}
 				</div>
 			)}

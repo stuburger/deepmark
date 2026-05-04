@@ -1,5 +1,6 @@
 "use client"
 
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -15,7 +16,6 @@ import {
 } from "@/components/ui/tooltip"
 import { UngradedBadge } from "@/components/ungraded-badge"
 import type { ResolvedOverride } from "@/lib/marking/overrides/resolve"
-import { cn } from "@/lib/utils"
 import { Pencil, RotateCcw } from "lucide-react"
 import { type ReactNode, useEffect, useRef, useState } from "react"
 
@@ -66,6 +66,7 @@ export function ScoreOverrideEditor({
 }: Props) {
 	const effectiveScore = override?.score_override ?? aiScore
 	const isOverridden = override !== null
+	const triggerIsScoreBadge = !renderDisplay && effectiveScore !== null
 
 	const [open, setOpen] = useState(false)
 	const [score, setScore] = useState(effectiveScore ?? 0)
@@ -127,28 +128,47 @@ export function ScoreOverrideEditor({
 
 	return (
 		<Popover open={open} onOpenChange={handleOpenChange}>
-			{/* nativeButton={false} — the trigger is a <span> on purpose so the
-			    badge can nest inside other clickable rows (e.g. MCQ rows) without
-			    forming an invalid <button>-in-<button>. We accept the loss of
-			    native button semantics; keyboard activation is wired manually. */}
+			{/* nativeButton={false} — trigger is span or Badge (not <button>) so we
+			    can nest inside other clickable rows without button-in-button. */}
 			<PopoverTrigger
 				nativeButton={false}
 				render={
-					<span
-						role="button"
-						tabIndex={0}
-						className="shrink-0 cursor-pointer"
-						onMouseDown={(e) => e.stopPropagation()}
-						onClick={(e) => e.stopPropagation()}
-						onKeyDown={(e) => {
-							if (e.key === "Enter" || e.key === " ") {
-								e.stopPropagation()
-							}
-						}}
-						title="Click to edit score"
-					>
-						{displayNode}
-					</span>
+					triggerIsScoreBadge ? (
+						<Badge
+							variant="score-full"
+							// biome-ignore lint/a11y/useSemanticElements: PopoverTrigger `nativeButton={false}` avoids nested `<button>` in MCQ/grid rows.
+							role="button"
+							tabIndex={0}
+							className="shrink-0 cursor-pointer"
+							onMouseDown={(e) => e.stopPropagation()}
+							onClick={(e) => e.stopPropagation()}
+							onKeyDown={(e) => {
+								if (e.key === "Enter" || e.key === " ") {
+									e.stopPropagation()
+								}
+							}}
+							title="Click to edit score"
+						>
+							{displayNode}
+						</Badge>
+					) : (
+						<span
+							// biome-ignore lint/a11y/useSemanticElements: PopoverTrigger `nativeButton={false}` avoids nested `<button>` in MCQ/grid rows.
+							role="button"
+							tabIndex={0}
+							className="shrink-0 cursor-pointer"
+							onMouseDown={(e) => e.stopPropagation()}
+							onClick={(e) => e.stopPropagation()}
+							onKeyDown={(e) => {
+								if (e.key === "Enter" || e.key === " ") {
+									e.stopPropagation()
+								}
+							}}
+							title="Click to edit score"
+						>
+							{displayNode}
+						</span>
+					)
 				}
 			/>
 			<PopoverContent
@@ -209,33 +229,19 @@ function DefaultBadge({
 	override: ResolvedOverride | null
 	aiScore: number
 }) {
-	const pct = maxScore > 0 ? effectiveScore / maxScore : 0
-	const color = override
-		? "bg-blue-500"
-		: pct >= 0.7
-			? "bg-green-500"
-			: pct >= 0.4
-				? "bg-amber-500"
-				: "bg-red-500"
-
-	const badge = (
-		<span
-			className={cn(
-				"inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold text-white tabular-nums",
-				color,
-			)}
-		>
+	const triggerInner = (
+		<span className="inline-flex items-center gap-1 tabular-nums">
 			{override && <Pencil className="h-2.5 w-2.5" />}
 			{effectiveScore}/{maxScore}
 		</span>
 	)
 
-	if (!override) return badge
+	if (!override) return triggerInner
 
 	return (
 		<TooltipProvider>
 			<Tooltip>
-				<TooltipTrigger render={badge} />
+				<TooltipTrigger render={triggerInner} />
 				<TooltipContent>
 					{override.reason && (
 						<p className="text-xs">

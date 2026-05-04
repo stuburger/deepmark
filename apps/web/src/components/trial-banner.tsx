@@ -38,9 +38,9 @@ function TrialOrPpuBanner({ balance }: { balance: number }) {
 	const exhausted = balance <= 0
 
 	const tone = exhausted
-		? "border-red-500/40 bg-red-500/10 text-red-700 dark:text-red-300"
+		? "border-error-500/40 bg-error-500/10 text-error-700 dark:text-error-300"
 		: balance <= 5
-			? "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-200"
+			? "border-warning-500/40 bg-warning-500/10 text-warning-700 dark:text-warning-200"
 			: "border-border/60 bg-muted/40 text-foreground/80"
 
 	const headline = exhausted
@@ -84,8 +84,8 @@ async function ProCapBanner(userId: string, totalBalance: number) {
 	if (atCap && extras > 0) return null
 
 	const tone = atCap
-		? "border-red-500/40 bg-red-500/10 text-red-700 dark:text-red-300"
-		: "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-200"
+		? "border-error-500/40 bg-error-500/10 text-error-700 dark:text-error-300"
+		: "border-warning-500/40 bg-warning-500/10 text-warning-700 dark:text-warning-200"
 
 	const headline = atCap
 		? `Monthly cap hit — top up to keep marking until ${formatPeriodEnd(usage.periodEndsAt)}.`

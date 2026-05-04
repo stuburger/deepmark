@@ -90,7 +90,7 @@ export function ListViewScriptSection({
 							id={`include-${script.id}`}
 							checked={isIncluded}
 							onCheckedChange={handleToggleInclude}
-							className="data-checked:border-green-600 data-checked:bg-green-600 dark:data-checked:bg-green-600"
+							className="data-checked:border-success-600 data-checked:bg-success-600 dark:data-checked:bg-success-600"
 							aria-label={
 								isIncluded ? "Remove from marking tray" : "Include for marking"
 							}

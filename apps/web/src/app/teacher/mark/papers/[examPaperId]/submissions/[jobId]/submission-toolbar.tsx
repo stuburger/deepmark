@@ -81,7 +81,7 @@ export function SubmissionToolbar({
 	return (
 		<TooltipProvider>
 			{/* ── Row 1: Context / breadcrumb ─────────────────────────────────── */}
-			<div className="shrink-0 flex items-center gap-1.5 border-b bg-muted/40 px-4 h-9 text-sm">
+			<div className="shrink-0 flex items-center gap-2 border-b border-border-quiet bg-background px-4 h-9 text-sm">
 				{!onClose && (
 					<>
 						<Link
@@ -189,7 +189,7 @@ export function SubmissionToolbar({
 			</div>
 
 			{/* ── Row 2: Job-level controls ────────────────────────────────────── */}
-			<div className="shrink-0 flex items-center gap-2 border-b bg-background px-4 h-11">
+			<div className="shrink-0 flex items-center gap-2 border-b border-border-quiet bg-background px-4 h-11">
 				<div className="flex-1" />
 
 				{/* LLM spend — admin-only (exposes model + per-call costs) */}

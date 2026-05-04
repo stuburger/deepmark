@@ -31,8 +31,8 @@ function buildInsertWidget(insertPos: number): Decoration {
 		"w-5 h-5 rounded text-xs font-bold leading-none",
 		"border border-zinc-300 dark:border-zinc-600",
 		"bg-white dark:bg-zinc-900 text-zinc-400 dark:text-zinc-500",
-		"hover:bg-blue-50 hover:text-blue-500 hover:border-blue-300",
-		"dark:hover:bg-blue-950/30 dark:hover:text-blue-400",
+		"hover:bg-teal-50 hover:text-primary hover:border-primary/40",
+		"dark:hover:bg-teal-950/30 dark:hover:text-primary",
 		"transition-colors cursor-pointer select-none",
 		"opacity-0 group-hover/insertrow:opacity-100",
 	].join(" ")

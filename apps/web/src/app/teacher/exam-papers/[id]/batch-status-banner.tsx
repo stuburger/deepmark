@@ -32,7 +32,7 @@ export function BatchStatusBanner({
 	return (
 		<div className="flex items-center justify-between gap-4 rounded-lg border bg-muted/20 px-4 py-3">
 			<div className="flex items-center gap-3">
-				<AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-500" />
+				<AlertTriangle className="h-3.5 w-3.5 shrink-0 text-warning" />
 				<p className="text-sm">
 					<span className="font-medium">
 						{pendingReviewCount > 0

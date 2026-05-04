@@ -209,7 +209,7 @@ export function ExamPaperQuestionsCard({
 											<div className="flex items-center gap-1.5">
 												{isDuplicate && (
 													<span
-														className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500"
+														className="h-1.5 w-1.5 shrink-0 rounded-full bg-warning"
 														title="Potential duplicate"
 													/>
 												)}

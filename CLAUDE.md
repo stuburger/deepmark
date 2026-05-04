@@ -26,6 +26,19 @@ DeepMark is an AI-powered marking tool for teachers, primarily targeting the UK 
 
 ---
 
+## Pre-launch operating mode (READ FIRST)
+
+**DeepMark has zero real users.** Public launch is targeted for 2026-05-15. Until that clause is removed from this file, the following hard rules apply:
+
+- **No grandfathering. No legacy maintenance. No backwards compatibility.** Schema breaks are fine. Renames are fine. Deleting old code paths is fine. There is no production data to preserve and no integrations to support.
+- **Never propose migration shims, compatibility flags, dual-write paths, or "for existing X, keep doing Y" branches.** If you find such code already in the repo, delete it as part of your change.
+- **Do not write code that exists to handle "existing users / existing rows / existing jobs / older clients".** Those don't exist.
+- **LLM and infra spend is paid out of personal funds pre-revenue.** Treat every retry loop, every long prompt, every unbounded queue retry as money flowing out of the founder's pocket. When you ship anything that issues LLM/Vision calls, an SQS-backed processor, or a Lambda, ensure: (a) bounded retries with a DLQ, (b) the failure path captures a `status='failed'` + error so loops can't run silently, (c) input size limits at the upload boundary so a single file can't pin a Lambda OOM-loop for 4 days. The investigation that produced this clause was a 46 MB PDF retrying for 38 minutes against a Lambda with no DLQ — that exact shape of bug is what to watch for.
+
+When real users exist, the founder will delete this section. Until then, suggesting "to keep things working for existing X" is wrong by definition — say so and propose the clean break instead.
+
+---
+
 ## Monorepo Structure
 
 ```

@@ -1,3 +1,4 @@
+import { concurrencyLimit } from "@/lib/concurrency"
 import { callLlmWithFallback } from "@/lib/infra/llm-runtime"
 import { logger } from "@/lib/infra/logger"
 import { outputSchema } from "@/lib/infra/output-schema"
@@ -16,6 +17,13 @@ const TAG = "segment-script"
 
 /** Tokens whose yMin is in the top 15% of page (bbox normalised to 0–1000). */
 const TOP_REGION_Y_MAX = 150
+
+// I/O-bound (HTTPS to Cloud Vision). Each in-flight call holds the page JPEG
+// + base64 string + response (~1 MB peak). At 16 concurrent: ~16 MB peak,
+// ~8 RPS effective — well under the Vision default quota of 30 RPS.
+// Tuned 8 → 16 after the 8-concurrency run timed out: 700 pages / 8 × ~2s
+// per call = 175 s for Vision alone, which left no budget for extract.
+const VISION_OCR_CONCURRENCY = 16
 
 export type SegmentPageInput = {
 	order: number
@@ -50,8 +58,11 @@ export async function segmentPdfScripts(
 
 	// Run Cloud Vision on every page that has image content. Pages already
 	// flagged blank by upstream ink-density detection skip the Vision call.
-	const pageTexts: PageTextBlock[] = await Promise.all(
-		sortedPages.map(async (p): Promise<PageTextBlock> => {
+	// Bounded concurrency: see VISION_OCR_CONCURRENCY above.
+	const pageTexts = await concurrencyLimit(
+		VISION_OCR_CONCURRENCY,
+		sortedPages,
+		async (p): Promise<PageTextBlock> => {
 			if (!p.jpegBuffer) return { order: p.order, empty: true }
 			const result = await runVisionOcr(
 				p.jpegBuffer.toString("base64"),
@@ -72,7 +83,7 @@ export async function segmentPdfScripts(
 				top: reconstructRegionText(result.tokens, "top"),
 				body: reconstructRegionText(result.tokens, "body"),
 			}
-		}),
+		},
 	)
 
 	// A page is blank if upstream flagged it OR Cloud Vision returned no tokens.

@@ -19,19 +19,33 @@ export const vapidPrivateKey = new sst.Secret(
 	"5UFLD1r3EJ8yyPi3SKLU7fX8KCcNUbUMvbxIvK5rmtY",
 )
 
+// Pre-launch (zero real users): a doomed SQS message has no value sitting in the
+// queue for the 4-day default while it gets redelivered every few minutes — that's
+// the founder's personal money on every retry. Cap at 30 min everywhere so a bad
+// message dies fast. Delete this constant and all references when real users exist.
+// DLQs are intentionally NOT capped — their purpose is post-mortem inspection.
+const PRELAUNCH_QUEUE_RETENTION_SECONDS = 30 * 60
+const prelaunchRetention = {
+	queue: { messageRetentionSeconds: PRELAUNCH_QUEUE_RETENTION_SECONDS },
+}
+
 export const markSchemePdfQueue = new sst.aws.Queue("MarkSchemePdfQueue", {
 	visibilityTimeout: "10 minutes",
+	transform: prelaunchRetention,
 })
 
 export const exemplarQueue = new sst.aws.Queue("ExemplarQueue", {
 	visibilityTimeout: "10 minutes",
+	transform: prelaunchRetention,
 })
 
 export const questionPaperQueue = new sst.aws.Queue("QuestionPaperQueue", {
 	visibilityTimeout: "10 minutes",
+	transform: prelaunchRetention,
 })
 
 // Dedicated DLQ per queue — each handler already knows its phase, no state inference needed.
+// Retention left at SQS default (4 days) so failed messages stick around long enough to inspect.
 const studentPaperOcrDlq = new sst.aws.Queue("StudentPaperOcrDLQ", {
 	visibilityTimeout: "1 minute",
 })
@@ -43,6 +57,7 @@ const studentPaperGradingDlq = new sst.aws.Queue("StudentPaperGradingDLQ", {
 export const studentPaperOcrQueue = new sst.aws.Queue("StudentPaperOcrQueue", {
 	visibilityTimeout: "10 minutes",
 	dlq: { queue: studentPaperOcrDlq.arn, retry: 2 },
+	transform: prelaunchRetention,
 })
 
 // Grading queue: manually triggered by server action after teacher selects exam paper.
@@ -50,6 +65,7 @@ export const studentPaperOcrQueue = new sst.aws.Queue("StudentPaperOcrQueue", {
 export const studentPaperQueue = new sst.aws.Queue("StudentPaperQueue", {
 	visibilityTimeout: "10 minutes",
 	dlq: { queue: studentPaperGradingDlq.arn, retry: 2 },
+	transform: prelaunchRetention,
 })
 
 // K-7: projection queue. Fires on Y.Doc snapshot writes from Hocuspocus
@@ -73,6 +89,7 @@ export const annotationProjectionQueue =
 	$dev || isPermanentStage
 		? new sst.aws.Queue("AnnotationProjectionQueue", {
 				visibilityTimeout: "5 minutes",
+				transform: prelaunchRetention,
 			})
 		: undefined
 
@@ -126,6 +143,7 @@ annotationProjectionQueue?.subscribe({
 
 export const batchClassifyQueue = new sst.aws.Queue("BatchClassifyQueue", {
 	visibilityTimeout: "5 minutes",
+	transform: prelaunchRetention,
 })
 
 batchClassifyQueue.subscribe({
@@ -139,9 +157,34 @@ batchClassifyQueue.subscribe({
 		scansBucket,
 	],
 	timeout: "4 minutes",
-	memory: "1 GB",
+	memory: "2 GB",
 	nodejs: { install: ["sharp", "mupdf"] },
 })
+
+// Test-only Lambda — same handler module as the BatchClassifyQueue subscriber,
+// invokable directly via the AWS SDK with a synthetic SQS event payload. Lets
+// the smoke test exercise the deployed code path under real Lambda conditions
+// (memory cap, vCPU, native bindings) without going through SQS or the upload
+// flow. `dev: false` keeps it in real AWS even during `sst dev`. Skipped on
+// production — no value in a never-invoked Lambda there.
+export const batchClassifyTestRunner =
+	$app.stage !== "production"
+		? new sst.aws.Function("BatchClassifyTestRunner", {
+				handler: "packages/backend/src/processors/batch-classify.handler",
+				link: [
+					neonPostgres,
+					geminiApiKey,
+					openAiApiKey,
+					anthropicApiKey,
+					cloudVisionApiKey,
+					scansBucket,
+				],
+				timeout: "4 minutes",
+				memory: "2 GB",
+				nodejs: { install: ["sharp", "mupdf"] },
+				dev: false,
+			})
+		: undefined
 
 // Triggered automatically: S3 fires a message when a PDF is uploaded to pdfs/mark-schemes/.
 // Can also be triggered manually via { job_id } from a server action (e.g. teacher retries a failed job).

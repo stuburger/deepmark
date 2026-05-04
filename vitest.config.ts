@@ -43,8 +43,26 @@ export default defineConfig({
 					name: "backend:integration",
 					root: backendRoot,
 					include: ["tests/integration/**/*.test.ts"],
+					exclude: ["tests/integration/**/*.smoke.test.ts"],
 					testTimeout: 180_000,
 					hookTimeout: 30_000,
+					pool: "forks",
+				},
+			},
+			// Smoke tests invoke deployed Lambdas directly (real AWS conditions)
+			// and cost real money per run (~$3 for the GWAUGH 700-page fixture).
+			// Opt-in only — never part of `bun test:integration`.
+			//
+			// testTimeout = Lambda max (4 min) + 1 min margin for setup/teardown.
+			// If the Lambda hits its own wall, the test should fail within ~5 min.
+			{
+				plugins: [backendTsconfigPaths],
+				test: {
+					name: "backend:lambda-smoke",
+					root: backendRoot,
+					include: ["tests/integration/**/*.smoke.test.ts"],
+					testTimeout: 300_000,
+					hookTimeout: 60_000,
 					pool: "forks",
 				},
 			},

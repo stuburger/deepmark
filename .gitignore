@@ -21,3 +21,9 @@ sample-data/
 
 # Local scratch dir for pulling artefacts (PDFs, traces) out of S3/DB.
 tmp/
+
+# Real-student stress fixture for batch-classify smoke test (44 MB,
+# contains real Year 10 mock answers + names from production).
+# Re-fetch from production S3 if needed:
+#   s3://deepmark-production-scansbucketbucket-oxttmuus/batches/cmorezqfn000302lb6v5rkn62/source/GWAUGH Exams.pdf
+y10_papers/gwaugh-700-page.pdf

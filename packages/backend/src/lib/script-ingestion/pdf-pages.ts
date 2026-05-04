@@ -1,4 +1,5 @@
 import { inflateSync } from "node:zlib"
+import { concurrencyLimit } from "@/lib/concurrency"
 import { s3 } from "@/lib/infra/s3"
 import { computeInkDensity } from "@/lib/scan-extraction/blank-detection"
 import { GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3"
@@ -6,6 +7,15 @@ import * as mupdf from "mupdf"
 import { PDFDict, PDFDocument, PDFName, PDFRawStream, PDFRef } from "pdf-lib"
 import { Resource } from "sst"
 import type { PageData } from "./types"
+
+// Each in-flight page extract holds two pdf-lib PDFDocument graphs (one for
+// the single-page extract, one re-loaded inside extractJpegFromPdfPage), the
+// extracted JPEG buffer, and an in-flight S3 PUT. Memory cost ~5 MB peak
+// per task, so 8 in flight = ~40 MB — comfortable in 2 GB. pdf-lib + mupdf
+// are single-threaded JS/native so the win above ~CPU count is overlapping
+// the S3 upload I/O with the next page's parse work. Tuned 4 → 8 after the
+// 4-concurrency run timed out at the 4-min wall.
+const PAGE_EXTRACT_CONCURRENCY = 8
 
 /**
  * Scale factor for the MuPDF fallback renderer — targets ~144 DPI for an A4
@@ -46,8 +56,11 @@ export async function extractPdfPages(
 			.pop()
 			?.replace(/\.[^/.]+$/, "") ?? "page"
 
-	const pages = await Promise.all(
-		Array.from({ length: pageCount }, async (_, i) => {
+	const pageIndices = Array.from({ length: pageCount }, (_, i) => i)
+	const pages = await concurrencyLimit(
+		PAGE_EXTRACT_CONCURRENCY,
+		pageIndices,
+		async (i): Promise<PageData> => {
 			const singlePage = await PDFDocument.create()
 			const [copiedPage] = await singlePage.copyPages(pdfDoc, [i])
 			// biome-ignore lint/style/noNonNullAssertion: copyPages always returns one page for single-index array
@@ -56,20 +69,12 @@ export async function extractPdfPages(
 
 			const jpegBytes = await extractJpegFromPdfPage(singlePageBytes)
 			if (!jpegBytes) {
-				return {
-					absoluteIndex: i,
-					jpegKey: null,
-					jpegBuffer: null,
-				} satisfies PageData
+				return { absoluteIndex: i, jpegKey: null, jpegBuffer: null }
 			}
 
 			const density = await computeInkDensity(jpegBytes)
 			if (density < BLANK_THRESHOLD) {
-				return {
-					absoluteIndex: i,
-					jpegKey: null,
-					jpegBuffer: null,
-				} satisfies PageData
+				return { absoluteIndex: i, jpegKey: null, jpegBuffer: null }
 			}
 
 			const jpegKey = `batches/${batchJobId}/pages/${sourceName}-${String(i + 1).padStart(3, "0")}.jpg`
@@ -82,12 +87,8 @@ export async function extractPdfPages(
 				}),
 			)
 
-			return {
-				absoluteIndex: i,
-				jpegKey,
-				jpegBuffer: jpegBytes,
-			} satisfies PageData
-		}),
+			return { absoluteIndex: i, jpegKey, jpegBuffer: jpegBytes }
+		},
 	)
 
 	return pages

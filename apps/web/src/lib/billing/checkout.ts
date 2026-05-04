@@ -15,6 +15,7 @@ import { stripeClient } from "./stripe-client"
 import { ensureStripeCustomer } from "./stripe-customer"
 
 const createCheckoutSessionInput = z.object({
+	kind: z.enum(["pro", "limitless"]),
 	currency: z.enum(["gbp", "usd"]),
 	interval: z.enum(["monthly", "annual"]),
 })
@@ -23,22 +24,29 @@ const createCheckoutSessionInput = z.object({
  * Create a Stripe Checkout session for the signed-in user. Auth wrapper +
  * four delegating calls: resolve-price, ensure-customer, decide-coupon,
  * build-and-call. Each piece is its own testable unit.
+ *
+ * The founders coupon is Pro-only (per `infra/billing.ts` — we want the £49
+ * Limitless ceiling to anchor Pro's value). Limitless always falls back to
+ * `allow_promotion_codes: true` so we can hand out manual codes if needed.
  */
 export const createCheckoutSession = authenticatedAction
 	.inputSchema(createCheckoutSessionInput)
 	.action(async ({ parsedInput, ctx }) => {
-		const { currency, interval } = parsedInput
-		const price = resolvePrice(currency, interval)
+		const { kind, currency, interval } = parsedInput
+		const price = resolvePrice(kind, currency, interval)
 
 		const customerId = await ensureStripeCustomer({
 			userId: ctx.user.id,
 			email: ctx.user.email,
 		})
 
-		const couponOrPromo = decideCheckoutCouponOrPromo({
-			foundersAvailable: await foundersAvailable(),
-			couponId: Resource.StripeConfig.foundersCouponId,
-		})
+		const couponOrPromo =
+			kind === "pro"
+				? decideCheckoutCouponOrPromo({
+						foundersAvailable: await foundersAvailable(),
+						couponId: Resource.StripeConfig.foundersCouponId,
+					})
+				: ({ allow_promotion_codes: true } as const)
 
 		const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://getdeepmark.com"
 		const params = buildCheckoutSessionParams({

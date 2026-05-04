@@ -75,7 +75,11 @@ export default async function PricingPage() {
 					foundersAvailable={foundersOpen}
 					signedIn={Boolean(session)}
 				/>
-				<LimitlessCard currency={currency} priceLabel={limitlessPriceLabel} />
+				<LimitlessCard
+					currency={currency}
+					priceLabel={limitlessPriceLabel}
+					signedIn={Boolean(session)}
+				/>
 			</div>
 
 			<div className="mx-auto mt-16 max-w-3xl space-y-8 text-sm text-muted-foreground">

@@ -7,6 +7,12 @@ export type Currency = "gbp" | "usd"
 export type Interval = "monthly" | "annual"
 
 /**
+ * The two recurring tiers a customer can pick at checkout. Pro has both
+ * monthly + annual; Limitless is monthly-only (we don't surface annual).
+ */
+export type PlanKind = "pro" | "limitless"
+
+/**
  * Plan IDs we set in Stripe Checkout `subscription_data.metadata.plan` so the
  * webhook can identify which plan was purchased without re-resolving the
  * Price. NOT the same as the Prisma `Plan` enum on User — `pro_annual` is a

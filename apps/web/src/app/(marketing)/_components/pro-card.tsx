@@ -39,6 +39,7 @@ export function ProCard(props: Props) {
 		}
 		setSubmitting(true)
 		const result = await createCheckoutSession({
+			kind: "pro",
 			currency: props.currency,
 			interval: "monthly",
 		})

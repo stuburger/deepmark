@@ -1,7 +1,11 @@
 "use client"
 
+import { useState } from "react"
+
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { createCheckoutSession } from "@/lib/billing/checkout"
+import { surfaceMarkingError } from "@/lib/billing/error-toast"
 import type { Currency } from "@/lib/billing/types"
 import { Check } from "lucide-react"
 
@@ -15,10 +19,41 @@ const FEATURES = [
 export function LimitlessCard({
 	currency,
 	priceLabel,
+	signedIn,
 }: {
 	currency: Currency
 	priceLabel: string
+	signedIn: boolean
 }) {
+	const [submitting, setSubmitting] = useState(false)
+
+	async function startCheckout() {
+		if (!signedIn) {
+			window.location.assign(
+				`/login?next=${encodeURIComponent("/pricing?tier=limitless")}`,
+			)
+			return
+		}
+		setSubmitting(true)
+		const result = await createCheckoutSession({
+			kind: "limitless",
+			currency,
+			interval: "monthly",
+		})
+		if (result?.serverError) {
+			surfaceMarkingError(result.serverError)
+			setSubmitting(false)
+			return
+		}
+		const url = result?.data?.url
+		if (!url) {
+			surfaceMarkingError("Could not start checkout. Please try again.")
+			setSubmitting(false)
+			return
+		}
+		window.location.assign(url)
+	}
+
 	return (
 		<div className="flex h-full flex-col">
 			<Card className="relative flex h-full flex-col border-border/60">
@@ -53,14 +88,17 @@ export function LimitlessCard({
 						className="mt-auto w-full"
 						size="lg"
 						variant="outline"
-						disabled
-						aria-label={`Limitless at ${priceLabel} per month — available soon`}
+						onClick={startCheckout}
+						disabled={submitting}
 					>
-						Available soon
+						{submitting
+							? "Starting checkout…"
+							: signedIn
+								? "Subscribe"
+								: "Sign in to subscribe"}
 					</Button>
 					<p className="text-center text-xs text-muted-foreground">
-						{currency === "gbp" ? "Prices in GBP" : "Prices in USD"} · launching
-						alongside Pro
+						{currency === "gbp" ? "Prices in GBP" : "Prices in USD"}
 					</p>
 				</CardContent>
 			</Card>

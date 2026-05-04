@@ -1,6 +1,6 @@
 import { Resource } from "sst"
 
-import type { Currency, Interval, PlanId } from "./types"
+import type { Currency, Interval, PlanId, PlanKind } from "./types"
 
 export type ResolvedPrice = {
 	planId: PlanId
@@ -11,38 +11,57 @@ export type ResolvedPrice = {
 }
 
 /**
- * Resolve a Stripe Price by currency + interval, reading the linked
+ * Resolve a Stripe Price by plan + currency + interval, reading the linked
  * StripeConfig. Throws if the combination is missing — every published
- * combination must exist in `infra/billing.ts` before we surface it in the UI.
+ * combination must exist in `infra/billing.ts` before we surface it in the
+ * UI. Limitless only ships monthly; passing `interval: "annual"` for it
+ * throws.
  */
 export function resolvePrice(
+	kind: PlanKind,
 	currency: Currency,
 	interval: Interval,
 ): ResolvedPrice {
-	const prices = Resource.StripeConfig.plans.pro.prices[currency]
-	const slot = interval === "monthly" ? prices.monthly : prices.annual
+	if (kind === "pro") {
+		const prices = Resource.StripeConfig.plans.pro.prices[currency]
+		const slot = interval === "monthly" ? prices.monthly : prices.annual
+		if (!slot.id) {
+			throw new Error(
+				`No Stripe price configured for pro/${currency}/${interval}`,
+			)
+		}
+		return {
+			planId: interval === "monthly" ? "pro_monthly" : "pro_annual",
+			priceId: slot.id,
+			amount: slot.amount,
+			currency,
+			interval,
+		}
+	}
+	if (interval !== "monthly") {
+		throw new Error(`Limitless is monthly-only — got ${interval}`)
+	}
+	const slot = Resource.StripeConfig.plans.limitless.prices[currency].monthly
 	if (!slot.id) {
-		throw new Error(
-			`No Stripe price configured for pro/${currency}/${interval}`,
-		)
+		throw new Error(`No Stripe price configured for limitless/${currency}`)
 	}
 	return {
-		planId: interval === "monthly" ? "pro_monthly" : "pro_annual",
+		planId: "limitless_monthly",
 		priceId: slot.id,
 		amount: slot.amount,
 		currency,
-		interval,
+		interval: "monthly",
 	}
 }
 
-/** Both intervals for a currency — used to render the pricing cards. */
+/** Both Pro intervals for a currency — used to render the Pro pricing card. */
 export function priceTiers(currency: Currency): {
 	monthly: ResolvedPrice
 	annual: ResolvedPrice
 } {
 	return {
-		monthly: resolvePrice(currency, "monthly"),
-		annual: resolvePrice(currency, "annual"),
+		monthly: resolvePrice("pro", currency, "monthly"),
+		annual: resolvePrice("pro", currency, "annual"),
 	}
 }
 

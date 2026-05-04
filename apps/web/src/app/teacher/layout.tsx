@@ -1,5 +1,7 @@
 import { redirect } from "next/navigation"
+import { Suspense } from "react"
 
+import { PurchaseSuccessToast } from "@/components/purchase-success-toast"
 import { PushRegistration } from "@/components/push-registration"
 import { IconRail } from "@/components/teacher/icon-rail"
 import { TeacherNavProvider } from "@/components/teacher/teacher-nav-context"
@@ -73,6 +75,11 @@ export default async function TeacherLayout({
 				initials={initials}
 			/>
 			<PushRegistration />
+			{/* useSearchParams reads the current location; wrap in Suspense per
+			    Next.js's static-bailout requirement. */}
+			<Suspense fallback={null}>
+				<PurchaseSuccessToast />
+			</Suspense>
 		</TeacherNavProvider>
 	)
 }

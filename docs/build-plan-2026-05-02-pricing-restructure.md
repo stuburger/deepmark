@@ -448,14 +448,23 @@ Items called out during the Phase 0-4 retrospective. Address before starting Pha
 
 #### High priority
 
-**1. Reserve-on-submit (close the over-spend race). — ✅ DONE 2026-05-03**
+**1. Reserve-on-submit (close the over-spend race). — ✅ DONE 2026-05-03 · race actually closed 2026-05-04**
 
 What shipped:
 - `commit-service.ts` pre-generates a `crypto.randomUUID()` per submission, then within one `db.$transaction` creates `StudentSubmission` + `OcrRun(pending)` + `GradingRun(pending)` + paper_ledger consume row. SQS messages send after commit.
 - Re-mark (`retriggerGrading`) and re-scan (`retriggerOcr`) follow the same pattern (one consume per call, single-row insert).
 - Period_id snapshotted **before** the transaction so all rows in a batch share the same period.
-- Lambda-side `debitPaperLedger` retained as defensive backfill (delegates to the shared helper; no-op-on-replay covers any pre-Phase-4.5 inflight or operator-injected SQS messages).
+- Lambda-side `debitPaperLedger` initially retained as defensive backfill — **deleted 2026-05-04** once reserve-on-submit was the universal write path (the Phase 6 backfill SQL absorbed any pre-existing pending rows).
 - `enforcePapersQuota` → `assertPapersQuota` rename across all 4 call sites.
+
+**Correction (2026-05-04):** the original rationale for "Reserve-on-submit closes the over-spend race" claimed "Postgres serialisation on the unique index" would roll back a double-submit. That was wrong — the unique index is on `(kind, grading_run_id)` and parallel batches use disjoint grading_run_ids, so they never collide. An integration test (`apps/web/tests/integration/over-spend-race.test.ts`) was authored against the unfixed code and confirmed the bug: balance went to -1 with two parallel batches each requesting 2 against a balance of 3. The actual fix lives inside `insertConsumesForBatch`:
+
+1. Per-user `pg_advisory_xact_lock(hashtext(user_id))` acquired inside the transaction. Auto-releases at COMMIT/ROLLBACK so the lock is scoped strictly to the consume tx.
+2. Re-read the balance under the lock; throw `InsufficientBalanceError` if it can no longer cover the request. The throw rolls the entire transaction back — no consume rows, no submission, no work scheduled. UI shows the cap-bite modal exactly as if the pre-flight check had caught it.
+3. `tx` is **required** (not optional) so future internal callers can't accidentally bypass the lock.
+4. `plan` is threaded through so the in-tx throw produces the same plan-aware error copy as the pre-flight `assertPapersQuota` would.
+
+Result: parallel batches serialize on the lock; second one observes the post-debit balance and can no longer over-spend. ~5 lines of code in one place, ~1ms added to every commit, no schema change.
 
 **2. Extract shared ledger helpers — ✅ DONE 2026-05-03**
 
@@ -584,14 +593,22 @@ Both wrapped in `BEGIN; COMMIT;` for forensic clarity. Per-stage execution seque
 - Stu's admin account: balance −88 (108 historical consumes), correctly bypasses entitlement via `role: admin`
 - Real teachers: full +20 trial available
 
-**Deferred to a Phase 6.5 cleanup pass before / after launch:**
+**Phase 6.5 cleanup (worked through 2026-05-04):**
 
 Surfaced during the post-migration audit; documented here for the record. None block the migration itself.
 
-1. **Auto-refund on grading-run failure not wired.** `insertRefundForGradingRun` exists in `apps/web/src/lib/billing/ledger.ts` but no production code path calls it. Reserve-on-submit (Phase 4.5) moved the consume row to submit time → DLQ-delivered failures now leave a debit with no offsetting refund. Right fix: extract the refund insert into the shared `@mcp-gcse/db/ledger.ts` and call from `student-paper-ocr-dlq.ts` + `student-paper-grading-dlq.ts`. Idempotent via `@@unique([kind, grading_run_id])`. ~30-45 min including tests. **Real money/credit loss, important to wire before non-trivial paid load.**
-2. **Trial_grant race window widened by the auth.ts hoist.** `seedTrialGrant` runs on every login now; two parallel logins can both pass the `findFirst` and both insert → user gets 40 trial papers. Outcome is "generous, not harmful" but a partial unique index `WHERE kind = 'trial_grant'` (raw SQL, matches the `setup-vectors.sql` precedent) closes it permanently. ~15 min.
-3. **No UI feedback after top-up success.** `?topup=success` query param is set on the redirect URL but nothing reads it. ~10 min for an on-mount toast.
+1. **Auto-refund on grading-run failure not wired. — ✅ DONE 2026-05-04.** New `refundFailedGradingRun` + `insertRefundForGradingRun` in `packages/db/src/ledger.ts`; both DLQ handlers call the failed-job refund after `markJobFailed`. Looks up the consume row by `grading_run_id` to recover user + period, inserts the offsetting refund row idempotently. `getCurrentPeriodUsage` and `expirePreviousPeriodGrant` now sum `consume + refund` per `period_id` so the meter and rollover math reflect refunds correctly. 6 unit tests added.
+2. **Trial_grant race window widened by the auth.ts hoist. — ✅ DONE 2026-05-04.** Partial unique index `paper_ledger_trial_grant_per_user_idx ON paper_ledger (user_id) WHERE kind = 'trial_grant'` appended to `setup-vectors.sql`. `seedTrialGrant` now catches P2002 silently — concurrent first-time logins collapse to a single grant. **Deploy note:** the index creation will fail if a stage already has duplicate trial_grants. Stuartbourhill's Phase 6 backfill seeded one-per-user, so it's clean; production hasn't been backfilled yet, also clean.
+3. **No UI feedback after top-up success. — ✅ DONE 2026-05-04.** New `<PurchaseSuccessToast />` mounted in the teacher layout (Suspense-wrapped) reads `?ppu=success` / `?topup=success` / `?topup=canceled` on mount, fires a sonner toast, then strips the params via `router.replace`.
 4. **`charge.refunded` still a logged stub.** Unchanged — needs schema decision (new `purchase_refund` kind or `@@unique([kind, stripe_session_id])` rework). Manual via admin Credits in the meantime.
+
+**Code-quality cleanups landed 2026-05-04 alongside the above:**
+
+- **Lambda defensive backfill (`debitPaperLedger`) deleted** from `student-paper-grade.ts` — reserve-on-submit is now the universal write path, and the Phase 6 backfill SQL absorbed any pre-existing pending submissions.
+- **Trial-grant + isUniqueViolation consolidated** into `@mcp-gcse/db`. `seedTrialGrant` is the canonical helper; auth.ts and the web wrapper both delegate. `isUniqueViolation` is one exported helper instead of three duplicated inline checks.
+- **`PurchaseSuccessToast` deps** — switched from `params` (URLSearchParams; unstable identity) to `params.toString()` to stop the effect re-running unnecessarily.
+- **`infra/billing.ts` top comment** rewritten to describe the four-product ladder (was Pro-only).
+- **`InsufficientBalanceError` plan-fidelity** — `plan` now threaded through `insertConsumesForBatch` so the in-tx lock-recheck throw produces the same plan-aware copy as the pre-flight `assertPapersQuota` throw. Without it, racing batches would hit the cap-bite modal with the generic fallback message instead of plan-specific copy.
 
 ---
 

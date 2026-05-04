@@ -1,9 +1,13 @@
 import { db } from "@/lib/db"
 import {
 	LedgerEntryKind,
+	type Plan,
 	type Prisma,
 	insertConsumesForGradingRuns as insertConsumesForGradingRunsShared,
+	seedTrialGrant as seedTrialGrantShared,
 } from "@mcp-gcse/db"
+
+import { InsufficientBalanceError } from "./types"
 
 /**
  * Web-side paper ledger helpers (impure — Prisma-backed). The append-only
@@ -70,10 +74,13 @@ export async function getCurrentPeriodUsage(userId: string): Promise<{
 		select: { period_id: true, papers: true, period_ends_at: true },
 	})
 	if (!latestGrant?.period_id) return null
+	// Net consumed = SUM(consume + refund) within the period. Refunds carry
+	// the same period_id as the consume they undo, so a DLQ-driven refund
+	// brings the displayed "this month's used" back down accordingly.
 	const consumesAgg = await db.paperLedgerEntry.aggregate({
 		where: {
 			user_id: userId,
-			kind: LedgerEntryKind.consume,
+			kind: { in: [LedgerEntryKind.consume, LedgerEntryKind.refund] },
 			period_id: latestGrant.period_id,
 		},
 		_sum: { papers: true },
@@ -92,92 +99,86 @@ export async function getCurrentPeriodUsage(userId: string): Promise<{
  * Reserve one consume entry per pre-generated grading_run_id. Called at
  * batch-commit / re-mark / re-scan time inside the same transaction as the
  * StudentSubmission + GradingRun creation — debit and work-scheduling are
- * atomic, closing the over-spend race that an after-the-fact debit would
- * leave open.
+ * atomic.
  *
- * Pass `tx` (the interactive-transaction client) to participate in the
- * caller's transaction; pass nothing to use the global `db` singleton.
+ * `tx` is **required** (not optional) because the over-spend protection
+ * uses a `pg_advisory_xact_lock` that auto-releases at COMMIT/ROLLBACK; a
+ * lock outside any transaction would release immediately and provide no
+ * mutual exclusion. All call sites (commit-service, re-mark, re-scan)
+ * already wrap in `db.$transaction`.
  *
- * Idempotent — replays from Lambda backfill calls or SQS retries no-op via
- * `@@unique([kind, grading_run_id])`.
+ * Race protection: `assertPapersQuota` outside this function is a fast-fail
+ * pre-check with no locking, so two parallel batches could both pass it
+ * with the same observed balance. Inside this function we acquire a
+ * per-user advisory lock and re-read the balance; the second batch to
+ * arrive at the lock either still has headroom (and proceeds) or sees the
+ * post-debit balance from the first batch and throws
+ * `InsufficientBalanceError`, rolling its tx back without the consume
+ * rows landing.
+ *
+ * `plan` is threaded through so the in-tx throw produces the same
+ * plan-aware error copy as the pre-flight `assertPapersQuota` would.
+ * Without it, racing batches would see the generic "insufficient
+ * balance" toast instead of the plan-specific "monthly limit hit — top
+ * up" / "buy a set or subscribe" copy.
+ *
+ * Idempotent on replay — `@@unique([kind, grading_run_id])` makes a retry
+ * with the same grading_run_ids a silent no-op.
  */
 export async function insertConsumesForBatch(args: {
 	userId: string
 	gradingRunIds: string[]
 	periodId: string | null
-	tx?: Prisma.TransactionClient
+	plan: Plan | null
+	tx: Prisma.TransactionClient
 }): Promise<{ inserted: number }> {
+	if (args.gradingRunIds.length === 0) return { inserted: 0 }
+
+	// Per-user serialization. hashtext() returns int; pg_advisory_xact_lock
+	// widens to bigint. Hash collisions across users are 1-in-4B and only
+	// cause unrelated users to briefly serialize — no correctness impact.
+	// $executeRaw (vs $queryRaw) because pg_advisory_xact_lock returns void
+	// and Prisma can't deserialize that into a result set.
+	await args.tx
+		.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${args.userId}))`
+
+	const balanceAgg = await args.tx.paperLedgerEntry.aggregate({
+		where: { user_id: args.userId },
+		_sum: { papers: true },
+	})
+	const balance = balanceAgg._sum.papers ?? 0
+	if (balance < args.gradingRunIds.length) {
+		throw new InsufficientBalanceError(
+			balance,
+			args.gradingRunIds.length,
+			args.plan,
+		)
+	}
+
 	return insertConsumesForGradingRunsShared({
-		db: args.tx ?? db,
+		db: args.tx,
 		userId: args.userId,
 		gradingRunIds: args.gradingRunIds,
 		periodId: args.periodId,
 	})
 }
 
-/**
- * Refund a previously-consumed grading run. Idempotent via the
- * `@@unique([kind, grading_run_id])` constraint — only one refund per
- * grading_run_id can exist regardless of how many times this is called.
- *
- * `grantedByUserId` + `note` are optional audit fields used when a human
- * operator issues the refund (e.g. "manual refund — student paper had a
- * scan error"). System-issued refunds (e.g. automatic Lambda-side recovery)
- * leave them null.
- *
- * Returns false if a refund row already exists for this grading_run (so
- * the caller knows the no-op happened); true if a new row was inserted.
- */
-export async function insertRefundForGradingRun(args: {
-	userId: string
-	gradingRunId: string
-	grantedByUserId?: string
-	note?: string
-}): Promise<{ refunded: boolean }> {
-	try {
-		await db.paperLedgerEntry.create({
-			data: {
-				user_id: args.userId,
-				papers: 1,
-				kind: LedgerEntryKind.refund,
-				grading_run_id: args.gradingRunId,
-				granted_by_user_id: args.grantedByUserId,
-				note: args.note,
-			},
-		})
-		return { refunded: true }
-	} catch (err) {
-		if (isUniqueViolation(err)) return { refunded: false }
-		throw err
-	}
-}
-
 // ─── Trial seeding ───────────────────────────────────────────────────────────
 
 /**
- * Seed a new user's trial allowance. Idempotent on (user_id, kind=trial_grant)
- * via the application-level pre-check; with one trial_grant per user expected,
- * this race is acceptable (worst case: a user retries within milliseconds and
- * sees a brief 40-paper allowance instead of 20). For stricter idempotency,
- * add a partial unique index later.
+ * Web wrapper around `@mcp-gcse/db`'s `seedTrialGrant`, binding the
+ * singleton `db`. No production caller currently — auth.ts owns the
+ * trial-seed call site and uses the shared helper directly.
  */
 export async function insertTrialGrant(args: {
 	userId: string
 	papers: number
 }): Promise<{ granted: boolean }> {
-	const existing = await db.paperLedgerEntry.findFirst({
-		where: { user_id: args.userId, kind: LedgerEntryKind.trial_grant },
-		select: { id: true },
+	return seedTrialGrantShared({
+		db,
+		userId: args.userId,
+		papers: args.papers,
 	})
-	if (existing) return { granted: false }
-	await db.paperLedgerEntry.create({
-		data: {
-			user_id: args.userId,
-			papers: args.papers,
-			kind: LedgerEntryKind.trial_grant,
-		},
-	})
-	return { granted: true }
 }
 
 // ─── Admin grants ────────────────────────────────────────────────────────────
@@ -208,15 +209,4 @@ export async function insertAdminGrant(args: {
 		select: { id: true },
 	})
 	return row
-}
-
-// ─── Internal ────────────────────────────────────────────────────────────────
-
-function isUniqueViolation(err: unknown): boolean {
-	return (
-		typeof err === "object" &&
-		err !== null &&
-		"code" in err &&
-		(err as Prisma.PrismaClientKnownRequestError).code === "P2002"
-	)
 }

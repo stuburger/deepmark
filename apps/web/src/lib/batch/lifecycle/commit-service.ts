@@ -155,16 +155,17 @@ export async function commitBatchService(
 		)
 
 		// Reserve the paper-ledger consume rows atomically with the work above.
-		// Skipped for admin / Limitless (uncapped). For trial / PPU-only / Pro
-		// the consume rows enforce balance via the assertPapersQuota pre-check;
-		// the createMany lands inside the same tx so a double-submit race would
-		// roll one of the two transactions back via Postgres serialisation on
-		// the unique index.
+		// Skipped for admin / Limitless (uncapped). Otherwise insertConsumesForBatch
+		// takes a per-user pg_advisory_xact_lock + balance recheck before
+		// inserting, so a parallel batch racing past the same pre-check
+		// gets rolled back here with InsufficientBalanceError instead of
+		// driving the balance negative.
 		if (!skipLedger) {
 			await insertConsumesForBatch({
 				userId: uploadedBy,
 				gradingRunIds: jobs.map((j) => j.id),
 				periodId,
+				plan: userPlan?.plan ?? null,
 				tx,
 			})
 		}

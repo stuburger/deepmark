@@ -1,6 +1,8 @@
 import {
 	insertConsumesForGradingRuns,
+	insertRefundForGradingRun,
 	lookupCurrentPeriodId,
+	refundFailedGradingRun,
 } from "@mcp-gcse/db"
 import { type Mock, describe, expect, it, vi } from "vitest"
 
@@ -16,6 +18,7 @@ type FakeLedgerStore = {
 	paperLedgerEntry: {
 		createMany: Mock
 		findFirst: Mock
+		create: Mock
 	}
 }
 
@@ -29,8 +32,13 @@ function makeFakeLedgerStore(): FakeLedgerStore {
 		paperLedgerEntry: {
 			createMany: vi.fn(async () => ({ count: 0 })),
 			findFirst: vi.fn(async () => null),
+			create: vi.fn(async () => ({ id: "fake-id" })),
 		},
 	}
+}
+
+function uniqueViolation(): Error {
+	return Object.assign(new Error("unique violation"), { code: "P2002" })
 }
 
 function asLedgerClient(store: FakeLedgerStore): never {
@@ -180,5 +188,108 @@ describe("lookupCurrentPeriodId", () => {
 			plan: "pro_monthly",
 		})
 		expect(result).toBeNull()
+	})
+})
+
+describe("insertRefundForGradingRun", () => {
+	it("inserts a positive refund row with the consume's period_id snapshot", async () => {
+		const db = makeFakeLedgerStore()
+		const result = await insertRefundForGradingRun({
+			db: asLedgerClient(db),
+			userId: "u_1",
+			gradingRunId: "gr_42",
+			periodId: "in_99",
+		})
+		expect(result).toEqual({ refunded: true })
+		expect(db.paperLedgerEntry.create).toHaveBeenCalledWith({
+			data: {
+				user_id: "u_1",
+				papers: 1,
+				kind: "refund",
+				grading_run_id: "gr_42",
+				period_id: "in_99",
+				granted_by_user_id: undefined,
+				note: undefined,
+			},
+		})
+	})
+
+	it("returns refunded:false on unique-constraint replay", async () => {
+		const db = makeFakeLedgerStore()
+		db.paperLedgerEntry.create.mockRejectedValueOnce(uniqueViolation())
+		const result = await insertRefundForGradingRun({
+			db: asLedgerClient(db),
+			userId: "u_1",
+			gradingRunId: "gr_42",
+			periodId: null,
+		})
+		expect(result).toEqual({ refunded: false })
+	})
+
+	it("rethrows non-unique errors", async () => {
+		const db = makeFakeLedgerStore()
+		db.paperLedgerEntry.create.mockRejectedValueOnce(new Error("connection"))
+		await expect(
+			insertRefundForGradingRun({
+				db: asLedgerClient(db),
+				userId: "u_1",
+				gradingRunId: "gr_42",
+				periodId: null,
+			}),
+		).rejects.toThrow(/connection/)
+	})
+})
+
+describe("refundFailedGradingRun", () => {
+	it("returns foundConsume:false without inserting when no consume exists", async () => {
+		const db = makeFakeLedgerStore()
+		// findFirst returns null (no consume row) — admin / Limitless path
+		db.paperLedgerEntry.findFirst.mockResolvedValueOnce(null)
+		const result = await refundFailedGradingRun({
+			db: asLedgerClient(db),
+			gradingRunId: "gr_42",
+		})
+		expect(result).toEqual({ refunded: false, foundConsume: false })
+		expect(db.paperLedgerEntry.create).not.toHaveBeenCalled()
+	})
+
+	it("looks up consume row, copies user+period, inserts refund", async () => {
+		const db = makeFakeLedgerStore()
+		db.paperLedgerEntry.findFirst.mockResolvedValueOnce({
+			user_id: "u_7",
+			period_id: "in_99",
+		})
+		const result = await refundFailedGradingRun({
+			db: asLedgerClient(db),
+			gradingRunId: "gr_42",
+		})
+		expect(result).toEqual({ refunded: true, foundConsume: true })
+		expect(db.paperLedgerEntry.findFirst).toHaveBeenCalledWith({
+			where: { kind: "consume", grading_run_id: "gr_42" },
+			select: { user_id: true, period_id: true },
+		})
+		expect(db.paperLedgerEntry.create).toHaveBeenCalledWith({
+			data: expect.objectContaining({
+				user_id: "u_7",
+				papers: 1,
+				kind: "refund",
+				grading_run_id: "gr_42",
+				period_id: "in_99",
+			}),
+		})
+	})
+
+	it("propagates idempotent replay (consume exists, refund insert is duplicate)", async () => {
+		const db = makeFakeLedgerStore()
+		db.paperLedgerEntry.findFirst.mockResolvedValueOnce({
+			user_id: "u_7",
+			period_id: null,
+		})
+		db.paperLedgerEntry.create.mockRejectedValueOnce(uniqueViolation())
+		const result = await refundFailedGradingRun({
+			db: asLedgerClient(db),
+			gradingRunId: "gr_42",
+		})
+		expect(result).toEqual({ refunded: false, foundConsume: true })
 	})
 })

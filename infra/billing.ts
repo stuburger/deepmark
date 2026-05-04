@@ -1,20 +1,30 @@
 /**
- * Stripe billing infra.
+ * Stripe billing infra — the four-product ladder.
  *
- * One Pro tier × two billing intervals (monthly, annual) × two currencies
- * (GBP, USD). Add ZAR/AUD post-launch when those markets justify the
- * tax-registration overhead (Stripe Tax flags it, but we still have to file).
+ *   PPU set      £10  / $13   one-off,    30 papers (no expiry, in code)
+ *   Pro          £24  / $30   monthly,    60 papers/month (capped, expires)
+ *                £259 / $324  annual      (kept in infra, not on public page)
+ *   Top-up       £6.50/ $8.50 one-off,    15 papers (in-app upsell only)
+ *   Limitless    £49  / $62   monthly,    uncapped
  *
- * Pricing (2026-05-01):
- *   GBP £24/mo, £259/yr (~10% off)
- *   USD $30/mo, $324/yr (~10% off)
+ * GBP + USD are the launch currencies; ZAR/AUD added post-launch when those
+ * markets justify the tax-registration overhead.
  *
- * Founders' offer: ONE Coupon, 40% off, repeating 6 months,
- * max_redemptions 100. Server-side gate counts active Pro subs and only
- * attaches the coupon while seats remain — Stripe's max_redemptions is the
- * defence-in-depth backstop if our count drifts.
+ * Founders' offer: a single Coupon, 40% off, repeating 6 months,
+ * max_redemptions 100. Pro only — explicitly NOT applied to Limitless (we
+ * want the £49 ceiling to anchor Pro's value). The web-side gate counts
+ * active Pro subs and only attaches the coupon while seats remain;
+ * Stripe's max_redemptions is the defence-in-depth backstop. Founders pay
+ * £14.40 (marketed as £14.50 — 10p drift accepted).
  *
- * Founders price: £24 × 0.6 = £14.40 (marketed as £14.50 — 10p drift OK).
+ * The Stripe webhook endpoint + `StripeWebhookSecret` Linkable live in
+ * `infra/api.ts` (the URL points at the API Gateway Lambda's
+ * `/stripe/webhook` route, so they have to be co-located with `api.url` to
+ * avoid an `api.ts` ↔ `billing.ts` import cycle).
+ *
+ * Source of truth for amounts is the constants below — the marketing
+ * pricing page reads them through `Resource.StripeConfig`, so the price
+ * shown on the page and the price Stripe charges can never drift.
  */
 
 // ─── Constants ───────────────────────────────────────────────────────────────

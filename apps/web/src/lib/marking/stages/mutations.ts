@@ -6,6 +6,7 @@ import { insertConsumesForBatch } from "@/lib/billing/ledger"
 import { db } from "@/lib/db"
 import { SQSClient, SendMessageCommand } from "@aws-sdk/client-sqs"
 import {
+	type Plan,
 	ResourceGrantPrincipalType,
 	ResourceGrantResourceType,
 	ResourceGrantRole,
@@ -25,20 +26,21 @@ const sqs = new SQSClient({})
 async function resolveLedgerContext(userId: string): Promise<{
 	skip: boolean
 	periodId: string | null
+	plan: Plan | null
 }> {
 	const user = await db.user.findUnique({
 		where: { id: userId },
 		select: { plan: true, role: true },
 	})
 	if (user?.role === "admin" || user?.plan === "limitless_monthly") {
-		return { skip: true, periodId: null }
+		return { skip: true, periodId: null, plan: user?.plan ?? null }
 	}
 	const periodId = await lookupCurrentPeriodId({
 		db,
 		userId,
 		plan: user?.plan ?? null,
 	})
-	return { skip: false, periodId }
+	return { skip: false, periodId, plan: user?.plan ?? null }
 }
 
 /**
@@ -178,6 +180,7 @@ export const retriggerGrading = resourceAction({
 					userId: oldSub.uploaded_by,
 					gradingRunIds: [created.id],
 					periodId: ledger.periodId,
+					plan: ledger.plan,
 					tx,
 				})
 			}
@@ -281,6 +284,7 @@ export const retriggerOcr = resourceAction({
 					userId: oldSub.uploaded_by,
 					gradingRunIds: [created.id],
 					periodId: ledger.periodId,
+					plan: ledger.plan,
 					tx,
 				})
 			}

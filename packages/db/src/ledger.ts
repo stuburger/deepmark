@@ -31,6 +31,20 @@ type LedgerCapableClient = {
 }
 
 /**
+ * True when `err` is a Prisma unique-constraint violation (P2002). All
+ * ledger writes that rely on a unique-index for idempotency catch this and
+ * treat the duplicate as a successful no-op.
+ */
+export function isUniqueViolation(err: unknown): boolean {
+	return (
+		typeof err === "object" &&
+		err !== null &&
+		"code" in err &&
+		(err as Prisma.PrismaClientKnownRequestError).code === "P2002"
+	)
+}
+
+/**
  * Insert one `consume` ledger entry per grading_run_id. Idempotent via the
  * schema's `@@unique([kind, grading_run_id])` — replays (e.g. SQS retries
  * landing on the Lambda after the consume was already reserved at submit
@@ -87,6 +101,81 @@ export async function lookupCurrentPeriodId(args: {
 		select: { period_id: true },
 	})
 	return latestGrant?.period_id ?? null
+}
+
+// ─── Refunds ─────────────────────────────────────────────────────────────────
+
+/**
+ * Refund a previously-consumed grading run. Idempotent via the
+ * `@@unique([kind, grading_run_id])` constraint — only one refund per
+ * grading_run_id can exist regardless of how many times this is called.
+ *
+ * `periodId` should snapshot the same period as the consume row being
+ * undone, so per-period usage queries (which net consume + refund per
+ * period_id) reflect the refund correctly. Pass `null` for refunds whose
+ * consume had no period (trial / PPU-only).
+ *
+ * `grantedByUserId` + `note` are optional audit fields used when a human
+ * operator issues the refund. System-issued refunds (DLQ-driven) leave them
+ * null. Returns `{ refunded: false }` on idempotent replay.
+ */
+export async function insertRefundForGradingRun(args: {
+	db: LedgerCapableClient
+	userId: string
+	gradingRunId: string
+	periodId: string | null
+	grantedByUserId?: string
+	note?: string
+}): Promise<{ refunded: boolean }> {
+	try {
+		await args.db.paperLedgerEntry.create({
+			data: {
+				user_id: args.userId,
+				papers: 1,
+				kind: LedgerEntryKind.refund,
+				grading_run_id: args.gradingRunId,
+				period_id: args.periodId,
+				granted_by_user_id: args.grantedByUserId,
+				note: args.note,
+			},
+		})
+		return { refunded: true }
+	} catch (err) {
+		if (isUniqueViolation(err)) return { refunded: false }
+		throw err
+	}
+}
+
+/**
+ * Refund a grading run whose work has terminally failed (DLQ-delivered).
+ * Looks up the original consume row by `grading_run_id` to recover the
+ * `user_id` + `period_id`, then inserts a matching refund row. Returns
+ * `{ refunded: false, foundConsume: false }` when no consume row exists —
+ * the normal case for admin / Limitless / never-reserved jobs.
+ *
+ * Idempotent: calling twice for the same grading_run produces one refund
+ * row. Safe to call from both OCR and grading DLQ handlers; only the first
+ * succeeds.
+ */
+export async function refundFailedGradingRun(args: {
+	db: LedgerCapableClient
+	gradingRunId: string
+}): Promise<{ refunded: boolean; foundConsume: boolean }> {
+	const consume = await args.db.paperLedgerEntry.findFirst({
+		where: {
+			kind: LedgerEntryKind.consume,
+			grading_run_id: args.gradingRunId,
+		},
+		select: { user_id: true, period_id: true },
+	})
+	if (!consume) return { refunded: false, foundConsume: false }
+	const result = await insertRefundForGradingRun({
+		db: args.db,
+		userId: consume.user_id,
+		gradingRunId: args.gradingRunId,
+		periodId: consume.period_id,
+	})
+	return { refunded: result.refunded, foundConsume: true }
 }
 
 // ─── Subscription period grants ──────────────────────────────────────────────
@@ -154,10 +243,14 @@ export async function expirePreviousPeriodGrant(args: {
 	})
 	if (!previousGrant?.period_id) return { expired: 0 }
 
+	// Net consumed = SUM(consume + refund) within the period. Refunds carry
+	// the same period_id as the consume they undo, so a -1 + +1 nets to 0
+	// within the aggregate — rolling-over a period with refunded failures
+	// gives back the right unused amount.
 	const consumesAgg = await args.db.paperLedgerEntry.aggregate({
 		where: {
 			user_id: args.userId,
-			kind: LedgerEntryKind.consume,
+			kind: { in: [LedgerEntryKind.consume, LedgerEntryKind.refund] },
 			period_id: previousGrant.period_id,
 		},
 		_sum: { papers: true },
@@ -267,15 +360,45 @@ export function computePeriodExpiryAmount(
 	return Math.max(0, unused)
 }
 
-// ─── Internal ────────────────────────────────────────────────────────────────
+// ─── Trial seeding ───────────────────────────────────────────────────────────
 
-function isUniqueViolation(err: unknown): boolean {
-	return (
-		typeof err === "object" &&
-		err !== null &&
-		"code" in err &&
-		(err as Prisma.PrismaClientKnownRequestError).code === "P2002"
-	)
+/**
+ * Seed a fresh user's free-trial paper allowance as a single `trial_grant`
+ * ledger entry. Called from auth (every login, idempotent) and the web's
+ * helper (no production caller currently). Idempotency:
+ *
+ *  1. Fast path: a `findFirst` short-circuits returning users without a write.
+ *  2. Race path: two concurrent first-time logins both pass the findFirst,
+ *     one wins the `create`, the other throws P2002 against the partial
+ *     unique index `paper_ledger_trial_grant_per_user_idx` defined in
+ *     `setup-vectors.sql`. We catch it and return `granted: false`.
+ *
+ * `papers` is the trial allowance amount — comes from `Resource.StripeConfig`
+ * but accepted as a parameter here so this module stays SST-agnostic.
+ */
+export async function seedTrialGrant(args: {
+	db: LedgerCapableClient
+	userId: string
+	papers: number
+}): Promise<{ granted: boolean }> {
+	const existing = await args.db.paperLedgerEntry.findFirst({
+		where: { user_id: args.userId, kind: LedgerEntryKind.trial_grant },
+		select: { id: true },
+	})
+	if (existing) return { granted: false }
+	try {
+		await args.db.paperLedgerEntry.create({
+			data: {
+				user_id: args.userId,
+				papers: args.papers,
+				kind: LedgerEntryKind.trial_grant,
+			},
+		})
+		return { granted: true }
+	} catch (err) {
+		if (isUniqueViolation(err)) return { granted: false }
+		throw err
+	}
 }
 
 // Re-export for callers that want to handle Prisma errors themselves.

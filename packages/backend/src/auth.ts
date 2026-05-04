@@ -1,4 +1,7 @@
-import { createPrismaClient } from "@mcp-gcse/db"
+import {
+	createPrismaClient,
+	seedTrialGrant as seedTrialGrantShared,
+} from "@mcp-gcse/db"
 import { issuer } from "@openauthjs/openauth"
 import { createClient } from "@openauthjs/openauth/client"
 import { GithubProvider } from "@openauthjs/openauth/provider/github"
@@ -53,26 +56,15 @@ async function attachPendingResourceGrantsForSignup(user: {
 }
 
 /**
- * Seed a fresh user's free-trial paper allowance as a single `trial_grant`
- * ledger entry. Idempotent: if the user already has one (e.g. webhook
- * replay, or this fires on a returning user via a code path that bypassed
- * the existing-user branch), it's a no-op.
- *
- * Uses Resource.StripeConfig.trialPaperCap as the source of truth so trial
- * size is configurable in one place (infra/billing.ts) without code changes.
+ * Seed the trial allowance on every login (idempotent). `trialPaperCap`
+ * is the source of truth in `infra/billing.ts`, threaded through here so
+ * the `@mcp-gcse/db` helper stays SST-agnostic.
  */
 async function seedTrialGrant(userId: string): Promise<void> {
-	const existing = await db.paperLedgerEntry.findFirst({
-		where: { user_id: userId, kind: "trial_grant" },
-		select: { id: true },
-	})
-	if (existing) return
-	await db.paperLedgerEntry.create({
-		data: {
-			user_id: userId,
-			papers: Resource.StripeConfig.trialPaperCap,
-			kind: "trial_grant",
-		},
+	await seedTrialGrantShared({
+		db,
+		userId,
+		papers: Resource.StripeConfig.trialPaperCap,
 	})
 }
 

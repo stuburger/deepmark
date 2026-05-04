@@ -30,7 +30,12 @@ import {
 	markJobFailed,
 	parseSqsJobId,
 } from "@/lib/infra/sqs-job-runner"
-import { type GradingStatus, logGradingRunEvent } from "@mcp-gcse/db"
+import {
+	type GradingStatus,
+	insertConsumesForGradingRuns,
+	logGradingRunEvent,
+	lookupCurrentPeriodId,
+} from "@mcp-gcse/db"
 import {
 	type LlmRunner,
 	type MarkerOrchestrator,
@@ -378,8 +383,61 @@ async function completeGradingJob(args: CompleteGradingJobArgs): Promise<void> {
 		examinerSummary: args.examinerSummary,
 	})
 	logGradingCompleteEvent(args.jobId, totals)
+	await debitPaperLedger({
+		uploadedBy: args.sub.uploaded_by,
+		gradingRunId: args.jobId,
+	})
 	await persistAnswerRowsIfLinked(args)
 	await notifyBatchIfComplete(args.sub.batch_job_id)
+}
+
+/**
+ * Defensive backfill — the canonical reserve happens at submit time
+ * (commit-service / re-mark / re-scan write the consume row inside the
+ * StudentSubmission transaction). This call is a no-op-on-replay via
+ * `@@unique([kind, grading_run_id])` for any submission that took the
+ * normal reserve-on-submit path. It exists to cover two edge cases:
+ *
+ *  1. Pre-Phase-4.5 in-flight submissions whose batch commit pre-dated
+ *     reserve-on-submit. After the Phase 6 backfill SQL these vanish.
+ *  2. Manually-enqueued grading runs that bypass the normal commit path
+ *     (e.g. an operator drops a row into SQS for debugging).
+ *
+ * Skipped for users who don't burn a paper credit per grading run: admins
+ * and Limitless subscribers. For capped Pro users the consume row gets
+ * `period_id` snapshotted from their latest subscription_grant.
+ */
+async function debitPaperLedger(args: {
+	uploadedBy: string | null
+	gradingRunId: string
+}): Promise<void> {
+	if (!args.uploadedBy) return
+
+	const user = await db.user.findUnique({
+		where: { id: args.uploadedBy },
+		select: { role: true, plan: true },
+	})
+	if (!user) return
+	if (user.role === "admin") return
+	if (user.plan === "limitless_monthly") return
+
+	const periodId = await lookupCurrentPeriodId({
+		db,
+		userId: args.uploadedBy,
+		plan: user.plan,
+	})
+
+	const result = await insertConsumesForGradingRuns({
+		db,
+		userId: args.uploadedBy,
+		gradingRunIds: [args.gradingRunId],
+		periodId,
+	})
+	if (result.inserted === 0) {
+		logger.info(TAG, "Consume entry already reserved for grading run", {
+			gradingRunId: args.gradingRunId,
+		})
+	}
 }
 
 function computeTotals(gradingResults: GradingResult[]): {

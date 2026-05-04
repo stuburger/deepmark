@@ -24,6 +24,7 @@ import {
 	TooltipProvider,
 	TooltipTrigger,
 } from "@/components/ui/tooltip"
+import type { Currency } from "@/lib/billing/types"
 import { deleteExamPaper } from "@/lib/exam-paper/paper/mutations"
 import type {
 	ExamPaperDetail,
@@ -42,6 +43,7 @@ import { useRouter } from "next/navigation"
 import { parseAsString, parseAsStringEnum, useQueryState } from "nuqs"
 import { useState } from "react"
 import { toast } from "sonner"
+import { CapBiteModal } from "./cap-bite-modal"
 import { DocumentThumbnail } from "./document-thumbnail"
 import { EditableTitle } from "./editable-title"
 import { ExamPaperAnalyticsTab } from "./exam-paper-analytics-tab"
@@ -68,6 +70,9 @@ export function ExamPaperPageShell({
 	initialLiveState = { ok: true as const, jobs: [], documents: [] },
 	initialSubmissions = [],
 	initialAnalytics = null,
+	currency,
+	topUpPriceLabel,
+	topUpPapers,
 }: {
 	paper: ExamPaperDetail
 	initialLiveState?: {
@@ -77,6 +82,9 @@ export function ExamPaperPageShell({
 	}
 	initialSubmissions?: SubmissionHistoryItem[]
 	initialAnalytics?: ExamPaperStats | null
+	currency: Currency
+	topUpPriceLabel: string
+	topUpPapers: number
 }) {
 	const router = useRouter()
 	const queryClient = useQueryClient()
@@ -120,6 +128,11 @@ export function ExamPaperPageShell({
 		parseAsString,
 	)
 
+	// Cap-bite modal — surfaced when commitBatch fails because the user
+	// can't cover the staged scripts. Replaces the generic upgrade toast for
+	// the batch path so the user can resolve the gate inline.
+	const [capBiteMessage, setCapBiteMessage] = useState<string | null>(null)
+
 	// Batch ingestion (classifying, staging) — independent of submissions
 	const {
 		ingestion,
@@ -131,7 +144,9 @@ export function ExamPaperPageShell({
 		handleUpdateScriptName,
 		handleToggleExclude,
 		handleToggleIncludeAll,
-	} = useBatchIngestion(paper.id)
+	} = useBatchIngestion(paper.id, {
+		onCapBite: (message) => setCapBiteMessage(message),
+	})
 
 	// Submissions — flat list, 60s poll + SW-triggered refresh
 	const {
@@ -497,6 +512,18 @@ export function ExamPaperPageShell({
 					}
 				}}
 				onJobChange={(newJobId) => void setMarkingJobId(newJobId)}
+			/>
+
+			<CapBiteModal
+				open={capBiteMessage !== null}
+				onOpenChange={(open) => {
+					if (!open) setCapBiteMessage(null)
+				}}
+				message={capBiteMessage ?? ""}
+				currency={currency}
+				topUpPriceLabel={topUpPriceLabel}
+				topUpPapers={topUpPapers}
+				returnPath={`/teacher/exam-papers/${paper.id}`}
 			/>
 
 			{(() => {

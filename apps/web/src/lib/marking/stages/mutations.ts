@@ -1,18 +1,45 @@
 "use server"
 
 import { resourceAction } from "@/lib/authz"
-import { enforcePapersQuota } from "@/lib/billing/entitlement"
+import { assertPapersQuota } from "@/lib/billing/entitlement"
+import { insertConsumesForBatch } from "@/lib/billing/ledger"
 import { db } from "@/lib/db"
 import { SQSClient, SendMessageCommand } from "@aws-sdk/client-sqs"
 import {
 	ResourceGrantPrincipalType,
 	ResourceGrantResourceType,
 	ResourceGrantRole,
+	lookupCurrentPeriodId,
 } from "@mcp-gcse/db"
 import { Resource } from "sst"
 import { z } from "zod"
 
 const sqs = new SQSClient({})
+
+/**
+ * Resolve which billing period this user's reserve-on-submit consume row
+ * should snapshot, and whether to skip the ledger write entirely (admin /
+ * Limitless are uncapped). Looked up once per re-mark / re-scan call,
+ * outside the transaction, so the snapshot is stable across the tx.
+ */
+async function resolveLedgerContext(userId: string): Promise<{
+	skip: boolean
+	periodId: string | null
+}> {
+	const user = await db.user.findUnique({
+		where: { id: userId },
+		select: { plan: true, role: true },
+	})
+	if (user?.role === "admin" || user?.plan === "limitless_monthly") {
+		return { skip: true, periodId: null }
+	}
+	const periodId = await lookupCurrentPeriodId({
+		db,
+		userId,
+		plan: user?.plan ?? null,
+	})
+	return { skip: false, periodId }
+}
 
 /**
  * Creates a new submission from the same OCR data, then marks the old one as
@@ -47,7 +74,9 @@ export const retriggerGrading = resourceAction({
 			throw new Error("No extracted answers — run OCR first")
 		}
 
-		await enforcePapersQuota({ user: ctx.user, additionalPapers: 1 })
+		await assertPapersQuota({ user: ctx.user, additionalPapers: 1 })
+
+		const ledger = await resolveLedgerContext(oldSub.uploaded_by)
 
 		const newSub = await db.$transaction(async (tx) => {
 			const created = await tx.studentSubmission.create({
@@ -86,6 +115,18 @@ export const retriggerGrading = resourceAction({
 					extracted_answers_raw: latestOcr.extracted_answers_raw as never,
 					page_analyses: latestOcr.page_analyses as never,
 					vision_raw_s3_key: latestOcr.vision_raw_s3_key,
+				},
+			})
+
+			// Pre-create the GradingRun in `pending` so the consume row's FK is
+			// satisfied. The grade Lambda's `claimGradingRun` already handles a
+			// pre-existing pending row.
+			await tx.gradingRun.create({
+				data: {
+					id: created.id,
+					submission_id: created.id,
+					ocr_run_id: created.id,
+					status: "pending",
 				},
 			})
 
@@ -131,6 +172,16 @@ export const retriggerGrading = resourceAction({
 				data: { superseded_at: new Date(), supersede_reason: "re-grade" },
 			})
 
+			// Reserve the paper-ledger consume atomically with the work above.
+			if (!ledger.skip) {
+				await insertConsumesForBatch({
+					userId: oldSub.uploaded_by,
+					gradingRunIds: [created.id],
+					periodId: ledger.periodId,
+					tx,
+				})
+			}
+
 			return created
 		})
 
@@ -167,7 +218,9 @@ export const retriggerOcr = resourceAction({
 			throw new Error("No pages uploaded — cannot re-scan")
 		}
 
-		await enforcePapersQuota({ user: ctx.user, additionalPapers: 1 })
+		await assertPapersQuota({ user: ctx.user, additionalPapers: 1 })
+
+		const ledger = await resolveLedgerContext(oldSub.uploaded_by)
 
 		const newSub = await db.$transaction(async (tx) => {
 			const created = await tx.studentSubmission.create({
@@ -198,10 +251,39 @@ export const retriggerOcr = resourceAction({
 				},
 			})
 
+			// Pre-create OcrRun + GradingRun in `pending` so the consume row's
+			// FK to grading_run is satisfied. The OCR Lambda's upsert handles
+			// the existing pending row; same for the grade Lambda's claim.
+			await tx.ocrRun.create({
+				data: {
+					id: created.id,
+					submission_id: created.id,
+					status: "pending",
+				},
+			})
+			await tx.gradingRun.create({
+				data: {
+					id: created.id,
+					submission_id: created.id,
+					ocr_run_id: created.id,
+					status: "pending",
+				},
+			})
+
 			await tx.studentSubmission.update({
 				where: { id: jobId },
 				data: { superseded_at: new Date(), supersede_reason: "re-scan" },
 			})
+
+			// Reserve the paper-ledger consume atomically with the work above.
+			if (!ledger.skip) {
+				await insertConsumesForBatch({
+					userId: oldSub.uploaded_by,
+					gradingRunIds: [created.id],
+					periodId: ledger.periodId,
+					tx,
+				})
+			}
 
 			return created
 		})

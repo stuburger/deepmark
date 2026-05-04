@@ -1,7 +1,7 @@
 "use server"
 
 import { resourceAction } from "@/lib/authz"
-import { enforcePapersQuota } from "@/lib/billing/entitlement"
+import { assertPapersQuota } from "@/lib/billing/entitlement"
 import { db } from "@/lib/db"
 import { z } from "zod"
 import { commitBatchService } from "./commit-service"
@@ -19,6 +19,10 @@ export const commitBatch = resourceAction({
 		// Pre-flight quota check: how many net-new submissions would this commit
 		// create? Service does the same exclusion (confirmed staged scripts minus
 		// already-committed); we replay it here to gate before any work happens.
+		// The actual debit (paper_ledger consume rows) is reserved atomically
+		// inside commit-service alongside the StudentSubmission/GradingRun
+		// creation, so a concurrent commit would fail at the unique-constraint
+		// step rather than over-spending.
 		const [confirmedScripts, alreadyCommitted] = await Promise.all([
 			db.stagedScript.count({
 				where: { batch_job_id: batchJobId, status: "confirmed" },
@@ -28,7 +32,7 @@ export const commitBatch = resourceAction({
 			}),
 		])
 		const newSubmissions = Math.max(0, confirmedScripts - alreadyCommitted)
-		await enforcePapersQuota({
+		await assertPapersQuota({
 			user: ctx.user,
 			additionalPapers: newSubmissions,
 		})

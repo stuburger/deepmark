@@ -1,7 +1,7 @@
 import { Prisma } from "@mcp-gcse/db"
 import { describe, expect, it } from "vitest"
 
-import { isTransientError } from "../transient-error"
+import { isTransientError } from "../../src/billing/transient-error"
 
 function knownPrismaError(code: string): Prisma.PrismaClientKnownRequestError {
 	return new Prisma.PrismaClientKnownRequestError(`test-${code}`, {

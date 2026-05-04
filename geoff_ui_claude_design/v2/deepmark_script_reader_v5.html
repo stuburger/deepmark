@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DeepMark — Script Reader v4</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&family=Lora:wght@400;500&display=swap" rel="stylesheet">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Geist', sans-serif;
+  background: #ECEAE4;
+  background-image: radial-gradient(circle, rgba(0,0,0,0.11) 1px, transparent 1px);
+  background-size: 22px 22px;
+  height: 100vh;
+  display: flex; align-items: center; justify-content: center;
+  padding: 14px;
+}
+
+/* ── MODAL — near fullscreen ── */
+.modal {
+  background: white;
+  border-radius: 10px;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.18), 0 6px 20px rgba(0,0,0,0.1), 3px 3px 0px rgba(0,0,0,0.07);
+  width: 100%; height: 100%;
+  display: flex; flex-direction: column;
+  overflow: hidden; position: relative;
+}
+
+/* ── TOPBAR 1 — student identity ── */
+.topbar1 {
+  padding: 9px 16px;
+  border-bottom: 1px solid rgba(0,0,0,0.07);
+  display: flex; align-items: center; gap: 8px;
+  flex-shrink: 0;
+}
+
+.student-name {
+  font-family: 'Lora', serif;
+  font-size: 14px; font-weight: 500; color: #1A1A1A;
+  letter-spacing: -0.01em;
+}
+.edit-ico { width: 12px; height: 12px; stroke: rgba(0,0,0,0.28); fill: none; stroke-width: 1.5; cursor: pointer; }
+
+.version-pill {
+  display: flex; align-items: center; gap: 4px;
+  padding: 2px 8px; border-radius: 4px;
+  border: 1px solid rgba(0,0,0,0.09); background: rgba(0,0,0,0.02);
+  font-family: 'Geist Mono', monospace; font-size: 9px; color: rgba(0,0,0,0.4); cursor: pointer;
+}
+.version-pill svg { width: 9px; height: 9px; stroke: rgba(0,0,0,0.3); fill: none; stroke-width: 2; }
+
+.score-badge { font-family: 'Geist Mono', monospace; font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 4px; background: rgba(196,136,58,0.1); color: #8A5010; border: 1px solid rgba(196,136,58,0.22); cursor: pointer; }
+.grade-badge { font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 4px; background: rgba(0,180,212,0.1); color: #016E88; border: 1px solid rgba(0,180,212,0.2); }
+
+/* Script counter — lives in topbar */
+.script-counter { font-family: 'Geist Mono', monospace; font-size: 10px; color: rgba(0,0,0,0.28); }
+
+.tb1-right { margin-left: auto; display: flex; align-items: center; gap: 7px; }
+
+.avatar-btn { width: 26px; height: 26px; border-radius: 5px; background: #00B4D4; color: white; font-size: 9px; font-weight: 600; display: flex; align-items: center; justify-content: center; cursor: pointer; letter-spacing: -0.02em; }
+
+.btn-sm {
+  display: flex; align-items: center; gap: 5px;
+  height: 26px; padding: 0 10px; border-radius: 4px;
+  border: 1px solid rgba(0,0,0,0.09); background: white;
+  font-size: 10px; font-weight: 500; color: rgba(0,0,0,0.5); cursor: pointer;
+  box-shadow: 2px 2px 0px rgba(0,0,0,0.07);
+  transition: transform 0.1s, box-shadow 0.1s;
+}
+.btn-sm:hover { transform: translate(1px,1px); box-shadow: 1px 1px 0px rgba(0,0,0,0.07); }
+.btn-sm svg { width: 10px; height: 10px; stroke: currentColor; fill: none; stroke-width: 1.8; }
+
+.btn-nav-sm {
+  height: 26px; padding: 0 10px; border-radius: 4px;
+  border: 1px solid rgba(0,0,0,0.09); background: transparent;
+  font-size: 10px; color: rgba(0,0,0,0.4); cursor: pointer; font-family: 'Geist', sans-serif;
+  transition: background 0.1s;
+}
+.btn-nav-sm:hover { background: rgba(0,0,0,0.03); }
+
+.btn-confirm {
+  height: 34px; padding: 0 18px; border-radius: 5px;
+  border: none; background: #00B4D4; color: white;
+  font-size: 12px; font-weight: 600; cursor: pointer; font-family: 'Geist', sans-serif;
+  box-shadow: 3px 3px 0px rgba(0,90,110,0.28);
+  transition: transform 0.1s, box-shadow 0.1s;
+  letter-spacing: -0.01em;
+}
+.btn-confirm:hover { transform: translate(2px,2px); box-shadow: 1px 1px 0px rgba(0,90,110,0.28); }
+.btn-confirm:active { transform: translate(3px,3px); box-shadow: none; }
+
+/* Paper counter — right of topbar, before confirm */
+.paper-counter {
+  font-family: 'Geist Mono', monospace;
+  font-size: 10px; color: rgba(0,0,0,0.3);
+  white-space: nowrap;
+}
+
+.btn-close { width: 26px; height: 26px; border-radius: 4px; border: 1px solid rgba(0,0,0,0.09); background: transparent; display: flex; align-items: center; justify-content: center; cursor: pointer; color: rgba(0,0,0,0.35); font-size: 12px; }
+.btn-close:hover { background: rgba(0,0,0,0.04); }
+
+/* ── TOPBAR 2 — status & actions ── */
+.topbar2 {
+  padding: 6px 16px;
+  border-bottom: 1px solid rgba(0,0,0,0.07);
+  display: flex; align-items: center; gap: 7px;
+  flex-shrink: 0; background: #FAFAF9; position: relative;
+}
+
+.status-dot { display: flex; align-items: center; gap: 4px; font-size: 10px; color: rgba(0,0,0,0.42); }
+.sdot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+.sdot.green { background: #3C8A62; } .sdot.teal { background: #00B4D4; }
+.tb2-sep { width: 1px; height: 12px; background: rgba(0,0,0,0.1); margin: 0 1px; }
+
+.thumb-btn { width: 26px; height: 26px; border-radius: 4px; border: 1px solid rgba(0,0,0,0.08); background: transparent; display: flex; align-items: center; justify-content: center; cursor: pointer; color: rgba(0,0,0,0.32); }
+.thumb-btn:hover { background: rgba(0,0,0,0.04); }
+.thumb-btn svg { width: 11px; height: 11px; stroke: currentColor; fill: none; stroke-width: 1.8; }
+
+/* ── BODY ── */
+.body { flex: 1; display: flex; overflow: hidden; min-height: 0; }
+
+/* ── LEFT — page thumbnails ── */
+.col-pages {
+  width: 124px; flex-shrink: 0;
+  border-right: 1px solid rgba(0,0,0,0.07);
+  background: #F5F4F0;
+  display: flex; flex-direction: column;
+  overflow-y: auto; padding: 8px 7px; gap: 4px;
+}
+.col-pages::-webkit-scrollbar { width: 3px; }
+
+.page-tools { display: flex; align-items: center; gap: 2px; padding-bottom: 7px; border-bottom: 1px solid rgba(0,0,0,0.07); margin-bottom: 4px; }
+.tool-ico { width: 22px; height: 22px; border-radius: 4px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: rgba(0,0,0,0.32); }
+.tool-ico:hover { background: rgba(0,0,0,0.06); }
+.tool-ico.active { color: #00B4D4; }
+.tool-ico svg { width: 12px; height: 12px; stroke: currentColor; fill: none; stroke-width: 1.6; stroke-linecap: round; }
+
+.page-thumb { background: white; border: 1.5px solid rgba(0,0,0,0.09); border-radius: 4px; padding: 5px; cursor: pointer; box-shadow: 1px 1px 0px rgba(0,0,0,0.07); transition: border-color 0.12s; }
+.page-thumb.active { border-color: #00B4D4; }
+.page-thumb:hover:not(.active) { border-color: rgba(0,180,212,0.35); }
+.pt-label { font-family: 'Geist Mono', monospace; font-size: 7px; color: rgba(0,0,0,0.28); margin-bottom: 3px; }
+.pt-img { width: 100%; aspect-ratio: 0.707; background: #fafaf9; border-radius: 2px; display: flex; flex-direction: column; padding: 4px 3px; gap: 2px; overflow: hidden; }
+.pl { height: 1.5px; border-radius: 1px; }
+.pl.h { background: rgba(0,0,0,0.4); width: 70%; margin-bottom: 1px; }
+.pl.t { background: rgba(0,0,0,0.1); }
+.pl.w { background: rgba(0,0,0,0.26); height: 2px; }
+.pl.i { background: rgba(0,180,212,0.35); }
+.pl.s { width: 65%; } .pl.xs { width: 40%; } .pl.f { width: 92%; }
+
+/* ── CENTRE — script content ── */
+.col-text { flex: 1; overflow-y: auto; min-width: 0; position: relative; }
+.col-text::-webkit-scrollbar { width: 4px; }
+.col-text::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); border-radius: 2px; }
+
+/* Floating toolbar — sits inside topbar2, absolutely centred */
+.floating-tb {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  display: flex; align-items: center; gap: 2px;
+  background: rgba(28,24,36,0.84);
+  backdrop-filter: blur(12px);
+  border-radius: 0 0 10px 10px; padding: 5px 8px;
+  border: 1px solid rgba(0,180,212,0.4);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.22), 0 1px 4px rgba(0,180,212,0.18);
+  width: fit-content; z-index: 10;
+}
+.floating-tb:hover { transform: translate(-50%, calc(-50% - 1px)); }
+.ftb-btn { width: 26px; height: 26px; border-radius: 5px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: rgba(255,255,255,0.5); font-size: 11px; font-weight: 600; transition: background 0.1s, color 0.1s; position: relative; font-family: 'Geist', sans-serif; }
+.ftb-btn:hover { background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.9); }
+.ftb-btn.active { background: rgba(0,180,212,0.4); color: white; }
+.ftb-btn svg { width: 12px; height: 12px; stroke: currentColor; fill: none; stroke-width: 1.5; }
+.ftb-num { position: absolute; bottom: 1px; right: 2px; font-size: 7px; color: rgba(255,255,255,0.28); font-family: 'Geist Mono', monospace; line-height: 1; }
+.ftb-sep { width: 1px; height: 14px; background: rgba(255,255,255,0.12); margin: 0 2px; }
+.ftb-hint { font-size: 9px; color: rgba(255,255,255,0.2); padding: 0 4px; white-space: nowrap; font-family: 'Geist Mono', monospace; }
+
+/* Paper */
+.paper { padding: 14px 20px 80px; }
+
+.q-block { margin-bottom: 22px; }
+.q-divider { height: 1px; background: rgba(0,0,0,0.07); margin: 0 0 22px; }
+
+.q-header { display: flex; align-items: flex-start; gap: 9px; margin-bottom: 8px; }
+.q-label { font-family: 'Geist Mono', monospace; font-size: 9px; font-weight: 500; color: rgba(0,0,0,0.28); text-transform: uppercase; letter-spacing: 0.1em; flex-shrink: 0; padding-top: 2px; }
+.q-text { font-size: 12.5px; font-weight: 500; color: #1A1A1A; flex: 1; line-height: 1.5; }
+
+.score-wrap { position: relative; flex-shrink: 0; }
+.score-pill { font-family: 'Geist Mono', monospace; font-size: 11px; font-weight: 700; padding: 3px 11px; border-radius: 4px; cursor: pointer; display: block; transition: transform 0.1s; }
+.score-pill:hover { transform: scale(1.04); }
+.score-pill.full { background: #3C8A62; color: white; }
+.score-pill.part { background: #C4883A; color: white; }
+.score-pill.low  { background: #C04444; color: white; }
+
+.mark-pop { position: absolute; top: 110%; right: 0; z-index: 50; background: white; border: 1px solid rgba(0,0,0,0.1); border-radius: 7px; box-shadow: 0 8px 24px rgba(0,0,0,0.14); padding: 9px 11px; display: none; min-width: 106px; }
+.mark-pop.open { display: block; }
+.mp-label { font-family: 'Geist Mono', monospace; font-size: 9px; color: rgba(0,0,0,0.28); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 4px; }
+.mp-input { width: 100%; height: 28px; border: 1px solid rgba(0,180,212,0.4); border-radius: 4px; padding: 0 7px; font-family: 'Geist Mono', monospace; font-size: 13px; font-weight: 600; color: #1A1A1A; outline: none; }
+.mp-input:focus { border-color: #00B4D4; }
+.mp-row { display: flex; gap: 4px; margin-top: 5px; }
+.mp-save { flex: 1; height: 24px; border: none; background: #00B4D4; color: white; border-radius: 4px; font-size: 10px; font-weight: 600; cursor: pointer; font-family: 'Geist', sans-serif; }
+.mp-cancel { height: 24px; padding: 0 7px; border: 1px solid rgba(0,0,0,0.1); background: transparent; color: rgba(0,0,0,0.4); border-radius: 4px; font-size: 10px; cursor: pointer; font-family: 'Geist', sans-serif; }
+
+.q-response { font-size: 13px; color: #1A1A1A; line-height: 2; margin-bottom: 9px; }
+
+.hl-ao1 { background: rgba(0,180,212,0.1); border-bottom: 1.5px solid #00B4D4; border-radius: 2px; cursor: pointer; padding: 0 1px; transition: background 0.12s; }
+.hl-ao2 { background: rgba(107,79,160,0.09); border-bottom: 1.5px solid #7B52C0; border-radius: 2px; cursor: pointer; padding: 0 1px; transition: background 0.12s; }
+.hl-ao3 { background: rgba(60,138,98,0.09); border-bottom: 1.5px solid #3C8A62; border-radius: 2px; cursor: pointer; padding: 0 1px; transition: background 0.12s; }
+.hl-err { background: rgba(192,68,68,0.08); border-bottom: 1.5px solid #C04444; border-radius: 2px; padding: 0 1px; }
+.hl-ao1.lit { background: rgba(0,180,212,0.22); }
+.hl-ao2.lit { background: rgba(107,79,160,0.2); }
+.hl-ao3.lit { background: rgba(60,138,98,0.2); }
+
+.q-tags { display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 7px; }
+.tag { font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 4px; cursor: pointer; border: 1px solid transparent; font-family: 'Geist', sans-serif; }
+.tag.www { background: rgba(60,138,98,0.1); color: #1F5E38; border-color: rgba(60,138,98,0.2); }
+.tag.ebi { background: rgba(196,136,58,0.1); color: #7A4A10; border-color: rgba(196,136,58,0.2); }
+.tag.fb  { background: rgba(0,0,0,0.05); color: rgba(0,0,0,0.45); border-color: rgba(0,0,0,0.1); }
+
+.expand-panel { background: white; border: 1px solid rgba(0,0,0,0.09); border-radius: 5px; padding: 9px 12px; margin-bottom: 6px; display: none; max-width: 560px; }
+.expand-panel.open { display: block; }
+.ep-label { font-family: 'Geist Mono', monospace; font-size: 9px; color: rgba(0,0,0,0.26); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 4px; }
+.ep-textarea { width: 100%; min-height: 48px; border: 1px solid rgba(0,0,0,0.08); border-radius: 4px; padding: 6px 9px; font-size: 12px; color: #1A1A1A; line-height: 1.6; font-family: 'Geist', sans-serif; resize: vertical; outline: none; background: white; }
+.ep-textarea:focus { border-color: #00B4D4; }
+.add-note { display: inline-flex; align-items: center; gap: 3px; font-size: 10px; color: rgba(0,180,212,0.6); cursor: pointer; border-bottom: 1px dashed rgba(0,180,212,0.3); margin-top: 3px; }
+
+/* ── RIGHT — AO annotations ── */
+.col-ao { width: 240px; flex-shrink: 0; border-left: 1px solid rgba(0,0,0,0.07); overflow-y: auto; padding: 10px 9px; background: white; }
+.col-ao::-webkit-scrollbar { width: 3px; }
+.ao-section-label { font-family: 'Geist Mono', monospace; font-size: 9px; color: rgba(0,0,0,0.26); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 7px; padding: 0 2px; }
+
+.ao-item { border: 1px solid rgba(0,0,0,0.08); border-radius: 5px; padding: 7px 9px; margin-bottom: 5px; cursor: pointer; transition: border-color 0.12s; background: white; box-shadow: 1px 1px 0px rgba(0,0,0,0.05); }
+.ao-item:hover { border-color: rgba(0,180,212,0.3); }
+.ao-item.lit { border-color: #00B4D4; box-shadow: 0 0 0 2px rgba(0,180,212,0.1); }
+.ao-item.expanded { border-color: rgba(0,0,0,0.12); }
+
+.ao-row { display: flex; align-items: center; gap: 5px; margin-bottom: 2px; }
+.ao-status { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+.ao-status.valid { background: #3C8A62; } .ao-status.partial { background: #C4883A; } .ao-status.wrong { border: 2px solid #C04444; background: transparent; }
+.ao-tag { font-family: 'Geist Mono', monospace; font-size: 9px; font-weight: 700; padding: 1px 5px; border-radius: 3px; letter-spacing: 0.04em; }
+.ao-tag.ao1 { background: rgba(0,180,212,0.12); color: #016E88; } .ao-tag.ao2 { background: rgba(107,79,160,0.1); color: #5A2D9E; } .ao-tag.ao3 { background: rgba(60,138,98,0.1); color: #1F5E38; }
+.ao-strength { font-size: 10px; color: rgba(0,0,0,0.28); }
+.ao-text { font-size: 11px; color: rgba(0,0,0,0.5); line-height: 1.4; }
+.ao-note { font-size: 10px; color: #C04444; font-weight: 500; margin-top: 2px; }
+
+.ao-expanded { margin-top: 7px; padding-top: 7px; border-top: 1px solid rgba(0,0,0,0.07); display: none; }
+.ao-item.expanded .ao-expanded { display: block; }
+.ao-sentiment { display: flex; gap: 3px; margin-bottom: 7px; }
+.sent-btn { flex: 1; height: 22px; border-radius: 4px; border: 1px solid rgba(0,0,0,0.1); background: transparent; font-size: 10px; font-weight: 600; cursor: pointer; font-family: 'Geist', sans-serif; }
+.sent-btn.pos { border-color: rgba(60,138,98,0.35); color: #1F5E38; }
+.sent-btn.pos.active { background: rgba(60,138,98,0.12); border-color: rgba(60,138,98,0.5); }
+.sent-btn.neu { color: rgba(0,0,0,0.42); }
+.sent-btn.neg { border-color: rgba(192,68,68,0.3); color: #C04444; }
+.ao-body { font-size: 11px; color: rgba(0,0,0,0.52); line-height: 1.5; margin-bottom: 7px; }
+.btn-remove { font-size: 10px; color: #C04444; background: none; border: none; cursor: pointer; font-family: 'Geist', sans-serif; font-weight: 500; padding: 0; text-decoration: underline; text-underline-offset: 2px; }
+
+/* ── AI CO-MARKER — detached floating bar ── */
+.ai-float {
+  position: absolute;
+  bottom: 18px;
+  left: calc(124px + (100% - 124px - 240px) / 2);
+  transform: translateX(-50%);
+  width: calc(100% - 124px - 240px - 80px); /* col-text width minus breathing room */
+  max-width: 640px;
+  min-width: 360px;
+  z-index: 40;
+  pointer-events: none;
+}
+
+.ai-context {
+  display: flex; align-items: center; gap: 5px;
+  margin-bottom: 5px; margin-left: 4px;
+  pointer-events: all;
+}
+.ai-dot { width: 5px; height: 5px; border-radius: 50%; background: #00B4D4; animation: pulse 2s ease-in-out infinite; flex-shrink: 0; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+.ai-ctx-text { font-family: 'Geist Mono', monospace; font-size: 9px; color: rgba(0,0,0,0.38); letter-spacing: 0.04em; }
+
+.ai-bar {
+  pointer-events: all;
+  background: white;
+  border-radius: 26px;
+  border: 1.5px solid rgba(0,180,212,0.38);
+  box-shadow: 0 8px 28px rgba(0,0,0,0.13), 0 2px 8px rgba(0,0,0,0.07);
+  display: flex; align-items: center;
+  padding: 0 16px; height: 50px;
+  transition: border-color 0.18s, box-shadow 0.18s, transform 0.3s cubic-bezier(0.22,1,0.36,1);
+}
+.ai-bar:hover { transform: translateY(-1px); box-shadow: 0 12px 32px rgba(0,0,0,0.15), 0 2px 8px rgba(0,0,0,0.08); }
+.ai-bar:focus-within {
+  border-color: rgba(0,180,212,0.7);
+  box-shadow: 0 8px 28px rgba(0,0,0,0.13), 0 0 0 3px rgba(0,180,212,0.1);
+}
+
+.ai-plus { font-size: 18px; font-weight: 300; color: rgba(0,0,0,0.25); margin-right: 12px; flex-shrink: 0; }
+
+.ai-input {
+  flex: 1; border: none; outline: none;
+  font-family: 'Geist', sans-serif; font-size: 13.5px;
+  color: #1A1A1A; background: transparent; letter-spacing: -0.01em;
+}
+.ai-input::placeholder { color: rgba(0,0,0,0.26); }
+
+.ai-hint { font-family: 'Geist Mono', monospace; font-size: 9px; color: rgba(0,0,0,0.2); margin-right: 10px; white-space: nowrap; }
+
+.ai-mic {
+  width: 30px; height: 30px; border-radius: 5px;
+  border: 1px solid rgba(0,0,0,0.08); background: transparent;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; color: rgba(0,0,0,0.28); margin-right: 6px;
+  transition: background 0.12s;
+}
+.ai-mic:hover { background: rgba(0,0,0,0.04); }
+.ai-mic svg { width: 13px; height: 13px; stroke: currentColor; fill: none; stroke-width: 1.5; }
+
+.ai-send {
+  width: 30px; height: 30px; border-radius: 5px;
+  border: none; background: #00B4D4; color: white;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  box-shadow: 2px 2px 0px rgba(0,90,110,0.28);
+  transition: background 0.12s;
+}
+.ai-send:hover { background: #009BB8; }
+.ai-send svg { width: 13px; height: 13px; stroke: white; fill: none; stroke-width: 2; }
+
+/* ── PROGRESS RAIL ── */
+.progress-rail {
+  height: 3px; width: 100%; background: rgba(0,0,0,0.06); flex-shrink: 0; position: relative; overflow: hidden;
+}
+.progress-fill {
+  position: absolute; left: 0; top: 0; height: 100%;
+  background: #00B4D4;
+  width: 3.8%; /* 1 of 26 confirmed */
+  transition: width 0.4s cubic-bezier(0.22,1,0.36,1);
+}
+.progress-rail:hover::after {
+  content: '1 confirmed · 25 remaining · 0 flagged';
+  position: absolute; left: 50%; top: 6px; transform: translateX(-50%);
+  background: rgba(28,24,36,0.84); color: white;
+  font-family: 'Geist Mono', monospace; font-size: 9px;
+  padding: 3px 9px; border-radius: 4px; white-space: nowrap;
+  pointer-events: none; z-index: 100;
+}
+
+/* ── FLAG BUTTON ── */
+.btn-flag {
+  display: flex; align-items: center; gap: 5px;
+  height: 34px; padding: 0 13px; border-radius: 5px;
+  border: 1.5px solid rgba(196,136,58,0.45);
+  background: white; color: #8A5010;
+  font-size: 11px; font-weight: 600; cursor: pointer; font-family: 'Geist', sans-serif;
+  box-shadow: 2px 2px 0px rgba(140,80,0,0.1);
+  transition: transform 0.1s, box-shadow 0.1s, border-color 0.15s;
+  letter-spacing: -0.01em;
+}
+.btn-flag:hover { transform: translate(1px,1px); box-shadow: 1px 1px 0px rgba(140,80,0,0.1); }
+.btn-flag:active { transform: translate(2px,2px); box-shadow: none; }
+.btn-flag.flagged { background: white; border-color: #C4883A; color: #6A3A08; }
+
+/* Flag dropdown */
+.flag-wrap { position: relative; }
+.flag-menu {
+  position: absolute; top: calc(100% + 6px); right: 0; z-index: 60;
+  background: white; border: 1px solid rgba(0,0,0,0.1); border-radius: 7px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.13); padding: 4px; min-width: 148px;
+  display: none;
+}
+.flag-menu.open { display: block; }
+.flag-menu-item {
+  display: flex; align-items: center; gap: 9px;
+  padding: 8px 10px; border-radius: 5px; cursor: pointer;
+  font-size: 11px; font-weight: 500; color: rgba(0,0,0,0.6);
+  transition: background 0.1s;
+}
+.flag-menu-item:hover { background: rgba(0,0,0,0.04); }
+.flag-menu-item svg { width: 12px; height: 12px; stroke: currentColor; fill: none; stroke-width: 1.8; flex-shrink: 0; }
+.flag-menu-item .fi-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.flag-menu-item .fi-dot.later { background: #C4883A; }
+.flag-menu-item .fi-dot.share { background: #00B4D4; }
+.btn-flag svg { width: 12px; height: 12px; fill: currentColor; }
+
+/* ── OVERFLOW MENU ── */
+.overflow-wrap { position: relative; }
+.btn-overflow {
+  width: 28px; height: 26px; border-radius: 4px;
+  border: 1px solid rgba(0,0,0,0.09); background: white;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; color: rgba(0,0,0,0.45); font-size: 13px; letter-spacing: 0.05em;
+  box-shadow: 2px 2px 0px rgba(0,0,0,0.07);
+  transition: transform 0.1s, box-shadow 0.1s;
+}
+.btn-overflow:hover { transform: translate(1px,1px); box-shadow: 1px 1px 0px rgba(0,0,0,0.07); }
+.overflow-menu {
+  position: absolute; top: calc(100% + 6px); right: 0; z-index: 60;
+  background: white; border: 1px solid rgba(0,0,0,0.1); border-radius: 7px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.13); padding: 4px; min-width: 130px;
+  display: none;
+}
+.overflow-menu.open { display: block; }
+.om-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 10px; border-radius: 5px; cursor: pointer;
+  font-size: 11px; font-weight: 500; color: rgba(0,0,0,0.6);
+  transition: background 0.1s;
+}
+.om-item:hover { background: rgba(0,0,0,0.04); }
+.om-item svg { width: 12px; height: 12px; stroke: currentColor; fill: none; stroke-width: 1.8; flex-shrink: 0; }
+
+/* Bottom padding — content clears floating AI bar by ~4mm at max scroll */
+.paper-bottom-pad { height: 86px; }
+</style>
+</head>
+<body>
+<div class="modal">
+
+  <!-- PROGRESS RAIL -->
+  <div class="progress-rail"><div class="progress-fill"></div></div>
+
+  <!-- TOPBAR 1 -->
+  <div class="topbar1">
+    <span class="student-name">Jasmine Kawsamally</span>
+    <svg class="edit-ico" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+    <div class="version-pill">v7 (latest)<svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg></div>
+    <div class="score-badge" onclick="openME('me0',event)">32/43 · 74%</div>
+    <div class="grade-badge">Grade 7</div>
+    <div class="tb1-right">
+      <button class="btn-nav-sm">← Prev</button>
+      <button class="btn-nav-sm">Next →</button>
+      <div class="tb2-sep" style="margin:0 2px;"></div>
+      <div class="avatar-btn">JK</div>
+      <div class="overflow-wrap">
+        <button class="btn-overflow" onclick="toggleOverflow(event)">···</button>
+        <div class="overflow-menu" id="overflowMenu">
+          <div class="om-item"><svg viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>Share script</div>
+          <div class="om-item"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Export PDF</div>
+          <div class="om-item"><svg viewBox="0 0 24 24"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.99"/></svg>Re-run grading</div>
+        </div>
+      </div>
+      <div class="tb2-sep" style="margin:0 2px;"></div>
+      <div class="paper-counter">Paper 1 of 26</div>
+      <div class="flag-wrap">
+        <button class="btn-flag" id="btnFlag" onclick="toggleFlagMenu(event)">
+          <svg viewBox="0 0 24 24"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
+          Flag
+          <svg viewBox="0 0 24 24" style="width:8px;height:8px;stroke:currentColor;fill:none;stroke-width:2;margin-left:1px;"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="flag-menu" id="flagMenu">
+          <div class="flag-menu-item" onclick="selectFlag('later')">
+            <div class="fi-dot later"></div>
+            Review later
+          </div>
+          <div class="flag-menu-item" onclick="selectFlag('share')">
+            <div class="fi-dot share"></div>
+            Share with colleague
+          </div>
+        </div>
+      </div>
+      <button class="btn-confirm" id="btnConfirm" onclick="confirmScript()">Confirm marking ✓</button>
+      <button class="btn-close">✕</button>
+    </div>
+  </div>
+
+  <!-- TOPBAR 2 — thin status bar -->
+  <div class="topbar2">
+    <div class="status-dot"><div class="sdot green"></div>Extraction complete</div>
+    <div class="tb2-sep"></div>
+    <div class="status-dot"><div class="sdot teal"></div>Grading complete</div>
+    <div class="tb2-sep"></div>
+    <button class="thumb-btn" title="Mark grading as helpful">
+      <svg viewBox="0 0 24 24"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14z"/><path d="M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>
+    </button>
+    <button class="thumb-btn" title="Mark grading as unhelpful">
+      <svg viewBox="0 0 24 24"><path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3H10z"/><path d="M17 2h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17"/></svg>
+    </button>
+
+    <!-- Editing toolbar — centred in topbar2 -->
+    <div class="floating-tb" id="floatingTb">
+      <div class="ftb-btn"><svg viewBox="0 0 24 24"><path d="M6 4h8a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"/><path d="M6 12h9a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"/></svg></div>
+      <div class="ftb-btn"><svg viewBox="0 0 24 24"><line x1="19" y1="4" x2="10" y2="4"/><line x1="14" y1="20" x2="5" y2="20"/><line x1="15" y1="4" x2="9" y2="20"/></svg></div>
+      <div class="ftb-btn"><svg viewBox="0 0 24 24"><path d="M6 3v7a6 6 0 0 0 6 6 6 6 0 0 0 6-6V3"/><line x1="4" y1="21" x2="20" y2="21"/></svg></div>
+      <div class="ftb-sep"></div>
+      <div class="ftb-btn active"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg><div class="ftb-num">1</div></div>
+      <div class="ftb-btn"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg><div class="ftb-num">2</div></div>
+      <div class="ftb-btn"><svg viewBox="0 0 24 24"><path d="M6 3v7a6 6 0 0 0 6 6 6 6 0 0 0 6-6V3"/><line x1="4" y1="21" x2="20" y2="21"/></svg><div class="ftb-num">3</div></div>
+      <div class="ftb-btn"><svg viewBox="0 0 24 24"><polyline points="5 12 3 12 12 3 21 12 19 12"/><polyline points="5 19 3 19 12 10 21 19 19 19"/></svg><div class="ftb-num">4</div></div>
+      <div class="ftb-btn"><svg viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg><div class="ftb-num">5</div></div>
+      <div class="ftb-btn"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/></svg><div class="ftb-num">6</div></div>
+      <div class="ftb-btn"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg><div class="ftb-num">7</div></div>
+      <div class="ftb-sep"></div>
+      <div class="ftb-btn"><svg viewBox="0 0 24 24"><path d="M20 20H7L3 16l9.5-9.5 2 2L7 16h13v4z"/><path d="M14.5 4.5l5 5"/></svg></div>
+      <div class="ftb-sep"></div>
+      <div class="ftb-hint">Select text · 1–7</div>
+    </div>
+  </div>
+
+  <!-- BODY -->
+  <div class="body">
+
+    <!-- LEFT — pages -->
+    <div class="col-pages">
+      <div class="page-tools">
+        <div class="tool-ico active"><svg viewBox="0 0 24 24"><rect x="2" y="3" width="7" height="9"/><rect x="15" y="3" width="7" height="9"/><rect x="2" y="14" width="7" height="7"/><rect x="15" y="14" width="7" height="7"/></svg></div>
+        <div class="tool-ico"><svg viewBox="0 0 24 24"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="9" y1="7" x2="15" y2="7"/><line x1="9" y1="11" x2="15" y2="11"/></svg></div>
+        <div class="tool-ico"><svg viewBox="0 0 24 24"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg></div>
+        <div class="tool-ico"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div>
+      </div>
+      <div class="page-thumb active" onclick="setPage(this)"><div class="pt-label">Page 1</div><div class="pt-img"><div class="pl h"></div><div class="pl t f"></div><div class="pl i f"></div><div class="pl t s"></div><div class="pl w f"></div><div class="pl t s"></div><div class="pl w f"></div></div></div>
+      <div class="page-thumb" onclick="setPage(this)"><div class="pt-label">Page 2</div><div class="pt-img"><div class="pl w f"></div><div class="pl t s"></div><div class="pl i f"></div><div class="pl w f"></div><div class="pl t xs"></div><div class="pl i s"></div><div class="pl w f"></div></div></div>
+      <div class="page-thumb" onclick="setPage(this)"><div class="pt-label">Page 3</div><div class="pt-img"><div class="pl t f"></div><div class="pl w f"></div><div class="pl w s"></div><div class="pl i f"></div><div class="pl t s"></div><div class="pl w f"></div><div class="pl t xs"></div></div></div>
+      <div class="page-thumb" onclick="setPage(this)"><div class="pt-label">Page 4</div><div class="pt-img"><div class="pl w f"></div><div class="pl t f"></div><div class="pl i f"></div><div class="pl w s"></div><div class="pl t xs"></div><div class="pl w f"></div><div class="pl t f"></div></div></div>
+      <div class="page-thumb" onclick="setPage(this)"><div class="pt-label">Page 5</div><div class="pt-img"><div class="pl t f"></div><div class="pl i s"></div><div class="pl w f"></div><div class="pl t f"></div><div class="pl w f"></div><div class="pl t xs"></div><div class="pl i f"></div></div></div>
+      <div class="page-thumb" onclick="setPage(this)"><div class="pt-label">Page 6</div><div class="pt-img"><div class="pl w f"></div><div class="pl t f"></div><div class="pl i f"></div><div class="pl t s"></div><div class="pl w f"></div><div class="pl t xs"></div><div class="pl w f"></div></div></div>
+      <div class="page-thumb" onclick="setPage(this)"><div class="pt-label">Page 7</div><div class="pt-img"><div class="pl t f"></div><div class="pl w f"></div><div class="pl i f"></div><div class="pl w xs"></div><div class="pl t f"></div><div class="pl w f"></div><div class="pl t s"></div></div></div>
+    </div>
+
+    <!-- CENTRE -->
+    <div class="col-text" id="colText">
+
+      <div class="paper">
+
+        <div class="q-block">
+          <div class="q-header">
+            <div class="q-label">Q002</div>
+            <div class="q-text">Analyse the impact of expanding using a franchising model for the home decorating service rather than the company employing its own additional staff and running the service themselves. [12 marks]</div>
+            <div class="score-wrap">
+              <div class="score-pill part" onclick="openME('me1',event)">6/12</div>
+              <div class="mark-pop" id="me1">
+                <div class="mp-label">Override mark</div>
+                <input class="mp-input" type="number" value="6" min="0" max="12">
+                <div style="font-size:9px;color:rgba(0,0,0,0.26);margin-top:2px;">max 12</div>
+                <div class="mp-row"><button class="mp-save" onclick="closeME('me1')">Save</button><button class="mp-cancel" onclick="closeME('me1')">Cancel</button></div>
+              </div>
+            </div>
+          </div>
+          <div class="q-response">
+            If Jim were to choose to become a franchisor, it would take time and effort but he would have advantages in the long run. If he chose then
+            <span class="hl-ao2" data-ao="c1" onclick="crosslight('c1','ao-c1')">the orders that he is receiving from the far locations can also buy wallpaper. This is because the franchisees could locate themselves near to the orders. This leads to profits increasing</span>
+            and to which Jim could supply more wallpaper. However, because opening a franchise is expanding organically ✓
+            <span class="hl-ao2" data-ao="c2" onclick="crosslight('c2','ao-c2')">this means that Jim might not receive higher profits straight away. This also means that he would have to wait a long time for enough franchises to be opened so that further away customers can buy wallpaper.</span>
+            <span class="hl-ao2" data-ao="c3" onclick="crosslight('c3','ao-c3')">Profits not increasing quickly leads to Jim not having enough money to pay for paint machinery.</span>
+            <span class="hl-err"> Since the demand for paint in his company is high, he would have to make it in large quantities, which he doesn't have money for, and he might also loose some potential customers, therefore further decreasing his profits.</span>
+            <br><br>
+            If Jim choose to recruit managers and decorators for an in-home decorating service then
+            <span class="hl-ao2" data-ao="c4" onclick="crosslight('c4','ao-c4')">he would not have to worry about the amount of labour nearby. This is because in his area there is a rising employment levels meaning that more people could come to work as a manager or decorator.</span>
+            This would increase customer loyalty as people are thankful that Jim's company provides this additional offer.
+          </div>
+          <div class="q-tags">
+            <div class="tag www" onclick="toggleExpand('www1')">WWW</div>
+            <div class="tag ebi" onclick="toggleExpand('ebi1')">EBI</div>
+            <div class="tag fb" onclick="toggleExpand('fb1')">FB</div>
+          </div>
+          <div class="expand-panel" id="www1">
+            <div class="ep-label">What went well</div>
+            <textarea class="ep-textarea">Good attempt at chains of analysis — structure of argument is present, showing awareness of cause and effect from franchising decisions.</textarea>
+          </div>
+          <div class="expand-panel" id="ebi1">
+            <div class="ep-label">Even better if</div>
+            <textarea class="ep-textarea">AO3 mark withheld — no explicit comparative judgement between franchising vs employing staff. Conclusion present but vague. Needs explicit weighing of which model is more profitable and why.</textarea>
+          </div>
+          <div class="expand-panel" id="fb1">
+            <div class="ep-label">Feedback</div>
+            <textarea class="ep-textarea">6/12 — solid AO2 chains but missing AO3 evaluation. Revisit with a direct comparative conclusion.</textarea>
+          </div>
+          
+        </div>
+
+        <div class="q-divider"></div>
+
+        <div class="q-block">
+          <div class="q-header">
+            <div class="q-label">Q03</div>
+            <div class="q-text">Explain two reasons why customer loyalty is important for Quality Wallpaper Ltd. [4 marks]</div>
+            <div class="score-wrap">
+              <div class="score-pill full" onclick="openME('me2',event)">4/4</div>
+              <div class="mark-pop" id="me2">
+                <div class="mp-label">Override mark</div>
+                <input class="mp-input" type="number" value="4" min="0" max="4">
+                <div style="font-size:9px;color:rgba(0,0,0,0.26);margin-top:2px;">max 4</div>
+                <div class="mp-row"><button class="mp-save" onclick="closeME('me2')">Save</button><button class="mp-cancel" onclick="closeME('me2')">Cancel</button></div>
+              </div>
+            </div>
+          </div>
+          <div class="q-response">
+            <span class="hl-ao1" data-ao="b1" onclick="crosslight('b1','ao-b1')">Loyal customers are more likely to return to buy wallpaper again, providing a steady revenue stream for Quality Wallpaper Ltd.</span>
+            <span class="hl-ao1" data-ao="b2" onclick="crosslight('b2','ao-b2')"> They are also more likely to recommend the business to friends and family, acting as free word-of-mouth marketing and reducing the need for expensive advertising.</span>
+          </div>
+          <div class="q-tags">
+            <div class="tag www" onclick="toggleExpand('www2')">WWW</div>
+          </div>
+          <div class="expand-panel" id="www2">
+            <div class="ep-label">What went well</div>
+            <textarea class="ep-textarea">Both points clearly stated with developed reasoning — repeat custom and word-of-mouth both correctly applied to the business context.</textarea>
+          </div>
+          
+        </div>
+
+        <div class="paper-bottom-pad"></div>
+      </div>
+    </div>
+
+    <!-- RIGHT — AO annotations -->
+    <div class="col-ao">
+      <div class="ao-section-label">AO annotations</div>
+
+      <div class="ao-item" id="ao-c1" onclick="crosslight('c1','ao-c1')">
+        <div class="ao-row"><div class="ao-status valid"></div><div class="ao-tag ao2">AO2</div><div class="ao-strength">valid</div></div>
+        <div class="ao-text">Applies franchising to address distant orders — location benefit identified</div>
+      </div>
+      <div class="ao-item" id="ao-c2" onclick="crosslight('c2','ao-c2')">
+        <div class="ao-row"><div class="ao-status valid"></div><div class="ao-tag ao3">AO3</div><div class="ao-strength">strong</div></div>
+        <div class="ao-text">Analyses slow profit growth from organic expansion — time lag chain sustained</div>
+      </div>
+      <div class="ao-item expanded" id="ao-c3" onclick="crosslight('c3','ao-c3')">
+        <div class="ao-row"><div class="ao-status valid"></div><div class="ao-tag ao2">AO2</div><div class="ao-strength">valid</div></div>
+        <div class="ao-text">Profit → machinery investment consequence identified</div>
+        <div class="ao-expanded">
+          <div class="ao-sentiment">
+            <button class="sent-btn pos active">Positive</button>
+            <button class="sent-btn neu">Neutral</button>
+            <button class="sent-btn neg">Negative</button>
+          </div>
+          <div class="ao-body">Strong analysis of impact on paint machinery investment and further profit loss — chain sustained across two steps.</div>
+          <button class="btn-remove">Remove mark</button>
+        </div>
+      </div>
+      <div class="ao-item" id="ao-c4" onclick="crosslight('c4','ao-c4')">
+        <div class="ao-row"><div class="ao-status partial"></div><div class="ao-tag ao3">AO3</div><div class="ao-strength">partial</div></div>
+        <div class="ao-text">Labour availability argument — rising employment applied to context</div>
+        <div class="ao-note">Needs further development — not linked back to profitability</div>
+      </div>
+
+      <div style="height:8px;"></div>
+      <div class="ao-section-label">Q03 annotations</div>
+
+      <div class="ao-item" id="ao-b1" onclick="crosslight('b1','ao-b1')">
+        <div class="ao-row"><div class="ao-status valid"></div><div class="ao-tag ao1">AO1</div><div class="ao-strength">valid</div></div>
+        <div class="ao-text">Repeat custom → steady revenue correctly stated</div>
+      </div>
+      <div class="ao-item" id="ao-b2" onclick="crosslight('b2','ao-b2')">
+        <div class="ao-row"><div class="ao-status valid"></div><div class="ao-tag ao1">AO1</div><div class="ao-strength">valid</div></div>
+        <div class="ao-text">Word-of-mouth → reduced advertising cost — correctly applied</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- AI CO-MARKER — detached floating pill, with physics on scroll -->
+  <div class="ai-float" id="aiFloat">
+    <div class="ai-bar" id="aiBar">
+      <div class="ai-plus">+</div>
+      <input class="ai-input" id="aiInput" placeholder="Ask DeepMark about this response, the mark scheme, or Jasmine's performance…" />
+      <div class="ai-hint">⌘K</div>
+      <button class="ai-mic">
+        <svg viewBox="0 0 24 24"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+      </button>
+      <button class="ai-send">
+        <svg viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+      </button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  function setPage(el) {
+    document.querySelectorAll('.page-thumb').forEach(function(t){ t.classList.remove('active'); });
+    el.classList.add('active');
+  }
+  function toggleExpand(id) { document.getElementById(id).classList.toggle('open'); }
+
+  var activeEditor = null;
+  function openME(id, e) {
+    e.stopPropagation();
+    if (activeEditor && activeEditor !== id) closeME(activeEditor);
+    document.getElementById(id).classList.toggle('open');
+    activeEditor = id;
+  }
+  function closeME(id) {
+    var el = document.getElementById(id);
+    if (el) el.classList.remove('open');
+    if (activeEditor === id) activeEditor = null;
+  }
+  document.addEventListener('click', function(e) {
+    if (activeEditor && !e.target.closest('.mark-pop') && !e.target.closest('.score-pill')) closeME(activeEditor);
+    if (!e.target.closest('.overflow-wrap')) document.getElementById('overflowMenu').classList.remove('open');
+    if (!e.target.closest('.flag-wrap')) document.getElementById('flagMenu').classList.remove('open');
+  });
+
+  // Overflow menu
+  function toggleOverflow(e) {
+    e.stopPropagation();
+    document.getElementById('overflowMenu').classList.toggle('open');
+  }
+
+  // Flag dropdown
+  function toggleFlagMenu(e) {
+    e.stopPropagation();
+    document.getElementById('flagMenu').classList.toggle('open');
+    document.getElementById('overflowMenu').classList.remove('open');
+  }
+  function selectFlag(type) {
+    var btn = document.getElementById('btnFlag');
+    var label = type === 'later' ? 'Review later' : 'Shared';
+    btn.classList.add('flagged');
+    btn.innerHTML = '<svg viewBox="0 0 24 24" style="width:12px;height:12px;fill:currentColor"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15" style="stroke:currentColor;stroke-width:2;fill:none"/></svg> ' + label;
+    document.getElementById('flagMenu').classList.remove('open');
+  }
+
+  // Confirm marking — flash green, simulate advance
+  function confirmScript() {
+    var btn = document.getElementById('btnConfirm');
+    btn.style.background = '#3C8A62';
+    btn.textContent = 'Saved ✓';
+    setTimeout(function() {
+      btn.style.background = '#00B4D4';
+      btn.textContent = 'Confirm marking ✓';
+    }, 1200);
+  }
+
+  // AO crosslight
+  var activeAo = null;
+  function crosslight(spanKey, aoId) {
+    if (activeAo === spanKey) { clearLit(); activeAo = null; return; }
+    clearLit(); activeAo = spanKey;
+    document.querySelectorAll('[data-ao="' + spanKey + '"]').forEach(function(s){ s.classList.add('lit'); });
+    var aoEl = document.getElementById(aoId);
+    if (aoEl) aoEl.classList.add('lit');
+  }
+  function clearLit() { document.querySelectorAll('.lit').forEach(function(el){ el.classList.remove('lit'); }); }
+
+  // Scroll physics — AI bar bob
+  var colText = document.getElementById('colText');
+  var aiFloat = document.getElementById('aiFloat');
+  var lastScroll = 0;
+  colText.addEventListener('scroll', function() {
+    var delta = colText.scrollTop - lastScroll;
+    lastScroll = colText.scrollTop;
+    var drift = Math.max(-2, Math.min(2, delta * 0.18));
+    aiFloat.style.bottom = (18 - drift) + 'px';
+    clearTimeout(aiFloat._t);
+    aiFloat._t = setTimeout(function(){ aiFloat.style.bottom = '18px'; }, 200);
+  });
+
+  // Sentiment toggle
+  document.querySelectorAll('.sent-btn').forEach(function(btn) {
+    btn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      btn.closest('.ao-sentiment').querySelectorAll('.sent-btn').forEach(function(s){ s.classList.remove('active'); });
+      btn.classList.add('active');
+    });
+  });
+
+  // Keyboard shortcuts
+  document.addEventListener('keydown', function(e) {
+    // ⌘K — focus AI bar
+    if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+      e.preventDefault();
+      document.getElementById('aiInput').focus();
+      return;
+    }
+    // ⌘↵ — confirm marking
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+      e.preventDefault();
+      confirmScript();
+      return;
+    }
+    // ← → — navigate scripts (skip if typing)
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+    if (e.key === 'ArrowLeft') { document.querySelector('.btn-nav-sm').click(); }
+    if (e.key === 'ArrowRight') { document.querySelectorAll('.btn-nav-sm')[1].click(); }
+  });
+</script>
+</body>
+</html>

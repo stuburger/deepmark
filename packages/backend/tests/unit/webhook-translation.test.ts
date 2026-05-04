@@ -1,12 +1,15 @@
+import { Plan } from "@mcp-gcse/db"
 import type Stripe from "stripe"
 import { describe, expect, it } from "vitest"
 
 import {
+	decideCheckoutSessionAction,
 	extractCustomerId,
 	identifyUserCriteria,
 	invoiceOutcomeToStatus,
 	subscriptionToUserUpdate,
-} from "../webhook-translation"
+	toPersistedPlan,
+} from "../../src/billing/webhook-translation"
 
 // Minimal builder so each test states only the fields it cares about. Casts
 // to the SDK types are intentional — we're testing the translator's contract,
@@ -71,7 +74,7 @@ describe("subscriptionToUserUpdate", () => {
 			stripe_customer_id: "cus_123",
 			stripe_subscription_id: "sub_abc",
 			subscription_status: "active",
-			plan: "pro_monthly",
+			plan: Plan.pro_monthly,
 			current_period_end: new Date(1_900_000_000 * 1000),
 		})
 	})
@@ -173,5 +176,97 @@ describe("invoiceOutcomeToStatus", () => {
 
 	it("maps failed → past_due", () => {
 		expect(invoiceOutcomeToStatus("failed")).toBe("past_due")
+	})
+})
+
+describe("toPersistedPlan", () => {
+	it("maps pro_monthly checkout marker to Plan.pro_monthly", () => {
+		expect(toPersistedPlan("pro_monthly")).toBe(Plan.pro_monthly)
+	})
+
+	it("collapses pro_annual onto Plan.pro_monthly (same entitlement, different cadence)", () => {
+		expect(toPersistedPlan("pro_annual")).toBe(Plan.pro_monthly)
+	})
+
+	it("maps limitless_monthly to Plan.limitless_monthly", () => {
+		expect(toPersistedPlan("limitless_monthly")).toBe(Plan.limitless_monthly)
+	})
+
+	it("returns null for unknown / missing plan markers", () => {
+		expect(toPersistedPlan(null)).toBeNull()
+		expect(toPersistedPlan(undefined)).toBeNull()
+		expect(toPersistedPlan("")).toBeNull()
+		expect(toPersistedPlan("free")).toBeNull()
+	})
+})
+
+function buildSession(
+	overrides: Partial<Stripe.Checkout.Session> = {},
+): Stripe.Checkout.Session {
+	return {
+		id: "cs_test",
+		object: "checkout.session",
+		mode: "payment",
+		metadata: {},
+		...overrides,
+	} as Stripe.Checkout.Session
+}
+
+describe("decideCheckoutSessionAction", () => {
+	it("ignores subscription-mode sessions (subscription.* drives that path)", () => {
+		const result = decideCheckoutSessionAction(
+			buildSession({ mode: "subscription" }),
+		)
+		expect(result).toEqual({ kind: "ignore", reason: "mode=subscription" })
+	})
+
+	it("ignores setup-mode sessions", () => {
+		const result = decideCheckoutSessionAction(buildSession({ mode: "setup" }))
+		expect(result).toEqual({ kind: "ignore", reason: "mode=setup" })
+	})
+
+	it("ignores payment-mode sessions missing user_id", () => {
+		const result = decideCheckoutSessionAction(
+			buildSession({ mode: "payment", metadata: { kind: "ppu" } }),
+		)
+		expect(result.kind).toBe("ignore")
+	})
+
+	it("recognises a PPU purchase session", () => {
+		const result = decideCheckoutSessionAction(
+			buildSession({
+				mode: "payment",
+				metadata: { kind: "ppu", user_id: "u_123" },
+			}),
+		)
+		expect(result).toEqual({
+			kind: "ppu_purchase",
+			userId: "u_123",
+			sessionId: "cs_test",
+		})
+	})
+
+	it("recognises a top-up purchase session", () => {
+		const result = decideCheckoutSessionAction(
+			buildSession({
+				mode: "payment",
+				metadata: { kind: "topup", user_id: "u_456" },
+			}),
+		)
+		expect(result).toEqual({
+			kind: "topup_purchase",
+			userId: "u_456",
+			sessionId: "cs_test",
+		})
+	})
+
+	it("ignores payment-mode sessions with unknown metadata.kind", () => {
+		const result = decideCheckoutSessionAction(
+			buildSession({
+				mode: "payment",
+				metadata: { kind: "unrecognised", user_id: "u_1" },
+			}),
+		)
+		expect(result.kind).toBe("ignore")
 	})
 })

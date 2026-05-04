@@ -1,7 +1,11 @@
 "use client"
 
+import { useState } from "react"
+
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { createPpuCheckoutSession } from "@/lib/billing/checkout-payment"
+import { surfaceMarkingError } from "@/lib/billing/error-toast"
 import type { Currency } from "@/lib/billing/types"
 import { Check } from "lucide-react"
 
@@ -12,17 +16,42 @@ const FEATURES = [
 	"Upgrade to monthly any time",
 ]
 
-export function PpuCard({
-	currency,
-	priceLabel,
-}: {
+type Props = {
 	currency: Currency
 	priceLabel: string
-}) {
+	signedIn: boolean
+}
+
+export function PpuCard(props: Props) {
+	const [submitting, setSubmitting] = useState(false)
+
+	async function startCheckout() {
+		if (!props.signedIn) {
+			window.location.assign(
+				`/login?next=${encodeURIComponent("/pricing?tier=ppu")}`,
+			)
+			return
+		}
+		setSubmitting(true)
+		const result = await createPpuCheckoutSession({
+			currency: props.currency,
+		})
+		if (result?.serverError) {
+			surfaceMarkingError(result.serverError)
+			setSubmitting(false)
+			return
+		}
+		const url = result?.data?.url
+		if (!url) {
+			surfaceMarkingError("Could not start checkout. Please try again.")
+			setSubmitting(false)
+			return
+		}
+		window.location.assign(url)
+	}
+
 	return (
 		<div className="flex h-full flex-col">
-			{/* Spacer matches the interval-toggle height in PricingTiers so both cards line up. */}
-			<div className="mb-8 h-[34px]" aria-hidden />
 			<Card className="relative flex h-full flex-col border-border/60">
 				<CardHeader>
 					<CardTitle className="text-2xl">Pay per set</CardTitle>
@@ -34,7 +63,9 @@ export function PpuCard({
 				<CardContent className="flex flex-1 flex-col space-y-6">
 					<div>
 						<div className="flex items-baseline gap-3">
-							<p className="text-5xl font-bold tracking-tight">{priceLabel}</p>
+							<p className="text-5xl font-bold tracking-tight">
+								{props.priceLabel}
+							</p>
 							<p className="text-sm text-muted-foreground">/ set</p>
 						</div>
 						<p className="mt-1 text-sm text-muted-foreground">
@@ -56,15 +87,15 @@ export function PpuCard({
 						className="mt-auto w-full"
 						size="lg"
 						variant="outline"
-						disabled
-						aria-label={`Pay ${priceLabel} per set — available soon`}
+						onClick={startCheckout}
+						disabled={submitting}
 					>
-						Available soon
+						{submitting
+							? "Starting checkout…"
+							: props.signedIn
+								? "Buy a set"
+								: "Sign in to buy"}
 					</Button>
-					<p className="text-center text-xs text-muted-foreground">
-						{currency === "gbp" ? "Prices in GBP" : "Prices in USD"} · launching
-						alongside subscription
-					</p>
 				</CardContent>
 			</Card>
 		</div>

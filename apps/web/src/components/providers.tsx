@@ -22,9 +22,15 @@ export function Providers({ children }: ProvidersProps) {
 	return (
 		<QueryClientProvider client={queryClient}>
 			<NuqsAdapter>
+				{/* Dark mode is intentionally disabled for the initial release
+				    via `forcedTheme="light"`. The .dark block in globals.css and
+				    the ThemeToggle component (apps/web/src/components/theme-toggle.tsx)
+				    are kept in place but inert — re-enabling is a one-line revert
+				    here plus re-rendering ThemeToggle in the navbars. */}
 				<ThemeProvider
 					attribute="class"
-					defaultTheme="dark"
+					defaultTheme="light"
+					forcedTheme="light"
 					enableSystem={false}
 					disableTransitionOnChange
 				>

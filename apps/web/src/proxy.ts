@@ -36,7 +36,6 @@ export function proxy(req: NextRequest) {
 export const config = {
 	// Skip Next.js internals, static assets, and all /api/ routes. The
 	// dm-currency cookie is only read by marketing/teacher page renders; API
-	// routes (incl. /api/stripe/webhook) don't need it and shouldn't have
-	// proxy in their path.
+	// routes don't need it and shouldn't have proxy in their path.
 	matcher: ["/((?!_next/static|_next/image|favicon|api/|.*\\..*).*)"],
 }

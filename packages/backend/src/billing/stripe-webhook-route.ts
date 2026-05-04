@@ -1,24 +1,31 @@
-import { stripeClient } from "@/lib/billing/stripe-client"
-import { isTransientError } from "@/lib/billing/transient-error"
-import {
-	applyInvoiceToUser,
-	applySubscriptionToUser,
-	clearSubscriptionFromUser,
-} from "@/lib/billing/webhook-handlers"
-import { log } from "@/lib/logger"
-import { NextResponse } from "next/server"
+import { Hono } from "hono"
 import { Resource } from "sst"
 import type Stripe from "stripe"
 
-const TAG = "api/stripe/webhook"
+import { logger as log } from "@/lib/infra/logger"
 
-export const runtime = "nodejs"
-export const dynamic = "force-dynamic"
+import { stripeClient } from "./stripe-client"
+import { isTransientError } from "./transient-error"
+import {
+	applyChargeRefunded,
+	applyCompletedCheckoutSession,
+	applyInvoiceFailed,
+	applyInvoiceSucceeded,
+	applySubscriptionToUser,
+	clearSubscriptionFromUser,
+} from "./webhook-handlers"
+
+const TAG = "billing/webhook-route"
 
 /**
- * Stripe webhook receiver. Verifies the signature, dispatches by event type.
+ * Stripe webhook receiver, mounted as a Hono route on the API Gateway Lambda.
  *
- * Failure model:
+ * Lives in the API Lambda (not Next.js) so SST's Live Lambda Development can
+ * tunnel webhook deliveries from the deployed ApiGatewayV2 down to localhost
+ * during `sst dev` — the previous Next.js route had no tunnel and only the
+ * deployed (frozen) Lambda would ever see events while developing locally.
+ *
+ * Failure model (matches the previous Next.js route):
  *   - Signature mismatch / missing                     → 400 (drop)
  *   - Handler throws a TRANSIENT error (DB unreachable,
  *     pool timeout, deadlock, init failure, panic)     → 500 (Stripe retries
@@ -31,13 +38,13 @@ export const dynamic = "force-dynamic"
  * or a missing user row will fail every retry, so we'd just keep accepting
  * the same broken event for hours/days. Logging once is the right move.
  */
-export async function POST(req: Request): Promise<NextResponse> {
-	const signature = req.headers.get("stripe-signature")
+export const stripeWebhookRoute = new Hono().post("/webhook", async (c) => {
+	const signature = c.req.header("stripe-signature")
 	if (!signature) {
-		return NextResponse.json({ error: "Missing signature" }, { status: 400 })
+		return c.json({ error: "Missing signature" }, 400)
 	}
 
-	const rawBody = await req.text()
+	const rawBody = await c.req.text()
 	let event: Stripe.Event
 	try {
 		event = stripeClient().webhooks.constructEvent(
@@ -49,7 +56,7 @@ export async function POST(req: Request): Promise<NextResponse> {
 		log.warn(TAG, "Signature verification failed", {
 			error: err instanceof Error ? err.message : String(err),
 		})
-		return NextResponse.json({ error: "Invalid signature" }, { status: 400 })
+		return c.json({ error: "Invalid signature" }, 400)
 	}
 
 	try {
@@ -62,18 +69,19 @@ export async function POST(req: Request): Promise<NextResponse> {
 				await clearSubscriptionFromUser(event.data.object)
 				break
 			case "invoice.payment_succeeded":
-				await applyInvoiceToUser(event.data.object, "succeeded")
+				await applyInvoiceSucceeded(event.data.object)
 				break
 			case "invoice.payment_failed":
-				await applyInvoiceToUser(event.data.object, "failed")
+				await applyInvoiceFailed(event.data.object)
+				break
+			case "charge.refunded":
+				await applyChargeRefunded(event.data.object)
 				break
 			case "checkout.session.completed":
-				// Subscription created event will follow with full state — nothing to
-				// do here beyond logging that the user came back from Checkout.
-				log.info(TAG, "Checkout completed", {
-					sessionId: event.data.object.id,
-					customerId: event.data.object.customer,
-				})
+				// Subscription sessions are no-ops here (the subscription.* +
+				// invoice.* events drive that flow). Payment-mode sessions (PPU,
+				// top-up) need a ledger insert — handler decides which.
+				await applyCompletedCheckoutSession(event.data.object)
 				break
 			default:
 				log.info(TAG, "Ignored event", { type: event.type })
@@ -90,13 +98,10 @@ export async function POST(req: Request): Promise<NextResponse> {
 		if (transient) {
 			// Tell Stripe to retry — DB is temporarily unhealthy and the next
 			// attempt will likely succeed.
-			return NextResponse.json(
-				{ error: "Transient failure, retrying" },
-				{ status: 500 },
-			)
+			return c.json({ error: "Transient failure, retrying" }, 500)
 		}
 		// Permanent: ack with 200 so Stripe stops retrying.
 	}
 
-	return NextResponse.json({ received: true })
-}
+	return c.json({ received: true })
+})

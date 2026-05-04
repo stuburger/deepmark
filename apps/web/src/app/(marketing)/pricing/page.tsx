@@ -1,26 +1,20 @@
 import type { Metadata } from "next"
+import { Resource } from "sst"
 
 import { auth } from "@/lib/auth"
 import { foundersAvailable } from "@/lib/billing/founders"
 import { formatPrice, priceTiers } from "@/lib/billing/plans"
 
+import { getCurrency } from "@/lib/billing/currency"
 import { CurrencySwitcher } from "../_components/currency-switcher"
+import { LimitlessCard } from "../_components/limitless-card"
 import { PpuCard } from "../_components/ppu-card"
-import { PricingTiers } from "../_components/pricing-tiers"
-import { getCurrency } from "../_lib/currency"
+import { ProCard } from "../_components/pro-card"
 
 export const metadata: Metadata = {
 	title: "Pricing — DeepMark",
 	description:
-		"Examiner-quality GCSE marking, two ways to pay. Subscribe monthly for unlimited classes, or pay per set when you need it.",
-}
-
-// PPU price per currency, in minor units (pence/cents). Subscription pricing
-// lives in `infra/billing.ts` because it backs real Stripe Prices; per-set is
-// surfaced as informational copy here until the PPU Stripe wiring lands.
-const PPU_AMOUNTS: Record<"gbp" | "usd", number> = {
-	gbp: 1000, // £10
-	usd: 1300, // $13
+		"Examiner-quality GCSE marking. Pay-as-you-go for occasional mocks, monthly Pro for the marking pile that never empties, or Limitless for no caps.",
 }
 
 export default async function PricingPage() {
@@ -30,78 +24,72 @@ export default async function PricingPage() {
 		auth(),
 	])
 	const tiers = priceTiers(currency)
-	const annualSavings = Math.round(
-		100 - (tiers.annual.amount / (tiers.monthly.amount * 12)) * 100,
+
+	// All amounts read from infra/billing.ts via the StripeConfig Linkable
+	// (single source of truth — same numbers Stripe charges). Founders price
+	// is computed from the standard Pro price + the discount %; £24 × 0.6 =
+	// £14.40, marketed as £14.50 (10p rounding drift is acceptable).
+	const standardLabel = formatPrice(tiers.monthly.amount, currency)
+	const foundersFactor =
+		(100 - Resource.StripeConfig.foundersDiscountPercent) / 100
+	const foundersAmount = Math.round(tiers.monthly.amount * foundersFactor)
+	const foundersLabel = foundersOpen
+		? formatPrice(foundersAmount, currency)
+		: null
+
+	const ppuPriceLabel = formatPrice(
+		Resource.StripeConfig.ppu[currency].amount,
+		currency,
+	)
+	const limitlessPriceLabel = formatPrice(
+		Resource.StripeConfig.plans.limitless.prices[currency].monthly.amount,
+		currency,
 	)
 
-	const monthlyHalf = Math.round(tiers.monthly.amount / 2)
-	const annualHalf = Math.round(tiers.annual.amount / 2)
-	const perMonthEquivalent = `${formatPrice(
-		Math.round(tiers.annual.amount / 12),
-		currency,
-	)}/mo`
-	const foundersPerMonthEquivalent = `${formatPrice(
-		Math.round(annualHalf / 12),
-		currency,
-	)}/mo`
-
-	const ppuPriceLabel = formatPrice(PPU_AMOUNTS[currency], currency)
-
 	return (
-		<div className="mx-auto max-w-5xl px-6 py-20">
+		<div className="mx-auto max-w-6xl px-6 py-20">
 			<div className="text-center">
 				<h1 className="text-4xl font-semibold tracking-tight sm:text-5xl">
-					Mark by the set, or by the month.
+					Pay how you mark.
 				</h1>
 				<p className="mx-auto mt-4 max-w-2xl text-base text-muted-foreground sm:text-lg">
-					Examiner-quality GCSE marking, priced two ways. Same engine, same
-					accuracy — pick what fits how you actually work. Start with 20 papers
-					free, no card needed.
+					Examiner-quality GCSE marking, three ways: a single set when you need
+					it, monthly Pro for regular marking, or Limitless when caps just get
+					in the way. Start with 20 papers free, no card needed.
 				</p>
 				<div className="mt-6 flex justify-center">
 					<CurrencySwitcher current={currency} />
 				</div>
 			</div>
 
-			<div className="mt-14 grid gap-6 md:grid-cols-2">
-				<PpuCard currency={currency} priceLabel={ppuPriceLabel} />
-				<PricingTiers
+			<div className="mt-14 grid gap-6 md:grid-cols-3">
+				<PpuCard
 					currency={currency}
-					monthly={{
-						amount: tiers.monthly.amount,
-						label: formatPrice(tiers.monthly.amount, currency),
-						foundersLabel: foundersOpen
-							? formatPrice(monthlyHalf, currency)
-							: null,
-					}}
-					annual={{
-						amount: tiers.annual.amount,
-						label: formatPrice(tiers.annual.amount, currency),
-						foundersLabel: foundersOpen
-							? formatPrice(annualHalf, currency)
-							: null,
-						perMonthEquivalent,
-						foundersPerMonthEquivalent: foundersOpen
-							? foundersPerMonthEquivalent
-							: null,
-					}}
-					annualSavingsPercent={annualSavings}
+					priceLabel={ppuPriceLabel}
+					signedIn={Boolean(session)}
+				/>
+				<ProCard
+					currency={currency}
+					standardLabel={standardLabel}
+					foundersLabel={foundersLabel}
 					foundersAvailable={foundersOpen}
 					signedIn={Boolean(session)}
 				/>
+				<LimitlessCard currency={currency} priceLabel={limitlessPriceLabel} />
 			</div>
 
 			<div className="mx-auto mt-16 max-w-3xl space-y-8 text-sm text-muted-foreground">
 				<div>
 					<h2 className="text-base font-medium text-foreground">
-						Why two prices?
+						Which one is right?
 					</h2>
 					<p className="mt-2">
-						Not every teacher marks every week. The monthly plan is for the
-						teacher whose half-term runs on this — unlimited classes, founders'
-						discount locked in. Pay-per-set is for the HoD running occasional
-						mocks, the cover supervisor, or anyone trying DeepMark on a real
-						workload before committing. Same marking either way.
+						Pay-per-set is for the HoD running occasional mocks, the cover
+						supervisor, or anyone trying DeepMark on a real workload before
+						committing. Pro is for the teacher whose half-term runs on this — 60
+						papers a month covers two full classes, with top-ups available at
+						£6.50 if exam season pushes you over. Limitless removes the cap
+						entirely and is built for heavy markers and exam-prep specialists.
 					</p>
 				</div>
 				<div>
@@ -111,6 +99,16 @@ export default async function PricingPage() {
 					<p className="mt-2">
 						One question paper run against a class of student scripts, up to 30.
 						One mock, one batch.
+					</p>
+				</div>
+				<div>
+					<h2 className="text-base font-medium text-foreground">
+						About the founders' offer
+					</h2>
+					<p className="mt-2">
+						The first 100 Pro subscribers pay £14.50/mo for the first 6 months,
+						then £24/mo thereafter. Your feedback shapes the product during the
+						lock-in period.
 					</p>
 				</div>
 				<div>

@@ -14,6 +14,7 @@ import type { HonoEnv } from "./types"
 import { swaggerUI } from "@hono/swagger-ui"
 import { apiRoutes } from "./api-routes"
 import { authMiddleware } from "./auth/auth-middleware"
+import { stripeWebhookRoute } from "./billing/stripe-webhook-route"
 
 export const v1Routes = new OpenAPIHono<HonoEnv>()
 	.route("/v1", apiRoutes)
@@ -32,6 +33,9 @@ export const routes = new OpenAPIHono<HonoEnv>()
 	.use("*", logger())
 	.use("*", compress())
 	.route("/mcp", mcpRoutes)
+	// Stripe webhook — intentionally at top level (NOT under /v1) so it
+	// bypasses authMiddleware. Stripe authenticates via signature, not bearer.
+	.route("/stripe", stripeWebhookRoute)
 	.route("/v1", v1Routes.use(authMiddleware))
 
 	.onError((error, c) => {

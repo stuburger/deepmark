@@ -1,52 +1,25 @@
 import { db } from "@/lib/db"
 
-import { countCompletedGradingRuns, trialPaperCap } from "./quota"
-import { TrialExhaustedError } from "./types"
+import {
+	type Entitlement,
+	decideEntitlement,
+	decideQuotaCheck,
+} from "./entitlement-decision"
+import { getSharedBalance } from "./ledger"
+import { InsufficientBalanceError } from "./types"
 
 /**
- * Discriminated state used as the single source of truth for "can this user
- * mark another paper?". Three callers consume it:
- *  - the markingAction quota gate (admin/active → pass; trial → check cap)
- *  - the in-app trial banner (renders only on "trial")
- *  - any future surface that needs the same answer
- *
- * Future "grace" kind (paid user with status "canceled" but inside the
- * paid period) slots in here without changing call sites that branch on
- * `kind === "trial"`.
+ * Impure orchestrator: fetches user + ledger state and routes through the
+ * pure decision functions in `./entitlement-decision`. Two entry points:
+ *  - `getEntitlement(userId)` — returns the Entitlement union for UI
+ *  - `assertPapersQuota({user, additionalPapers})` — pre-flight check that
+ *    throws on insufficient balance
  */
-export type Entitlement =
-	| { kind: "admin" }
-	| { kind: "active" }
-	| {
-			kind: "trial"
-			used: number
-			cap: number
-			remaining: number
-			exhausted: boolean
-	  }
-
-type SubscriptionFields = {
-	plan: string | null
-	subscription_status: string | null
-}
 
 /**
- * Pure predicate: does this user record reflect an actively-entitled paid
- * subscription? Both `plan` and a paying status must be set; "past_due",
- * "canceled" etc. are NOT entitled — the subscription needs attention.
- */
-export function isActivelyEntitled(user: SubscriptionFields): boolean {
-	if (!user.plan) return false
-	return (
-		user.subscription_status === "active" ||
-		user.subscription_status === "trialing"
-	)
-}
-
-/**
- * Resolve the user's marking entitlement. Cheap path first — paid users do
- * exactly one DB query (the user select). Trial users add a second indexed
- * COUNT for completed grading runs.
+ * Resolve the user's marking entitlement. Cheap path first — admin and
+ * uncapped users skip the balance read entirely. Metered users incur one
+ * indexed SUM aggregate against the ledger.
  */
 export async function getEntitlement(userId: string): Promise<Entitlement> {
 	const user = await db.user.findUnique({
@@ -54,36 +27,35 @@ export async function getEntitlement(userId: string): Promise<Entitlement> {
 		select: { role: true, plan: true, subscription_status: true },
 	})
 	if (!user) {
-		// Unknown user — treat as fresh trial. Defensive: shouldn't happen for
-		// an authenticated session, but covers the gap if a user row is deleted
-		// while a session token still exists.
-		const cap = trialPaperCap()
-		return { kind: "trial", used: 0, cap, remaining: cap, exhausted: false }
+		// Unknown user — treat as fresh metered with zero balance. Defensive:
+		// shouldn't happen for an authenticated session, but covers the gap if
+		// a user row is deleted while a session token still exists.
+		return decideEntitlement({ user: null, balance: 0 })
 	}
-	if (user.role === "admin") return { kind: "admin" }
-	if (isActivelyEntitled(user)) return { kind: "active" }
-
-	const cap = trialPaperCap()
-	const used = await countCompletedGradingRuns(userId)
-	const remaining = Math.max(0, cap - used)
-	return {
-		kind: "trial",
-		used,
-		cap,
-		remaining,
-		exhausted: remaining === 0,
-	}
+	const decision = decideEntitlement({ user, balance: 0 })
+	if (decision.kind !== "metered") return decision
+	const balance = await getSharedBalance(userId)
+	return { kind: "metered", balance, plan: decision.plan }
 }
 
 /**
- * Throw TrialExhaustedError if the user can't consume `additionalPapers`
- * more marking quota. Used by the markingAction middleware (additionalPapers
- * = 1) and the batch-commit action (additionalPapers = staged-script count).
+ * Pre-flight assertion: throws `InsufficientBalanceError` if the user can't
+ * cover `additionalPapers` from their available balance. Pure check, no
+ * write — the actual ledger consume is reserved atomically alongside the
+ * StudentSubmission + GradingRun creation in commit-service / re-mark /
+ * re-scan, so a double-submit race can't over-spend (the second submit's
+ * consume insert hits the same balance and fails the check).
  *
- * Lambda processors should re-check this before doing real work — the
- * client-side check can race (double-click, two tabs, queued retries).
+ * Used by:
+ *  - the `markingAction` middleware (additionalPapers = 1)
+ *  - the batch-commit action (additionalPapers = staged-script count)
+ *  - re-mark / re-scan single-script actions (additionalPapers = 1)
+ *
+ * The reserve-on-submit consume insert is the source of truth for "does
+ * this user have credit?" — this assertion is a fast-fail to avoid doing
+ * work that the consume insert would reject anyway.
  */
-export async function enforcePapersQuota({
+export async function assertPapersQuota({
 	user,
 	additionalPapers,
 }: {
@@ -91,10 +63,11 @@ export async function enforcePapersQuota({
 	additionalPapers: number
 }): Promise<void> {
 	const ent = await getEntitlement(user.id)
-	if (ent.kind === "admin" || ent.kind === "active") return
-	if (ent.used + additionalPapers > ent.cap) {
-		throw new TrialExhaustedError(
-			`Free trial covers ${ent.cap} papers (you've used ${ent.used}). Upgrade to mark ${additionalPapers > 1 ? `${additionalPapers} more` : "more"}.`,
-		)
-	}
+	const decision = decideQuotaCheck({ entitlement: ent, additionalPapers })
+	if (decision.ok) return
+	throw new InsufficientBalanceError(
+		decision.balance,
+		decision.requested,
+		decision.plan,
+	)
 }

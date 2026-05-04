@@ -106,8 +106,27 @@ declare module "sst" {
     }
     "StripeConfig": {
       "foundersCouponId": string
+      "foundersDiscountPercent": number
       "foundersSlotLimit": number
       "plans": {
+        "limitless": {
+          "description": string
+          "name": string
+          "prices": {
+            "gbp": {
+              "monthly": {
+                "amount": number
+                "id": string
+              }
+            }
+            "usd": {
+              "monthly": {
+                "amount": number
+                "id": string
+              }
+            }
+          }
+        }
         "pro": {
           "description": string
           "name": string
@@ -135,7 +154,30 @@ declare module "sst" {
           }
         }
       }
+      "ppu": {
+        "gbp": {
+          "amount": number
+          "id": string
+        }
+        "papersPerSet": number
+        "usd": {
+          "amount": number
+          "id": string
+        }
+      }
+      "proMonthlyGrantSize": number
       "productId": string
+      "topUp": {
+        "gbp": {
+          "amount": number
+          "id": string
+        }
+        "papersPerPurchase": number
+        "usd": {
+          "amount": number
+          "id": string
+        }
+      }
       "trialPaperCap": number
       "type": "sst.sst.Linkable"
     }

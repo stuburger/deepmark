@@ -1,10 +1,6 @@
+import { stripeWebhookSecret } from "./api"
 import { auth, authUrl } from "./auth"
-import {
-	stripeConfig,
-	stripePublishableKey,
-	stripeSecretKey,
-	stripeWebhookSecret,
-} from "./billing"
+import { stripeConfig, stripePublishableKey, stripeSecretKey } from "./billing"
 import { collabServer } from "./collab"
 import {
 	domain,

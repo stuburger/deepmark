@@ -52,6 +52,30 @@ async function attachPendingResourceGrantsForSignup(user: {
 	})
 }
 
+/**
+ * Seed a fresh user's free-trial paper allowance as a single `trial_grant`
+ * ledger entry. Idempotent: if the user already has one (e.g. webhook
+ * replay, or this fires on a returning user via a code path that bypassed
+ * the existing-user branch), it's a no-op.
+ *
+ * Uses Resource.StripeConfig.trialPaperCap as the source of truth so trial
+ * size is configurable in one place (infra/billing.ts) without code changes.
+ */
+async function seedTrialGrant(userId: string): Promise<void> {
+	const existing = await db.paperLedgerEntry.findFirst({
+		where: { user_id: userId, kind: "trial_grant" },
+		select: { id: true },
+	})
+	if (existing) return
+	await db.paperLedgerEntry.create({
+		data: {
+			user_id: userId,
+			papers: Resource.StripeConfig.trialPaperCap,
+			kind: "trial_grant",
+		},
+	})
+}
+
 const app = issuer({
 	subjects,
 	storage: DynamoStorage({
@@ -99,8 +123,16 @@ const app = issuer({
 						email: gh_user.email,
 					},
 				})
-				await attachPendingResourceGrantsForSignup(user)
 			}
+
+			// Run on every login (not just signup): both helpers are idempotent.
+			// Self-heals any signup whose user.create succeeded but a side effect
+			// failed (Neon blip, etc.) — without this hoist the user would be
+			// permanently stuck at zero balance because the next login skips the
+			// `if (!user)` block. Also retroactively attaches resources shared with
+			// the user's email after their account already existed.
+			await attachPendingResourceGrantsForSignup(user)
+			await seedTrialGrant(user.id)
 
 			return ctx.subject("user", {
 				userId: user.id,
@@ -126,8 +158,11 @@ const app = issuer({
 						email: googleUser.email,
 					},
 				})
-				await attachPendingResourceGrantsForSignup(user)
 			}
+
+			// Run on every login (not just signup): see GitHub branch above.
+			await attachPendingResourceGrantsForSignup(user)
+			await seedTrialGrant(user.id)
 
 			return ctx.subject("user", {
 				userId: user.id,

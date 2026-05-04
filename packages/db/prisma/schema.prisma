@@ -164,6 +164,25 @@ enum StimulusContentType {
   table
 }
 
+/// Paid subscription plans. Trial / PPU-only users have plan = NULL.
+enum Plan {
+  pro_monthly         // capped at 60 papers/month, current product
+  limitless_monthly   // uncapped paid tier
+}
+
+/// What kind of paper-ledger event this is. Drives how the row is interpreted
+/// (which idempotency key applies, whether period bounds are populated, etc.).
+enum LedgerEntryKind {
+  trial_grant           // +20 papers seeded on User creation
+  subscription_grant    // +N papers on invoice.payment_succeeded for a capped plan
+  period_expiry         // -N papers zeroing a previous period's unused subscription credits
+  purchase_ppu          // +N papers on PPU checkout completion
+  purchase_topup        // +N papers on top-up checkout completion
+  consume               // -1 paper per grading run
+  refund                // +1 paper per failed/refunded grading run
+  admin_grant           // +N papers manual support grant (audit trail)
+}
+
 model User {
   id         String   @id @default(cuid())
   email      String?  @unique
@@ -181,8 +200,11 @@ model User {
   stripe_customer_id     String?  @unique
   /// Stripe Subscription id, set when an active sub exists. Null = trial.
   stripe_subscription_id String?  @unique
-  /// "pro_monthly" | "pro_annual" — null while user is on free trial.
-  plan                   String?
+  /// Active subscription plan. NULL = no active sub (trial / PPU-only).
+  /// Founders' status is NOT stored here — derived from Stripe's
+  /// subscription.discount.coupon.id on demand. Per-period paper consumption
+  /// is NOT stored here either — computed from `paper_ledger` entries.
+  plan                   Plan?
   /// Mirrors Stripe subscription.status: "active" | "trialing" | "past_due" |
   /// "canceled" | "incomplete" | "incomplete_expired" | "unpaid" | "paused".
   /// Updated by the Stripe webhook handler.
@@ -207,6 +229,11 @@ model User {
   submission_feedback  SubmissionFeedback[]   @relation("UserFeedback")
   resource_grants_created   ResourceGrant[] @relation("ResourceGrantCreatedBy")
   resource_grants_principal ResourceGrant[] @relation("ResourceGrantPrincipalUser")
+
+  paper_ledger_entries      PaperLedgerEntry[]
+  /// Ledger rows where this user was the human grantor (admin_grant /
+  /// admin-issued refund). Audit trail for support actions.
+  paper_ledger_grants_issued PaperLedgerEntry[] @relation("LedgerGrantor")
 
   @@map("users")
 }
@@ -733,6 +760,7 @@ model GradingRun {
   ocr_run    OcrRun                   @relation(fields: [ocr_run_id], references: [id])
   annotations StudentPaperAnnotation[] @relation("GradingRunAnnotations")
   feedback   SubmissionFeedback[]     @relation("GradingRunFeedback")
+  paper_ledger_entries PaperLedgerEntry[]
 
   @@index([submission_id])
   @@index([ocr_run_id])
@@ -891,4 +919,86 @@ model LlmCallSite {
   updated_at   DateTime @updatedAt
 
   @@map("llm_call_sites")
+}
+
+/// Append-only ledger of every paper-affecting event.
+///
+/// Single source of truth for "how many papers does this user have available?":
+/// `SUM(papers) WHERE user_id = ?`. No denormalised counters anywhere — see
+/// `docs/build-plan-2026-05-02-pricing-restructure.md` for the design rationale
+/// and the full kind-by-kind interpretation.
+///
+/// Idempotency:
+///  - `stripe_session_id` UNIQUE — webhook replay of a payment-mode checkout
+///    is a no-op for ppu/topup grants.
+///  - `stripe_invoice_id` UNIQUE — webhook replay of invoice.payment_succeeded
+///    is a no-op for subscription_grant + period_expiry pairs.
+///  - `@@unique([kind, grading_run_id])` — at most one consume row per
+///    grading_run_id, and at most one refund row per grading_run_id. Postgres
+///    treats NULLs as distinct in unique constraints, so the many ledger
+///    kinds with NULL grading_run_id (grants, expiries, etc.) are unaffected.
+model PaperLedgerEntry {
+  id                String           @id @default(cuid())
+  user_id           String
+  user              User             @relation(fields: [user_id], references: [id])
+
+  /// Signed paper count. +ve = grant, -ve = consumption or expiry.
+  papers            Int
+
+  /// What kind of ledger event this is. Determines which idempotency key
+  /// applies and how the row is interpreted.
+  kind              LedgerEntryKind
+
+  /// Stripe Checkout Session id — set on `purchase_ppu` and `purchase_topup`
+  /// only. UNIQUE so webhook replay is a no-op.
+  stripe_session_id String?          @unique
+
+  /// Stripe Invoice id — set on `subscription_grant` (the invoice that paid
+  /// for this period) and `period_expiry` (the invoice whose rollover
+  /// expired the previous period). UNIQUE so webhook replay is a no-op.
+  stripe_invoice_id String?          @unique
+
+  /// Grading run id — set on `consume` and `refund`. Uniqueness is enforced
+  /// per-kind via the `@@unique([kind, grading_run_id])` constraint below,
+  /// so a consume and a refund can share a grading_run_id (the refund undoes
+  /// the consume), but two consumes for the same grading_run can't coexist.
+  grading_run_id    String?
+  grading_run       GradingRun?      @relation(fields: [grading_run_id], references: [id])
+
+  /// Period this entry belongs to — Stripe invoice id of the period.
+  ///  - subscription_grant: the invoice that paid for this period
+  ///  - consume: the period the grading_run was charged against (snapshotted)
+  ///  - period_expiry: the period being expired
+  ///  - everything else: NULL
+  period_id         String?
+
+  /// Period bounds — set on `subscription_grant` only. Snapshotted from
+  /// `invoice.lines.data[0].period.{start,end}`. Decouples "what period are
+  /// we in" from a Stripe round-trip; also the seam for future annual /
+  /// quarterly cadence (one annual invoice → 12 monthly grants varying
+  /// these bounds).
+  period_starts_at  DateTime?
+  period_ends_at    DateTime?
+
+  /// Audit trail for human-issued entries. Set on `admin_grant` and
+  /// admin-issued `refund` rows; null for system-generated entries
+  /// (subscription_grant, period_expiry, consume, etc). Lets us answer
+  /// "show me all grants Stu issued last month" with SQL rather than log
+  /// scraping.
+  granted_by_user_id String?
+  granted_by_user    User?           @relation("LedgerGrantor", fields: [granted_by_user_id], references: [id])
+
+  /// Free-form context for an admin grant or refund — e.g. "compensation
+  /// for outage 2026-05-15", "founders trial bump". Surfaced in admin
+  /// audit views and a future user-facing paper-history surface.
+  note               String?
+
+  created_at        DateTime         @default(now())
+
+  @@unique([kind, grading_run_id])
+  @@index([user_id])
+  @@index([user_id, period_id])
+  @@index([user_id, kind])
+  @@index([user_id, period_starts_at])
+  @@map("paper_ledger")
 }

@@ -2,6 +2,8 @@
 // callable from server actions, queue-handler glue, and SSR pages, but never
 // from a client component. The auth boundary is the caller's job.
 
+import { randomUUID } from "node:crypto"
+import { insertConsumesForBatch } from "@/lib/billing/ledger"
 import { db } from "@/lib/db"
 import { SQSClient, SendMessageCommand } from "@aws-sdk/client-sqs"
 import {
@@ -9,6 +11,7 @@ import {
 	ResourceGrantPrincipalType,
 	ResourceGrantResourceType,
 	ResourceGrantRole,
+	lookupCurrentPeriodId,
 } from "@mcp-gcse/db"
 import { Resource } from "sst"
 import { parsePageKeys } from "../types"
@@ -68,6 +71,24 @@ export async function commitBatchService(
 		return { ok: false, error: "No confirmed scripts to commit" }
 	}
 
+	// Snapshot the user's current billing period BEFORE the transaction so all
+	// reserved consume rows in this batch share the same period_id (and the
+	// snapshot is stable even if a webhook for a new invoice lands mid-commit).
+	// `null` for trial / PPU-only / Limitless — only capped Pro users have one.
+	const userPlan = await db.user.findUnique({
+		where: { id: uploadedBy },
+		select: { plan: true, role: true },
+	})
+	const skipLedger =
+		userPlan?.role === "admin" || userPlan?.plan === "limitless_monthly"
+	const periodId = skipLedger
+		? null
+		: await lookupCurrentPeriodId({
+				db,
+				userId: uploadedBy,
+				plan: userPlan?.plan ?? null,
+			})
+
 	const createdJobs = await db.$transaction(async (tx) => {
 		const jobs = await Promise.all(
 			confirmedScripts.map(async (script) => {
@@ -79,8 +100,13 @@ export async function commitBatchService(
 				}))
 				const studentName = script.confirmed_name ?? script.proposed_name
 
+				// Pre-generate the submission id so we can wire OcrRun + GradingRun
+				// + paper_ledger consume row (all sharing the same id) atomically.
+				const submissionId = randomUUID()
+
 				const submission = await tx.studentSubmission.create({
 					data: {
+						id: submissionId,
 						s3_key: pageKeys[0]?.s3_key ?? "",
 						s3_bucket: bucketName,
 						uploaded_by: uploadedBy,
@@ -105,9 +131,43 @@ export async function commitBatchService(
 						accepted_at: new Date(),
 					},
 				})
+				// OcrRun + GradingRun pre-created in `pending` so the consume row's
+				// FK to grading_run is satisfied immediately. The OCR Lambda upserts
+				// (treats existing pending row as "claim and run"), the grade Lambda's
+				// `claimGradingRun` already handles a pre-existing pending row.
+				await tx.ocrRun.create({
+					data: {
+						id: submissionId,
+						submission_id: submissionId,
+						status: "pending",
+					},
+				})
+				await tx.gradingRun.create({
+					data: {
+						id: submissionId,
+						submission_id: submissionId,
+						ocr_run_id: submissionId,
+						status: "pending",
+					},
+				})
 				return submission
 			}),
 		)
+
+		// Reserve the paper-ledger consume rows atomically with the work above.
+		// Skipped for admin / Limitless (uncapped). For trial / PPU-only / Pro
+		// the consume rows enforce balance via the assertPapersQuota pre-check;
+		// the createMany lands inside the same tx so a double-submit race would
+		// roll one of the two transactions back via Postgres serialisation on
+		// the unique index.
+		if (!skipLedger) {
+			await insertConsumesForBatch({
+				userId: uploadedBy,
+				gradingRunIds: jobs.map((j) => j.id),
+				periodId,
+				tx,
+			})
+		}
 
 		// Mark staged scripts as submitted so the batch query doesn't need to join submissions
 		await tx.stagedScript.updateMany({

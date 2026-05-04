@@ -1,22 +1,10 @@
-import { db } from "@/lib/db"
 import { Resource } from "sst"
 
 /**
- * Count completed grading runs across all submissions uploaded by this user.
- * Naturally counts re-marks (new grading run on same submission) and re-scans
- * (new submission with its own grading run) — both are quota-consuming events.
+ * Trial allowance — used when seeding a `trial_grant` ledger entry on user
+ * creation, and as the divisor for the trial-progress UI. Stored in
+ * `infra/billing.ts` so changing it is a single deploy.
  */
-export async function countCompletedGradingRuns(
-	userId: string,
-): Promise<number> {
-	return db.gradingRun.count({
-		where: {
-			status: "complete",
-			submission: { uploaded_by: userId },
-		},
-	})
-}
-
 export function trialPaperCap(): number {
 	return Resource.StripeConfig.trialPaperCap
 }

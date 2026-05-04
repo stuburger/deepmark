@@ -11,7 +11,10 @@ import type {
 	BatchIngestionState,
 	StagedScript,
 } from "@/lib/batch/types"
-import { surfaceMarkingError } from "@/lib/billing/error-toast"
+import {
+	parseInsufficientBalanceError,
+	surfaceMarkingError,
+} from "@/lib/billing/error-toast"
 import { queryKeys } from "@/lib/query-keys"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useMemo } from "react"
@@ -44,7 +47,17 @@ function mapBatchToIngestionState(
 
 // ─── Hook ───────────────────────────────────────────────────────────────────
 
-export function useBatchIngestion(paperId: string) {
+export function useBatchIngestion(
+	paperId: string,
+	options: {
+		/**
+		 * Called when commitBatch fails because the user doesn't have enough
+		 * paper credit. The shell uses this to open a richer cap-bite modal
+		 * (top-up + see-plans) instead of the generic upgrade toast.
+		 */
+		onCapBite?: (message: string) => void
+	} = {},
+) {
 	const queryClient = useQueryClient()
 
 	// Active batch — polls every 3s while classifying or staging (short-lived phases)
@@ -85,10 +98,16 @@ export function useBatchIngestion(paperId: string) {
 			if (r?.serverError) throw new Error(r.serverError)
 			return r?.data
 		},
-		onError: (err) =>
+		onError: (err) => {
+			const parsed = parseInsufficientBalanceError(err)
+			if (parsed.isInsufficientBalance && options.onCapBite) {
+				options.onCapBite(parsed.message)
+				return
+			}
 			surfaceMarkingError(
 				err instanceof Error ? err : "Failed to start marking",
-			),
+			)
+		},
 		onSettled: () => {
 			// Invalidate both the batch (transitions to marking) and the
 			// submissions list (new submissions were created by the commit)

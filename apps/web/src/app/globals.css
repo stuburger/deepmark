@@ -132,7 +132,7 @@
 	--teal-dark: #0190ae;
 	--teal-light: rgba(1, 173, 208, 0.08);
 	--teal-ring: rgba(1, 173, 208, 0.25);
-	--paper: #ebebeb;
+	--paper: #ffffff;
 	--paper-surface: #f5f4f0;
 	--paper-white: #ffffff;
 	--success: #3c8a62;
@@ -146,13 +146,12 @@
 	--phase-annotate: #9b6dd4;
 
 	/* Page texture — applied to body in light mode. Tight 10px grid matching
-	   Geoff's dot-grid.png asset (the slide-over menu uses the same texture so
-	   the menu reads as a continuation of the page). */
-	--texture-image: radial-gradient(
-		circle,
-		rgba(0, 0, 0, 0.14) 0.6px,
-		transparent 0.6px
-	);
+	   Geoff's dot-grid.png asset. Dots are #D6D6D6 (RGB 214) per Geoff's
+	   spec — a defined light grey rather than alpha-on-paper, so the dot
+	   colour stays constant whether the underlying surface is the page
+	   white or a slightly tinted muted area. The slide-over menu uses the
+	   same texture so it reads as a continuation of the page. */
+	--texture-image: radial-gradient(circle, #d6d6d6 0.6px, transparent 0.6px);
 	--texture-size: 10px 10px;
 
 	/* shadcn semantic vars — mapped onto DeepMark primitives.
@@ -179,7 +178,7 @@
 	   for hairlines that should barely register. Both must stay clearly
 	   below `--border` so the visual hierarchy reads. */
 	--border-quiet: rgba(0, 0, 0, 0.07);
-	--border-subtle: rgba(0, 0, 0, 0.04);
+	--border-subtle: rgba(0, 0, 0, 0.08);
 	--input: rgba(0, 0, 0, 0.1);
 	--ring: var(--teal-ring);
 
@@ -257,7 +256,7 @@
 	--destructive: #e04848;
 	--border: rgba(255, 255, 255, 0.1);
 	--border-quiet: rgba(255, 255, 255, 0.07);
-	--border-subtle: rgba(255, 255, 255, 0.04);
+	--border-subtle: rgba(255, 255, 255, 0.08);
 	--input: rgba(255, 255, 255, 0.15);
 	--ring: rgba(1, 173, 208, 0.35);
 

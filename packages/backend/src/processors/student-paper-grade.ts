@@ -16,7 +16,6 @@ import {
 	gradeAndAnnotateAll,
 } from "@/lib/grading/grade-questions"
 import { createMarkerOrchestrator } from "@/lib/grading/grader-config"
-import { persistAnswerRows } from "@/lib/grading/persist-answers"
 import { loadQuestionList } from "@/lib/grading/question-list"
 import {
 	type CancellationToken,
@@ -373,12 +372,16 @@ async function completeGradingJob(args: CompleteGradingJobArgs): Promise<void> {
 	// — by the time we get here, the doc has every mark and the session is
 	// closed. Nothing more to do for the editor; just record the run as
 	// complete on the DB and notify downstream.
+	//
+	// Answer + MarkingResult rows are NOT written here. They are projected
+	// from the Yjs doc by `annotation-projection.ts` on the next snapshot,
+	// alongside annotations / grading_results JSON / examiner summary /
+	// teacher overrides. Single writer, derived from one input.
 	await markGradingRunComplete({
 		jobId: args.jobId,
 		examinerSummary: args.examinerSummary,
 	})
 	logGradingCompleteEvent(args.jobId, totals)
-	await persistAnswerRowsIfLinked(args)
 	await notifyBatchIfComplete(args.sub.batch_job_id)
 }
 
@@ -442,17 +445,6 @@ function logGradingCompleteEvent(
 		at: new Date().toISOString(),
 		total_awarded: totals.totalAwarded,
 		total_max: totals.totalMax,
-	})
-}
-
-async function persistAnswerRowsIfLinked(
-	args: CompleteGradingJobArgs,
-): Promise<void> {
-	if (!args.sub.student_id) return
-	await persistAnswerRows({
-		gradingResults: args.gradingResults,
-		studentId: args.sub.student_id,
-		jobId: args.jobId,
 	})
 }
 

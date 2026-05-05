@@ -354,7 +354,6 @@ model Student {
   updated_at DateTime @updatedAt
 
   teacher              User                @relation("TeacherStudents", fields: [teacher_id], references: [id])
-  answers              Answer[]            @relation("StudentAnswers")
   student_submissions  StudentSubmission[] @relation("SubmissionStudent")
 
   @@map("students")
@@ -363,7 +362,10 @@ model Student {
 model Answer {
   id                 String        @id @default(cuid())
   question_id        String
-  student_id         String
+  /// Owning submission. Answer rows are projections of the Yjs doc onto the
+  /// student_submissions row that produced them — Student linkage is derivable
+  /// via submission.student_id (nullable; not a precondition for grading).
+  submission_id      String
   student_answer     String
   submitted_at       DateTime      @default(now())
   marked_at          DateTime?
@@ -372,10 +374,11 @@ model Answer {
   marking_status     MarkingStatus @default(pending)
   source             AnswerSource  @default(typed)
 
-  student         Student         @relation("StudentAnswers", fields: [student_id], references: [id])
-  question        Question        @relation(fields: [question_id], references: [id])
+  submission      StudentSubmission @relation("SubmissionAnswers", fields: [submission_id], references: [id])
+  question        Question          @relation(fields: [question_id], references: [id])
   marking_results MarkingResult[]
 
+  @@unique([submission_id, question_id])
   @@map("answers")
 }
 
@@ -698,6 +701,7 @@ model StudentSubmission {
   staged_script StagedScript?             @relation("StagedScriptSubmission", fields: [staged_script_id], references: [id])
   ocr_runs      OcrRun[]
   grading_runs  GradingRun[]
+  answers       Answer[]                  @relation("SubmissionAnswers")
   word_tokens   StudentPaperPageToken[]   @relation("SubmissionWordTokens")
   answer_regions     StudentPaperAnswerRegion[] @relation("SubmissionAnswerRegions")
   teacher_overrides  TeacherOverride[]          @relation("SubmissionOverrides")

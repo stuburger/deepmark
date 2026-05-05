@@ -4,6 +4,12 @@ import {
 	diffAnnotations,
 } from "@/lib/annotations/projection-diff"
 import { getEditorSchema } from "@/lib/collab/editor-schema"
+import {
+	type DesiredRow as MarkingResultDesiredRow,
+	type ExistingRow as MarkingResultExistingRow,
+	buildDesiredRows as buildDesiredMarkingResultRows,
+	diffMarkingResults,
+} from "@/lib/grading/marking-result-projection"
 import { logger } from "@/lib/infra/logger"
 import type { SqsEvent } from "@/lib/infra/sqs-job-runner"
 import { GetObjectCommand, S3Client } from "@aws-sdk/client-s3"
@@ -12,6 +18,7 @@ import {
 	DOC_FRAGMENT_NAME,
 	type DerivedTeacherOverride,
 	type GradingResult,
+	type MarkPointResult,
 	type StudentPaperAnnotation,
 	deriveAnnotationsFromDoc,
 	deriveExaminerSummaryFromDoc,
@@ -123,6 +130,7 @@ async function processRecord(rec: S3EventRecord): Promise<void> {
 		writeGradingResults(submissionId, derived.gradingResults),
 		writeExaminerSummary(submissionId, derived.examinerSummary),
 		replaceTeacherOverrides(submissionId, derived.teacherOverrides),
+		writeMarkingResults(submissionId, derived.gradingResults),
 	])
 
 	logger.info(TAG, "Projection complete", {
@@ -327,6 +335,183 @@ async function writeExaminerSummary(
 	await db.gradingRun.update({
 		where: { id: submissionId },
 		data: { examiner_summary: examinerSummary },
+	})
+}
+
+/**
+ * Project per-question grades onto normalised `Answer` + `MarkingResult`
+ * rows. The doc remains the live source of truth — these rows exist for
+ * SQL analytics (avg score per question, per-student trajectory across
+ * papers, hardest/easiest question) which the JSON column on GradingRun
+ * can't serve at scale.
+ *
+ * Stable identity is `(submission_id, question_id)`. Each Answer has at
+ * most one MarkingResult — the projection rebuilds it on every snapshot
+ * and prunes any stale extras. Yjs is the temporal log; this table is a
+ * current-state projection.
+ *
+ * Rows derived from a question with no `mark_scheme_id` are skipped —
+ * the schema requires `MarkingResult.mark_scheme_id` non-null, and an
+ * orphan Answer would defeat the 1:1 invariant.
+ */
+export async function writeMarkingResults(
+	submissionId: string,
+	gradingResults: GradingResult[],
+): Promise<void> {
+	const desired = buildDesiredMarkingResultRows(gradingResults)
+
+	await db.$transaction(async (tx) => {
+		const existingAnswers = await tx.answer.findMany({
+			where: { submission_id: submissionId },
+			select: {
+				id: true,
+				question_id: true,
+				student_answer: true,
+				total_score: true,
+				max_possible_score: true,
+				marking_results: {
+					orderBy: { marked_at: "desc" },
+					select: {
+						id: true,
+						mark_scheme_id: true,
+						mark_points_results: true,
+						feedback_summary: true,
+						llm_reasoning: true,
+						level_awarded: true,
+						why_not_next_level: true,
+						cap_applied: true,
+					},
+				},
+			},
+		})
+
+		const existing: MarkingResultExistingRow[] = existingAnswers.map((a) => {
+			const mr = a.marking_results[0] ?? null
+			return {
+				answer_id: a.id,
+				marking_result_id: mr?.id ?? null,
+				question_id: a.question_id,
+				mark_scheme_id: mr?.mark_scheme_id ?? null,
+				student_answer: a.student_answer,
+				total_score: a.total_score,
+				max_possible_score: a.max_possible_score,
+				mark_points_results:
+					(mr?.mark_points_results as MarkPointResult[] | null) ?? [],
+				feedback_summary: mr?.feedback_summary ?? "",
+				llm_reasoning: mr?.llm_reasoning ?? "",
+				level_awarded: mr?.level_awarded ?? null,
+				why_not_next_level: mr?.why_not_next_level ?? null,
+				cap_applied: mr?.cap_applied ?? null,
+			}
+		})
+
+		const plan = diffMarkingResults(existing, desired)
+
+		if (plan.deleteAnswerIds.length > 0) {
+			await tx.markingResult.deleteMany({
+				where: { answer_id: { in: plan.deleteAnswerIds } },
+			})
+			await tx.answer.deleteMany({
+				where: { id: { in: plan.deleteAnswerIds } },
+			})
+		}
+
+		const markedAt = new Date()
+		for (const row of plan.inserts) {
+			const answer = await tx.answer.create({
+				data: {
+					submission_id: submissionId,
+					question_id: row.question_id,
+					student_answer: row.student_answer,
+					total_score: row.awarded_score,
+					max_possible_score: row.max_score,
+					marking_status: "completed",
+					source: "scanned",
+					marked_at: markedAt,
+				},
+				select: { id: true },
+			})
+			await tx.markingResult.create({
+				data: {
+					answer_id: answer.id,
+					mark_scheme_id: row.mark_scheme_id,
+					mark_points_results: row.mark_points_results as Prisma.InputJsonValue,
+					total_score: row.awarded_score,
+					max_possible_score: row.max_score,
+					marked_at: markedAt,
+					llm_reasoning: row.llm_reasoning,
+					feedback_summary: row.feedback_summary,
+					level_awarded: row.level_awarded,
+					why_not_next_level: row.why_not_next_level,
+					cap_applied: row.cap_applied,
+				},
+			})
+		}
+
+		for (const u of plan.updates) {
+			await applyMarkingResultUpdate(tx, u, markedAt)
+		}
+
+		logger.info(TAG, "Marking-result diff applied", {
+			submissionId,
+			inserts: plan.inserts.length,
+			updates: plan.updates.length,
+			deletes: plan.deleteAnswerIds.length,
+			unchanged:
+				existing.length - plan.deleteAnswerIds.length - plan.updates.length,
+		})
+	})
+}
+
+async function applyMarkingResultUpdate(
+	tx: Prisma.TransactionClient,
+	u: { answer_id: string; marking_result_id: string | null; row: MarkingResultDesiredRow },
+	markedAt: Date,
+): Promise<void> {
+	const { answer_id, marking_result_id, row } = u
+	await tx.answer.update({
+		where: { id: answer_id },
+		data: {
+			student_answer: row.student_answer,
+			total_score: row.awarded_score,
+			max_possible_score: row.max_score,
+			marking_status: "completed",
+			marked_at: markedAt,
+		},
+	})
+	if (marking_result_id) {
+		await tx.markingResult.update({
+			where: { id: marking_result_id },
+			data: {
+				mark_scheme_id: row.mark_scheme_id,
+				mark_points_results: row.mark_points_results as Prisma.InputJsonValue,
+				total_score: row.awarded_score,
+				max_possible_score: row.max_score,
+				marked_at: markedAt,
+				llm_reasoning: row.llm_reasoning,
+				feedback_summary: row.feedback_summary,
+				level_awarded: row.level_awarded,
+				why_not_next_level: row.why_not_next_level,
+				cap_applied: row.cap_applied,
+			},
+		})
+		return
+	}
+	// Existing Answer with no MarkingResult — create the missing pair half.
+	await tx.markingResult.create({
+		data: {
+			answer_id,
+			mark_scheme_id: row.mark_scheme_id,
+			mark_points_results: row.mark_points_results as Prisma.InputJsonValue,
+			total_score: row.awarded_score,
+			max_possible_score: row.max_score,
+			marked_at: markedAt,
+			llm_reasoning: row.llm_reasoning,
+			feedback_summary: row.feedback_summary,
+			level_awarded: row.level_awarded,
+			why_not_next_level: row.why_not_next_level,
+			cap_applied: row.cap_applied,
+		},
 	})
 }
 

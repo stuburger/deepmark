@@ -101,6 +101,9 @@ function mcqRowToGradingResult(row: McqTableRow): GradingResult {
 		multiple_choice_options: row.options,
 		correct_option_labels: row.correctLabels,
 		mark_points_results: row.markPointsResults,
+		mark_scheme_id: row.markSchemeId,
+		why_not_next_level: row.whyNotNextLevel,
+		cap_applied: row.capApplied,
 	}
 }
 
@@ -122,6 +125,9 @@ function questionAnswerToGradingResult(
 		what_went_well: attrs.whatWentWell,
 		even_better_if: attrs.evenBetterIf,
 		mark_points_results: attrs.markPointsResults,
+		mark_scheme_id: attrs.markSchemeId,
+		why_not_next_level: attrs.whyNotNextLevel,
+		cap_applied: attrs.capApplied,
 	}
 }
 

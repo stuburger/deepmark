@@ -69,6 +69,15 @@ export type GradingResult = {
 	correct_option_labels?: string[]
 	mark_points_results?: MarkPointResult[]
 	stimuli?: ResultStimulus[]
+	/// Mark scheme used during grading. Carried on the doc's `markSchemeId`
+	/// node attr; surfaced here so the projection Lambda can write Answer +
+	/// MarkingResult rows without an extra DB lookup. Null for questions
+	/// graded without a mark scheme (skipped by the row projection).
+	mark_scheme_id?: string | null
+	/// Why_not_next_level field surfaced from level_of_response grading.
+	why_not_next_level?: string | null
+	/// Cap descriptor surfaced from level_of_response grading.
+	cap_applied?: string | null
 }
 
 export type ExtractedAnswer = {

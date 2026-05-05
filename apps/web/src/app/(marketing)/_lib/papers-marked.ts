@@ -14,7 +14,8 @@ export type MarketingStats = {
 /**
  * Public, cached stats for the marketing homepage.
  * - papersMarked: unique current submissions with a completed grading run
- * - personalizedComments: total marking results (each has a feedback_summary)
+ * - personalizedComments: marking results attached to current submissions —
+ *   excludes superseded ones so re-marks don't double-count
  * - hoursSaved: derived from comment count at SECONDS_SAVED_PER_ANSWER per answer
  *
  * Cached for 5 min — these are vanity numbers, not a live dashboard.
@@ -28,7 +29,9 @@ export const getMarketingStats = unstable_cache(
 					grading_runs: { some: { status: "complete" } },
 				},
 			}),
-			db.markingResult.count(),
+			db.markingResult.count({
+				where: { answer: { is: { submission: { is: { superseded_at: null } } } } },
+			}),
 		])
 
 		const hoursSaved = Math.round(

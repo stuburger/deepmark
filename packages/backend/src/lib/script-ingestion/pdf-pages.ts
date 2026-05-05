@@ -6,7 +6,12 @@ import { GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3"
 import * as mupdf from "mupdf"
 import { PDFDict, PDFDocument, PDFName, PDFRawStream, PDFRef } from "pdf-lib"
 import { Resource } from "sst"
+import { appendJobEvent } from "./job-events"
 import type { PageData } from "./types"
+
+// Emit a pages_extracted progress event every N pages (plus a terminal one
+// at the end). For 700 pages: 7 progress emissions vs. 700-per-page noise.
+const EXTRACT_PROGRESS_STRIDE = 100
 
 // Each in-flight page extract holds two pdf-lib PDFDocument graphs (one for
 // the single-page extract, one re-loaded inside extractJpegFromPdfPage), the
@@ -56,6 +61,13 @@ export async function extractPdfPages(
 			.pop()
 			?.replace(/\.[^/.]+$/, "") ?? "page"
 
+	await appendJobEvent(batchJobId, {
+		kind: "source_file_started",
+		sourceKey,
+		totalPages: pageCount,
+	})
+
+	let processed = 0
 	const pageIndices = Array.from({ length: pageCount }, (_, i) => i)
 	const pages = await concurrencyLimit(
 		PAGE_EXTRACT_CONCURRENCY,
@@ -67,29 +79,49 @@ export async function extractPdfPages(
 			singlePage.addPage(copiedPage!)
 			const singlePageBytes = await singlePage.save()
 
+			let result: PageData
 			const jpegBytes = await extractJpegFromPdfPage(singlePageBytes)
 			if (!jpegBytes) {
-				return { absoluteIndex: i, jpegKey: null, jpegBuffer: null }
+				result = { absoluteIndex: i, jpegKey: null, jpegBuffer: null }
+			} else {
+				const density = await computeInkDensity(jpegBytes)
+				if (density < BLANK_THRESHOLD) {
+					result = { absoluteIndex: i, jpegKey: null, jpegBuffer: null }
+				} else {
+					const jpegKey = `batches/${batchJobId}/pages/${sourceName}-${String(i + 1).padStart(3, "0")}.jpg`
+					await s3.send(
+						new PutObjectCommand({
+							Bucket: Resource.ScansBucket.name,
+							Key: jpegKey,
+							Body: jpegBytes,
+							ContentType: "image/jpeg",
+						}),
+					)
+					result = { absoluteIndex: i, jpegKey, jpegBuffer: jpegBytes }
+				}
 			}
 
-			const density = await computeInkDensity(jpegBytes)
-			if (density < BLANK_THRESHOLD) {
-				return { absoluteIndex: i, jpegKey: null, jpegBuffer: null }
+			processed++
+			if (processed % EXTRACT_PROGRESS_STRIDE === 0) {
+				await appendJobEvent(batchJobId, {
+					kind: "pages_extracted",
+					sourceKey,
+					processed,
+					total: pageCount,
+				})
 			}
-
-			const jpegKey = `batches/${batchJobId}/pages/${sourceName}-${String(i + 1).padStart(3, "0")}.jpg`
-			await s3.send(
-				new PutObjectCommand({
-					Bucket: Resource.ScansBucket.name,
-					Key: jpegKey,
-					Body: jpegBytes,
-					ContentType: "image/jpeg",
-				}),
-			)
-
-			return { absoluteIndex: i, jpegKey, jpegBuffer: jpegBytes }
+			return result
 		},
 	)
+
+	// Terminal progress event (covers the case where pageCount is not a
+	// multiple of the stride).
+	await appendJobEvent(batchJobId, {
+		kind: "pages_extracted",
+		sourceKey,
+		processed: pageCount,
+		total: pageCount,
+	})
 
 	return pages
 }

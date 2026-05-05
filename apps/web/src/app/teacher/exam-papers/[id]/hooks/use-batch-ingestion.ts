@@ -1,3 +1,4 @@
+import { deriveProgress } from "@/lib/batch/events"
 import { commitBatch } from "@/lib/batch/lifecycle/mutations"
 import { getActiveBatchForPaper } from "@/lib/batch/lifecycle/queries"
 import {
@@ -28,7 +29,11 @@ function mapBatchToIngestionState(
 ): BatchIngestionState | null {
 	if (!batch) return null
 
-	const phase = batch.status as "classifying" | "staging" | "marking"
+	const phase = batch.status as
+		| "classifying"
+		| "staging"
+		| "marking"
+		| "failed"
 
 	const unsubmittedScripts = batch.staged_scripts.filter(
 		(s) => s.status !== "submitted",
@@ -38,10 +43,12 @@ function mapBatchToIngestionState(
 		phase,
 		isProcessing: phase === "classifying",
 		isReadyForReview: phase === "staging",
+		isFailed: phase === "failed",
 		batchId: batch.id,
 		paperId,
 		allScripts: batch.staged_scripts,
 		unsubmittedScripts,
+		progress: deriveProgress(batch.events),
 	}
 }
 
@@ -70,6 +77,9 @@ export function useBatchIngestion(
 			},
 			refetchInterval: (q) => {
 				const b = q.state.data
+				// Poll while in flight (classifying, staging) — stop once we
+				// reach a terminal state (marking, failed) where nothing else
+				// will change without explicit user action.
 				return b?.status === "classifying" || b?.status === "staging"
 					? 3000
 					: false

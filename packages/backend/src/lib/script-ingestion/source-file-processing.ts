@@ -1,5 +1,6 @@
 import { logger } from "@/lib/infra/logger"
 import { s3 } from "@/lib/infra/s3"
+import { appendJobEvent } from "@/lib/script-ingestion/job-events"
 import { extractPdfPages, fetchS3Bytes } from "@/lib/script-ingestion/pdf-pages"
 import { segmentPdfScripts } from "@/lib/script-ingestion/segment-script"
 import type { PageKey, StagedScriptData } from "@/lib/script-ingestion/types"
@@ -70,11 +71,27 @@ export async function processSourceFile(
 
 	const { scripts: segmented } = await segmentPdfScripts(
 		pages.map((p) => ({ order: p.absoluteIndex, jpegBuffer: p.jpegBuffer })),
+		{
+			onVisionProgress: (processed, total) => {
+				void appendJobEvent(batchJobId, {
+					kind: "vision_progress",
+					sourceKey,
+					processed,
+					total,
+				})
+			},
+		},
 	)
 
 	logger.info(TAG, "Segmentation complete", {
 		sourceKey,
 		pageCount: pages.length,
+		scriptCount: segmented.length,
+	})
+
+	await appendJobEvent(batchJobId, {
+		kind: "segmentation_complete",
+		sourceKey,
 		scriptCount: segmented.length,
 	})
 

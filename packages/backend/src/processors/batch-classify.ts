@@ -1,6 +1,7 @@
 import { db } from "@/db"
 import { logger } from "@/lib/infra/logger"
 import type { SqsEvent, SqsRecord } from "@/lib/infra/sqs-job-runner"
+import { appendJobEvent } from "@/lib/script-ingestion/job-events"
 import {
 	listSourceFiles,
 	processSourceFile,
@@ -37,15 +38,14 @@ export async function handler(
 				batchJobId,
 				error: errMsg,
 			})
+			const reason = err instanceof Error ? err.message : String(err)
 			await db.batchIngestJob
 				.update({
 					where: { id: batchJobId },
-					data: {
-						status: "failed" as BatchStatus,
-						error: err instanceof Error ? err.message : String(err),
-					},
+					data: { status: "failed" as BatchStatus, error: reason },
 				})
 				.catch(() => {})
+			await appendJobEvent(batchJobId, { kind: "failed", reason })
 			failures.push({ itemIdentifier: record.messageId })
 		}
 	}
@@ -74,6 +74,7 @@ async function classifyBatch(batchJobId: string): Promise<void> {
 		where: { id: batchJobId },
 		data: { status: "classifying" as BatchStatus },
 	})
+	await appendJobEvent(batchJobId, { kind: "started" })
 
 	const sourceKeys = await listSourceFiles(batchJobId)
 	logger.info(TAG, "Source files found", {
@@ -100,6 +101,10 @@ async function classifyBatch(batchJobId: string): Promise<void> {
 	await db.batchIngestJob.update({
 		where: { id: batchJobId },
 		data: { status: "staging" as BatchStatus },
+	})
+	await appendJobEvent(batchJobId, {
+		kind: "complete",
+		totalScripts: allStagedScripts.length,
 	})
 
 	logger.info(TAG, "Batch classification complete", {

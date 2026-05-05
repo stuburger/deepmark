@@ -1,3 +1,6 @@
+import type { SoftChipKind } from "@/components/ui/soft-chip"
+import type { StatusDotKind } from "@/components/ui/status-dot"
+
 export const TERMINAL_STATUSES = new Set([
 	"ocr_complete",
 	"failed",
@@ -12,40 +15,62 @@ export function formatDate(date: Date) {
 	}).format(new Date(date))
 }
 
-export function scoreColour(pct: number | null) {
-	if (pct === null) return null
-	if (pct >= 70)
-		return {
-			chip: "bg-success-50 text-success-800 dark:bg-success-900/40 dark:text-success-300",
-			dot: "bg-success",
-		}
-	if (pct >= 40)
-		return {
-			chip: "bg-warning-50 text-warning-800 dark:bg-warning-900/40 dark:text-warning-300",
-			dot: "bg-warning",
-		}
-	return {
-		chip: "bg-error-50 text-error-700 dark:bg-error-900/40 dark:text-error-300",
-		dot: "bg-destructive",
-	}
+/**
+ * Pick a SoftChip kind for a marked submission's percentage. Used by the
+ * score cell once the submission reaches `ocr_complete` and a real score
+ * is available.
+ */
+export function scoreChipKind(pct: number): SoftChipKind {
+	if (pct >= 70) return "success"
+	if (pct >= 40) return "warning"
+	return "error"
 }
 
-export function statusDot(status: string, pct: number | null) {
-	if (pct !== null) {
-		const c = scoreColour(pct)
-		return c?.dot ?? "bg-muted-foreground"
-	}
+// ─── Submission phase (UI-facing rollup of ScanStatus) ──────────────────────
+
+export type SubmissionPhase = "extraction" | "grading" | "done" | "error"
+
+/**
+ * Roll up the legacy ScanStatus into the four phases the UI cares about.
+ * `pending` and `processing` are OCR-side; `text_extracted` and `grading`
+ * are grading-side; `ocr_complete` is the terminal happy path.
+ */
+export function submissionPhase(status: string): SubmissionPhase {
 	switch (status) {
 		case "failed":
 		case "cancelled":
-			return "bg-destructive"
+			return "error"
 		case "ocr_complete":
-			return "bg-success"
+			return "done"
+		case "text_extracted":
+		case "grading":
+			return "grading"
 		default:
-			return "bg-warning-400"
+			// pending, processing, anything new/unknown → still working
+			return "extraction"
 	}
 }
 
-export function statusLabel(status: string) {
-	return status.replace(/_/g, " ")
+export const PHASE_LABEL: Record<SubmissionPhase, string> = {
+	extraction: "Extracting",
+	grading: "Grading",
+	done: "Marked",
+	error: "Failed",
+}
+
+export function phaseStatusKind(phase: SubmissionPhase): StatusDotKind {
+	switch (phase) {
+		case "extraction":
+			return "warning"
+		case "grading":
+			return "info"
+		case "done":
+			return "success"
+		case "error":
+			return "error"
+	}
+}
+
+export function isInFlightPhase(phase: SubmissionPhase): boolean {
+	return phase === "extraction" || phase === "grading"
 }

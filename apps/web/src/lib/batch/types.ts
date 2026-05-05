@@ -1,5 +1,6 @@
 import type { BatchStatus, StagedScriptStatus } from "@mcp-gcse/db"
 import { z } from "zod"
+import type { BatchProgress, JobEvent } from "./events"
 
 export const pageKeySchema = z.object({
 	s3_key: z.string(),
@@ -43,6 +44,7 @@ export type ActiveBatchInfo = {
 	status: BatchStatus
 	total_student_jobs: number
 	staged_scripts: BatchIngestJobData["staged_scripts"]
+	events: JobEvent[]
 } | null
 
 // ─── UI domain types ────────────────────────────────────────────────────────
@@ -58,9 +60,10 @@ export type StagedScript = {
 
 export type BatchIngestionState = {
 	/** Processing phase visible to the teacher */
-	phase: "classifying" | "staging" | "marking"
+	phase: "classifying" | "staging" | "marking" | "failed"
 	isProcessing: boolean
 	isReadyForReview: boolean
+	isFailed: boolean
 
 	batchId: string
 	paperId: string
@@ -69,4 +72,7 @@ export type BatchIngestionState = {
 	allScripts: StagedScript[]
 	/** Scripts not yet committed as submissions (status !== "submitted") */
 	unsubmittedScripts: StagedScript[]
+
+	/** Live progress derived from the handler's job_events stream. */
+	progress: BatchProgress
 }

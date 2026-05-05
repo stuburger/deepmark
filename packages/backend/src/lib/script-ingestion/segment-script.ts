@@ -46,8 +46,19 @@ export type SegmentPdfScriptsResult = {
 	scripts: SegmentedScript[]
 }
 
+export type SegmentPdfScriptsOptions = {
+	/**
+	 * Throttled progress callback fired during the Cloud Vision OCR loop.
+	 * Caller is responsible for any persistence (e.g. job_events writes).
+	 */
+	onVisionProgress?: (processed: number, total: number) => void
+}
+
+const VISION_PROGRESS_STRIDE = 50
+
 export async function segmentPdfScripts(
 	pages: SegmentPageInput[],
+	options: SegmentPdfScriptsOptions = {},
 ): Promise<SegmentPdfScriptsResult> {
 	if (pages.length === 0) {
 		return { scripts: [] }
@@ -59,32 +70,49 @@ export async function segmentPdfScripts(
 	// Run Cloud Vision on every page that has image content. Pages already
 	// flagged blank by upstream ink-density detection skip the Vision call.
 	// Bounded concurrency: see VISION_OCR_CONCURRENCY above.
+	let processed = 0
 	const pageTexts = await concurrencyLimit(
 		VISION_OCR_CONCURRENCY,
 		sortedPages,
 		async (p): Promise<PageTextBlock> => {
-			if (!p.jpegBuffer) return { order: p.order, empty: true }
-			const result = await runVisionOcr(
-				p.jpegBuffer.toString("base64"),
-				"image/jpeg",
-			).catch((err) => {
-				logger.warn(TAG, "Cloud Vision failed for page — treating as blank", {
-					order: p.order,
-					error: String(err),
+			let block: PageTextBlock
+			if (!p.jpegBuffer) {
+				block = { order: p.order, empty: true }
+			} else {
+				const result = await runVisionOcr(
+					p.jpegBuffer.toString("base64"),
+					"image/jpeg",
+				).catch((err) => {
+					logger.warn(
+						TAG,
+						"Cloud Vision failed for page — treating as blank",
+						{ order: p.order, error: String(err) },
+					)
+					return { rawResponse: null, tokens: [] as VisionToken[] }
 				})
-				return { rawResponse: null, tokens: [] as VisionToken[] }
-			})
-			if (result.tokens.length === 0) {
-				return { order: p.order, empty: true }
+				if (result.tokens.length === 0) {
+					block = { order: p.order, empty: true }
+				} else {
+					block = {
+						order: p.order,
+						empty: false,
+						top: reconstructRegionText(result.tokens, "top"),
+						body: reconstructRegionText(result.tokens, "body"),
+					}
+				}
 			}
-			return {
-				order: p.order,
-				empty: false,
-				top: reconstructRegionText(result.tokens, "top"),
-				body: reconstructRegionText(result.tokens, "body"),
+
+			processed++
+			if (
+				options.onVisionProgress &&
+				processed % VISION_PROGRESS_STRIDE === 0
+			) {
+				options.onVisionProgress(processed, totalPages)
 			}
+			return block
 		},
 	)
+	options.onVisionProgress?.(totalPages, totalPages)
 
 	// A page is blank if upstream flagged it OR Cloud Vision returned no tokens.
 	const blankIndices = pageTexts.filter((p) => p.empty).map((p) => p.order)

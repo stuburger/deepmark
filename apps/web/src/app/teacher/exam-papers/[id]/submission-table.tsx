@@ -4,6 +4,8 @@ import { ShareDialog } from "@/components/sharing/share-dialog"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
+import { SoftChip } from "@/components/ui/soft-chip"
+import { StatusDot } from "@/components/ui/status-dot"
 import {
 	Table,
 	TableBody,
@@ -12,13 +14,16 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table"
+import { cn } from "@/lib/utils"
 import type { SubmissionHistoryItem } from "@/lib/marking/types"
-import { Loader2, Share2, Trash2 } from "lucide-react"
+import { Share2, Trash2 } from "lucide-react"
 import {
-	TERMINAL_STATUSES,
+	PHASE_LABEL,
 	formatDate,
-	scoreColour,
-	statusLabel,
+	isInFlightPhase,
+	phaseStatusKind,
+	scoreChipKind,
+	submissionPhase,
 } from "./submission-grid-config"
 
 export function SubmissionTable({
@@ -77,6 +82,7 @@ export function SubmissionTable({
 								/>
 							</TableHead>
 							<TableHead>Student</TableHead>
+							<TableHead className="w-32">Status</TableHead>
 							<TableHead>Score</TableHead>
 							<TableHead>Date</TableHead>
 							<TableHead className="w-20" />
@@ -84,13 +90,13 @@ export function SubmissionTable({
 					</TableHeader>
 					<TableBody>
 						{submissions.map((sub) => {
+							const isMarked = sub.status === "ocr_complete"
+							const phase = submissionPhase(sub.status)
+							const inFlight = isInFlightPhase(phase)
 							const pct =
-								sub.total_max > 0
+								isMarked && sub.total_max > 0
 									? Math.round((sub.total_awarded / sub.total_max) * 100)
 									: null
-							const colours = scoreColour(pct)
-							const isInProgress = !TERMINAL_STATUSES.has(sub.status)
-							const isMarked = sub.status === "ocr_complete"
 							return (
 								<TableRow key={sub.id} className="group">
 									<TableCell>
@@ -109,19 +115,30 @@ export function SubmissionTable({
 										)}
 									</TableCell>
 									<TableCell>
+										<span className="inline-flex items-center gap-2 text-xs text-muted-foreground">
+											<StatusDot
+												kind={phaseStatusKind(phase)}
+												className={cn(inFlight && "animate-pulse")}
+											/>
+											{PHASE_LABEL[phase]}
+										</span>
+									</TableCell>
+									<TableCell>
 										{pct !== null ? (
-											<span
-												className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums ${colours?.chip}`}
-											>
-												{sub.total_awarded}/{sub.total_max} · {pct}%
-											</span>
+											<SoftChip kind={scoreChipKind(pct)}>
+												<span className="tabular-nums font-mono">
+													{sub.total_awarded}/{sub.total_max}
+												</span>
+												<span className="ml-1.5 tabular-nums font-mono opacity-70">
+													{pct}%
+												</span>
+											</SoftChip>
 										) : (
-											<span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground capitalize">
-												{isInProgress && (
-													<Loader2 className="h-3 w-3 animate-spin" />
-												)}
-												{statusLabel(sub.status)}
-											</span>
+											<SoftChip kind="neutral">
+												<span className="tabular-nums font-mono">
+													?/{sub.total_max}
+												</span>
+											</SoftChip>
 										)}
 									</TableCell>
 									<TableCell className="text-xs text-muted-foreground tabular-nums">

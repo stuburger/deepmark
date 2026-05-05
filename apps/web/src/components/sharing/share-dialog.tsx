@@ -62,12 +62,28 @@ export function ShareDialog({
 	resourceType,
 	resourceId,
 	trigger,
+	open: controlledOpen,
+	onOpenChange: controlledOnOpenChange,
 }: {
 	resourceType: ResourceGrantResourceType
 	resourceId: string
-	trigger: ReactElement
+	/**
+	 * Optional. When omitted, the dialog is fully controlled via `open` /
+	 * `onOpenChange` (e.g. opened from a DropdownMenu item that can't be
+	 * the DialogTrigger render target). When provided, the dialog manages
+	 * its own open state and the trigger toggles it.
+	 */
+	trigger?: ReactElement
+	open?: boolean
+	onOpenChange?: (open: boolean) => void
 }) {
-	const [open, setOpen] = useState(false)
+	const [internalOpen, setInternalOpen] = useState(false)
+	const isControlled = controlledOpen !== undefined
+	const open = isControlled ? controlledOpen : internalOpen
+	const setOpen = (next: boolean) => {
+		if (!isControlled) setInternalOpen(next)
+		controlledOnOpenChange?.(next)
+	}
 	const [emailInput, setEmailInput] = useState("")
 	const [role, setRole] = useState<ResourceGrantRole>("editor")
 	const [grants, setGrants] = useState<ResourceGrantListItem[]>([])
@@ -138,7 +154,7 @@ export function ShareDialog({
 
 	return (
 		<Dialog open={open} onOpenChange={setOpen}>
-			<DialogTrigger render={trigger} />
+			{trigger && <DialogTrigger render={trigger} />}
 			<DialogContent className="sm:max-w-lg">
 				<DialogHeader>
 					<DialogTitle>{title}</DialogTitle>

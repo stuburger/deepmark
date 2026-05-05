@@ -192,7 +192,7 @@ export function ExamPaperPaperView({
 	return (
 		<div className="max-w-4xl mx-auto bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md shadow-sm">
 			{/* Header */}
-			<div className="px-8 pt-8 pb-6 border-b border-zinc-200 dark:border-zinc-700">
+			<div className="px-3 pt-5 pb-4 border-b border-zinc-200 dark:border-zinc-700 md:px-8 md:pt-8 md:pb-6">
 				<div className="text-center space-y-1">
 					{paper.exam_board && (
 						<p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
@@ -221,7 +221,7 @@ export function ExamPaperPaperView({
 			</div>
 
 			{/* Questions with drag-and-drop */}
-			<div className="px-8 py-4">
+			<div className="px-3 py-4 md:px-8">
 				<DndContext
 					id="exam-paper-sections"
 					sensors={sensors}
@@ -249,7 +249,7 @@ export function ExamPaperPaperView({
 			</div>
 
 			{/* Footer */}
-			<div className="px-8 py-4 border-t border-zinc-200 dark:border-zinc-700 text-center">
+			<div className="px-3 py-4 border-t border-zinc-200 dark:border-zinc-700 text-center md:px-8">
 				<p className="text-xs text-muted-foreground">
 					End of paper — Total: {paper.total_marks} marks
 				</p>

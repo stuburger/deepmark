@@ -123,7 +123,7 @@ export function ExamPaperQuestionsCard({
 					</div>
 				</div>
 			</CardHeader>
-			<CardContent className="space-y-4">
+			<CardContent className="space-y-4 px-0 md:px-4">
 				<GradeBoundariesCard
 					paperId={paper.id}
 					subject={paper.subject}

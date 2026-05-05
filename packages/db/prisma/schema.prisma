@@ -167,7 +167,7 @@ enum StimulusContentType {
 /// Paid subscription plans. Trial / PPU-only users have plan = NULL.
 enum Plan {
   pro_monthly         // capped at 60 papers/month, current product
-  limitless_monthly   // uncapped paid tier
+  unlimited_monthly   // uncapped paid tier
 }
 
 /// What kind of paper-ledger event this is. Drives how the row is interpreted

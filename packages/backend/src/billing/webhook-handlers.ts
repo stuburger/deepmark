@@ -131,7 +131,7 @@ export async function applyInvoiceFailed(
  *     b. Insert a `period_expiry` zeroing any unused subscription credits
  *        from the previous period (also idempotent on this invoice id).
  *
- * Limitless users are uncapped — no ledger work for them. Trial / PPU-only
+ * Unlimited users are uncapped — no ledger work for them. Trial / PPU-only
  * users have no subscription invoices at all, so this handler is a no-op for
  * them by construction.
  */
@@ -160,7 +160,7 @@ export async function applyInvoiceSucceeded(
 		data: { subscription_status: invoiceOutcomeToStatus("succeeded") },
 	})
 
-	// Ledger work only for capped Pro. Limitless is uncapped (no
+	// Ledger work only for capped Pro. Unlimited is uncapped (no
 	// subscription_grant rows means no expirePreviousPeriodGrant either).
 	if (user.plan !== Plan.pro_monthly) {
 		log.info(

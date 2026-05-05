@@ -15,7 +15,7 @@ import { stripeClient } from "./stripe-client"
 import { ensureStripeCustomer } from "./stripe-customer"
 
 const createCheckoutSessionInput = z.object({
-	kind: z.enum(["pro", "limitless"]),
+	kind: z.enum(["pro", "unlimited"]),
 	currency: z.enum(["gbp", "usd"]),
 	interval: z.enum(["monthly", "annual"]),
 })
@@ -26,7 +26,7 @@ const createCheckoutSessionInput = z.object({
  * build-and-call. Each piece is its own testable unit.
  *
  * The founders coupon is Pro-only (per `infra/billing.ts` — we want the £49
- * Limitless ceiling to anchor Pro's value). Limitless always falls back to
+ * Unlimited ceiling to anchor Pro's value). Unlimited always falls back to
  * `allow_promotion_codes: true` so we can hand out manual codes if needed.
  */
 export const createCheckoutSession = authenticatedAction

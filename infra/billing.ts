@@ -5,17 +5,17 @@
  *   Pro          £24  / $30   monthly,    60 papers/month (capped, expires)
  *                £259 / $324  annual      (kept in infra, not on public page)
  *   Top-up       £6.50/ $8.50 one-off,    15 papers (in-app upsell only)
- *   Limitless    £49  / $62   monthly,    uncapped
+ *   Unlimited    £49  / $62   monthly,    uncapped
  *
  * GBP + USD are the launch currencies; ZAR/AUD added post-launch when those
  * markets justify the tax-registration overhead.
  *
  * Founders' offer: a single Coupon, 40% off, repeating 6 months,
- * max_redemptions 100. Pro only — explicitly NOT applied to Limitless (we
+ * max_redemptions 100. Pro only — explicitly NOT applied to Unlimited (we
  * want the £49 ceiling to anchor Pro's value). The web-side gate counts
  * active Pro subs and only attaches the coupon while seats remain;
  * Stripe's max_redemptions is the defence-in-depth backstop. Founders pay
- * £14.40 (marketed as £14.50 — 10p drift accepted).
+ * £14.40/month for the first 6 months.
  *
  * The Stripe webhook endpoint + `StripeWebhookSecret` Linkable live in
  * `infra/api.ts` (the URL points at the API Gateway Lambda's
@@ -36,18 +36,17 @@ const FOUNDERS_SLOT_LIMIT = 100
 
 // Founders coupon discount — applied to the Pro monthly price. Both the
 // stripe.Coupon definition (server-of-record) and the marketing pricing
-// page's displayed founders price read from this single source. Marketing
-// rounds £14.40 to £14.50; the 10p drift is acceptable.
+// page's displayed founders price read from this single source.
 const FOUNDERS_DISCOUNT_PERCENT = 40
 
-// PPU + Limitless + Top-up prices. One source of truth for both Stripe Prices
+// PPU + Unlimited + Top-up prices. One source of truth for both Stripe Prices
 // and the displayed amount on the marketing pricing page — closes the drift
 // risk where the page shows one number and Stripe charges another.
 const PPU_GBP = 1000 // £10
 const PPU_USD = 1300 // $13
 const PPU_PAPERS_PER_SET = 30
-const LIMITLESS_GBP_MONTHLY = 4900 // £49
-const LIMITLESS_USD_MONTHLY = 6200 // $62
+const UNLIMITED_GBP_MONTHLY = 4900 // £49
+const UNLIMITED_USD_MONTHLY = 6200 // $62
 // Top-up: in-app upsell when the Pro 60-paper cap bites. Not on the public
 // pricing page — only surfaced to subscribers approaching/at their cap.
 const TOP_UP_GBP = 650 // £6.50
@@ -111,23 +110,23 @@ const foundersCoupon = new stripe.Coupon("FoundersCoupon", {
 	maxRedemptions: FOUNDERS_SLOT_LIMIT,
 })
 
-// ─── Limitless tier ──────────────────────────────────────────────────────────
-const limitlessProduct = new stripe.Product("LimitlessProduct", {
-	name: "DeepMark Limitless",
+// ─── Unlimited tier ──────────────────────────────────────────────────────────
+const unlimitedProduct = new stripe.Product("UnlimitedProduct", {
+	name: "DeepMark Unlimited",
 	description:
 		"Uncapped marking — for heavy markers and exam-prep specialists.",
 })
 
-const limitlessGbpMonthly = new stripe.Price("LimitlessGbpMonthly", {
-	product: limitlessProduct.id,
-	unitAmount: LIMITLESS_GBP_MONTHLY,
+const unlimitedGbpMonthly = new stripe.Price("UnlimitedGbpMonthly", {
+	product: unlimitedProduct.id,
+	unitAmount: UNLIMITED_GBP_MONTHLY,
 	currency: "gbp",
 	recurring: { interval: "month", intervalCount: 1 },
 })
 
-const limitlessUsdMonthly = new stripe.Price("LimitlessUsdMonthly", {
-	product: limitlessProduct.id,
-	unitAmount: LIMITLESS_USD_MONTHLY,
+const unlimitedUsdMonthly = new stripe.Price("UnlimitedUsdMonthly", {
+	product: unlimitedProduct.id,
+	unitAmount: UNLIMITED_USD_MONTHLY,
 	currency: "usd",
 	recurring: { interval: "month", intervalCount: 1 },
 })
@@ -193,7 +192,7 @@ export const stripeConfig = new sst.Linkable("StripeConfig", {
 		trialPaperCap: 20,
 		// Monthly paper allowance for capped Pro subscribers. Granted as a
 		// `subscription_grant` ledger entry on each `invoice.payment_succeeded`;
-		// any unused portion is removed by the rollover `period_expiry`. Limitless
+		// any unused portion is removed by the rollover `period_expiry`. Unlimited
 		// subscribers ignore this and stay uncapped. Renamed from `proPaperCap`
 		// 2026-05-03 — the previous name read as an enforcement cap, but no
 		// code enforces it independently; the cap IS the grant size.
@@ -213,21 +212,21 @@ export const stripeConfig = new sst.Linkable("StripeConfig", {
 					},
 				},
 			},
-			limitless: {
-				name: "Limitless",
+			unlimited: {
+				name: "Unlimited",
 				description:
 					"Uncapped marking — for heavy markers and exam-prep specialists.",
 				prices: {
 					gbp: {
 						monthly: {
-							id: limitlessGbpMonthly.id,
-							amount: LIMITLESS_GBP_MONTHLY,
+							id: unlimitedGbpMonthly.id,
+							amount: UNLIMITED_GBP_MONTHLY,
 						},
 					},
 					usd: {
 						monthly: {
-							id: limitlessUsdMonthly.id,
-							amount: LIMITLESS_USD_MONTHLY,
+							id: unlimitedUsdMonthly.id,
+							amount: UNLIMITED_USD_MONTHLY,
 						},
 					},
 				},

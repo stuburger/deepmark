@@ -7,9 +7,11 @@ import {
 	FileText,
 	HelpCircle,
 	LayoutDashboard,
+	LogOut,
 	Settings,
 	X,
 } from "lucide-react"
+import Image from "next/image"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import type { ComponentType, SVGProps } from "react"
@@ -21,6 +23,7 @@ import {
 	SheetTitle,
 } from "@/components/ui/sheet"
 import { SoftChip, type SoftChipKind } from "@/components/ui/soft-chip"
+import { logoutFormAction } from "@/lib/actions"
 import { cn } from "@/lib/utils"
 
 import { useTeacherNav } from "./teacher-nav-context"
@@ -68,6 +71,7 @@ type TeacherNavSheetProps = {
 	displayName: string
 	role: string
 	initials: string
+	avatarUrl: string | null
 	planChip: PlanChip
 	showUpgradeCard: boolean
 }
@@ -76,6 +80,7 @@ export function TeacherNavSheet({
 	displayName,
 	role,
 	initials,
+	avatarUrl,
 	planChip,
 	showUpgradeCard,
 }: TeacherNavSheetProps) {
@@ -101,7 +106,14 @@ export function TeacherNavSheet({
 				</SheetDescription>
 
 				<div className="flex items-center justify-between px-5 py-5">
-					<span className="text-[18px] font-semibold text-foreground">
+					<span className="flex items-center gap-2 text-[18px] font-semibold text-foreground">
+						<Image
+							src="/octopus-logo.png"
+							alt=""
+							width={28}
+							height={28}
+							className="size-7"
+						/>
 						DeepMark
 					</span>
 					<button
@@ -137,10 +149,22 @@ export function TeacherNavSheet({
 						onNavigate={() => setOpen(false)}
 						compact
 					/>
+					<form action={logoutFormAction}>
+						<button
+							type="submit"
+							className="flex w-full items-center gap-3 px-4 py-2.5 text-[15px] text-foreground transition-colors hover:bg-primary/10"
+						>
+							<span className="flex size-5 shrink-0 items-center justify-center text-current">
+								<LogOut className="size-5" strokeWidth={1.5} />
+							</span>
+							Log out
+						</button>
+					</form>
 					<UserProfile
 						displayName={displayName}
 						role={role}
 						initials={initials}
+						avatarUrl={avatarUrl}
 						planChip={planChip}
 						onNavigate={() => setOpen(false)}
 					/>
@@ -231,19 +255,31 @@ function UserProfile({
 	displayName,
 	role,
 	initials,
+	avatarUrl,
 	planChip,
 	onNavigate,
 }: {
 	displayName: string
 	role: string
 	initials: string
+	avatarUrl: string | null
 	planChip: PlanChip
 	onNavigate: () => void
 }) {
 	return (
 		<div className="flex items-center gap-2.5 py-2">
-			<div className="flex size-9 shrink-0 items-center justify-center rounded-sm bg-primary font-mono text-[12px] font-semibold text-paper-white">
-				{initials}
+			<div className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-sm bg-primary font-mono text-[12px] font-semibold text-paper-white">
+				{avatarUrl ? (
+					// biome-ignore lint/performance/noImgElement: Google avatar host isn't in next/image remotePatterns.
+					<img
+						src={avatarUrl}
+						alt=""
+						referrerPolicy="no-referrer"
+						className="size-full object-cover"
+					/>
+				) : (
+					initials
+				)}
 			</div>
 			<div className="min-w-0 flex-1">
 				<div className="flex items-center gap-1.5">

@@ -17,6 +17,7 @@ import { useTeacherNav } from "./teacher-nav-context"
 
 type IconRailProps = {
 	initials: string
+	avatarUrl: string | null
 }
 
 const NAV_ICONS = [
@@ -42,7 +43,7 @@ const NAV_ICONS = [
 	},
 ] as const
 
-export function IconRail({ initials }: IconRailProps) {
+export function IconRail({ initials, avatarUrl }: IconRailProps) {
 	const pathname = usePathname()
 	const { open, setOpen } = useTeacherNav()
 
@@ -88,9 +89,19 @@ export function IconRail({ initials }: IconRailProps) {
 			<Link
 				href="/teacher/settings"
 				aria-label="Account"
-				className="mt-auto mb-3 flex size-10 items-center justify-center rounded-full bg-ink-secondary font-mono text-[12px] font-semibold text-paper-white transition-all hover:scale-105 hover:bg-primary"
+				className="mt-auto mb-3 flex size-10 items-center justify-center overflow-hidden rounded-full bg-ink-secondary font-mono text-[12px] font-semibold text-paper-white transition-all hover:scale-105 hover:bg-primary"
 			>
-				{initials}
+				{avatarUrl ? (
+					// biome-ignore lint/performance/noImgElement: Google avatar host isn't in next/image remotePatterns.
+					<img
+						src={avatarUrl}
+						alt=""
+						referrerPolicy="no-referrer"
+						className="size-full object-cover"
+					/>
+				) : (
+					initials
+				)}
 			</Link>
 		</aside>
 	)

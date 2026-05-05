@@ -14,7 +14,7 @@ export type ResolvedPrice = {
  * Resolve a Stripe Price by plan + currency + interval, reading the linked
  * StripeConfig. Throws if the combination is missing — every published
  * combination must exist in `infra/billing.ts` before we surface it in the
- * UI. Limitless only ships monthly; passing `interval: "annual"` for it
+ * UI. Unlimited only ships monthly; passing `interval: "annual"` for it
  * throws.
  */
 export function resolvePrice(
@@ -39,14 +39,14 @@ export function resolvePrice(
 		}
 	}
 	if (interval !== "monthly") {
-		throw new Error(`Limitless is monthly-only — got ${interval}`)
+		throw new Error(`Unlimited is monthly-only — got ${interval}`)
 	}
-	const slot = Resource.StripeConfig.plans.limitless.prices[currency].monthly
+	const slot = Resource.StripeConfig.plans.unlimited.prices[currency].monthly
 	if (!slot.id) {
-		throw new Error(`No Stripe price configured for limitless/${currency}`)
+		throw new Error(`No Stripe price configured for unlimited/${currency}`)
 	}
 	return {
-		planId: "limitless_monthly",
+		planId: "unlimited_monthly",
 		priceId: slot.id,
 		amount: slot.amount,
 		currency,

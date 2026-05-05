@@ -7,14 +7,14 @@ import { formatPrice, priceTiers } from "@/lib/billing/plans"
 
 import { getCurrency } from "@/lib/billing/currency"
 import { CurrencySwitcher } from "../_components/currency-switcher"
-import { LimitlessCard } from "../_components/limitless-card"
 import { PpuCard } from "../_components/ppu-card"
 import { ProCard } from "../_components/pro-card"
+import { UnlimitedCard } from "../_components/unlimited-card"
 
 export const metadata: Metadata = {
 	title: "Pricing — DeepMark",
 	description:
-		"Examiner-quality GCSE marking. Pay-as-you-go for occasional mocks, monthly Pro for the marking pile that never empties, or Limitless for no caps.",
+		"Examiner-quality GCSE marking. Pay-as-you-go for occasional mocks, monthly Pro for the marking pile that never empties, or Unlimited for no caps.",
 }
 
 export default async function PricingPage() {
@@ -27,8 +27,7 @@ export default async function PricingPage() {
 
 	// All amounts read from infra/billing.ts via the StripeConfig Linkable
 	// (single source of truth — same numbers Stripe charges). Founders price
-	// is computed from the standard Pro price + the discount %; £24 × 0.6 =
-	// £14.40, marketed as £14.50 (10p rounding drift is acceptable).
+	// is computed from the standard Pro price + the discount %: £24 × 0.6 = £14.40.
 	const standardLabel = formatPrice(tiers.monthly.amount, currency)
 	const foundersFactor =
 		(100 - Resource.StripeConfig.foundersDiscountPercent) / 100
@@ -41,8 +40,8 @@ export default async function PricingPage() {
 		Resource.StripeConfig.ppu[currency].amount,
 		currency,
 	)
-	const limitlessPriceLabel = formatPrice(
-		Resource.StripeConfig.plans.limitless.prices[currency].monthly.amount,
+	const unlimitedPriceLabel = formatPrice(
+		Resource.StripeConfig.plans.unlimited.prices[currency].monthly.amount,
 		currency,
 	)
 
@@ -54,7 +53,7 @@ export default async function PricingPage() {
 				</h1>
 				<p className="mx-auto mt-4 max-w-2xl text-base text-muted-foreground sm:text-lg">
 					Examiner-quality GCSE marking, three ways: a single set when you need
-					it, monthly Pro for regular marking, or Limitless when caps just get
+					it, monthly Pro for regular marking, or Unlimited when caps just get
 					in the way. Start with 20 papers free, no card needed.
 				</p>
 				<div className="mt-6 flex justify-center">
@@ -62,7 +61,14 @@ export default async function PricingPage() {
 				</div>
 			</div>
 
-			<div className="mt-14 grid gap-6 md:grid-cols-3">
+			{/*
+			  Subgrid alignment: the outer grid declares four named rows
+			  (header, price, features, cta). Each card sets `row-span-4
+			  grid-rows-subgrid` so its sections land in the same row across
+			  cards regardless of copy length. The 1fr on the features row
+			  absorbs slack so cards stretch to equal height.
+			*/}
+			<div className="mt-14 grid gap-6 md:grid-cols-3 md:grid-rows-[auto_auto_1fr_auto]">
 				<PpuCard
 					currency={currency}
 					priceLabel={ppuPriceLabel}
@@ -75,9 +81,9 @@ export default async function PricingPage() {
 					foundersAvailable={foundersOpen}
 					signedIn={Boolean(session)}
 				/>
-				<LimitlessCard
+				<UnlimitedCard
 					currency={currency}
-					priceLabel={limitlessPriceLabel}
+					priceLabel={unlimitedPriceLabel}
 					signedIn={Boolean(session)}
 				/>
 			</div>
@@ -92,8 +98,9 @@ export default async function PricingPage() {
 						supervisor, or anyone trying DeepMark on a real workload before
 						committing. Pro is for the teacher whose half-term runs on this — 60
 						papers a month covers two full classes, with top-ups available at
-						£6.50 if exam season pushes you over. Limitless removes the cap
-						entirely and is built for heavy markers and exam-prep specialists.
+						£6.50 for 15 extra papers if exam season pushes you over. Unlimited
+						removes the cap entirely and is built for heavy markers and
+						exam-prep specialists.
 					</p>
 				</div>
 				<div>
@@ -110,7 +117,7 @@ export default async function PricingPage() {
 						About the founders' offer
 					</h2>
 					<p className="mt-2">
-						The first 100 Pro subscribers pay £14.50/mo for the first 6 months,
+						The first 100 Pro subscribers pay £14.40/mo for the first 6 months,
 						then £24/mo thereafter. Your feedback shapes the product during the
 						lock-in period.
 					</p>

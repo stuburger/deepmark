@@ -4,37 +4,41 @@ import { useState } from "react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { createPpuCheckoutSession } from "@/lib/billing/checkout-payment"
+import { createCheckoutSession } from "@/lib/billing/checkout"
 import { surfaceMarkingError } from "@/lib/billing/error-toast"
 import type { Currency } from "@/lib/billing/types"
 import { Check } from "lucide-react"
 
 const FEATURES = [
-	"No subscription, no recurring charge",
-	"Same marking engine, same accuracy",
-	"Pay only when you actually mark",
-	"Upgrade to monthly any time",
+	"Unlimited papers — no monthly cap",
+	"Priority queue during exam season",
+	"All Pro features included",
+	"Best fit for HoDs, exam-prep specialists, and heavy markers",
 ]
 
-type Props = {
+export function UnlimitedCard({
+	currency,
+	priceLabel,
+	signedIn,
+}: {
 	currency: Currency
 	priceLabel: string
 	signedIn: boolean
-}
-
-export function PpuCard(props: Props) {
+}) {
 	const [submitting, setSubmitting] = useState(false)
 
 	async function startCheckout() {
-		if (!props.signedIn) {
+		if (!signedIn) {
 			window.location.assign(
-				`/login?next=${encodeURIComponent("/pricing?tier=ppu")}`,
+				`/login?next=${encodeURIComponent("/pricing?tier=unlimited")}`,
 			)
 			return
 		}
 		setSubmitting(true)
-		const result = await createPpuCheckoutSession({
-			currency: props.currency,
+		const result = await createCheckoutSession({
+			kind: "unlimited",
+			currency,
+			interval: "monthly",
 		})
 		if (result?.serverError) {
 			surfaceMarkingError(result.serverError)
@@ -53,22 +57,19 @@ export function PpuCard(props: Props) {
 	return (
 		<Card className="relative border-border/60 md:row-span-4 md:grid md:grid-rows-subgrid md:gap-6">
 			<CardHeader>
-				<CardTitle className="text-2xl">Pay per set</CardTitle>
+				<CardTitle className="text-2xl">Unlimited</CardTitle>
 				<p className="text-sm text-muted-foreground">
-					For mocks, cover lessons, or trying DeepMark on a real stack before
-					subscribing.
+					No caps, no top-ups, no thinking about volume.
 				</p>
 			</CardHeader>
 			<CardContent className="flex flex-1 flex-col space-y-6 md:row-span-3 md:grid md:grid-rows-subgrid md:gap-6 md:space-y-0">
 				<div>
 					<div className="flex items-baseline gap-3">
-						<p className="text-5xl font-bold tracking-tight">
-							{props.priceLabel}
-						</p>
-						<p className="text-sm text-muted-foreground">/ set</p>
+						<p className="text-5xl font-bold tracking-tight">{priceLabel}</p>
+						<p className="text-sm text-muted-foreground">/ month</p>
 					</div>
 					<p className="mt-1 text-sm text-muted-foreground">
-						One question paper, up to 30 student scripts.
+						Mark as much as you can scan.
 					</p>
 				</div>
 				<ul className="space-y-2">
@@ -91,9 +92,9 @@ export function PpuCard(props: Props) {
 				>
 					{submitting
 						? "Starting checkout…"
-						: props.signedIn
-							? "Buy a set"
-							: "Sign in to buy"}
+						: signedIn
+							? "Subscribe"
+							: "Sign in to subscribe"}
 				</Button>
 			</CardContent>
 		</Card>

@@ -188,8 +188,8 @@ describe("toPersistedPlan", () => {
 		expect(toPersistedPlan("pro_annual")).toBe(Plan.pro_monthly)
 	})
 
-	it("maps limitless_monthly to Plan.limitless_monthly", () => {
-		expect(toPersistedPlan("limitless_monthly")).toBe(Plan.limitless_monthly)
+	it("maps unlimited_monthly to Plan.unlimited_monthly", () => {
+		expect(toPersistedPlan("unlimited_monthly")).toBe(Plan.unlimited_monthly)
 	})
 
 	it("returns null for unknown / missing plan markers", () => {

@@ -80,7 +80,7 @@ export async function insertConsumesForGradingRuns(args: {
 /**
  * Resolve which billing period a debit should be charged against. Returns
  * the latest `subscription_grant.period_id` for capped Pro users; null for
- * trial / PPU-only / Limitless / admin (Limitless + admin never reach a
+ * trial / PPU-only / Unlimited / admin (Unlimited + admin never reach a
  * debit path; the null return for them is defensive).
  *
  * Snapshotted at debit time so a consume row's `period_id` is stable even
@@ -151,7 +151,7 @@ export async function insertRefundForGradingRun(args: {
  * Looks up the original consume row by `grading_run_id` to recover the
  * `user_id` + `period_id`, then inserts a matching refund row. Returns
  * `{ refunded: false, foundConsume: false }` when no consume row exists —
- * the normal case for admin / Limitless / never-reserved jobs.
+ * the normal case for admin / Unlimited / never-reserved jobs.
  *
  * Idempotent: calling twice for the same grading_run produces one refund
  * row. Safe to call from both OCR and grading DLQ handlers; only the first

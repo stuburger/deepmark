@@ -1,3 +1,4 @@
+import { stripeConfig } from "./billing"
 import {
 	githubClientId,
 	githubClientSecret,
@@ -47,6 +48,8 @@ export const auth = new sst.aws.Auth("Auth", {
 			githubClientSecret,
 			googleClientId,
 			googleClientSecret,
+			// `seedTrialGrant` reads `Resource.StripeConfig.trialPaperCap` on signup.
+			stripeConfig,
 		],
 		environment: {
 			WEB_URL: webUrl,

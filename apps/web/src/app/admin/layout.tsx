@@ -9,16 +9,11 @@ import {
 	SidebarProvider,
 	SidebarSeparator,
 } from "@/components/ui/sidebar"
-import { logout } from "@/lib/actions"
+import { logoutFormAction } from "@/lib/actions"
 import { auth } from "@/lib/auth"
 import { Shield } from "lucide-react"
 import Link from "next/link"
 import { redirect } from "next/navigation"
-
-async function logoutFormAction() {
-	"use server"
-	await logout()
-}
 
 export default async function AdminLayout({
 	children,

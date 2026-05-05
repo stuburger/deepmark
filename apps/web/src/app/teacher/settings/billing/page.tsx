@@ -22,7 +22,7 @@ export const dynamic = "force-dynamic"
 
 const PLAN_LABEL: Record<Plan, string> = {
 	pro_monthly: "Pro · Monthly",
-	limitless_monthly: "Limitless · Monthly",
+	unlimited_monthly: "Unlimited · Monthly",
 }
 
 const STATUS_TONE: Record<string, "default" | "secondary" | "destructive"> = {

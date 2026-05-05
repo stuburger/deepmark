@@ -20,7 +20,7 @@ const sqs = new SQSClient({})
 /**
  * Resolve which billing period this user's reserve-on-submit consume row
  * should snapshot, and whether to skip the ledger write entirely (admin /
- * Limitless are uncapped). Looked up once per re-mark / re-scan call,
+ * Unlimited are uncapped). Looked up once per re-mark / re-scan call,
  * outside the transaction, so the snapshot is stable across the tx.
  */
 async function resolveLedgerContext(userId: string): Promise<{
@@ -32,7 +32,7 @@ async function resolveLedgerContext(userId: string): Promise<{
 		where: { id: userId },
 		select: { plan: true, role: true },
 	})
-	if (user?.role === "admin" || user?.plan === "limitless_monthly") {
+	if (user?.role === "admin" || user?.plan === "unlimited_monthly") {
 		return { skip: true, periodId: null, plan: user?.plan ?? null }
 	}
 	const periodId = await lookupCurrentPeriodId({

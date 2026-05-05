@@ -72,7 +72,8 @@ declare module "sst" {
       "value": string
     }
     "HocuspocusServer": {
-      "type": "sst.sst.Linkable"
+      "service": string
+      "type": "sst.aws.Service"
       "url": string
     }
     "Interactions": {
@@ -109,24 +110,6 @@ declare module "sst" {
       "foundersDiscountPercent": number
       "foundersSlotLimit": number
       "plans": {
-        "limitless": {
-          "description": string
-          "name": string
-          "prices": {
-            "gbp": {
-              "monthly": {
-                "amount": number
-                "id": string
-              }
-            }
-            "usd": {
-              "monthly": {
-                "amount": number
-                "id": string
-              }
-            }
-          }
-        }
         "pro": {
           "description": string
           "name": string
@@ -146,6 +129,24 @@ declare module "sst" {
                 "amount": number
                 "id": string
               }
+              "monthly": {
+                "amount": number
+                "id": string
+              }
+            }
+          }
+        }
+        "unlimited": {
+          "description": string
+          "name": string
+          "prices": {
+            "gbp": {
+              "monthly": {
+                "amount": number
+                "id": string
+              }
+            }
+            "usd": {
               "monthly": {
                 "amount": number
                 "id": string
@@ -216,6 +217,9 @@ declare module "sst" {
     "VapidPublicKey": {
       "type": "sst.sst.Secret"
       "value": string
+    }
+    "Vpc": {
+      "type": "sst.aws.Vpc"
     }
     "Web": {
       "type": "sst.aws.Nextjs"

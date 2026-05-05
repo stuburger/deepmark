@@ -10,6 +10,14 @@ export const logout = publicAction.action(async () => {
 	redirect("/login")
 })
 
+// Form-action variant: matches the `(formData?) => Promise<void>` shape that
+// `<form action={…}>` requires, so it can be wired directly without a
+// per-layout wrapper.
+export async function logoutFormAction() {
+	await clearTokens()
+	redirect("/login")
+}
+
 async function authorizeWith(provider: "github" | "google") {
 	const headersList = await headers()
 	const host = headersList.get("host")

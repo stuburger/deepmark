@@ -7,7 +7,7 @@ import { TRIAL_PAPER_CAP } from "@/lib/billing/types"
 
 /**
  * Persistent in-app paper-balance nudge. Renders nothing for admins or
- * uncapped subscribers (Limitless). Surfaces in three modes:
+ * uncapped subscribers (Unlimited). Surfaces in three modes:
  *
  *  - Trial / PPU-only (`ent.kind === "metered"`, no plan):
  *      shows balance with escalating tone (>5 muted, ≤5 amber, 0 red)

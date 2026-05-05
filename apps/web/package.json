@@ -6,7 +6,8 @@
 		"dev": "next dev",
 		"build": "next build",
 		"start": "next start",
-		"lint": "bunx biome check src/"
+		"lint": "bunx biome check src/",
+		"gen:favicon": "node scripts/generate-favicon.mjs"
 	},
 	"dependencies": {
 		"@ai-sdk/anthropic": "^3.0.68",
@@ -90,6 +91,8 @@
 		"@types/react-dom": "^19",
 		"@types/ws": "^8.18.1",
 		"culori": "^4.0.2",
+		"png-to-ico": "^3.0.1",
+		"sharp": "^0.34.5",
 		"tailwindcss": "^4",
 		"typescript": "^5"
 	},

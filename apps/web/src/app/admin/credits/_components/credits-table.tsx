@@ -138,8 +138,8 @@ function planLabel(plan: string): string {
 	switch (plan) {
 		case "pro_monthly":
 			return "Pro · Monthly"
-		case "limitless_monthly":
-			return "Limitless"
+		case "unlimited_monthly":
+			return "Unlimited"
 		default:
 			return plan
 	}

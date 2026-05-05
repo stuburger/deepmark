@@ -127,12 +127,12 @@ describe("insertConsumesForGradingRuns", () => {
 })
 
 describe("lookupCurrentPeriodId", () => {
-	it("returns null without querying for non-Pro plans (Limitless)", async () => {
+	it("returns null without querying for non-Pro plans (Unlimited)", async () => {
 		const db = makeFakeLedgerStore()
 		const result = await lookupCurrentPeriodId({
 			db: asLedgerClient(db),
 			userId: "u_1",
-			plan: "limitless_monthly",
+			plan: "unlimited_monthly",
 		})
 		expect(result).toBeNull()
 		expect(db.paperLedgerEntry.findFirst).not.toHaveBeenCalled()
@@ -243,7 +243,7 @@ describe("insertRefundForGradingRun", () => {
 describe("refundFailedGradingRun", () => {
 	it("returns foundConsume:false without inserting when no consume exists", async () => {
 		const db = makeFakeLedgerStore()
-		// findFirst returns null (no consume row) — admin / Limitless path
+		// findFirst returns null (no consume row) — admin / Unlimited path
 		db.paperLedgerEntry.findFirst.mockResolvedValueOnce(null)
 		const result = await refundFailedGradingRun({
 			db: asLedgerClient(db),

@@ -5,12 +5,14 @@ import { auth } from "@/lib/auth"
 
 import { CaregiverSection } from "./_components/caregiver-section"
 import { FinalCta } from "./_components/final-cta"
+import { GetTimeBackSection } from "./_components/get-time-back-section"
 import { HeroSection } from "./_components/hero-section"
 import { HowItWorksSection } from "./_components/how-it-works-section"
-import { PricingStrip } from "./_components/pricing-strip"
+import { ProofSection } from "./_components/proof-section"
 import { SageProductSection } from "./_components/sage-product-section"
-import { SampleScriptSection } from "./_components/sample-script-section"
-import { getPapersMarkedCount } from "./_lib/papers-marked"
+import { StudentImpactSection } from "./_components/student-impact-section"
+import { TestimonialsSection } from "./_components/testimonials-section"
+import { getMarketingStats } from "./_lib/papers-marked"
 
 export const metadata: Metadata = {
 	title: "DeepMark — Examiner-quality GCSE marking",
@@ -24,16 +26,18 @@ export default async function LandingPage() {
 		redirect("/teacher")
 	}
 
-	const papersMarked = await getPapersMarkedCount()
+	const stats = await getMarketingStats()
 
 	return (
 		<>
-			<HeroSection papersMarked={papersMarked} />
+			<HeroSection />
+			<ProofSection stats={stats} />
 			<CaregiverSection />
 			<SageProductSection />
-			<SampleScriptSection />
+			<TestimonialsSection />
 			<HowItWorksSection />
-			<PricingStrip />
+			<StudentImpactSection />
+			<GetTimeBackSection />
 			<FinalCta />
 		</>
 	)

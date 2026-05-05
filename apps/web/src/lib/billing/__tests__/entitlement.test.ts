@@ -30,17 +30,17 @@ describe("decideEntitlement", () => {
 		).toEqual({ kind: "admin" })
 	})
 
-	it("returns uncapped for limitless_monthly with active status", () => {
+	it("returns uncapped for unlimited_monthly with active status", () => {
 		expect(
 			decideEntitlement({
 				user: {
 					role: "teacher",
-					plan: Plan.limitless_monthly,
+					plan: Plan.unlimited_monthly,
 					subscription_status: "active",
 				},
 				balance: 0,
 			}),
-		).toEqual({ kind: "uncapped", plan: Plan.limitless_monthly })
+		).toEqual({ kind: "uncapped", plan: Plan.unlimited_monthly })
 	})
 
 	it("returns metered for pro_monthly (capped) — needs balance check", () => {
@@ -61,7 +61,7 @@ describe("decideEntitlement", () => {
 			decideEntitlement({
 				user: {
 					role: "teacher",
-					plan: Plan.limitless_monthly,
+					plan: Plan.unlimited_monthly,
 					subscription_status: "past_due",
 				},
 				balance: 0,
@@ -100,7 +100,7 @@ describe("decideQuotaCheck", () => {
 	const admin: Entitlement = { kind: "admin" }
 	const uncapped: Entitlement = {
 		kind: "uncapped",
-		plan: Plan.limitless_monthly,
+		plan: Plan.unlimited_monthly,
 	}
 
 	it("admin always passes regardless of request size", () => {
@@ -172,7 +172,7 @@ describe("isActivelyEntitled", () => {
 		expect(
 			isActivelyEntitled({
 				role: "teacher",
-				plan: Plan.limitless_monthly,
+				plan: Plan.unlimited_monthly,
 				subscription_status: "trialing",
 			}),
 		).toBe(true)

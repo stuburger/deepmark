@@ -27,7 +27,7 @@ export function extractCustomerId(
  *
  *  - `pro_monthly` and `pro_annual` are different billing cadences but the
  *    same entitlement, so both map to `Plan.pro_monthly`.
- *  - `limitless_monthly` maps directly.
+ *  - `unlimited_monthly` maps directly.
  *  - Unknown / missing → null (caller decides whether to clobber existing
  *    user.plan or preserve it).
  */
@@ -38,8 +38,8 @@ export function toPersistedPlan(
 		case "pro_monthly":
 		case "pro_annual":
 			return Plan.pro_monthly
-		case "limitless_monthly":
-			return Plan.limitless_monthly
+		case "unlimited_monthly":
+			return Plan.unlimited_monthly
 		default:
 			return null
 	}

@@ -74,13 +74,13 @@ export async function commitBatchService(
 	// Snapshot the user's current billing period BEFORE the transaction so all
 	// reserved consume rows in this batch share the same period_id (and the
 	// snapshot is stable even if a webhook for a new invoice lands mid-commit).
-	// `null` for trial / PPU-only / Limitless — only capped Pro users have one.
+	// `null` for trial / PPU-only / Unlimited — only capped Pro users have one.
 	const userPlan = await db.user.findUnique({
 		where: { id: uploadedBy },
 		select: { plan: true, role: true },
 	})
 	const skipLedger =
-		userPlan?.role === "admin" || userPlan?.plan === "limitless_monthly"
+		userPlan?.role === "admin" || userPlan?.plan === "unlimited_monthly"
 	const periodId = skipLedger
 		? null
 		: await lookupCurrentPeriodId({
@@ -155,7 +155,7 @@ export async function commitBatchService(
 		)
 
 		// Reserve the paper-ledger consume rows atomically with the work above.
-		// Skipped for admin / Limitless (uncapped). Otherwise insertConsumesForBatch
+		// Skipped for admin / Unlimited (uncapped). Otherwise insertConsumesForBatch
 		// takes a per-user pg_advisory_xact_lock + balance recheck before
 		// inserting, so a parallel batch racing past the same pre-check
 		// gets rolled back here with InsufficientBalanceError instead of

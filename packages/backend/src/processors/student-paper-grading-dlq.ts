@@ -11,7 +11,7 @@ const TAG = "student-paper-grading-dlq"
  *
  * Fires when a message exhausts its retries on StudentPaperQueue.
  * Marks the GradingRun as failed and refunds the user's paper-ledger consume
- * row (if one exists — admin / Limitless never reserved one). The refund is
+ * row (if one exists — admin / Unlimited never reserved one). The refund is
  * idempotent via `@@unique([kind, grading_run_id])`, so an OCR-DLQ refund
  * already issued for the same job is a silent no-op here.
  */

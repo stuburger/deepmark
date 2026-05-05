@@ -20,7 +20,7 @@ export type UserSnapshot = {
  * mark another paper?". Three kinds:
  *
  *  - `admin`     → bypass all quota / ledger logic
- *  - `uncapped`  → active sub on a non-metered plan (limitless)
+ *  - `uncapped`  → active sub on a non-metered plan (unlimited)
  *  - `metered`   → balance-gated (trial users, PPU-only, capped Pro all share
  *                  this path; the underlying ledger entries differ but the
  *                  enforcement check is identical)
@@ -56,7 +56,7 @@ export function decideEntitlement(args: {
 		user.subscription_status !== null &&
 		PAID_STATUSES.has(user.subscription_status)
 
-	if (isActiveSub && user.plan === Plan.limitless_monthly) {
+	if (isActiveSub && user.plan === Plan.unlimited_monthly) {
 		return { kind: "uncapped", plan: user.plan }
 	}
 

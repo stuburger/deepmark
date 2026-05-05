@@ -150,6 +150,11 @@ const app = issuer({
 						email: googleUser.email,
 					},
 				})
+			} else if (user.avatar_url !== googleUser.avatar_url) {
+				user = await db.user.update({
+					where: { id: user.id },
+					data: { avatar_url: googleUser.avatar_url },
+				})
 			}
 
 			// Run on every login (not just signup): see GitHub branch above.

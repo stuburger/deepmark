@@ -82,18 +82,16 @@ export default async function BillingPage() {
 
 function AdminBlock() {
 	return (
-		<div className="mx-auto max-w-2xl py-12">
-			<Card>
-				<CardHeader>
-					<CardTitle>Admin account</CardTitle>
-				</CardHeader>
-				<CardContent>
-					<p className="text-sm text-muted-foreground">
-						Admins have unlimited marking. No subscription required.
-					</p>
-				</CardContent>
-			</Card>
-		</div>
+		<Card>
+			<CardHeader>
+				<CardTitle>Admin account</CardTitle>
+			</CardHeader>
+			<CardContent>
+				<p className="text-sm text-muted-foreground">
+					Admins have unlimited marking. No subscription required.
+				</p>
+			</CardContent>
+		</Card>
 	)
 }
 
@@ -107,15 +105,12 @@ function TrialBlock({ balance }: { balance: number }) {
 		? Math.min(100, Math.round((used / TRIAL_PAPER_CAP) * 100))
 		: 0
 	return (
-		<div className="mx-auto max-w-2xl space-y-6 py-12">
-			<div>
-				<h1 className="text-2xl font-semibold tracking-tight">Billing</h1>
-				<p className="mt-1 text-sm text-muted-foreground">
-					{isPureTrial
-						? "You're on the free trial."
-						: "You have purchased papers available."}
-				</p>
-			</div>
+		<div className="space-y-6">
+			<p className="text-sm text-muted-foreground">
+				{isPureTrial
+					? "You're on the free trial."
+					: "You have purchased papers available."}
+			</p>
 			<Card>
 				<CardHeader>
 					<CardTitle className="flex items-baseline justify-between text-lg">
@@ -160,13 +155,10 @@ function PaidBlock(props: PaidBlockProps) {
 	const topUpPriceLabel = formatPrice(topUpPrice.amount, props.currency)
 
 	return (
-		<div className="mx-auto max-w-2xl space-y-6 py-12">
-			<div>
-				<h1 className="text-2xl font-semibold tracking-tight">Billing</h1>
-				<p className="mt-1 text-sm text-muted-foreground">
-					Manage your subscription, payment method, and invoices.
-				</p>
-			</div>
+		<div className="space-y-6">
+			<p className="text-sm text-muted-foreground">
+				Manage your subscription, payment method, and invoices.
+			</p>
 			<Card>
 				<CardHeader>
 					<CardTitle className="flex items-center justify-between text-lg">

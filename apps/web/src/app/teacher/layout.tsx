@@ -5,10 +5,15 @@ import { PurchaseSuccessToast } from "@/components/purchase-success-toast"
 import { PushRegistration } from "@/components/push-registration"
 import { IconRail } from "@/components/teacher/icon-rail"
 import { TeacherNavProvider } from "@/components/teacher/teacher-nav-context"
-import { TeacherNavSheet } from "@/components/teacher/teacher-nav-sheet"
+import {
+	type PlanChip,
+	TeacherNavSheet,
+} from "@/components/teacher/teacher-nav-sheet"
 import { TeacherNavbar } from "@/components/teacher/teacher-navbar"
 import { TrialBanner } from "@/components/trial-banner"
 import { auth } from "@/lib/auth"
+import { getEntitlement } from "@/lib/billing/entitlement"
+import type { Entitlement } from "@/lib/billing/entitlement-decision"
 import { db } from "@/lib/db"
 
 function deriveDisplayName(name: string | null, email: string | null): string {
@@ -28,6 +33,19 @@ function deriveInitials(displayName: string): string {
 	return tokens.map((t) => t[0]?.toUpperCase() ?? "").join("") || "T"
 }
 
+function derivePlanChip(entitlement: Entitlement): PlanChip {
+	if (entitlement.kind === "admin") {
+		return { label: "Admin", kind: "info", linkable: false }
+	}
+	if (entitlement.kind === "uncapped") {
+		return { label: "Limitless", kind: "success", linkable: true }
+	}
+	if (entitlement.plan === "pro_monthly") {
+		return { label: "Pro", kind: "info", linkable: true }
+	}
+	return { label: "Trial", kind: "neutral", linkable: true }
+}
+
 export default async function TeacherLayout({
 	children,
 }: {
@@ -36,14 +54,23 @@ export default async function TeacherLayout({
 	const session = await auth()
 	if (!session) redirect("/login")
 
-	const user = await db.user.findUnique({
-		where: { id: session.userId },
-		select: { name: true, email: true },
-	})
+	const [user, entitlement] = await Promise.all([
+		db.user.findUnique({
+			where: { id: session.userId },
+			select: { name: true, email: true },
+		}),
+		getEntitlement(session.userId),
+	])
 
 	const displayName = deriveDisplayName(user?.name ?? null, user?.email ?? null)
 	const initials = deriveInitials(displayName)
 	const role = "Teacher"
+	const planChip = derivePlanChip(entitlement)
+	// Show the "Upgrade to Pro" CTA only to users without an active paid sub
+	// (trial / PPU-only). Capped Pro and Limitless already have a plan; Admins
+	// bypass billing entirely.
+	const showUpgradeCard =
+		entitlement.kind === "metered" && entitlement.plan === null
 
 	return (
 		<TeacherNavProvider>
@@ -73,6 +100,8 @@ export default async function TeacherLayout({
 				displayName={displayName}
 				role={role}
 				initials={initials}
+				planChip={planChip}
+				showUpgradeCard={showUpgradeCard}
 			/>
 			<PushRegistration />
 			{/* useSearchParams reads the current location; wrap in Suspense per

@@ -26,7 +26,7 @@ export const createBillingPortalSession = authenticatedAction.action(
 		const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://getdeepmark.com"
 		const session = await stripeClient().billingPortal.sessions.create({
 			customer: user.stripe_customer_id,
-			return_url: `${baseUrl}/teacher/billing`,
+			return_url: `${baseUrl}/teacher/settings/billing`,
 		})
 
 		return { url: session.url }

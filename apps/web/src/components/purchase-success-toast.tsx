@@ -12,9 +12,9 @@ import { toast } from "sonner"
  * URL the user shares / bookmarks is clean).
  *
  * Mounted once in the teacher layout: covers `/teacher` (PPU return),
- * `/teacher/billing` (top-up from the billing page), and the exam-paper
- * pages (top-up from the cap-bite modal). Also no-ops on client navigations
- * because the param disappears after the first effect run.
+ * `/teacher/settings/billing` (top-up from the billing page), and the
+ * exam-paper pages (top-up from the cap-bite modal). Also no-ops on client
+ * navigations because the param disappears after the first effect run.
  *
  * The success toasts say "credited shortly" rather than "credited" — the
  * Stripe webhook fulfilment is async and may not have landed yet (the user

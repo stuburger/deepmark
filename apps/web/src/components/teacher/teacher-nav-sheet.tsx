@@ -20,9 +20,17 @@ import {
 	SheetDescription,
 	SheetTitle,
 } from "@/components/ui/sheet"
+import { SoftChip, type SoftChipKind } from "@/components/ui/soft-chip"
 import { cn } from "@/lib/utils"
 
 import { useTeacherNav } from "./teacher-nav-context"
+
+export type PlanChip = {
+	label: string
+	kind: SoftChipKind
+	/** When false (admin), the chip renders as static text — no billing link. */
+	linkable: boolean
+}
 
 type NavItem = {
 	href: string
@@ -60,12 +68,16 @@ type TeacherNavSheetProps = {
 	displayName: string
 	role: string
 	initials: string
+	planChip: PlanChip
+	showUpgradeCard: boolean
 }
 
 export function TeacherNavSheet({
 	displayName,
 	role,
 	initials,
+	planChip,
+	showUpgradeCard,
 }: TeacherNavSheetProps) {
 	const { open, setOpen } = useTeacherNav()
 
@@ -75,7 +87,7 @@ export function TeacherNavSheet({
 				side="left"
 				showCloseButton={false}
 				className={cn(
-					"w-[340px] !max-w-[340px] gap-0 rounded-r-md border-r-0 bg-background p-0 shadow-sidebar",
+					"w-[min(340px,90vw)] !max-w-[340px] gap-0 rounded-r-md border-r-0 bg-background p-0 shadow-sidebar",
 					"data-[side=left]:sm:max-w-[340px]",
 				)}
 				style={{
@@ -117,7 +129,9 @@ export function TeacherNavSheet({
 				</div>
 
 				<div className="flex flex-col gap-3 border-t border-border-quiet px-4 py-4">
-					<UpgradeCard />
+					{showUpgradeCard ? (
+						<UpgradeCard onNavigate={() => setOpen(false)} />
+					) : null}
 					<NavSection
 						items={FOOTER_ITEMS}
 						onNavigate={() => setOpen(false)}
@@ -127,6 +141,8 @@ export function TeacherNavSheet({
 						displayName={displayName}
 						role={role}
 						initials={initials}
+						planChip={planChip}
+						onNavigate={() => setOpen(false)}
 					/>
 				</div>
 			</SheetContent>
@@ -193,9 +209,13 @@ function RecentMarkingSubmenuStub() {
 	)
 }
 
-function UpgradeCard() {
+function UpgradeCard({ onNavigate }: { onNavigate: () => void }) {
 	return (
-		<div className="rounded-md border border-primary/20 bg-primary/10 p-3">
+		<Link
+			href="/teacher/settings/billing"
+			onClick={onNavigate}
+			className="block rounded-md border border-primary/20 bg-primary/10 p-3 transition-colors hover:bg-primary/15"
+		>
 			<div className="text-[13px] font-semibold text-primary">
 				Upgrade to Pro
 			</div>
@@ -203,7 +223,7 @@ function UpgradeCard() {
 				Multiple classes per month · Advanced analytics · Test feedback lesson
 				plans and more.
 			</div>
-		</div>
+		</Link>
 	)
 }
 
@@ -211,10 +231,14 @@ function UserProfile({
 	displayName,
 	role,
 	initials,
+	planChip,
+	onNavigate,
 }: {
 	displayName: string
 	role: string
 	initials: string
+	planChip: PlanChip
+	onNavigate: () => void
 }) {
 	return (
 		<div className="flex items-center gap-2.5 py-2">
@@ -222,8 +246,22 @@ function UserProfile({
 				{initials}
 			</div>
 			<div className="min-w-0 flex-1">
-				<div className="truncate text-[13px] font-medium text-foreground">
-					{displayName}
+				<div className="flex items-center gap-1.5">
+					<span className="truncate text-[13px] font-medium text-foreground">
+						{displayName}
+					</span>
+					{planChip.linkable ? (
+						<Link
+							href="/teacher/settings/billing"
+							onClick={onNavigate}
+							aria-label={`Plan: ${planChip.label} — manage billing`}
+							className="rounded-md transition-opacity hover:opacity-80"
+						>
+							<SoftChip kind={planChip.kind}>{planChip.label}</SoftChip>
+						</Link>
+					) : (
+						<SoftChip kind={planChip.kind}>{planChip.label}</SoftChip>
+					)}
 				</div>
 				<div className="truncate text-[11px] text-ink-secondary">{role}</div>
 			</div>

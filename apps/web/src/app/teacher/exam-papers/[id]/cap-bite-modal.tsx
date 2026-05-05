@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/dialog"
 import type { Currency } from "@/lib/billing/types"
 
-import { BuyTopUpButton } from "../../billing/_components/buy-topup-button"
+import { BuyTopUpButton } from "../../settings/billing/_components/buy-topup-button"
 
 type Props = {
 	open: boolean

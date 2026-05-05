@@ -1,14 +1,15 @@
-import { Sparkles } from "lucide-react"
+import { BarChart3 } from "lucide-react"
 
-export default function ProfileSettingsPage() {
+export default function UsageSettingsPage() {
 	return (
 		<div className="flex flex-col items-center gap-3 py-16 text-center">
-			<Sparkles className="size-8 text-primary" />
+			<BarChart3 className="size-8 text-primary" />
 			<h2 className="font-editorial text-[clamp(24px,3vw,32px)] leading-[1.1] tracking-[-0.01em] text-foreground">
-				Profile is coming.
+				Usage is coming.
 			</h2>
 			<p className="max-w-[480px] text-[13px] text-muted-foreground">
-				Name, role, notifications, and marking preferences. Wire-up in progress.
+				Paper meter, period consumption, and ledger history. Wire-up in
+				progress.
 			</p>
 		</div>
 	)

@@ -12,7 +12,7 @@ import { TRIAL_PAPER_CAP } from "@/lib/billing/types"
  *  - Trial / PPU-only (`ent.kind === "metered"`, no plan):
  *      shows balance with escalating tone (>5 muted, ≤5 amber, 0 red)
  *  - Capped Pro at ≥80% of monthly grant:
- *      shows "47 of 60 used this month" with a Top up CTA → /teacher/billing
+ *      shows "47 of 60 used this month" with a Top up CTA → /teacher/settings/billing
  *  - Capped Pro at cap (consumed >= grant) AND no extras:
  *      red banner forcing the cap-bite UX
  *
@@ -96,7 +96,7 @@ async function ProCapBanner(userId: string, totalBalance: number) {
 			<div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-2">
 				<span className="font-medium">{headline}</span>
 				<Link
-					href="/teacher/billing"
+					href="/teacher/settings/billing"
 					className="rounded-md border border-current/30 px-3 py-1 text-xs font-semibold transition-colors hover:bg-current/10"
 				>
 					Top up

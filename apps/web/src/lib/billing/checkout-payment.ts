@@ -69,12 +69,12 @@ const topUpInput = z.object({
 	currency: z.enum(["gbp", "usd"]),
 	// Where to send the user after they complete (or cancel) the top-up. Lets
 	// the cap-bite modal land them back mid-marking, the billing page button
-	// land them back on /teacher/billing, etc.
+	// land them back on /teacher/settings/billing, etc.
 	returnPath: z
 		.string()
 		.regex(/^\//, "returnPath must start with '/'")
 		.max(200)
-		.default("/teacher/billing"),
+		.default("/teacher/settings/billing"),
 })
 
 /**

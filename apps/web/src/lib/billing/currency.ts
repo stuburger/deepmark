@@ -8,7 +8,7 @@ import type { Currency } from "./types"
  * the marketing currency switcher). Defaults to USD if missing or invalid.
  *
  * Lives in `lib/billing/` rather than under a route group because both the
- * marketing /pricing surface and the in-app /teacher/billing surface read
+ * marketing /pricing surface and the in-app /teacher/settings/billing surface read
  * it — same cookie, same fallback.
  */
 export async function getCurrency(): Promise<Currency> {

@@ -26,7 +26,7 @@ export function BuyTopUpButton(props: Props) {
 		setPending(true)
 		const result = await createTopUpCheckoutSession({
 			currency: props.currency,
-			returnPath: props.returnPath ?? "/teacher/billing",
+			returnPath: props.returnPath ?? "/teacher/settings/billing",
 		})
 		if (result?.serverError) {
 			surfaceMarkingError(result.serverError)

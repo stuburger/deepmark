@@ -28,6 +28,7 @@ export function DashboardActions() {
 			<Button
 				variant="secondary"
 				className="w-full justify-start"
+				nativeButton={false}
 				render={<Link href="/teacher/mark" />}
 			>
 				<Play className="size-3.5 fill-current" />
@@ -36,6 +37,7 @@ export function DashboardActions() {
 			<Button
 				variant="secondary"
 				className="w-full justify-start"
+				nativeButton={false}
 				render={<Link href="/teacher/analytics" />}
 			>
 				<BarChart3 className="size-3.5" />

@@ -41,7 +41,6 @@ export function SubmissionToolbar({
 	data,
 	phase,
 	onNavigateToJob,
-	onVersionChange,
 	onClose,
 	annotations,
 	pageTokens,
@@ -52,8 +51,7 @@ export function SubmissionToolbar({
 	jobId: string
 	data: StudentPaperJobPayload
 	phase: MarkingPhase
-	onNavigateToJob?: (newJobId: string) => void
-	onVersionChange?: (newJobId: string) => void
+	onNavigateToJob: (newJobId: string) => void
 	onClose?: () => void
 	annotations?: StudentPaperAnnotation[]
 	pageTokens?: PageToken[]
@@ -118,9 +116,7 @@ export function SubmissionToolbar({
 				)}
 
 				<StudentNameEditor jobId={jobId} initialName={data.student_name} />
-				{onVersionChange && (
-					<VersionSwitcher jobId={jobId} onVersionChange={onVersionChange} />
-				)}
+				<VersionSwitcher jobId={jobId} onVersionChange={onNavigateToJob} />
 
 				{phase === "completed" && totalMax > 0 && (
 					<span className="ml-2 inline-flex items-center gap-1.5">
@@ -204,7 +200,7 @@ export function SubmissionToolbar({
 				{/* Pipeline stage pips */}
 				<StagePips
 					jobId={jobId}
-					onNavigateToJob={onNavigateToJob ?? (() => {})}
+					onNavigateToJob={onNavigateToJob}
 				/>
 
 				{/* Completed-phase output actions */}
@@ -220,7 +216,7 @@ export function SubmissionToolbar({
 						/>
 						<ReRunMenu
 							jobId={jobId}
-							onNavigateToJob={onNavigateToJob ?? (() => {})}
+							onNavigateToJob={onNavigateToJob}
 						/>
 					</div>
 				)}
@@ -230,7 +226,7 @@ export function SubmissionToolbar({
 					(phase === "scan_processing" || phase === "failed") && (
 						<ReScanButton
 							jobId={jobId}
-							onNavigateToJob={onNavigateToJob ?? (() => {})}
+							onNavigateToJob={onNavigateToJob}
 						/>
 					)}
 			</div>

@@ -36,7 +36,6 @@ export function SubmissionView({
 	initialStages,
 	debugMode = false,
 	onNavigateToJob,
-	onVersionChange,
 	onClose,
 	paperAccessible = true,
 	readOnly = false,
@@ -48,8 +47,7 @@ export function SubmissionView({
 	pageTokens: PageToken[]
 	initialStages: JobStages
 	debugMode?: boolean
-	onNavigateToJob?: (newJobId: string) => void
-	onVersionChange?: (newJobId: string) => void
+	onNavigateToJob: (newJobId: string) => void
 	onClose?: () => void
 	/**
 	 * Whether the viewer can navigate to the parent exam paper. Defaults to
@@ -218,7 +216,6 @@ export function SubmissionView({
 					data={data}
 					phase={phase}
 					onNavigateToJob={onNavigateToJob}
-					onVersionChange={onVersionChange}
 					onClose={onClose}
 					annotations={annotations}
 					pageTokens={pageTokens}

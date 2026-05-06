@@ -6,11 +6,20 @@ import {
 	Clock,
 	FileText,
 	LayoutDashboard,
+	LogOut,
 	Menu,
+	User,
 } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { logoutFormAction } from "@/lib/actions"
 import { cn } from "@/lib/utils"
 
 import { useTeacherNav } from "./teacher-nav-context"
@@ -86,23 +95,37 @@ export function IconRail({ initials, avatarUrl }: IconRailProps) {
 				})}
 			</div>
 
-			<Link
-				href="/teacher/settings"
-				aria-label="Account"
-				className="mt-auto mb-3 flex size-10 items-center justify-center overflow-hidden rounded-full bg-ink-secondary font-mono text-[12px] font-semibold text-paper-white transition-all hover:scale-105 hover:bg-primary"
-			>
-				{avatarUrl ? (
-					// biome-ignore lint/performance/noImgElement: Google avatar host isn't in next/image remotePatterns.
-					<img
-						src={avatarUrl}
-						alt=""
-						referrerPolicy="no-referrer"
-						className="size-full object-cover"
-					/>
-				) : (
-					initials
-				)}
-			</Link>
+			<DropdownMenu>
+				<DropdownMenuTrigger
+					aria-label="Account"
+					className="mt-auto mb-3 flex size-10 items-center justify-center overflow-hidden rounded-full bg-ink-secondary font-mono text-[12px] font-semibold text-paper-white transition-all hover:scale-105 hover:bg-primary"
+				>
+					{avatarUrl ? (
+						// biome-ignore lint/performance/noImgElement: Google avatar host isn't in next/image remotePatterns.
+						<img
+							src={avatarUrl}
+							alt=""
+							referrerPolicy="no-referrer"
+							className="size-full object-cover"
+						/>
+					) : (
+						initials
+					)}
+				</DropdownMenuTrigger>
+				<DropdownMenuContent side="right" align="end" sideOffset={12}>
+					<DropdownMenuItem render={<Link href="/teacher/settings" />}>
+						<User />
+						Profile
+					</DropdownMenuItem>
+					<DropdownMenuItem
+						variant="destructive"
+						onClick={() => logoutFormAction()}
+					>
+						<LogOut />
+						Log out
+					</DropdownMenuItem>
+				</DropdownMenuContent>
+			</DropdownMenu>
 		</aside>
 	)
 }

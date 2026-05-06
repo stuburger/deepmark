@@ -16,13 +16,13 @@ export function MarkingJobDialog({
 	jobId,
 	open,
 	onOpenChange,
-	onJobChange,
+	onNavigateToJob,
 }: {
 	examPaperId: string
 	jobId: string | null
 	open: boolean
 	onOpenChange: (open: boolean) => void
-	onJobChange: (newJobId: string) => void
+	onNavigateToJob: (newJobId: string) => void
 }) {
 	const enabled = open && !!jobId
 
@@ -93,8 +93,7 @@ export function MarkingJobDialog({
 						scanPages={scanPages}
 						pageTokens={pageTokens}
 						initialStages={stages}
-						onNavigateToJob={onJobChange}
-						onVersionChange={onJobChange}
+						onNavigateToJob={onNavigateToJob}
 						onClose={() => onOpenChange(false)}
 					/>
 				)}

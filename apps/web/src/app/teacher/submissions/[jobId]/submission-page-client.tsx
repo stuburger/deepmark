@@ -8,6 +8,7 @@ import type { StudentPaperJobPayload } from "@/lib/marking/types"
 import { queryKeys } from "@/lib/query-keys"
 import { useQuery } from "@tanstack/react-query"
 import { Loader2 } from "lucide-react"
+import { useRouter } from "next/navigation"
 import { SubmissionView } from "../../mark/papers/[examPaperId]/submissions/[jobId]/submission-view"
 
 /**
@@ -29,6 +30,8 @@ export function SubmissionPageClient({
 	paperAccessible: boolean
 	readOnly: boolean
 }) {
+	const router = useRouter()
+
 	const { data: jobData } = useQuery<StudentPaperJobPayload | null>({
 		queryKey: queryKeys.studentJob(jobId),
 		queryFn: async () => {
@@ -84,6 +87,9 @@ export function SubmissionPageClient({
 				initialStages={stages}
 				paperAccessible={paperAccessible}
 				readOnly={readOnly}
+				onNavigateToJob={(newJobId) =>
+					router.push(`/teacher/submissions/${newJobId}`)
+				}
 			/>
 		</div>
 	)

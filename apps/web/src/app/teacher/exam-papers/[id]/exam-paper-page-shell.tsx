@@ -743,7 +743,7 @@ export function ExamPaperPageShell({
 						void setQuestionParam(null)
 					}
 				}}
-				onJobChange={(newJobId) => void setMarkingJobId(newJobId)}
+				onNavigateToJob={(newJobId) => void setMarkingJobId(newJobId)}
 			/>
 
 			<CapBiteModal

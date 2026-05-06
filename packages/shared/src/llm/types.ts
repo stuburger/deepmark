@@ -311,8 +311,14 @@ export const LLM_CALL_SITE_DEFAULTS: Array<{
 		phase: "answer-detection",
 		step: 2,
 		multiplier: "once",
+		// Anthropic primary; Gemini 3 Pro fallback so a 529 "Overloaded" surge
+		// on Anthropic's side fails over to a different provider rather than
+		// taking the marking pipeline out. Different temperature default per
+		// provider (Anthropic: low for analytical; Gemini 3.x reasoning
+		// models: 1.0 per docs).
 		models: [
 			{ provider: "anthropic", model: "claude-sonnet-4-6", temperature: 0.1 },
+			{ provider: "google", model: "gemini-3.1-pro-preview", temperature: 1.0 },
 		],
 	},
 	// ── Grading ──────────────────────────────────────────────────────────

@@ -4,12 +4,12 @@ If anything here is unclear, please contact us at [privacy@getdeepmark.com](mail
 
 ## 1. Who we are
 
-DeepMark is operated by **\[Company name — to be confirmed before launch\]**, registered in England and Wales at **\[Registered office address — to be confirmed\]**.
+DeepMark is operated by **DeepMark Ltd**, a company registered in England and Wales with its registered office at 86–90 Paul Street, London EC2A 4NE.
 
 For the purposes of UK GDPR:
 
-- We are a **data controller** for personal data about teachers and school administrators who hold accounts with us, and for visitors to our website.
-- We are a **data processor** for personal data contained in student exam scripts and related material that schools and teachers upload to DeepMark. The school is the data controller for that material.
+- We are a **data controller** for personal data about teachers who hold accounts with us, and for visitors to our website.
+- We are a **data processor** for personal data contained in student exam scripts and related material that teachers upload to DeepMark. The school at which the teacher works remains the data controller for that material under UK GDPR.
 
 Our data protection contact is [privacy@getdeepmark.com](mailto:privacy@getdeepmark.com).
 
@@ -20,7 +20,7 @@ Our data protection contact is [privacy@getdeepmark.com](mailto:privacy@getdeepm
 When a teacher creates a DeepMark account or uses the service, we collect:
 
 - Name and email address
-- School affiliation
+- The school at which the teacher works (optional)
 - Authentication credentials (handled via our authentication provider; we do not store passwords in plain text)
 - Billing details where a paid subscription is in place (handled by Stripe — we do not store full card numbers)
 - Product usage data (pages uploaded, papers marked, feature usage) for service operation, billing, and improvement
@@ -35,20 +35,20 @@ When a teacher uploads exam scripts, mark schemes, or question papers, the uploa
 - Handwritten or typed answers to exam questions
 - Page images of the original script
 
-We process this material **only to provide the marking service** to the school that uploaded it. The school decides what is uploaded, what is retained, and when it is deleted.
+We process this material **only to provide the marking service** to the teacher who uploaded it. The teacher decides what is uploaded, what is retained, and when it is deleted, in line with the policies of the school at which they work.
 
 ### 2.3 Special category data
 
-DeepMark is not designed to collect special category data (such as health, ethnicity, or religion). However, free-text answers in subjects like English, RE, or History may incidentally contain such information. Schools should treat any free-text student answer as potentially sensitive and take this into account when deciding to use DeepMark.
+DeepMark is not designed to collect special category data (such as health, ethnicity, or religion). However, free-text answers in subjects like English, RE, or History may incidentally contain such information. Teachers and schools should treat any free-text student answer as potentially sensitive and take this into account when deciding to use DeepMark.
 
 ## 3. Children's data
 
 The vast majority of work uploaded to DeepMark is produced by children, typically aged 11–18. We apply the following commitments:
 
-- Children's data is processed only on the documented instructions of the school.
+- Children's data is processed only on the documented instructions of the teacher who uploaded it, who is responsible for ensuring the upload complies with the policies of the school at which they work.
 - We do not use student work to train AI models.
 - We do not use student work for advertising, profiling, or any commercial purpose unrelated to providing the marking service.
-- We do not knowingly create accounts for children. DeepMark accounts are intended for teachers and school administrators only.
+- We do not knowingly create accounts for children. DeepMark accounts are intended for teachers only.
 
 If you believe a child has created an account, contact us at [privacy@getdeepmark.com](mailto:privacy@getdeepmark.com) and we will remove it.
 
@@ -65,16 +65,16 @@ We process personal data to:
 
 We rely on the following lawful bases under UK GDPR:
 
-- **Contract** — to provide the service to teachers and schools that have signed up
+- **Contract** — to provide the service to teachers who have signed up
 - **Legitimate interests** — to keep the service secure, prevent abuse, and improve the product (we have balanced these interests against your rights)
 - **Legal obligation** — for tax, accounting, and lawful requests from authorities
 - **Consent** — for any optional cookies or marketing communications, where applicable
 
-For student data, the school as controller is responsible for establishing the lawful basis under which it shares that data with us.
+For student data, the school at which the teacher works — as controller of that personal data under UK GDPR — is responsible for establishing the lawful basis under which it shares that data with us. The teacher is responsible for ensuring their upload is permitted by their school's policies.
 
 ## 5. AI and automated processing
 
-DeepMark uses AI to extract text from scripts (OCR) and to suggest marks against the mark scheme provided by the school. Important points:
+DeepMark uses AI to extract text from scripts (OCR) and to suggest marks against the mark scheme provided by the teacher. Important points:
 
 - AI-suggested marks are **decision support, not final assessment.** A teacher reviews and is responsible for the final mark awarded to a student.
 - We do not use student work to train the underlying AI models. Our AI providers are contractually committed not to use submitted content to train their general-purpose models.
@@ -93,11 +93,11 @@ We use the following sub-processors to operate the service. Where data is proces
 | Stripe | Payment processing | EU / US — protected by SCCs and the UK IDTA Addendum |
 | Vercel / hosting provider | Web application hosting | UK / EU |
 
-We review sub-processors before engaging them and require each to provide appropriate safeguards. We will give reasonable notice of changes to this list to schools that have signed a Data Processing Agreement with us.
+We review sub-processors before engaging them and require each to provide appropriate safeguards. We will give reasonable notice of changes to this list to teachers and to any school that has signed a Data Processing Agreement with us.
 
 ## 7. Data retention
 
-- **Student exam material** is retained for as long as the school's account requires it for the service, and is deleted on request from the school. Where a school cancels its subscription, student material is deleted within 30 days unless the school asks for it sooner.
+- **Student exam material** is retained for as long as the teacher's account requires it for the service, and is deleted on request from the teacher. Where a teacher cancels their subscription, student material is deleted within 30 days unless the teacher asks for it sooner.
 - **Teacher account data** is retained for as long as the account is active, and for up to 12 months after closure for backup, audit, and dispute-resolution purposes, after which it is deleted.
 - **Billing records** are retained for the period required by HMRC (currently six years).
 - **Server logs** are retained for up to 90 days.
@@ -107,9 +107,9 @@ We review sub-processors before engaging them and require each to provide approp
 We do not sell personal data, and we do not share it for advertising. We share personal data only:
 
 - With sub-processors listed above, under written agreements
-- Within the school account that owns the data
+- Within the teacher's account that owns the data
 - With professional advisers (lawyers, accountants) under duties of confidentiality
-- Where required by law or to protect the safety of a child (see Safeguarding Policy)
+- Where required by law or to protect the safety of a child
 
 ## 9. Security
 
@@ -139,7 +139,7 @@ Under UK GDPR you have the right to:
 
 To exercise these rights, email [privacy@getdeepmark.com](mailto:privacy@getdeepmark.com). We will respond within one month.
 
-For student data, requests should normally be raised with the school — they are the controller. We will assist the school in fulfilling the request.
+For student data, requests should normally be raised with the school the student attends — under UK GDPR the school is the controller of student personal data. We will assist the school, and the teacher in liaising with their school, to fulfil the request.
 
 The ICO can be contacted at [ico.org.uk](https://ico.org.uk) or 0303 123 1113.
 
@@ -156,4 +156,4 @@ We may update this policy as the service and the law evolve. Material changes wi
 For any data protection question, contact:
 
 - **Email:** [privacy@getdeepmark.com](mailto:privacy@getdeepmark.com)
-- **Post:** \[Registered office address — to be confirmed\]
+- **Post:** DeepMark Ltd, 86–90 Paul Street, London EC2A 4NE, United Kingdom

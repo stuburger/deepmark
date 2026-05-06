@@ -21,7 +21,7 @@ export function MarketingFooter() {
 					heading="Trust"
 					links={[
 						{ label: "Privacy", href: "/privacy" },
-						{ label: "Safeguarding", href: "/safeguarding" },
+						{ label: "Data & Safety", href: "/data-safety" },
 						{ label: "Terms", href: "/terms" },
 					]}
 				/>

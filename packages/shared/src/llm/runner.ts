@@ -42,19 +42,30 @@ export class LlmTimeoutError extends Error {
  *
  * Catches an `AbortError` rejected by the SDK and rewrites it to
  * `LlmTimeoutError` so callers get a consistent, descriptive error.
+ *
+ * On timeout, emits a structured `llm-timeout` log via the supplied
+ * logger. That's the only signal we have for tuning the timeout budgets
+ * post-hoc — without it we'd be picking numbers from anecdotes.
  */
 async function withTimeout<T>(
 	fn: (signal: AbortSignal) => Promise<T>,
 	timeoutMs: number,
 	callSiteKey: string,
+	logger?: FallbackLogger,
 ): Promise<T> {
 	const controller = new AbortController()
+	const startedAt = Date.now()
 	let timedOut = false
 	let timer: ReturnType<typeof setTimeout> | undefined
 	const timeoutPromise = new Promise<never>((_, reject) => {
 		timer = setTimeout(() => {
 			timedOut = true
 			controller.abort()
+			logger?.warn("llm-timeout", "LLM call exceeded wall-clock budget", {
+				callSiteKey,
+				timeoutMs,
+				signalForwarded: controller.signal.aborted,
+			})
 			reject(new LlmTimeoutError(callSiteKey, timeoutMs))
 		}, timeoutMs)
 	})
@@ -64,6 +75,16 @@ async function withTimeout<T>(
 	} catch (err) {
 		// SDK rejected via the abort signal we triggered — surface as timeout.
 		if (timedOut && !(err instanceof LlmTimeoutError)) {
+			logger?.warn(
+				"llm-timeout",
+				"LLM call rejected via abort after timeout fired",
+				{
+					callSiteKey,
+					timeoutMs,
+					elapsedMs: Date.now() - startedAt,
+					sdkError: err instanceof Error ? err.message : String(err),
+				},
+			)
 			throw new LlmTimeoutError(callSiteKey, timeoutMs)
 		}
 		throw err
@@ -191,6 +212,7 @@ export class LlmRunner {
 					(signal) => fn(model, entry, report, signal),
 					timeoutMs,
 					callSiteKey,
+					this.deps.logger,
 				),
 			{
 				callSiteKey,

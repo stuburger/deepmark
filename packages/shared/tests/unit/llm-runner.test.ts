@@ -39,8 +39,12 @@ function createRunner(
 	const resolveModel = vi.fn((entry: LlmModelEntry) =>
 		stubModel(`${entry.provider}/${entry.model}`),
 	)
-	const runner = new LlmRunner({ getConfig, resolveModel }, overrides)
-	return { runner, getConfig, resolveModel }
+	const logger = { warn: vi.fn(), info: vi.fn() }
+	const runner = new LlmRunner(
+		{ getConfig, resolveModel, logger },
+		overrides,
+	)
+	return { runner, getConfig, resolveModel, logger }
 }
 
 // ── Tests ───────────────────────────────────────────────────────────────────
@@ -313,6 +317,24 @@ describe("LlmRunner", () => {
 			expect((err as LlmTimeoutError).callSiteKey).toBe("grading")
 			expect((err as LlmTimeoutError).timeoutMs).toBe(25)
 		}
+	})
+
+	it("emits a structured llm-timeout warn when the timeout fires", async () => {
+		const { runner, logger } = createRunner({ grading: [GOOGLE_FLASH] })
+
+		await runner
+			.call(
+				"grading",
+				() => new Promise(() => {}),
+				{ timeoutMs: 30 },
+			)
+			.catch(() => {})
+
+		expect(logger.warn).toHaveBeenCalledWith(
+			"llm-timeout",
+			expect.stringContaining("exceeded wall-clock budget"),
+			expect.objectContaining({ callSiteKey: "grading", timeoutMs: 30 }),
+		)
 	})
 
 	it("DEFAULT_LLM_TIMEOUT_MS is exported and reasonable", () => {

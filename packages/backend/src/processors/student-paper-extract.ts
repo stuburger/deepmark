@@ -13,6 +13,7 @@ import {
 	markJobFailed,
 	parseSqsJobId,
 } from "@/lib/infra/sqs-job-runner"
+import { claimOcrRun } from "@/lib/ocr/claim-ocr-run"
 import {
 	type AttributeScriptQuestion,
 	attributeScript,
@@ -52,20 +53,18 @@ export async function handler(event: SqsEvent): Promise<void> {
 			where: { id: jobId },
 		})
 
-		await db.ocrRun.upsert({
-			where: { id: jobId },
-			create: {
-				id: jobId,
-				submission_id: jobId,
-				status: "processing" satisfies OcrStatus,
-				started_at: new Date(),
-			},
-			update: {
-				status: "processing" satisfies OcrStatus,
-				error: null,
-				started_at: new Date(),
-			},
-		})
+		// Atomic claim BEFORE any work — guards against the SQS at-least-once
+		// race that lets a second handler invocation clobber `status='complete'`
+		// back to `processing` after the first invocation succeeded but the
+		// poller couldn't ack in time. Symmetric to `claimGradingRun`.
+		const claim = await claimOcrRun(db.ocrRun, jobId)
+		if (!claim.ok) {
+			logger.info(TAG, "Skipping duplicate OCR invocation", {
+				jobId,
+				reason: claim.reason,
+			})
+			return
+		}
 
 		void logOcrRunEvent(db, jobId, {
 			type: "ocr_started",

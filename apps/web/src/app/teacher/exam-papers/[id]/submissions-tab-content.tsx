@@ -1,5 +1,6 @@
 import type { BatchIngestionState } from "@/lib/batch/types"
 import type { SubmissionHistoryItem } from "@/lib/marking/types"
+import type { BoundaryMode, GradeBoundary } from "@mcp-gcse/shared"
 import { useState } from "react"
 import { BatchStatusBanner } from "./batch-status-banner"
 import { SubmissionTable } from "./submission-table"
@@ -9,6 +10,8 @@ export function SubmissionsTabContent({
 	paperId,
 	ingestion,
 	submissions,
+	gradeBoundaries,
+	gradeBoundaryMode,
 	markedCount,
 	inProgressCount,
 	onOpenStaging,
@@ -20,6 +23,8 @@ export function SubmissionsTabContent({
 	paperId: string
 	ingestion: BatchIngestionState | null
 	submissions: SubmissionHistoryItem[]
+	gradeBoundaries: GradeBoundary[] | null
+	gradeBoundaryMode: BoundaryMode | null
 	markedCount: number
 	inProgressCount: number
 	onOpenStaging: () => void
@@ -52,6 +57,8 @@ export function SubmissionsTabContent({
 					/>
 					<SubmissionTable
 						submissions={submissions}
+						gradeBoundaries={gradeBoundaries}
+						gradeBoundaryMode={gradeBoundaryMode}
 						onView={onViewJob}
 						onDeleteRequest={onDeleteSubmission}
 						selectedIds={selectedIds}

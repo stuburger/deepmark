@@ -656,6 +656,8 @@ export function ExamPaperPageShell({
 						paperId={paper.id}
 						ingestion={ingestion}
 						submissions={submissions}
+						gradeBoundaries={paper.grade_boundaries}
+						gradeBoundaryMode={paper.grade_boundary_mode}
 						markedCount={markedCount}
 						inProgressCount={inProgressCount}
 						onOpenStaging={() => setStagingOpen(true)}

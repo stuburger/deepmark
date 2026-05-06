@@ -16,7 +16,14 @@ import {
 } from "@/components/ui/table"
 import type { SubmissionHistoryItem } from "@/lib/marking/types"
 import { cn } from "@/lib/utils"
-import { Share2, Trash2 } from "lucide-react"
+import {
+	type BoundaryMode,
+	type GradeBoundary,
+	computeGrade,
+} from "@mcp-gcse/shared"
+import { ArrowDown, ArrowUp, ArrowUpDown, Share2, Trash2 } from "lucide-react"
+import { parseAsStringLiteral, useQueryState } from "nuqs"
+import { useMemo } from "react"
 import {
 	PHASE_LABEL,
 	formatDate,
@@ -26,22 +33,135 @@ import {
 	submissionPhase,
 } from "./submission-grid-config"
 
+const SORT_KEYS = ["student", "status", "score", "grade", "date"] as const
+type SortKey = (typeof SORT_KEYS)[number]
+
+const SORT_DIRS = ["asc", "desc"] as const
+type SortDir = (typeof SORT_DIRS)[number]
+
+// Default direction applied when first selecting a column. Names sort A→Z;
+// scores/grades/dates sort newest/highest first because that's what teachers
+// usually want to see at the top.
+const DEFAULT_DIR: Record<SortKey, SortDir> = {
+	student: "asc",
+	status: "asc",
+	score: "desc",
+	grade: "desc",
+	date: "desc",
+}
+
+// Phase ordering for status sort. Working states first, terminal states last.
+const PHASE_RANK: Record<ReturnType<typeof submissionPhase>, number> = {
+	extraction: 0,
+	grading: 1,
+	done: 2,
+	error: 3,
+}
+
+const NAME_COLLATOR = new Intl.Collator("en-GB", { sensitivity: "base" })
+
+function pctFor(sub: SubmissionHistoryItem): number | null {
+	if (sub.status !== "ocr_complete" || sub.total_max <= 0) return null
+	return (sub.total_awarded / sub.total_max) * 100
+}
+
+// Convert grade label to a numeric rank for sorting. "9" → 9, "U" → 0, null →
+// sentinel handled at compare-time so unmarked rows always end up last.
+function gradeRank(grade: string | null): number | null {
+	if (grade === null) return null
+	if (grade === "U") return 0
+	return Number(grade)
+}
+
+// Compare with nulls last regardless of sort direction.
+function compareNullable(
+	a: number | null,
+	b: number | null,
+	order: 1 | -1,
+): number {
+	if (a === null && b === null) return 0
+	if (a === null) return 1
+	if (b === null) return -1
+	return order * (a - b)
+}
+
 export function SubmissionTable({
 	submissions,
+	gradeBoundaries,
+	gradeBoundaryMode,
 	onView,
 	onDeleteRequest,
 	selectedIds,
 	onSelectionChange,
 }: {
 	submissions: SubmissionHistoryItem[]
+	gradeBoundaries: GradeBoundary[] | null
+	gradeBoundaryMode: BoundaryMode | null
 	onView: (id: string) => void
 	onDeleteRequest: (id: string) => void
 	selectedIds: Set<string>
 	onSelectionChange: (ids: Set<string>) => void
 }) {
+	const [sort, setSort] = useQueryState("sort", parseAsStringLiteral(SORT_KEYS))
+	const [dir, setDir] = useQueryState("dir", parseAsStringLiteral(SORT_DIRS))
+
+	const sorted = useMemo(() => {
+		if (!sort) return submissions
+		const order: 1 | -1 = dir === "asc" ? 1 : -1
+		const list = [...submissions]
+		list.sort((a, b) => {
+			switch (sort) {
+				case "student":
+					return (
+						order *
+						NAME_COLLATOR.compare(a.student_name ?? "", b.student_name ?? "")
+					)
+				case "status":
+					return (
+						order *
+						(PHASE_RANK[submissionPhase(a.status)] -
+							PHASE_RANK[submissionPhase(b.status)])
+					)
+				case "score":
+					return compareNullable(pctFor(a), pctFor(b), order)
+				case "grade": {
+					const ag = gradeRank(
+						computeGrade(
+							a.total_awarded,
+							a.total_max,
+							gradeBoundaries,
+							gradeBoundaryMode ?? "percent",
+						),
+					)
+					const bg = gradeRank(
+						computeGrade(
+							b.total_awarded,
+							b.total_max,
+							gradeBoundaries,
+							gradeBoundaryMode ?? "percent",
+						),
+					)
+					return compareNullable(ag, bg, order)
+				}
+				case "date":
+					return order * (a.created_at.getTime() - b.created_at.getTime())
+			}
+		})
+		return list
+	}, [submissions, sort, dir, gradeBoundaries, gradeBoundaryMode])
+
+	function handleSort(key: SortKey) {
+		if (sort === key) {
+			void setDir(dir === "asc" ? "desc" : "asc")
+		} else {
+			void setSort(key)
+			void setDir(DEFAULT_DIR[key])
+		}
+	}
+
 	if (submissions.length === 0) return null
 
-	const selectableIds = submissions
+	const selectableIds = sorted
 		.filter((s) => s.status === "ocr_complete")
 		.map((s) => s.id)
 	const allSelected =
@@ -81,15 +201,48 @@ export function SubmissionTable({
 									aria-label="Select all marked submissions"
 								/>
 							</TableHead>
-							<TableHead>Student</TableHead>
-							<TableHead className="w-32">Status</TableHead>
-							<TableHead>Score</TableHead>
-							<TableHead>Date</TableHead>
+							<SortableHeader
+								label="Student"
+								columnKey="student"
+								activeKey={sort}
+								activeDir={dir}
+								onSort={handleSort}
+							/>
+							<SortableHeader
+								label="Status"
+								columnKey="status"
+								activeKey={sort}
+								activeDir={dir}
+								onSort={handleSort}
+								className="w-32"
+							/>
+							<SortableHeader
+								label="Score"
+								columnKey="score"
+								activeKey={sort}
+								activeDir={dir}
+								onSort={handleSort}
+							/>
+							<SortableHeader
+								label="Grade"
+								columnKey="grade"
+								activeKey={sort}
+								activeDir={dir}
+								onSort={handleSort}
+								className="w-20"
+							/>
+							<SortableHeader
+								label="Date"
+								columnKey="date"
+								activeKey={sort}
+								activeDir={dir}
+								onSort={handleSort}
+							/>
 							<TableHead className="w-20" />
 						</TableRow>
 					</TableHeader>
 					<TableBody>
-						{submissions.map((sub) => {
+						{sorted.map((sub) => {
 							const isMarked = sub.status === "ocr_complete"
 							const phase = submissionPhase(sub.status)
 							const inFlight = isInFlightPhase(phase)
@@ -97,6 +250,14 @@ export function SubmissionTable({
 								isMarked && sub.total_max > 0
 									? Math.round((sub.total_awarded / sub.total_max) * 100)
 									: null
+							const grade = isMarked
+								? computeGrade(
+										sub.total_awarded,
+										sub.total_max,
+										gradeBoundaries,
+										gradeBoundaryMode ?? "percent",
+									)
+								: null
 							return (
 								<TableRow key={sub.id} className="group">
 									<TableCell>
@@ -140,6 +301,13 @@ export function SubmissionTable({
 												</span>
 											</SoftChip>
 										)}
+									</TableCell>
+									<TableCell>
+										<span className="tabular-nums font-mono text-sm">
+											{grade ?? (
+												<span className="text-muted-foreground">—</span>
+											)}
+										</span>
 									</TableCell>
 									<TableCell className="text-xs text-muted-foreground tabular-nums">
 										{formatDate(sub.created_at)}
@@ -189,5 +357,45 @@ export function SubmissionTable({
 				</Table>
 			</CardContent>
 		</Card>
+	)
+}
+
+function SortableHeader({
+	label,
+	columnKey,
+	activeKey,
+	activeDir,
+	onSort,
+	className,
+}: {
+	label: string
+	columnKey: SortKey
+	activeKey: SortKey | null
+	activeDir: SortDir | null
+	onSort: (key: SortKey) => void
+	className?: string
+}) {
+	const isActive = activeKey === columnKey
+	const Icon = !isActive
+		? ArrowUpDown
+		: activeDir === "asc"
+			? ArrowUp
+			: ArrowDown
+	return (
+		<TableHead className={className}>
+			<Button
+				type="button"
+				variant="ghost"
+				size="sm"
+				onClick={() => onSort(columnKey)}
+				className={cn(
+					"-ml-2 h-7 px-2 text-xs font-medium gap-1",
+					isActive ? "text-foreground" : "text-muted-foreground",
+				)}
+			>
+				{label}
+				<Icon className="h-3 w-3" />
+			</Button>
+		</TableHead>
 	)
 }

@@ -1,6 +1,11 @@
 import type { LanguageModel } from "ai"
 import { describe, expect, it, vi } from "vitest"
-import { LlmRunSnapshotSchema, LlmRunner } from "../../src/llm/runner"
+import {
+	DEFAULT_LLM_TIMEOUT_MS,
+	LlmRunSnapshotSchema,
+	LlmRunner,
+	LlmTimeoutError,
+} from "../../src/llm/runner"
 import type { LlmModelEntry } from "../../src/llm/types"
 
 // ── Test helpers ────────────────────────────────────────────────────────────
@@ -199,6 +204,120 @@ describe("LlmRunner", () => {
 			prompt_tokens: 100,
 			completion_tokens: 50,
 		})
+	})
+
+	// ── Wall-clock timeout ────────────────────────────────────────────────
+
+	it("rejects with LlmTimeoutError when fn exceeds timeoutMs", async () => {
+		const { runner } = createRunner({ grading: [GOOGLE_FLASH] })
+
+		await expect(
+			runner.call(
+				"grading",
+				() => new Promise(() => {}), // never resolves, ignores signal
+				{ timeoutMs: 50 },
+			),
+		).rejects.toBeInstanceOf(LlmTimeoutError)
+	})
+
+	it("aborts the AbortSignal when the timeout fires", async () => {
+		const { runner } = createRunner({ grading: [GOOGLE_FLASH] })
+
+		let observedSignal: AbortSignal | null = null
+		await runner
+			.call(
+				"grading",
+				async (_m, _e, _r, signal) => {
+					observedSignal = signal
+					return new Promise(() => {}) // never resolves
+				},
+				{ timeoutMs: 50 },
+			)
+			.catch(() => {})
+
+		expect(observedSignal).not.toBeNull()
+		expect((observedSignal as unknown as AbortSignal).aborted).toBe(true)
+	})
+
+	it("rewrites SDK AbortError to LlmTimeoutError when our timeout caused the abort", async () => {
+		const { runner } = createRunner({ grading: [GOOGLE_FLASH] })
+
+		// Simulate the AI SDK rejecting with a generic AbortError once it sees
+		// the signal go aborted. Our wrapper should still surface a typed
+		// LlmTimeoutError so callers can branch on it.
+		await expect(
+			runner.call(
+				"grading",
+				(_m, _e, _r, signal) =>
+					new Promise((_, reject) => {
+						signal.addEventListener("abort", () => {
+							const err = new Error("The operation was aborted.")
+							err.name = "AbortError"
+							reject(err)
+						})
+					}),
+				{ timeoutMs: 30 },
+			),
+		).rejects.toBeInstanceOf(LlmTimeoutError)
+	})
+
+	it("does not time out fast-resolving calls", async () => {
+		const { runner } = createRunner({ grading: [GOOGLE_FLASH] })
+
+		const result = await runner.call(
+			"grading",
+			async () => "fast",
+			{ timeoutMs: 1000 },
+		)
+
+		expect(result).toBe("fast")
+	})
+
+	it("falls back to the next model after a timeout", async () => {
+		const { runner } = createRunner({
+			grading: [GOOGLE_FLASH, OPENAI_GPT4O],
+		})
+
+		let calls = 0
+		const result = await runner.call(
+			"grading",
+			async (model) => {
+				calls++
+				if (
+					(model as unknown as { modelId: string }).modelId.includes("google")
+				) {
+					return new Promise(() => {}) // hang on primary
+				}
+				return "fallback-result"
+			},
+			{ timeoutMs: 30 },
+		)
+
+		expect(result).toBe("fallback-result")
+		expect(calls).toBe(2)
+		expect(runner.toSnapshot().effective.grading).toEqual(eff(1, 1))
+	})
+
+	it("LlmTimeoutError carries callSiteKey and timeoutMs", async () => {
+		const { runner } = createRunner({ grading: [GOOGLE_FLASH] })
+
+		try {
+			await runner.call(
+				"grading",
+				() => new Promise(() => {}),
+				{ timeoutMs: 25 },
+			)
+			throw new Error("expected timeout")
+		} catch (err) {
+			expect(err).toBeInstanceOf(LlmTimeoutError)
+			expect((err as LlmTimeoutError).callSiteKey).toBe("grading")
+			expect((err as LlmTimeoutError).timeoutMs).toBe(25)
+		}
+	})
+
+	it("DEFAULT_LLM_TIMEOUT_MS is exported and reasonable", () => {
+		expect(DEFAULT_LLM_TIMEOUT_MS).toBeGreaterThan(10_000)
+		expect(DEFAULT_LLM_TIMEOUT_MS).toBeLessThanOrEqual(300_000)
 	})
 
 	it("captures usage from fallback model", async () => {

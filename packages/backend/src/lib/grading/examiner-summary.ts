@@ -70,9 +70,10 @@ Write a 3-line summary for this student.`
 	try {
 		const output = await runner.call(
 			CALL_SITE_KEY,
-			async (model, entry, report) => {
+			async (model, entry, report, signal) => {
 				const result = await generateText({
 					model,
+					abortSignal: signal,
 					temperature: entry.temperature,
 					messages: [
 						{ role: "system", content: SYSTEM_PROMPT },

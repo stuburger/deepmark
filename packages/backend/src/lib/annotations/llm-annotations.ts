@@ -71,9 +71,10 @@ export async function annotateOneQuestion(
 
 	const plan = await llm.call(
 		"llm-annotations",
-		async (model, entry, report) => {
+		async (model, entry, report, signal) => {
 			const result = await generateText({
 				model,
+				abortSignal: signal,
 				temperature: entry.temperature,
 				system:
 					"You are an expert GCSE examiner producing structured annotations for a student's exam script. Output valid JSON matching the schema. Be precise and concise.",

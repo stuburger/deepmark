@@ -51,9 +51,10 @@ export class Grader {
 
 		const output = await this.runner.call(
 			this.callSiteKey,
-			async (model, entry, report) => {
+			async (model, entry, report, signal) => {
 				const result = await generateText({
 					model,
+					abortSignal: signal,
 					temperature: entry.temperature,
 					messages: [
 						{ role: "system", content: this.systemPrompt },
@@ -113,9 +114,10 @@ export class Grader {
 
 		const output = await this.runner.call(
 			this.callSiteKey,
-			async (model, entry, report) => {
+			async (model, entry, report, signal) => {
 				const result = await generateText({
 					model,
+					abortSignal: signal,
 					temperature: entry.temperature,
 					messages: [
 						{ role: "system", content: this.systemPrompt },
@@ -160,9 +162,10 @@ export class Grader {
 
 		const output = await this.runner.call(
 			this.callSiteKey,
-			async (model, entry, report) => {
+			async (model, entry, report, signal) => {
 				const result = await generateText({
 					model,
+					abortSignal: signal,
 					temperature: entry.temperature,
 					messages: [
 						{ role: "system", content: this.systemPrompt },

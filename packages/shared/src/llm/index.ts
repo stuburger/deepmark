@@ -6,9 +6,11 @@ export {
 } from "./fallback"
 export { createModelResolver, type ProviderClient } from "./resolve"
 export {
+	DEFAULT_LLM_TIMEOUT_MS,
 	LlmRunner,
 	LlmModelEntrySchema,
 	LlmRunSnapshotSchema,
+	LlmTimeoutError,
 	type EffectiveSummary,
 	type LlmCallReport,
 	type LlmRunSnapshot,

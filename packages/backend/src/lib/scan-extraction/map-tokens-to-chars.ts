@@ -59,9 +59,10 @@ export async function mapTokensToChars({
 
 	const { output } = await callLlmWithFallback(
 		"token-char-mapping",
-		async (model, entry, report) => {
+		async (model, entry, report, signal) => {
 			const result = await generateText({
 				model,
+				abortSignal: signal,
 				temperature: entry.temperature,
 				messages: [
 					{

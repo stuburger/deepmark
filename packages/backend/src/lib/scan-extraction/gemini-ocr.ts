@@ -125,9 +125,10 @@ export async function runOcr(
 
 	const { output } = await callLlmWithFallback(
 		"handwriting-ocr",
-		async (model, entry, report) => {
+		async (model, entry, report, signal) => {
 			const result = await generateText({
 				model,
+				abortSignal: signal,
 				temperature: entry.temperature,
 				system:
 					"You are an expert at reading handwritten student exam scripts. " +

@@ -68,6 +68,11 @@ function getDefaultRunner(): LlmRunner {
  * When `llm` is provided (run-scoped), delegates to the runner which
  * records selected/effective config for the snapshot. When omitted,
  * uses a shared default runner (no snapshot persistence).
+ *
+ * The 4th `signal` argument to `fn` is an AbortSignal driven by the
+ * per-attempt wall-clock timeout — forward it to `generateText({ ...,
+ * abortSignal: signal })` so a hung LLM call is actually cancelled.
+ * Pass `opts.timeoutMs` to override the default (90 s).
  */
 export async function callLlmWithFallback<T>(
 	callSiteKey: string,
@@ -75,10 +80,12 @@ export async function callLlmWithFallback<T>(
 		model: LanguageModel,
 		entry: LlmModelEntry,
 		report: LlmCallReport,
+		signal: AbortSignal,
 	) => Promise<T>,
 	llm?: LlmRunner,
+	opts?: { timeoutMs?: number },
 ): Promise<T> {
-	return (llm ?? getDefaultRunner()).call(callSiteKey, fn)
+	return (llm ?? getDefaultRunner()).call(callSiteKey, fn, opts)
 }
 
 /**

@@ -284,9 +284,10 @@ export async function attributeScript({
 		try {
 			const { output: rawOutput } = await callLlmWithFallback(
 				"script-attribution",
-				async (model, entry, report) => {
+				async (model, entry, report, signal) => {
 					const result = await generateText({
 						model,
+						abortSignal: signal,
 						temperature: entry.temperature,
 						messages: [
 							{
@@ -308,6 +309,11 @@ export async function attributeScript({
 					return result
 				},
 				llm,
+				// Multi-page attribution (28 pages observed) takes 30–180 s on
+				// healthy runs. 240 s gives ~30% headroom over the slowest
+				// healthy case while still fitting inside the 5-min Lambda
+				// timeout — a hung Gemini call fails fast, not at lambda kill.
+				{ timeoutMs: 240_000 },
 			)
 			output = rawOutput
 		} catch (err) {

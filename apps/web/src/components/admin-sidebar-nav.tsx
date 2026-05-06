@@ -14,6 +14,8 @@ import {
 	Coins,
 	GraduationCap,
 	LayoutDashboard,
+	Mail,
+	Palette,
 	Settings,
 } from "lucide-react"
 import Link from "next/link"
@@ -25,6 +27,8 @@ const navItems = [
 	{ href: "/admin/exemplars", label: "Exemplar Answers", icon: GraduationCap },
 	{ href: "/admin/usage", label: "Usage", icon: BarChart3 },
 	{ href: "/admin/credits", label: "Credits", icon: Coins },
+	{ href: "/admin/emails", label: "Email previews", icon: Mail },
+	{ href: "/design-system", label: "Design system", icon: Palette },
 	{ href: "/admin/settings", label: "Settings", icon: Settings },
 ]
 

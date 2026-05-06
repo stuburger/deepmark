@@ -9,9 +9,12 @@ import {
 	collabUrl,
 	geminiApiKey,
 	openAiApiKey,
+	vapidPrivateKey,
+	vapidPublicKey,
 	webUrl,
 } from "./config"
 import { neonPostgres } from "./database"
+import { bus } from "./events"
 import {
 	batchClassifyQueue,
 	exemplarQueue,
@@ -19,8 +22,6 @@ import {
 	questionPaperQueue,
 	studentPaperOcrQueue,
 	studentPaperQueue,
-	vapidPrivateKey,
-	vapidPublicKey,
 } from "./queues"
 import { router } from "./router"
 import { scansBucket } from "./storage"
@@ -59,6 +60,11 @@ export const web = new sst.aws.Nextjs("Web", {
 		stripeSecretKey,
 		stripePublishableKey,
 		stripeWebhookSecret,
+		// Linked for parity — current emit sites are on the API + Auth Lambdas,
+		// but admin/preview pages render templates with @mcp-gcse/emails which
+		// statically imports the SES client from sst-env (so the resource needs
+		// to be reachable at build time for type generation).
+		bus,
 	],
 	dev: {
 		url: "http://localhost:3000",

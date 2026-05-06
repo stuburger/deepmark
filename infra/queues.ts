@@ -8,16 +8,8 @@ import {
 	openAiApiKey,
 } from "./config"
 import { neonPostgres } from "./database"
+import { bus } from "./events"
 import { scansBucket } from "./storage"
-
-export const vapidPublicKey = new sst.Secret(
-	"VapidPublicKey",
-	"BCFcD8zrMJzK4lMxhj6vEG_jBuxsqT1b7qo0i3NoTJWCm4yGH1OFN2L0sRTRP5YR-LCScli9ltW_SqZCysXSvFk",
-)
-export const vapidPrivateKey = new sst.Secret(
-	"VapidPrivateKey",
-	"5UFLD1r3EJ8yyPi3SKLU7fX8KCcNUbUMvbxIvK5rmtY",
-)
 
 // Pre-launch (zero real users): a doomed SQS message has no value sitting in the
 // queue for the 4-day default while it gets redelivered every few minutes — that's
@@ -304,10 +296,12 @@ studentPaperQueue.subscribe({
 		openAiApiKey,
 		anthropicApiKey,
 		scansBucket,
-		vapidPublicKey,
-		vapidPrivateKey,
+		// Batch-complete is now emitted onto the bus; PushSubscriber is the
+		// only consumer that needs VAPID, but linking here keeps a clean
+		// rollback if we ever revert the migration.
 		collabServer,
 		collabServiceSecret,
+		bus,
 	],
 	environment: {
 		STAGE: $app.stage,

@@ -2,12 +2,7 @@ import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import type { SourceFileProgress } from "@/lib/batch/events"
 import type { BatchIngestionState } from "@/lib/batch/types"
-import {
-	AlertTriangle,
-	CheckCircle2,
-	FileText,
-	Loader2,
-} from "lucide-react"
+import { AlertTriangle, CheckCircle2, FileText, Loader2 } from "lucide-react"
 
 export function BatchStatusBanner({
 	ingestion,
@@ -86,9 +81,8 @@ function ProgressCard({ ingestion }: { ingestion: BatchIngestionState }) {
 
 function SourceFileRow({ file }: { file: SourceFileProgress }) {
 	const fileName = file.sourceKey.split("/").pop() ?? file.sourceKey
-	const { phaseLabel, phaseProcessed, phaseTotal, isDone } = phaseDescriptor(
-		file,
-	)
+	const { phaseLabel, phaseProcessed, phaseTotal, isDone } =
+		phaseDescriptor(file)
 	const percent =
 		phaseTotal > 0 ? Math.round((phaseProcessed / phaseTotal) * 100) : 0
 

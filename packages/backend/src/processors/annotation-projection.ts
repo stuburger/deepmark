@@ -465,7 +465,11 @@ export async function writeMarkingResults(
 
 async function applyMarkingResultUpdate(
 	tx: Prisma.TransactionClient,
-	u: { answer_id: string; marking_result_id: string | null; row: MarkingResultDesiredRow },
+	u: {
+		answer_id: string
+		marking_result_id: string | null
+		row: MarkingResultDesiredRow
+	},
 	markedAt: Date,
 ): Promise<void> {
 	const { answer_id, marking_result_id, row } = u

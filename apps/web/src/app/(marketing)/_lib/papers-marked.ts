@@ -1,9 +1,13 @@
 import { db } from "@/lib/db"
 import { unstable_cache } from "next/cache"
 
-/** Seconds saved per marked answer — conservative estimate covering short answers,
- *  extended writing, and MCQ averaged together. Adjust as real-world data accumulates. */
-const SECONDS_SAVED_PER_ANSWER = 45
+/** Conservative minutes saved per marked GCSE script. Anchored on the DfE
+ *  Teacher Workload Survey + NEU figures putting full-script marking at
+ *  10–15 minutes; we pick the low end so the claim is defensible. The
+ *  per-paper basis (rather than per-answer) is also stable against the
+ *  backfill state of marking_results — papers_marked only counts current
+ *  submissions with a complete grading run. */
+const MINUTES_SAVED_PER_PAPER = 12
 
 export type MarketingStats = {
 	papersMarked: number
@@ -16,7 +20,7 @@ export type MarketingStats = {
  * - papersMarked: unique current submissions with a completed grading run
  * - personalizedComments: marking results attached to current submissions —
  *   excludes superseded ones so re-marks don't double-count
- * - hoursSaved: derived from comment count at SECONDS_SAVED_PER_ANSWER per answer
+ * - hoursSaved: papersMarked × MINUTES_SAVED_PER_PAPER (per-paper basis)
  *
  * Cached for 5 min — these are vanity numbers, not a live dashboard.
  */
@@ -30,13 +34,13 @@ export const getMarketingStats = unstable_cache(
 				},
 			}),
 			db.markingResult.count({
-				where: { answer: { is: { submission: { is: { superseded_at: null } } } } },
+				where: {
+					answer: { is: { submission: { is: { superseded_at: null } } } },
+				},
 			}),
 		])
 
-		const hoursSaved = Math.round(
-			(personalizedComments * SECONDS_SAVED_PER_ANSWER) / 3600,
-		)
+		const hoursSaved = Math.round((papersMarked * MINUTES_SAVED_PER_PAPER) / 60)
 
 		return { papersMarked, hoursSaved, personalizedComments }
 	},

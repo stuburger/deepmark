@@ -10,13 +10,13 @@ import { useYDoc } from "@/components/annotated-answer/use-y-doc"
 import { OrganicMarkingLoader } from "@/components/marking-loader"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
-import { LockKeyhole } from "lucide-react"
 import type {
 	GradingResult,
 	StudentPaperAnnotation,
 	StudentPaperResultPayload,
 	TeacherOverride,
 } from "@/lib/marking/types"
+import { LockKeyhole } from "lucide-react"
 import { useMemo } from "react"
 
 function scoreBadgeVariant(

@@ -9,6 +9,7 @@ import {
 	webUrl,
 } from "./config"
 import { neonPostgres } from "./database"
+import { bus } from "./events"
 
 export const authTable = new sst.aws.Dynamo("AuthTable", {
 	fields: {
@@ -50,6 +51,8 @@ export const auth = new sst.aws.Auth("Auth", {
 			googleClientSecret,
 			// `seedTrialGrant` reads `Resource.StripeConfig.trialPaperCap` on signup.
 			stripeConfig,
+			// `user.signed_up` emit on first user.create — handled by EmailSubscriber.
+			bus,
 		],
 		environment: {
 			WEB_URL: webUrl,

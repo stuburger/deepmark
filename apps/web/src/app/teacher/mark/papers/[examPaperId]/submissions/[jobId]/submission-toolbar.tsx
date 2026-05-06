@@ -198,10 +198,7 @@ export function SubmissionToolbar({
 				)}
 
 				{/* Pipeline stage pips */}
-				<StagePips
-					jobId={jobId}
-					onNavigateToJob={onNavigateToJob}
-				/>
+				<StagePips jobId={jobId} onNavigateToJob={onNavigateToJob} />
 
 				{/* Completed-phase output actions */}
 				{phase === "completed" && (
@@ -214,20 +211,14 @@ export function SubmissionToolbar({
 							annotations={annotations}
 							pageTokens={pageTokens}
 						/>
-						<ReRunMenu
-							jobId={jobId}
-							onNavigateToJob={onNavigateToJob}
-						/>
+						<ReRunMenu jobId={jobId} onNavigateToJob={onNavigateToJob} />
 					</div>
 				)}
 
 				{/* Scan recovery */}
 				{data.pages_count > 0 &&
 					(phase === "scan_processing" || phase === "failed") && (
-						<ReScanButton
-							jobId={jobId}
-							onNavigateToJob={onNavigateToJob}
-						/>
+						<ReScanButton jobId={jobId} onNavigateToJob={onNavigateToJob} />
 					)}
 			</div>
 		</TooltipProvider>

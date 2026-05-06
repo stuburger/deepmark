@@ -83,11 +83,10 @@ export async function segmentPdfScripts(
 					p.jpegBuffer.toString("base64"),
 					"image/jpeg",
 				).catch((err) => {
-					logger.warn(
-						TAG,
-						"Cloud Vision failed for page — treating as blank",
-						{ order: p.order, error: String(err) },
-					)
+					logger.warn(TAG, "Cloud Vision failed for page — treating as blank", {
+						order: p.order,
+						error: String(err),
+					})
 					return { rawResponse: null, tokens: [] as VisionToken[] }
 				})
 				if (result.tokens.length === 0) {

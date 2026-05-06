@@ -79,3 +79,20 @@ export const anthropicApiKey = new sst.Secret("AnthropicApiKey")
  * Set with: `sst secret set CollabServiceSecret <random-64-char-string>`.
  */
 export const collabServiceSecret = new sst.Secret("CollabServiceSecret")
+
+/**
+ * VAPID keys for Web Push. Linked to the PushSubscriber Lambda which fans
+ * out batch-completed push notifications, and to `web.ts` so the browser
+ * client can subscribe with the matching public key. Lives here (not
+ * `queues.ts`) because `events.ts` consumes them — keeping the secret
+ * declaration in `queues.ts` would create an import cycle once `queues.ts`
+ * imports `bus` from `events.ts`.
+ */
+export const vapidPublicKey = new sst.Secret(
+	"VapidPublicKey",
+	"BCFcD8zrMJzK4lMxhj6vEG_jBuxsqT1b7qo0i3NoTJWCm4yGH1OFN2L0sRTRP5YR-LCScli9ltW_SqZCysXSvFk",
+)
+export const vapidPrivateKey = new sst.Secret(
+	"VapidPrivateKey",
+	"5UFLD1r3EJ8yyPi3SKLU7fX8KCcNUbUMvbxIvK5rmtY",
+)

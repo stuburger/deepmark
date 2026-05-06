@@ -34,6 +34,10 @@ declare module "sst" {
       "type": "sst.aws.Queue"
       "url": string
     }
+    "BatchClassifyTestRunner": {
+      "name": string
+      "type": "sst.aws.Function"
+    }
     "CloudVisionApiKey": {
       "type": "sst.sst.Secret"
       "value": string
@@ -46,6 +50,20 @@ declare module "sst" {
     "CollabServiceSecret": {
       "type": "sst.sst.Secret"
       "value": string
+    }
+    "Email": {
+      "configSet": string
+      "sender": string
+      "type": "sst.aws.Email"
+    }
+    "EmailSubscriberDLQ": {
+      "type": "sst.aws.Queue"
+      "url": string
+    }
+    "EventBus": {
+      "arn": string
+      "name": string
+      "type": "sst.aws.Bus"
     }
     "ExemplarQueue": {
       "type": "sst.aws.Queue"
@@ -72,8 +90,7 @@ declare module "sst" {
       "value": string
     }
     "HocuspocusServer": {
-      "service": string
-      "type": "sst.aws.Service"
+      "type": "sst.sst.Linkable"
       "url": string
     }
     "Interactions": {
@@ -92,6 +109,10 @@ declare module "sst" {
     "OpenAiApiKey": {
       "type": "sst.sst.Secret"
       "value": string
+    }
+    "PushSubscriberDLQ": {
+      "type": "sst.aws.Queue"
+      "url": string
     }
     "QuestionPaperQueue": {
       "type": "sst.aws.Queue"
@@ -217,9 +238,6 @@ declare module "sst" {
     "VapidPublicKey": {
       "type": "sst.sst.Secret"
       "value": string
-    }
-    "Vpc": {
-      "type": "sst.aws.Vpc"
     }
     "Web": {
       "type": "sst.aws.Nextjs"

@@ -14,8 +14,8 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table"
-import { cn } from "@/lib/utils"
 import type { SubmissionHistoryItem } from "@/lib/marking/types"
+import { cn } from "@/lib/utils"
 import { Share2, Trash2 } from "lucide-react"
 import {
 	PHASE_LABEL,

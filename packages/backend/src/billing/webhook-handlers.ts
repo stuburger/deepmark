@@ -5,12 +5,16 @@ import {
 	insertSubscriptionGrant,
 	insertTopUpPurchase,
 } from "@mcp-gcse/db"
+import { EventDetailType, EventSource } from "@mcp-gcse/emails"
 import { Resource } from "sst"
 import type Stripe from "stripe"
 
 import { db } from "@/db/client"
+import { emitEvent } from "@/lib/events/emit"
 import { logger as log } from "@/lib/infra/logger"
 
+import { stripeToActiveDiscount } from "./active-discount"
+import { detectWelcomeUpgrade } from "./upgrade-detection"
 import {
 	decideCheckoutSessionAction,
 	extractCustomerId,
@@ -54,6 +58,7 @@ export async function applySubscriptionToUser(
 	}
 
 	const update = subscriptionToUserUpdate(subscription)
+	const finalPlan = update.plan ?? user.plan
 	await db.user.update({
 		where: { id: user.id },
 		data: {
@@ -61,15 +66,61 @@ export async function applySubscriptionToUser(
 			// Status-only updates often arrive without a `plan` in metadata
 			// (e.g. invoice.payment_failed → subscription.updated). Don't clobber
 			// the existing plan when the event doesn't carry one.
-			plan: update.plan ?? user.plan,
+			plan: finalPlan,
 		},
 	})
 
 	log.info(TAG, "Applied subscription to user", {
 		userId: user.id,
 		status: update.subscription_status,
-		plan: update.plan ?? user.plan,
+		plan: finalPlan,
 	})
+
+	// Emit a "first time on this paying tier" event so the EmailSubscriber
+	// can fire welcome-to-Pro / welcome-to-Unlimited. Renewals (Pro → Pro)
+	// produce no event. Pure helper — no DB read, takes the previous + new
+	// plan in.
+	const upgrade = detectWelcomeUpgrade(user.plan, finalPlan)
+	if (upgrade) {
+		const standardAmount = readStandardAmount(subscription)
+		const currency =
+			subscription.currency ??
+			subscription.items.data[0]?.price?.currency ??
+			null
+		if (standardAmount !== null && currency) {
+			await emitEvent({
+				source: EventSource.billing,
+				detailType: EventDetailType.subscriptionUpgraded,
+				detail: {
+					userId: user.id,
+					plan: upgrade,
+					standardAmount,
+					currency: currency.toLowerCase(),
+					discount: stripeToActiveDiscount(subscription),
+				},
+			})
+		} else {
+			log.warn(
+				TAG,
+				"Upgrade detected but price not resolvable; skipping email",
+				{
+					userId: user.id,
+					plan: finalPlan,
+				},
+			)
+		}
+	}
+}
+
+function readStandardAmount(sub: Stripe.Subscription): number | null {
+	const price = sub.items.data[0]?.price
+	if (!price?.unit_amount) return null
+	const interval = price.recurring?.interval
+	const intervalCount = price.recurring?.interval_count ?? 1
+	if (interval === "year")
+		return Math.round(price.unit_amount / (12 * intervalCount))
+	if (interval === "month") return Math.round(price.unit_amount / intervalCount)
+	return price.unit_amount
 }
 
 /**
@@ -303,6 +354,36 @@ export async function applyCompletedCheckoutSession(
 		papers,
 		granted: result.granted,
 	})
+
+	// Only emit on the first ledger insert — replays return granted=false and
+	// must NOT re-trigger the thank-you email.
+	if (!result.granted) return
+
+	const currency = (session.currency ?? "gbp").toLowerCase()
+	const amount = session.amount_total ?? 0
+	if (decision.kind === "ppu_purchase") {
+		await emitEvent({
+			source: EventSource.billing,
+			detailType: EventDetailType.ppuPurchased,
+			detail: {
+				userId: decision.userId,
+				currency,
+				amount,
+				papersGranted: papers,
+			},
+		})
+	} else {
+		await emitEvent({
+			source: EventSource.billing,
+			detailType: EventDetailType.topupPurchased,
+			detail: {
+				userId: decision.userId,
+				currency,
+				amount,
+				papersGranted: papers,
+			},
+		})
+	}
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────

@@ -8,6 +8,7 @@ import {
 	withHeadlessEditor,
 } from "@/lib/collab/editor-seed"
 import { loadTokensByQuestion } from "@/lib/collab/load-tokens"
+import { emitEvent } from "@/lib/events/emit"
 import { claimGradingRun } from "@/lib/grading/claim-grading-run"
 import { generateExaminerSummary } from "@/lib/grading/examiner-summary"
 import { loadExamPaperForGrading } from "@/lib/grading/grade-queries"
@@ -23,13 +24,13 @@ import {
 } from "@/lib/infra/cancellation"
 import { createLlmRunner } from "@/lib/infra/llm-runtime"
 import { logger } from "@/lib/infra/logger"
-import { sendBatchCompleteNotification } from "@/lib/infra/push-notification"
 import {
 	type SqsEvent,
 	markJobFailed,
 	parseSqsJobId,
 } from "@/lib/infra/sqs-job-runner"
 import { type GradingStatus, logGradingRunEvent } from "@mcp-gcse/db"
+import { EventDetailType, EventSource } from "@mcp-gcse/emails"
 import {
 	type LlmRunner,
 	type MarkerOrchestrator,
@@ -496,22 +497,22 @@ export async function checkAndNotifyBatchCompletion(
 
 	if (updated.count === 0) return
 
-	logger.info(TAG, "Batch complete — sending push notification", {
+	logger.info(TAG, "Batch complete — emitting batch.completed event", {
 		batchJobId,
 		studentCount: batch.total_student_jobs,
 	})
 
-	try {
-		await sendBatchCompleteNotification(
+	// Email + push are both subscribers of `deepmark.marking → batch.completed`
+	// on the EventBus; this single emit fans out to both. Failures land in
+	// each subscriber's own DLQ — never block the grader on a notification
+	// blip.
+	await emitEvent({
+		source: EventSource.marking,
+		detailType: EventDetailType.batchCompleted,
+		detail: {
 			batchJobId,
-			batch.uploaded_by,
-			batch.exam_paper.title,
-			batch.total_student_jobs,
-		)
-	} catch (err) {
-		logger.error(TAG, "Push notification failed — batch still complete", {
-			batchJobId,
-			error: err instanceof Error ? err.message : String(err),
-		})
-	}
+			uploadedBy: batch.uploaded_by,
+			totalSubmissions: batch.total_student_jobs,
+		},
+	})
 }

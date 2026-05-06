@@ -2,6 +2,7 @@ import { auth, authUrlLink } from "./auth"
 import { stripeConfig, stripeSecretKey } from "./billing"
 import { geminiApiKey, openAiApiKey } from "./config"
 import { neonPostgres } from "./database"
+import { bus } from "./events"
 import { exemplarQueue, markSchemePdfQueue } from "./queues"
 import { scansBucket } from "./storage"
 
@@ -50,6 +51,9 @@ api.route("$default", {
 		stripeSecretKey,
 		stripeWebhookSecret,
 		stripeConfig,
+		// Subscription / PPU / top-up events are emitted onto the bus from the
+		// webhook handler — EmailSubscriber turns them into transactional emails.
+		bus,
 	],
 	environment: {
 		NODE_ENV: $dev ? "development" : "production",

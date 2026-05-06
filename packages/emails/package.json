@@ -1,0 +1,39 @@
+{
+	"name": "@mcp-gcse/emails",
+	"version": "1.0.0",
+	"private": true,
+	"type": "module",
+	"main": "dist/index.js",
+	"types": "dist/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js"
+		},
+		"./fixtures": {
+			"types": "./dist/fixtures.d.ts",
+			"import": "./dist/fixtures.js"
+		}
+	},
+	"scripts": {
+		"build": "tsc",
+		"typecheck": "tsc --noEmit",
+		"preview": "bunx react-email dev --dir src --port 3030",
+		"clean": "rm -rf dist .turbo"
+	},
+	"dependencies": {
+		"@react-email/components": "0.0.36",
+		"@react-email/render": "1.0.6"
+	},
+	"peerDependencies": {
+		"react": "^19.0.0",
+		"react-dom": "^19.0.0"
+	},
+	"devDependencies": {
+		"@types/react": "^19.0.0",
+		"react": "^19.0.0",
+		"react-dom": "^19.0.0",
+		"react-email": "4.0.16",
+		"typescript": "^5.8.3"
+	}
+}

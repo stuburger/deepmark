@@ -80,9 +80,9 @@ type Props = {
 	onSubmit: (
 		values: ClassExportFormValues,
 	) =>
-		| Promise<FlattenedValidationErrors | void | null>
+		| Promise<FlattenedValidationErrors | undefined | null>
 		| FlattenedValidationErrors
-		| void
+		| undefined
 		| null
 	submitting?: boolean
 }

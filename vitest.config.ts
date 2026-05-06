@@ -28,6 +28,15 @@ export default defineConfig({
 				},
 			},
 			{
+				test: {
+					name: "emails:unit",
+					root: path.resolve(__dirname, "packages/emails"),
+					include: ["tests/**/*.test.ts"],
+					testTimeout: 10_000,
+					hookTimeout: 5_000,
+				},
+			},
+			{
 				plugins: [backendTsconfigPaths],
 				test: {
 					name: "backend:unit",

@@ -29,11 +29,7 @@ function mapBatchToIngestionState(
 ): BatchIngestionState | null {
 	if (!batch) return null
 
-	const phase = batch.status as
-		| "classifying"
-		| "staging"
-		| "marking"
-		| "failed"
+	const phase = batch.status as "classifying" | "staging" | "marking" | "failed"
 
 	const unsubmittedScripts = batch.staged_scripts.filter(
 		(s) => s.status !== "submitted",

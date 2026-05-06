@@ -47,7 +47,9 @@ export function applyServerValidationErrors<T extends FieldValues>(
 	fieldMap: Partial<Record<string, FieldPath<T>>> = {},
 ): string | null {
 	let banner: string | null = validationErrors.formErrors?.[0] ?? null
-	for (const [serverKey, msgs] of Object.entries(validationErrors.fieldErrors)) {
+	for (const [serverKey, msgs] of Object.entries(
+		validationErrors.fieldErrors,
+	)) {
 		const msg = msgs?.[0]
 		if (!msg) continue
 		const formField = fieldMap[serverKey]

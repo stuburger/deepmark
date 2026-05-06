@@ -2,6 +2,7 @@ import {
 	createPrismaClient,
 	seedTrialGrant as seedTrialGrantShared,
 } from "@mcp-gcse/db"
+import { EventDetailType, EventSource } from "@mcp-gcse/emails"
 import { issuer } from "@openauthjs/openauth"
 import { createClient } from "@openauthjs/openauth/client"
 import { GithubProvider } from "@openauthjs/openauth/provider/github"
@@ -11,6 +12,7 @@ import { Hono } from "hono"
 import { handle } from "hono/aws-lambda"
 import { Resource } from "sst"
 import { z } from "zod/v4"
+import { emitEvent } from "./lib/events/emit"
 import { subjects } from "./subjects"
 
 const db = createPrismaClient(Resource.NeonPostgres.databaseUrl)
@@ -115,6 +117,19 @@ const app = issuer({
 						email: gh_user.email,
 					},
 				})
+				// Welcome email is fired off the bus — best-effort, never blocks
+				// signup. EmailSubscriber's DLQ owns retry/observability.
+				if (user.email) {
+					await emitEvent({
+						source: EventSource.users,
+						detailType: EventDetailType.userSignedUp,
+						detail: {
+							userId: user.id,
+							email: user.email,
+							signupMethod: "github",
+						},
+					})
+				}
 			}
 
 			// Run on every login (not just signup): both helpers are idempotent.
@@ -150,6 +165,17 @@ const app = issuer({
 						email: googleUser.email,
 					},
 				})
+				if (user.email) {
+					await emitEvent({
+						source: EventSource.users,
+						detailType: EventDetailType.userSignedUp,
+						detail: {
+							userId: user.id,
+							email: user.email,
+							signupMethod: "google",
+						},
+					})
+				}
 			} else if (user.avatar_url !== googleUser.avatar_url) {
 				user = await db.user.update({
 					where: { id: user.id },

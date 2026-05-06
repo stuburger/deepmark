@@ -26,9 +26,7 @@ describe("parseJobEvents", () => {
 
 	it("rejects malformed entries", () => {
 		expect(() => parseJobEvents([{ kind: "what", at: at("00") }])).toThrow()
-		expect(() =>
-			parseJobEvents([{ kind: "complete", at: at("00") }]),
-		).toThrow()
+		expect(() => parseJobEvents([{ kind: "complete", at: at("00") }])).toThrow()
 	})
 })
 
@@ -160,8 +158,18 @@ describe("deriveProgress", () => {
 		const b = "batches/x/source/b.pdf"
 		const events: JobEvent[] = [
 			{ kind: "started", at: at("00") },
-			{ kind: "source_file_started", at: at("01"), sourceKey: a, totalPages: 100 },
-			{ kind: "source_file_started", at: at("02"), sourceKey: b, totalPages: 50 },
+			{
+				kind: "source_file_started",
+				at: at("01"),
+				sourceKey: a,
+				totalPages: 100,
+			},
+			{
+				kind: "source_file_started",
+				at: at("02"),
+				sourceKey: b,
+				totalPages: 50,
+			},
 			{
 				kind: "pages_extracted",
 				at: at("30"),

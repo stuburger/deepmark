@@ -143,7 +143,7 @@ function WrittenQuestionCard({
 	const marks = marksForQuestion(result, annotations, pageTokens)
 
 	return (
-		<View style={styles.questionCard} wrap={false}>
+		<View style={styles.questionCard}>
 			<View style={styles.questionHeader}>
 				<Text style={styles.questionNumber}>Q{result.question_number}</Text>
 				<Text style={[styles.questionScore, { color: scoreColour(pct) }]}>

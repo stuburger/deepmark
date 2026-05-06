@@ -112,7 +112,9 @@ export const GET = routeHandler.resource<{ submissionId: string }>(
 					}
 				}
 
-				console.log(`[SSE:${submissionId.slice(-6)}] closed after ${tickCount} ticks`)
+				console.log(
+					`[SSE:${submissionId.slice(-6)}] closed after ${tickCount} ticks`,
+				)
 				controller.close()
 			},
 		})

@@ -40,7 +40,9 @@ describe("getMarketingStats", () => {
 
 		expect(markingResultCount).toHaveBeenCalledTimes(1)
 		expect(markingResultCount).toHaveBeenCalledWith({
-			where: { answer: { is: { submission: { is: { superseded_at: null } } } } },
+			where: {
+				answer: { is: { submission: { is: { superseded_at: null } } } },
+			},
 		})
 		expect(stats.personalizedComments).toBe(2400)
 	})
@@ -60,15 +62,32 @@ describe("getMarketingStats", () => {
 		})
 	})
 
-	it("derives hoursSaved from comment count via the public conversion", async () => {
-		submissionCount.mockResolvedValue(0)
-		// 2400 answers * 45s = 108_000s = 30h
-		markingResultCount.mockResolvedValue(2400)
+	it("derives hoursSaved from papers marked at 12 min/paper", async () => {
+		// 159 papers * 12 min / 60 = 31.8 → rounds to 32
+		submissionCount.mockResolvedValue(159)
+		markingResultCount.mockResolvedValue(0)
 
 		const { getMarketingStats } = await import("../papers-marked")
 		const stats = await getMarketingStats()
 
-		expect(stats.hoursSaved).toBe(30)
+		expect(stats.hoursSaved).toBe(32)
+	})
+
+	it("hoursSaved is independent of comment count (per-paper basis)", async () => {
+		// Pin the contract: backfill state shouldn't move the public hours number.
+		// 50 papers, 0 comments vs 50 papers, 2000 comments → same hoursSaved.
+		submissionCount.mockResolvedValue(50)
+		markingResultCount.mockResolvedValue(0)
+
+		const { getMarketingStats } = await import("../papers-marked")
+		const a = await getMarketingStats()
+
+		vi.clearAllMocks()
+		submissionCount.mockResolvedValue(50)
+		markingResultCount.mockResolvedValue(2000)
+
+		const b = await getMarketingStats()
+		expect(a.hoursSaved).toBe(b.hoursSaved)
 	})
 
 	it("returns zeros cleanly when nothing has been marked yet", async () => {

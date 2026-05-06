@@ -35,6 +35,12 @@ export function parseSqsJobId(record: SqsRecord, tag: string): string | null {
 /**
  * Marks a job as failed on the corresponding run record (OcrRun or GradingRun).
  * Safe to call from a catch block — any DB errors are swallowed.
+ *
+ * Guards against terminal states (`complete`, `cancelled`): when this is
+ * invoked from a DLQ handler after a successful handler invocation already
+ * wrote `complete`, the DLQ has only seen a redelivery race — not a real
+ * failure — and must not overwrite the row. Same for `cancelled`, which is
+ * an intentional user-driven terminal.
  */
 export async function markJobFailed(
 	jobId: string,
@@ -49,10 +55,20 @@ export async function markJobFailed(
 	// Uses id === jobId (same convention as the processors' upsert calls).
 	try {
 		if (phase === "ocr") {
-			await db.ocrRun.update({
-				where: { id: jobId },
+			const result = await db.ocrRun.updateMany({
+				where: {
+					id: jobId,
+					status: { notIn: ["complete", "cancelled"] satisfies OcrStatus[] },
+				},
 				data: { status: "failed" satisfies OcrStatus, error: message },
 			})
+			if (result.count === 0) {
+				logger.warn(tag, "markJobFailed skipped — run already terminal", {
+					jobId,
+					phase,
+				})
+				return
+			}
 			void logOcrRunEvent(db, jobId, {
 				type: "job_failed",
 				at: new Date().toISOString(),
@@ -60,10 +76,22 @@ export async function markJobFailed(
 				error: message,
 			})
 		} else if (phase === "grading") {
-			await db.gradingRun.update({
-				where: { id: jobId },
+			const result = await db.gradingRun.updateMany({
+				where: {
+					id: jobId,
+					status: {
+						notIn: ["complete", "cancelled"] satisfies GradingStatus[],
+					},
+				},
 				data: { status: "failed" satisfies GradingStatus, error: message },
 			})
+			if (result.count === 0) {
+				logger.warn(tag, "markJobFailed skipped — run already terminal", {
+					jobId,
+					phase,
+				})
+				return
+			}
 			void logGradingRunEvent(db, jobId, {
 				type: "job_failed",
 				at: new Date().toISOString(),

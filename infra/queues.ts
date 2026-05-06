@@ -53,17 +53,20 @@ const studentPaperGradingDlq = new sst.aws.Queue("StudentPaperGradingDLQ", {
 	visibilityTimeout: "1 minute",
 })
 
-// OCR queue: manually triggered by server action after teacher finalises upload
+// OCR queue: manually triggered by server action after teacher finalises upload.
+// Visibility = Lambda timeout (5 min) + 1 min buffer for SQS poller ack on success.
+// With batch=1, the buffer doesn't need to be larger.
 export const studentPaperOcrQueue = new sst.aws.Queue("StudentPaperOcrQueue", {
-	visibilityTimeout: "10 minutes",
+	visibilityTimeout: "6 minutes",
 	dlq: { queue: studentPaperOcrDlq.arn, retry: 2 },
 	transform: prelaunchRetention,
 })
 
 // Grading queue: manually triggered by server action after teacher selects exam paper.
 // Grading + inline annotation run in the same Lambda — no downstream enrichment queue.
+// Same visibility/timeout reasoning as the OCR queue.
 export const studentPaperQueue = new sst.aws.Queue("StudentPaperQueue", {
-	visibilityTimeout: "10 minutes",
+	visibilityTimeout: "6 minutes",
 	dlq: { queue: studentPaperGradingDlq.arn, retry: 2 },
 	transform: prelaunchRetention,
 })
@@ -273,8 +276,17 @@ studentPaperOcrQueue.subscribe({
 	environment: {
 		STAGE: $app.stage,
 	},
-	timeout: "10 minutes",
+	// 5 min is a deliberate fail-fast: a clean OCR run on a single paper is 1–3 min,
+	// so anything longer means the LLM call hung or the input is wrong shape.
+	// Better to kill it and route to the DLQ than burn money on a doomed retry.
+	timeout: "5 minutes",
 	memory: "1 GB",
+	// One paper per Lambda invocation. OCR runs are 1–3 min of LLM + Vision
+	// work; batching multiple sequentially blew the function timeout and
+	// dragged successful runs into the DLQ when one bad record poisoned the
+	// batch (no `partialResponses`, so any throw failed the whole batch).
+	// At size=1, blast radius is one job and a clean throw redelivers in seconds.
+	batch: { size: 1 },
 })
 
 // Triggered automatically by student-paper-extract once OCR + reconciliation + attribution completes.
@@ -300,8 +312,11 @@ studentPaperQueue.subscribe({
 	environment: {
 		STAGE: $app.stage,
 	},
-	timeout: "10 minutes",
+	// 5 min fail-fast — same reasoning as the OCR queue.
+	timeout: "5 minutes",
 	memory: "1 GB",
+	// One paper per Lambda invocation — same reasoning as the OCR queue.
+	batch: { size: 1 },
 })
 
 // DLQ handlers: each queue has its own dedicated DLQ handler that already knows

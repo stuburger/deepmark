@@ -49,30 +49,28 @@ type SubmissionWithOcr = Awaited<
 
 // ─── Public handler ────────────────────────────────────────────────────────────
 
-export async function handler(
-	event: SqsEvent,
-): Promise<{ batchItemFailures?: { itemIdentifier: string }[] }> {
-	const failures: { itemIdentifier: string }[] = []
+export async function handler(event: SqsEvent): Promise<void> {
+	// Queue is configured with `batch: { size: 1 }`, so SQS delivers one
+	// record per invocation. Throwing is the correct way to fail — SQS sees
+	// it, redelivers up to maxReceiveCount, then routes to the DLQ.
+	const [record] = event.Records
+	if (!record) return
 
-	for (const record of event.Records) {
-		const jobId = parseSqsJobId(record, TAG)
-		if (!jobId) continue
+	const jobId = parseSqsJobId(record, TAG)
+	if (!jobId) return
 
-		const cancellation = createCancellationToken(jobId)
-		try {
-			const llm = createLlmRunner()
-			const annotationLlm = createLlmRunner()
-			const orchestrator = createMarkerOrchestrator(llm)
-			await gradeJob({ jobId, orchestrator, llm, annotationLlm, cancellation })
-		} catch (err) {
-			await markJobFailed(jobId, TAG, "grading", err)
-			failures.push({ itemIdentifier: record.messageId })
-		} finally {
-			cancellation.stop()
-		}
+	const cancellation = createCancellationToken(jobId)
+	try {
+		const llm = createLlmRunner()
+		const annotationLlm = createLlmRunner()
+		const orchestrator = createMarkerOrchestrator(llm)
+		await gradeJob({ jobId, orchestrator, llm, annotationLlm, cancellation })
+	} catch (err) {
+		await markJobFailed(jobId, TAG, "grading", err)
+		throw err
+	} finally {
+		cancellation.stop()
 	}
-
-	return failures.length > 0 ? { batchItemFailures: failures } : {}
 }
 
 // ─── Domain: grade a single job ───────────────────────────────────────────────

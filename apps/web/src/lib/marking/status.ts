@@ -10,8 +10,20 @@ export function deriveScanStatus(
 	ocrStatus: OcrStatus | null,
 	gradingStatus: GradingStatus | null,
 ): ScanStatus {
-	// Grading takes precedence when it exists
-	if (gradingStatus) {
+	// Terminal OCR failure or cancellation wins regardless of grading row state.
+	// A grading_runs row is created upfront at submission commit time with
+	// status='pending' (see commit-service.ts and marking/stages/mutations.ts),
+	// so without this check a genuine OCR failure resolves through the
+	// grading-precedence branch below as "text_extracted" — which the UI
+	// renders as "Grading queued", masking the failure entirely.
+	if (ocrStatus === "failed") return "failed"
+	if (ocrStatus === "cancelled") return "cancelled"
+
+	// Grading takes precedence only once it has progressed past `pending`.
+	// Same upfront-pending-row reason: a pending grading row isn't yet a
+	// meaningful signal, so fall through to OCR to report the real state
+	// (e.g. show "Extracting" while OCR is running, not "Grading queued").
+	if (gradingStatus && gradingStatus !== "pending") {
 		switch (gradingStatus) {
 			case "complete":
 				return "ocr_complete" // legacy name for "grading complete"
@@ -21,21 +33,16 @@ export function deriveScanStatus(
 				return "failed"
 			case "cancelled":
 				return "cancelled"
-			case "pending":
-				return "text_extracted" // grading queued but not started
 		}
 	}
 
 	if (ocrStatus) {
 		switch (ocrStatus) {
 			case "complete":
+				// OCR done; grading is pending or absent — show "Grading queued".
 				return "text_extracted"
 			case "processing":
 				return "processing"
-			case "failed":
-				return "failed"
-			case "cancelled":
-				return "cancelled"
 			case "pending":
 				return "pending"
 		}

@@ -45,20 +45,27 @@ const studentPaperGradingDlq = new sst.aws.Queue("StudentPaperGradingDLQ", {
 	visibilityTimeout: "1 minute",
 })
 
+// COUPLED BY DESIGN. Lambda timeout for student-paper processors (OCR +
+// grading). Visibility MUST be strictly greater than the Lambda timeout —
+// the SQS poller needs buffer to ack a successful invocation before SQS
+// would otherwise redeliver. Equality re-opens the race that produced
+// the OCR DLQ-clobber incident: handler succeeds, poller can't ack in
+// time, message redelivers, second invocation clobbers status='complete'.
+// If you bump one of these, bump the other.
+const STUDENT_PAPER_LAMBDA_TIMEOUT = "5 minutes" as const
+const STUDENT_PAPER_VISIBILITY_TIMEOUT = "6 minutes" as const
+
 // OCR queue: manually triggered by server action after teacher finalises upload.
-// Visibility = Lambda timeout (5 min) + 1 min buffer for SQS poller ack on success.
-// With batch=1, the buffer doesn't need to be larger.
 export const studentPaperOcrQueue = new sst.aws.Queue("StudentPaperOcrQueue", {
-	visibilityTimeout: "6 minutes",
+	visibilityTimeout: STUDENT_PAPER_VISIBILITY_TIMEOUT,
 	dlq: { queue: studentPaperOcrDlq.arn, retry: 2 },
 	transform: prelaunchRetention,
 })
 
 // Grading queue: manually triggered by server action after teacher selects exam paper.
 // Grading + inline annotation run in the same Lambda — no downstream enrichment queue.
-// Same visibility/timeout reasoning as the OCR queue.
 export const studentPaperQueue = new sst.aws.Queue("StudentPaperQueue", {
-	visibilityTimeout: "6 minutes",
+	visibilityTimeout: STUDENT_PAPER_VISIBILITY_TIMEOUT,
 	dlq: { queue: studentPaperGradingDlq.arn, retry: 2 },
 	transform: prelaunchRetention,
 })
@@ -271,7 +278,7 @@ studentPaperOcrQueue.subscribe({
 	// 5 min is a deliberate fail-fast: a clean OCR run on a single paper is 1–3 min,
 	// so anything longer means the LLM call hung or the input is wrong shape.
 	// Better to kill it and route to the DLQ than burn money on a doomed retry.
-	timeout: "5 minutes",
+	timeout: STUDENT_PAPER_LAMBDA_TIMEOUT,
 	memory: "1 GB",
 	// One paper per Lambda invocation. OCR runs are 1–3 min of LLM + Vision
 	// work; batching multiple sequentially blew the function timeout and
@@ -307,7 +314,7 @@ studentPaperQueue.subscribe({
 		STAGE: $app.stage,
 	},
 	// 5 min fail-fast — same reasoning as the OCR queue.
-	timeout: "5 minutes",
+	timeout: STUDENT_PAPER_LAMBDA_TIMEOUT,
 	memory: "1 GB",
 	// One paper per Lambda invocation — same reasoning as the OCR queue.
 	batch: { size: 1 },

@@ -6,24 +6,19 @@ import { z } from "zod"
 import { deriveScanStatus } from "../../marking/status"
 import { type BatchIngestJobData, parsePageKeys } from "../types"
 
-const submissionInclude = {
-	student_submissions: {
-		where: { superseded_at: null },
-		select: {
-			id: true,
-			student_name: true,
-			staged_script_id: true,
-			ocr_runs: {
-				orderBy: { created_at: "desc" as const },
-				take: 1,
-				select: { status: true },
-			},
-			grading_runs: {
-				orderBy: { created_at: "desc" as const },
-				take: 1,
-				select: { status: true, grading_results: true },
-			},
-		},
+const submissionSelect = {
+	id: true,
+	student_name: true,
+	staged_script_id: true,
+	ocr_runs: {
+		orderBy: { created_at: "desc" as const },
+		take: 1,
+		select: { status: true },
+	},
+	grading_runs: {
+		orderBy: { created_at: "desc" as const },
+		take: 1,
+		select: { status: true, grading_results: true },
 	},
 } as const
 
@@ -60,15 +55,21 @@ export const getBatchIngestJob = resourceAction({
 	async ({
 		parsedInput: { batchJobId },
 	}): Promise<{ batch: BatchIngestJobData | null }> => {
-		const batch = await db.batchIngestJob.findFirst({
-			where: { id: batchJobId },
-			include: {
-				staged_scripts: {
-					orderBy: { created_at: "asc" },
+		const [batch, submissions] = await Promise.all([
+			db.batchIngestJob.findFirst({
+				where: { id: batchJobId },
+				include: {
+					staged_scripts: { orderBy: { created_at: "asc" } },
 				},
-				...submissionInclude,
-			},
-		})
+			}),
+			db.studentSubmission.findMany({
+				where: {
+					staged_script: { batch_job_id: batchJobId },
+					superseded_at: null,
+				},
+				select: submissionSelect,
+			}),
+		])
 
 		if (!batch) return { batch: null }
 
@@ -76,8 +77,6 @@ export const getBatchIngestJob = resourceAction({
 			batch: {
 				id: batch.id,
 				status: batch.status,
-				total_student_jobs: batch.total_student_jobs,
-				notification_sent_at: batch.notification_sent_at,
 				error: batch.error,
 				staged_scripts: batch.staged_scripts.map((s) => ({
 					id: s.id,
@@ -87,7 +86,7 @@ export const getBatchIngestJob = resourceAction({
 					confidence: s.confidence,
 					status: s.status,
 				})),
-				student_jobs: batch.student_submissions.map(mapSubmission),
+				student_jobs: submissions.map(mapSubmission),
 			},
 		}
 	},

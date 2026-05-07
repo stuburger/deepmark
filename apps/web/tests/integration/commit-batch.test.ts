@@ -72,11 +72,10 @@ describe("commitBatch", () => {
 		expect(result.studentJobCount).toBe(1)
 
 		const subs = await db.studentSubmission.findMany({
-			where: { batch_job_id: batchId },
+			where: { staged_script: { batch_job_id: batchId } },
 		})
 		expect(subs).toHaveLength(1)
 		expect(subs[0]?.student_name).toBe("Sofia")
-		expect(subs[0]?.batch_job_id).toBe(batchId)
 		expect(subs[0]?.processing_batch_id).not.toBeNull()
 
 		const processingBatch = await db.processingBatch.findFirstOrThrow({
@@ -155,12 +154,12 @@ describe("commitBatch", () => {
 		expect(result.studentJobCount).toBe(2)
 
 		const subs = await db.studentSubmission.findMany({
-			where: { batch_job_id: batchId },
+			where: { staged_script: { batch_job_id: batchId } },
 		})
 		expect(subs).toHaveLength(2)
 	})
 
-	it("sets total_student_jobs = N on BatchIngestJob", async () => {
+	it("sets BatchIngestJob status to committed and creates a ProcessingBatch with total_jobs=N", async () => {
 		const batch = await db.batchIngestJob.create({
 			data: {
 				exam_paper_id: TEST_EXAM_PAPER_ID,
@@ -200,8 +199,11 @@ describe("commitBatch", () => {
 		const updated = await db.batchIngestJob.findUniqueOrThrow({
 			where: { id: batchId },
 		})
-		expect(updated.total_student_jobs).toBe(1)
-		expect(updated.status).toBe("marking")
+		expect(updated.status).toBe("committed")
+		const pb = await db.processingBatch.findFirstOrThrow({
+			where: { ingest_batch_id: batchId },
+		})
+		expect(pb.total_jobs).toBe(1)
 	})
 
 	it("each StudentSubmission.pages uses {key, order, mime_type} mapped from StagedScript.page_keys", async () => {
@@ -242,7 +244,7 @@ describe("commitBatch", () => {
 		await commitBatchService(batchId, TEST_USER_ID)
 
 		const subs = await db.studentSubmission.findMany({
-			where: { batch_job_id: batchId },
+			where: { staged_script: { batch_job_id: batchId } },
 		})
 		expect(subs).toHaveLength(1)
 		expect(subs[0]?.pages).toEqual([
@@ -309,7 +311,7 @@ describe("commitBatch", () => {
 		expect(result.studentJobCount).toBe(1)
 
 		const subs = await db.studentSubmission.findMany({
-			where: { batch_job_id: batchId },
+			where: { staged_script: { batch_job_id: batchId } },
 		})
 		expect(subs).toHaveLength(1)
 		expect(subs[0]?.student_name).toBe("Sofia")

@@ -62,27 +62,20 @@ export async function createTestStagedScript(args: {
 }
 
 export async function cleanupBatch(batchId: string) {
-	// Some tests create the submission with `staged_script_id` only (no
-	// batch_job_id); previously those tripped a FK violation when
-	// stagedScript.deleteMany ran with the submission still referencing it.
-	// Find submissions via either link so the cleanup is total.
+	// Submissions are linked to a batch only via staged_script_id now.
 	const stagedScriptIds = (
 		await db.stagedScript.findMany({
 			where: { batch_job_id: batchId },
 			select: { id: true },
 		})
 	).map((s) => s.id)
-	const submissions = await db.studentSubmission.findMany({
-		where: {
-			OR: [
-				{ batch_job_id: batchId },
-				...(stagedScriptIds.length > 0
-					? [{ staged_script_id: { in: stagedScriptIds } }]
-					: []),
-			],
-		},
-		select: { id: true, processing_batch_id: true },
-	})
+	const submissions =
+		stagedScriptIds.length > 0
+			? await db.studentSubmission.findMany({
+					where: { staged_script_id: { in: stagedScriptIds } },
+					select: { id: true, processing_batch_id: true },
+				})
+			: []
 	const subIds = submissions.map((s) => s.id)
 	const processingBatchIds = Array.from(
 		new Set(

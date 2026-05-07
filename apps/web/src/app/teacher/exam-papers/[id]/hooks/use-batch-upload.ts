@@ -44,11 +44,7 @@ export function useBatchUpload({
 			if (!batch) return
 
 			// Classification done — close dialog and hand off to StagingReviewDialog
-			if (
-				batch.status === "staging" ||
-				batch.status === "marking" ||
-				batch.status === "complete"
-			) {
+			if (batch.status === "staging" || batch.status === "committed") {
 				stopPolling()
 				handleOpenChange(false)
 			} else if (batch.status === "failed") {

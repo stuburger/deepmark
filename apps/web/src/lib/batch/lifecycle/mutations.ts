@@ -28,7 +28,10 @@ export const commitBatch = resourceAction({
 				where: { batch_job_id: batchJobId, status: "confirmed" },
 			}),
 			db.studentSubmission.count({
-				where: { batch_job_id: batchJobId, superseded_at: null },
+				where: {
+					staged_script: { batch_job_id: batchJobId },
+					superseded_at: null,
+				},
 			}),
 		])
 		const newSubmissions = Math.max(0, confirmedScripts - alreadyCommitted)

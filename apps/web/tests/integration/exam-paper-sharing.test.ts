@@ -1,5 +1,10 @@
 import { randomUUID } from "node:crypto"
-import { cleanupBatch, createTestStagedScript, db } from "@mcp-gcse/test-utils"
+import {
+	cleanupBatch,
+	createTestProcessingBatch,
+	createTestStagedScript,
+	db,
+} from "@mcp-gcse/test-utils"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 // `auth()` is stubbed so we can switch the calling user mid-test. The active
@@ -96,6 +101,11 @@ async function createPaperWithQuestion(ownerId: string): Promise<{
 		examPaperId: paperId,
 		uploadedBy: ownerId,
 	})
+	const processingBatch = await createTestProcessingBatch({
+		examPaperId: paperId,
+		triggeredBy: ownerId,
+		totalJobs: 1,
+	})
 	await db.studentSubmission.create({
 		data: {
 			id: submissionId,
@@ -106,6 +116,7 @@ async function createPaperWithQuestion(ownerId: string): Promise<{
 			exam_board: "AQA",
 			pages: [],
 			staged_script_id: stagedScriptId,
+			processing_batch_id: processingBatch.id,
 		},
 	})
 

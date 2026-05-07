@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto"
 import {
 	TEST_EXAM_PAPER_ID,
+	TEST_PROCESSING_BATCH_ID,
 	TEST_STAGED_SCRIPT_ID,
 	db,
 	ensureExamPaper,
@@ -104,6 +105,7 @@ describe("paper_ledger over-spend race", () => {
 				s3_key: "test",
 				s3_bucket: "test",
 				staged_script_id: TEST_STAGED_SCRIPT_ID,
+				processing_batch_id: TEST_PROCESSING_BATCH_ID,
 			},
 		})
 		await db.ocrRun.create({

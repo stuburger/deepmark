@@ -44,7 +44,6 @@ type SubmissionCloneSource = {
 	pages: unknown
 	student_name: string | null
 	student_id: string | null
-	batch_job_id: string | null
 	staged_script_id: string
 }
 
@@ -63,7 +62,6 @@ function submissionCloneFields(
 		pages: oldSub.pages as never,
 		student_name: oldSub.student_name,
 		student_id: oldSub.student_id,
-		batch_job_id: oldSub.batch_job_id,
 		staged_script_id: oldSub.staged_script_id,
 		parent_submission_id: args.parentSubmissionId,
 		processing_batch_id: args.processingBatchId,

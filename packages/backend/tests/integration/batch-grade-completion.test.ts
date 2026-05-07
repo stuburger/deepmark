@@ -30,7 +30,6 @@ async function createSubmission(args: {
 }) {
 	const sub = await db.studentSubmission.create({
 		data: {
-			batch_job_id: args.batchId,
 			processing_batch_id: args.processingBatchId,
 			exam_paper_id: TEST_EXAM_PAPER_ID,
 			uploaded_by: TEST_USER_ID,

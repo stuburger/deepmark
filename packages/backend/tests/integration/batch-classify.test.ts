@@ -40,7 +40,7 @@ describe("batch-classify Lambda", () => {
 				})
 				if (
 					b?.status === "staging" ||
-					b?.status === "marking" ||
+					b?.status === "committed" ||
 					b?.status === "failed"
 				) {
 					return b

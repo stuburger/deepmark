@@ -16,14 +16,15 @@ export const getActiveBatchForPaper = resourceAction({
 	async ({
 		parsedInput: { examPaperId },
 	}): Promise<{ batch: ActiveBatchInfo }> => {
-		// "failed" is included so the UI can surface the failure to the teacher
-		// instead of silently disappearing the spinner. The next successful
-		// upload supersedes it via createTestBatch / triggerClassification.
+		// `committed` is intentionally not in this filter — once the user has
+		// finished review and committed, the staging banner disappears and
+		// grading progress is rendered by the submissions tab itself.
+		// `failed` stays so the UI can surface the failure to the teacher.
 		const batch = await db.batchIngestJob.findFirst({
 			where: {
 				exam_paper_id: examPaperId,
 				status: {
-					in: ["classifying", "staging", "marking", "failed"] as BatchStatus[],
+					in: ["classifying", "staging", "failed"] as BatchStatus[],
 				},
 			},
 			orderBy: { created_at: "desc" },
@@ -38,7 +39,6 @@ export const getActiveBatchForPaper = resourceAction({
 			batch: {
 				id: batch.id,
 				status: batch.status,
-				total_student_jobs: batch.total_student_jobs,
 				events: parseJobEvents(batch.job_events),
 				staged_scripts: batch.staged_scripts.map((s) => ({
 					id: s.id,

@@ -29,7 +29,7 @@ function mapBatchToIngestionState(
 ): BatchIngestionState | null {
 	if (!batch) return null
 
-	const phase = batch.status as "classifying" | "staging" | "marking" | "failed"
+	const phase = batch.status as "classifying" | "staging" | "failed"
 
 	const unsubmittedScripts = batch.staged_scripts.filter(
 		(s) => s.status !== "submitted",
@@ -73,9 +73,10 @@ export function useBatchIngestion(
 			},
 			refetchInterval: (q) => {
 				const b = q.state.data
-				// Poll while in flight (classifying, staging) — stop once we
-				// reach a terminal state (marking, failed) where nothing else
-				// will change without explicit user action.
+				// Poll while in flight (classifying, staging) — once the user
+				// commits, the batch leaves this query (filter excludes
+				// `committed`) and grading progress is owned by the
+				// submissions tab.
 				return b?.status === "classifying" || b?.status === "staging"
 					? 3000
 					: false

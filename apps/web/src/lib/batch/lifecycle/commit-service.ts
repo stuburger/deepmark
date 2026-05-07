@@ -42,10 +42,6 @@ export async function commitBatchService(
 			staged_scripts: {
 				where: { status: "confirmed" },
 			},
-			student_submissions: {
-				where: { superseded_at: null },
-				select: { staged_script_id: true },
-			},
 			exam_paper: {
 				select: {
 					id: true,
@@ -59,9 +55,18 @@ export async function commitBatchService(
 
 	if (!batch) return { ok: false, error: "Batch job not found" }
 
-	// Exclude scripts already submitted in a previous commit
+	// Exclude scripts already submitted in a previous commit. Walked via the
+	// staged_script join now that StudentSubmission no longer carries a direct
+	// batch_job_id — staged_script_id is the only durable link.
+	const alreadyCommitted = await db.studentSubmission.findMany({
+		where: {
+			staged_script: { batch_job_id: batchJobId },
+			superseded_at: null,
+		},
+		select: { staged_script_id: true },
+	})
 	const alreadySubmitted = new Set(
-		batch.student_submissions.map((j) => j.staged_script_id).filter(Boolean),
+		alreadyCommitted.map((j) => j.staged_script_id),
 	)
 	const confirmedScripts = batch.staged_scripts.filter(
 		(s) => !alreadySubmitted.has(s.id),
@@ -131,7 +136,6 @@ export async function commitBatchService(
 						year: batch.exam_paper.year,
 						pages: pagesJson as never,
 						student_name: studentName,
-						batch_job_id: batchJobId,
 						processing_batch_id: processingBatch.id,
 						staged_script_id: script.id,
 					},
@@ -192,12 +196,12 @@ export async function commitBatchService(
 			data: { status: "submitted" },
 		})
 
+		// Ingest is done — the batch is `committed` and disappears from the
+		// staging banner. Grading progress is owned by ProcessingBatch from
+		// here on, and emits its own batch.completed event when settled.
 		await tx.batchIngestJob.update({
 			where: { id: batchJobId },
-			data: {
-				status: "marking" as BatchStatus,
-				total_student_jobs: { increment: jobs.length },
-			},
+			data: { status: "committed" as BatchStatus },
 		})
 
 		return jobs

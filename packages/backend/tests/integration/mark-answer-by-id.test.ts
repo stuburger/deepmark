@@ -1,5 +1,6 @@
 import {
 	TEST_EXAM_PAPER_ID,
+	TEST_PROCESSING_BATCH_ID,
 	TEST_STAGED_SCRIPT_ID,
 	TEST_USER_ID,
 	db,
@@ -60,6 +61,7 @@ describe("markAnswerById schema chain", () => {
 				exam_board: "AQA",
 				pages: [],
 				staged_script_id: TEST_STAGED_SCRIPT_ID,
+				processing_batch_id: TEST_PROCESSING_BATCH_ID,
 			},
 		})
 		submissionId = sub.id

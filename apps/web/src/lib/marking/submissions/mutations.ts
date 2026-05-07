@@ -67,7 +67,7 @@ export const deleteSubmission = resourceAction({
 }).action(async ({ parsedInput: { jobId } }): Promise<{ ok: true }> => {
 	const sub = await db.studentSubmission.findUnique({
 		where: { id: jobId },
-		select: { batch_job_id: true, superseded_at: true },
+		select: { id: true },
 	})
 
 	if (!sub) throw new Error("Submission not found")
@@ -79,15 +79,6 @@ export const deleteSubmission = resourceAction({
 			where: { resource_type: "student_submission", resource_id: jobId },
 		})
 		await tx.studentSubmission.delete({ where: { id: jobId } })
-
-		if (sub.batch_job_id && sub.superseded_at === null) {
-			await tx.batchIngestJob.update({
-				where: { id: sub.batch_job_id },
-				data: {
-					total_student_jobs: { decrement: 1 },
-				},
-			})
-		}
 	})
 
 	return { ok: true }

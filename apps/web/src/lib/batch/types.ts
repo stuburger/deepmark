@@ -18,8 +18,6 @@ export function parsePageKeys(raw: unknown): PageKey[] {
 export type BatchIngestJobData = {
 	id: string
 	status: BatchStatus
-	total_student_jobs: number
-	notification_sent_at: Date | null
 	error: string | null
 	staged_scripts: Array<{
 		id: string
@@ -42,7 +40,6 @@ export type BatchIngestJobData = {
 export type ActiveBatchInfo = {
 	id: string
 	status: BatchStatus
-	total_student_jobs: number
 	staged_scripts: BatchIngestJobData["staged_scripts"]
 	events: JobEvent[]
 } | null
@@ -60,7 +57,7 @@ export type StagedScript = {
 
 export type BatchIngestionState = {
 	/** Processing phase visible to the teacher */
-	phase: "classifying" | "staging" | "marking" | "failed"
+	phase: "classifying" | "staging" | "failed"
 	isProcessing: boolean
 	isReadyForReview: boolean
 	isFailed: boolean

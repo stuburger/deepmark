@@ -1,6 +1,7 @@
 import * as fs from "node:fs"
 import * as path from "node:path"
 import {
+	createTestProcessingBatch,
 	createTestStagedScript,
 	db,
 	uploadTestFile,
@@ -121,6 +122,11 @@ export async function seedFixture(
 		examPaperId: fixture.examPaperId,
 		uploadedBy: fixture.userId,
 	})
+	const processingBatch = await createTestProcessingBatch({
+		examPaperId: fixture.examPaperId,
+		triggeredBy: fixture.userId,
+		totalJobs: 1,
+	})
 	await db.studentSubmission.create({
 		data: {
 			id: submissionId,
@@ -131,6 +137,7 @@ export async function seedFixture(
 			exam_board: "AQA",
 			pages: pageKeys,
 			staged_script_id: stagedScriptId,
+			processing_batch_id: processingBatch.id,
 		},
 	})
 

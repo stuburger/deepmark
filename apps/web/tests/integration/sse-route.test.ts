@@ -1,9 +1,11 @@
 import { randomUUID } from "node:crypto"
 import {
 	TEST_EXAM_PAPER_ID,
+	TEST_PROCESSING_BATCH_ID,
 	TEST_STAGED_SCRIPT_ID,
 	TEST_USER_ID,
 	cleanupBatch,
+	createTestProcessingBatch,
 	createTestStagedScript,
 	db,
 	ensureExamPaper,
@@ -103,6 +105,11 @@ describe("SSE route /api/submissions/[submissionId]/events", () => {
 			examPaperId: paperId,
 			uploadedBy: ownerId,
 		})
+		const processingBatch = await createTestProcessingBatch({
+			examPaperId: paperId,
+			triggeredBy: ownerId,
+			totalJobs: 1,
+		})
 		await db.studentSubmission.create({
 			data: {
 				id: jobId,
@@ -113,6 +120,7 @@ describe("SSE route /api/submissions/[submissionId]/events", () => {
 				exam_board: "AQA",
 				pages: [],
 				staged_script_id: stagedScriptId,
+				processing_batch_id: processingBatch.id,
 			},
 		})
 
@@ -145,6 +153,7 @@ describe("SSE route /api/submissions/[submissionId]/events", () => {
 				exam_board: "AQA",
 				pages: [],
 				staged_script_id: TEST_STAGED_SCRIPT_ID,
+				processing_batch_id: TEST_PROCESSING_BATCH_ID,
 			},
 		})
 		const ocr = await db.ocrRun.create({

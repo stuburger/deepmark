@@ -146,8 +146,7 @@ enum BatchStatus {
   uploading
   classifying
   staging
-  marking
-  complete
+  committed
   failed
 }
 
@@ -704,14 +703,11 @@ model StudentSubmission {
   year             Int?
   paper_reference  String?
   detected_subject Subject?
-  batch_job_id     String?
   staged_script_id String
   /// The ProcessingBatch this submission belongs to — the notification group
   /// that fires one email/push when every member has reached a terminal
-  /// state. Nullable during the additive migration phase; flipped to non-null
-  /// once backfill + Phase C writes complete. Set on every fresh upload, every
-  /// regrade, and every re-extract.
-  processing_batch_id String?
+  /// state. Set on every fresh upload, every regrade, and every re-extract.
+  processing_batch_id String
   /// The submission this one was directly cloned from (re-grade or re-scan).
   /// Preserves the true DAG lineage; the listing UI shows linear history by
   /// superseding all active siblings on each new version, but this column
@@ -726,9 +722,8 @@ model StudentSubmission {
   uploader      User                       @relation("SubmissionUploader", fields: [uploaded_by], references: [id])
   exam_paper    ExamPaper                  @relation("SubmissionExamPaper", fields: [exam_paper_id], references: [id])
   student       Student?                   @relation("SubmissionStudent", fields: [student_id], references: [id])
-  batch_job     BatchIngestJob?            @relation("BatchIngestSubmissions", fields: [batch_job_id], references: [id])
   staged_script StagedScript              @relation("StagedScriptSubmission", fields: [staged_script_id], references: [id])
-  processing_batch ProcessingBatch?       @relation("ProcessingBatchSubmissions", fields: [processing_batch_id], references: [id])
+  processing_batch ProcessingBatch        @relation("ProcessingBatchSubmissions", fields: [processing_batch_id], references: [id])
   parent        StudentSubmission?         @relation("SubmissionLineage", fields: [parent_submission_id], references: [id])
   children      StudentSubmission[]        @relation("SubmissionLineage")
   ocr_runs      OcrRun[]
@@ -850,22 +845,19 @@ model MarkSchemeTestRun {
 }
 
 model BatchIngestJob {
-  id                   String      @id @default(cuid())
-  exam_paper_id        String
-  uploaded_by          String
-  status               BatchStatus @default(uploading)
-  total_student_jobs   Int         @default(0)
-  notification_sent_at DateTime?
-  error                String?
-  job_events           Json?
-  created_at           DateTime    @default(now())
-  processed_at         DateTime?
+  id              String      @id @default(cuid())
+  exam_paper_id   String
+  uploaded_by     String
+  status          BatchStatus @default(uploading)
+  error           String?
+  job_events      Json?
+  created_at      DateTime    @default(now())
+  processed_at    DateTime?
 
-  uploader            User                @relation("BatchIngestJobUploader", fields: [uploaded_by], references: [id])
-  exam_paper          ExamPaper           @relation(fields: [exam_paper_id], references: [id])
-  student_submissions StudentSubmission[] @relation("BatchIngestSubmissions")
+  uploader            User              @relation("BatchIngestJobUploader", fields: [uploaded_by], references: [id])
+  exam_paper          ExamPaper         @relation(fields: [exam_paper_id], references: [id])
   staged_scripts      StagedScript[]
-  processing_batches  ProcessingBatch[]   @relation("ProcessingBatchIngest")
+  processing_batches  ProcessingBatch[] @relation("ProcessingBatchIngest")
 
   @@map("batch_ingest_jobs")
 }

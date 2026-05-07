@@ -1,6 +1,10 @@
 import * as fs from "node:fs"
 import * as path from "node:path"
-import { db, uploadTestFile } from "@mcp-gcse/test-utils"
+import {
+	createTestStagedScript,
+	db,
+	uploadTestFile,
+} from "@mcp-gcse/test-utils"
 import { Resource } from "sst"
 import type { FixtureSpec, FixtureToken } from "./shared-types"
 
@@ -113,6 +117,10 @@ export async function seedFixture(
 	}
 
 	// ── submission ──
+	const { stagedScriptId } = await createTestStagedScript({
+		examPaperId: fixture.examPaperId,
+		uploadedBy: fixture.userId,
+	})
 	await db.studentSubmission.create({
 		data: {
 			id: submissionId,
@@ -122,6 +130,7 @@ export async function seedFixture(
 			s3_bucket: Resource.ScansBucket.name,
 			exam_board: "AQA",
 			pages: pageKeys,
+			staged_script_id: stagedScriptId,
 		},
 	})
 

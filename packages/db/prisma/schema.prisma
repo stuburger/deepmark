@@ -687,7 +687,12 @@ model StudentSubmission {
   paper_reference  String?
   detected_subject Subject?
   batch_job_id     String?
-  staged_script_id String?
+  staged_script_id String
+  /// The submission this one was directly cloned from (re-grade or re-scan).
+  /// Preserves the true DAG lineage; the listing UI shows linear history by
+  /// superseding all active siblings on each new version, but this column
+  /// records which submission was actually the parent.
+  parent_submission_id String?
   created_at       DateTime @default(now())
   /// Set when this submission is superseded by a re-scan/re-mark. Superseded submissions are excluded from lists and analytics.
   superseded_at     DateTime?
@@ -698,7 +703,9 @@ model StudentSubmission {
   exam_paper    ExamPaper                  @relation("SubmissionExamPaper", fields: [exam_paper_id], references: [id])
   student       Student?                   @relation("SubmissionStudent", fields: [student_id], references: [id])
   batch_job     BatchIngestJob?            @relation("BatchIngestSubmissions", fields: [batch_job_id], references: [id])
-  staged_script StagedScript?             @relation("StagedScriptSubmission", fields: [staged_script_id], references: [id])
+  staged_script StagedScript              @relation("StagedScriptSubmission", fields: [staged_script_id], references: [id])
+  parent        StudentSubmission?         @relation("SubmissionLineage", fields: [parent_submission_id], references: [id])
+  children      StudentSubmission[]        @relation("SubmissionLineage")
   ocr_runs      OcrRun[]
   grading_runs  GradingRun[]
   answers       Answer[]                  @relation("SubmissionAnswers")

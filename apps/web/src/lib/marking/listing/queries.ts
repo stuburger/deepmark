@@ -142,19 +142,21 @@ export const listSubmissionsForPaper = resourceAction({
 			}),
 			fetchPaperTotals([examPaperId]),
 			db.studentSubmission.groupBy({
-				by: ["s3_key"],
+				by: ["staged_script_id"],
 				where: { exam_paper_id: examPaperId },
 				_count: true,
 			}),
 		])
 
 		const paperTotal = paperTotals.get(examPaperId) ?? 0
-		const countByKey = new Map(versionCounts.map((v) => [v.s3_key, v._count]))
+		const countByKey = new Map(
+			versionCounts.map((v) => [v.staged_script_id, v._count]),
+		)
 
 		return {
 			submissions: subs.map((sub) => ({
 				...mapSubmissionToListItem(sub, paperTotal),
-				version_count: countByKey.get(sub.s3_key) ?? 1,
+				version_count: countByKey.get(sub.staged_script_id) ?? 1,
 			})),
 		}
 	},

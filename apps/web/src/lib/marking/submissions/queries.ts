@@ -515,12 +515,14 @@ export type SubmissionVersion = {
 	superseded_at: Date | null
 	supersede_reason: string | null
 	status: string
+	total_awarded: number
+	total_max: number
 }
 
 /**
- * Finds all versions of a submission (current + superseded).
- * Groups by s3_key — re-scans and re-marks copy the same s3_key,
- * so all versions of the same student's paper share it.
+ * Finds all versions of a submission (current + superseded). Groups by
+ * staged_script_id — every regrade/re-scan carries the original staged
+ * script id forward, so all versions of the same student's paper share it.
  */
 export const getSubmissionVersions = resourceAction({
 	type: "submission",
@@ -533,49 +535,77 @@ export const getSubmissionVersions = resourceAction({
 	}): Promise<{ versions: SubmissionVersion[] }> => {
 		const current = await db.studentSubmission.findFirst({
 			where: { id: jobId },
-			select: { s3_key: true, exam_paper_id: true },
+			select: { staged_script_id: true, exam_paper_id: true },
 		})
 		if (!current) throw new Error("Submission not found")
 
-		const siblings = await db.studentSubmission.findMany({
-			where: {
-				s3_key: current.s3_key,
-				exam_paper_id: current.exam_paper_id,
-			},
-			orderBy: { created_at: "desc" },
-			select: {
-				id: true,
-				created_at: true,
-				superseded_at: true,
-				supersede_reason: true,
-				ocr_runs: {
-					orderBy: { created_at: "desc" as const },
-					take: 1,
-					select: { status: true },
+		const [siblings, paperSections] = await Promise.all([
+			db.studentSubmission.findMany({
+				where: {
+					staged_script_id: current.staged_script_id,
+					exam_paper_id: current.exam_paper_id,
 				},
-				grading_runs: {
-					orderBy: { created_at: "desc" as const },
-					take: 1,
-					select: { status: true },
+				orderBy: { created_at: "desc" },
+				select: {
+					id: true,
+					created_at: true,
+					superseded_at: true,
+					supersede_reason: true,
+					ocr_runs: {
+						orderBy: { created_at: "desc" as const },
+						take: 1,
+						select: { status: true },
+					},
+					grading_runs: {
+						orderBy: { created_at: "desc" as const },
+						take: 1,
+						select: { status: true, grading_results: true },
+					},
+					teacher_overrides: {
+						select: { question_id: true, score_override: true },
+					},
 				},
-			},
-		})
+			}),
+			db.examSection.findMany({
+				where: { exam_paper_id: current.exam_paper_id },
+				select: {
+					exam_section_questions: {
+						select: { question: { select: { points: true } } },
+					},
+				},
+			}),
+		])
+
+		const totalMax = sumPaperPoints(paperSections)
 
 		return {
-			versions: siblings.map((s) => ({
-				id: s.id,
-				created_at: s.created_at,
-				superseded_at: s.superseded_at,
-				supersede_reason: s.supersede_reason,
-				status: deriveScanStatus(
-					(s.ocr_runs[0]?.status ?? null) as Parameters<
-						typeof deriveScanStatus
-					>[0],
-					(s.grading_runs[0]?.status ?? null) as Parameters<
-						typeof deriveScanStatus
-					>[1],
-				),
-			})),
+			versions: siblings.map((s) => {
+				const results = (s.grading_runs[0]?.grading_results ??
+					[]) as GradingResult[]
+				const overrideByQuestion = new Map(
+					s.teacher_overrides.map((o) => [o.question_id, o.score_override]),
+				)
+				const totalAwarded = results.reduce((sum, r) => {
+					const override = overrideByQuestion.get(r.question_id)
+					return sum + (override ?? r.awarded_score)
+				}, 0)
+				return {
+					id: s.id,
+					created_at: s.created_at,
+					superseded_at: s.superseded_at,
+					supersede_reason: s.supersede_reason,
+					status: deriveScanStatus(
+						(s.ocr_runs[0]?.status ?? null) as Parameters<
+							typeof deriveScanStatus
+						>[0],
+						(s.grading_runs[0]?.status ?? null) as Parameters<
+							typeof deriveScanStatus
+						>[1],
+					),
+					total_awarded: totalAwarded,
+					total_max: totalMax,
+				}
+			}),
 		}
 	},
 )

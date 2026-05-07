@@ -21,9 +21,16 @@ import {
 	type GradeBoundary,
 	computeGrade,
 } from "@mcp-gcse/shared"
-import { ArrowDown, ArrowUp, ArrowUpDown, Share2, Trash2 } from "lucide-react"
+import {
+	ArrowDown,
+	ArrowUp,
+	ArrowUpDown,
+	ChevronRight,
+	Share2,
+	Trash2,
+} from "lucide-react"
 import { parseAsStringLiteral, useQueryState } from "nuqs"
-import { useMemo } from "react"
+import { Fragment, useMemo, useState } from "react"
 import {
 	PHASE_LABEL,
 	formatDate,
@@ -32,6 +39,7 @@ import {
 	scoreChipKind,
 	submissionPhase,
 } from "./submission-grid-config"
+import { SubmissionVersionRows } from "./submission-version-rows"
 
 const SORT_KEYS = ["student", "status", "score", "grade", "date"] as const
 type SortKey = (typeof SORT_KEYS)[number]
@@ -104,6 +112,14 @@ export function SubmissionTable({
 }) {
 	const [sort, setSort] = useQueryState("sort", parseAsStringLiteral(SORT_KEYS))
 	const [dir, setDir] = useQueryState("dir", parseAsStringLiteral(SORT_DIRS))
+	const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
+
+	function toggleExpand(id: string) {
+		const next = new Set(expandedIds)
+		if (next.has(id)) next.delete(id)
+		else next.add(id)
+		setExpandedIds(next)
+	}
 
 	const sorted = useMemo(() => {
 		if (!sort) return submissions
@@ -258,99 +274,140 @@ export function SubmissionTable({
 										gradeBoundaryMode ?? "percent",
 									)
 								: null
+							const versionCount = sub.version_count ?? 1
+							const hasPriorVersions = versionCount > 1
+							const isExpanded = expandedIds.has(sub.id)
 							return (
-								<TableRow key={sub.id} className="group">
-									<TableCell>
-										<Checkbox
-											checked={selectedIds.has(sub.id)}
-											onCheckedChange={(checked) => toggleOne(sub.id, checked)}
-											disabled={!isMarked}
-											aria-label={`Select ${sub.student_name ?? "submission"}`}
-										/>
-									</TableCell>
-									<TableCell className="text-sm">
-										{sub.student_name ?? (
-											<span className="text-muted-foreground italic">
-												Unnamed
-											</span>
-										)}
-									</TableCell>
-									<TableCell>
-										<span className="inline-flex items-center gap-2 text-xs text-muted-foreground">
-											<StatusDot
-												kind={phaseStatusKind(phase)}
-												className={cn(inFlight && "animate-pulse")}
-											/>
-											{PHASE_LABEL[phase]}
-										</span>
-									</TableCell>
-									<TableCell>
-										{pct !== null ? (
-											<SoftChip kind={scoreChipKind(pct)}>
-												<span className="tabular-nums font-mono">
-													{sub.total_awarded}/{sub.total_max}
-												</span>
-												<span className="ml-1.5 tabular-nums font-mono opacity-70">
-													{pct}%
-												</span>
-											</SoftChip>
-										) : (
-											<SoftChip kind="neutral">
-												<span className="tabular-nums font-mono">
-													?/{sub.total_max}
-												</span>
-											</SoftChip>
-										)}
-									</TableCell>
-									<TableCell>
-										<span className="tabular-nums font-mono text-sm">
-											{grade ?? (
-												<span className="text-muted-foreground">—</span>
-											)}
-										</span>
-									</TableCell>
-									<TableCell className="text-xs text-muted-foreground tabular-nums">
-										{formatDate(sub.created_at)}
-									</TableCell>
-									<TableCell>
-										<div className="flex items-center justify-end gap-2">
-											<Button
-												type="button"
-												size="sm"
-												variant="ghost"
-												onClick={() => onView(sub.id)}
-												className="h-7 px-2 text-xs"
-											>
-												View
-											</Button>
-											<ShareDialog
-												resourceType="student_submission"
-												resourceId={sub.id}
-												trigger={
-													<Button
-														type="button"
-														size="sm"
-														variant="ghost"
-														className="h-7 px-2 text-xs gap-1"
-													>
-														<Share2 className="h-3.5 w-3.5" />
-														Share
-													</Button>
+								<Fragment key={sub.id}>
+									<TableRow className="group">
+										<TableCell>
+											<Checkbox
+												checked={selectedIds.has(sub.id)}
+												onCheckedChange={(checked) =>
+													toggleOne(sub.id, checked)
 												}
+												disabled={!isMarked}
+												aria-label={`Select ${sub.student_name ?? "submission"}`}
 											/>
-											<Button
-												size="sm"
-												variant="ghost"
-												className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
-												title="Delete submission"
-												onClick={() => onDeleteRequest(sub.id)}
-											>
-												<Trash2 className="h-3.5 w-3.5" />
-												<span className="sr-only">Delete submission</span>
-											</Button>
-										</div>
-									</TableCell>
-								</TableRow>
+										</TableCell>
+										<TableCell className="text-sm">
+											<div className="flex items-center gap-1.5">
+												{hasPriorVersions ? (
+													<button
+														type="button"
+														onClick={() => toggleExpand(sub.id)}
+														aria-label={
+															isExpanded ? "Hide history" : "Show history"
+														}
+														className="-ml-1 inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+													>
+														<ChevronRight
+															className={cn(
+																"h-3.5 w-3.5 transition-transform",
+																isExpanded && "rotate-90",
+															)}
+														/>
+													</button>
+												) : null}
+												<span>
+													{sub.student_name ?? (
+														<span className="text-muted-foreground italic">
+															Unnamed
+														</span>
+													)}
+												</span>
+												{hasPriorVersions && (
+													<span className="text-[10px] tabular-nums font-mono text-muted-foreground">
+														v{versionCount}
+													</span>
+												)}
+											</div>
+										</TableCell>
+										<TableCell>
+											<span className="inline-flex items-center gap-2 text-xs text-muted-foreground">
+												<StatusDot
+													kind={phaseStatusKind(phase)}
+													className={cn(inFlight && "animate-pulse")}
+												/>
+												{PHASE_LABEL[phase]}
+											</span>
+										</TableCell>
+										<TableCell>
+											{pct !== null ? (
+												<SoftChip kind={scoreChipKind(pct)}>
+													<span className="tabular-nums font-mono">
+														{sub.total_awarded}/{sub.total_max}
+													</span>
+													<span className="ml-1.5 tabular-nums font-mono opacity-70">
+														{pct}%
+													</span>
+												</SoftChip>
+											) : (
+												<SoftChip kind="neutral">
+													<span className="tabular-nums font-mono">
+														?/{sub.total_max}
+													</span>
+												</SoftChip>
+											)}
+										</TableCell>
+										<TableCell>
+											<span className="tabular-nums font-mono text-sm">
+												{grade ?? (
+													<span className="text-muted-foreground">—</span>
+												)}
+											</span>
+										</TableCell>
+										<TableCell className="text-xs text-muted-foreground tabular-nums">
+											{formatDate(sub.created_at)}
+										</TableCell>
+										<TableCell>
+											<div className="flex items-center justify-end gap-2">
+												<Button
+													type="button"
+													size="sm"
+													variant="ghost"
+													onClick={() => onView(sub.id)}
+													className="h-7 px-2 text-xs"
+												>
+													View
+												</Button>
+												<ShareDialog
+													resourceType="student_submission"
+													resourceId={sub.id}
+													trigger={
+														<Button
+															type="button"
+															size="sm"
+															variant="ghost"
+															className="h-7 px-2 text-xs gap-1"
+														>
+															<Share2 className="h-3.5 w-3.5" />
+															Share
+														</Button>
+													}
+												/>
+												<Button
+													size="sm"
+													variant="ghost"
+													className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
+													title="Delete submission"
+													onClick={() => onDeleteRequest(sub.id)}
+												>
+													<Trash2 className="h-3.5 w-3.5" />
+													<span className="sr-only">Delete submission</span>
+												</Button>
+											</div>
+										</TableCell>
+									</TableRow>
+									{isExpanded && hasPriorVersions && (
+										<SubmissionVersionRows
+											submissionId={sub.id}
+											gradeBoundaries={gradeBoundaries}
+											gradeBoundaryMode={gradeBoundaryMode}
+											onView={onView}
+										/>
+									)}
+								</Fragment>
 							)
 						})}
 					</TableBody>

@@ -1,5 +1,10 @@
 import { randomUUID } from "node:crypto"
-import { TEST_EXAM_PAPER_ID, db, ensureExamPaper } from "@mcp-gcse/test-utils"
+import {
+	TEST_EXAM_PAPER_ID,
+	TEST_STAGED_SCRIPT_ID,
+	db,
+	ensureExamPaper,
+} from "@mcp-gcse/test-utils"
 import { afterEach, beforeAll, describe, expect, it } from "vitest"
 
 const { insertConsumesForBatch } = await import("../../src/lib/billing/ledger")
@@ -98,6 +103,7 @@ describe("paper_ledger over-spend race", () => {
 				pages: [],
 				s3_key: "test",
 				s3_bucket: "test",
+				staged_script_id: TEST_STAGED_SCRIPT_ID,
 			},
 		})
 		await db.ocrRun.create({

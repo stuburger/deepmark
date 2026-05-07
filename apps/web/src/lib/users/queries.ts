@@ -2,7 +2,7 @@
 
 import { authenticatedAction } from "@/lib/authz"
 import { db } from "@/lib/db"
-import type { UserRole } from "@mcp-gcse/db"
+import type { Plan, UserRole } from "@mcp-gcse/db"
 
 export type CurrentUserProfile = {
 	id: string
@@ -10,6 +10,7 @@ export type CurrentUserProfile = {
 	email: string | null
 	avatar_url: string | null
 	role: UserRole
+	plan: Plan | null
 }
 
 /**
@@ -28,6 +29,7 @@ export const getCurrentUser = authenticatedAction.action(
 				email: true,
 				avatar_url: true,
 				role: true,
+				plan: true,
 			},
 		})
 		return { user: row ?? null }

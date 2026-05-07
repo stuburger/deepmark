@@ -1,5 +1,6 @@
 import {
 	TEST_EXAM_PAPER_ID,
+	TEST_STAGED_SCRIPT_ID,
 	TEST_USER_ID,
 	db,
 	ensureExamPaper,
@@ -67,6 +68,7 @@ describe("writeMarkingResults projection", () => {
 				s3_bucket: "test-bucket",
 				exam_board: "AQA",
 				pages: [],
+				staged_script_id: TEST_STAGED_SCRIPT_ID,
 			},
 			select: { id: true },
 		})

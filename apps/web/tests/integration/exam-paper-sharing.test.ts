@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto"
-import { db } from "@mcp-gcse/test-utils"
+import { cleanupBatch, createTestStagedScript, db } from "@mcp-gcse/test-utils"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 // `auth()` is stubbed so we can switch the calling user mid-test. The active
@@ -49,6 +49,7 @@ async function createPaperWithQuestion(ownerId: string): Promise<{
 	sectionId: string
 	questionId: string
 	submissionId: string
+	batchId: string
 }> {
 	const paperId = randomUUID()
 	const sectionId = randomUUID()
@@ -91,6 +92,10 @@ async function createPaperWithQuestion(ownerId: string): Promise<{
 	await db.examSectionQuestion.create({
 		data: { exam_section_id: sectionId, question_id: questionId, order: 1 },
 	})
+	const { batchId, stagedScriptId } = await createTestStagedScript({
+		examPaperId: paperId,
+		uploadedBy: ownerId,
+	})
 	await db.studentSubmission.create({
 		data: {
 			id: submissionId,
@@ -100,10 +105,11 @@ async function createPaperWithQuestion(ownerId: string): Promise<{
 			s3_bucket: "test-bucket",
 			exam_board: "AQA",
 			pages: [],
+			staged_script_id: stagedScriptId,
 		},
 	})
 
-	return { paperId, sectionId, questionId, submissionId }
+	return { paperId, sectionId, questionId, submissionId, batchId }
 }
 
 async function cleanupPaper(paperId: string): Promise<void> {
@@ -137,6 +143,7 @@ describe("exam paper sharing — end to end", () => {
 	let paperId: string
 	let questionId: string
 	let submissionId: string
+	let batchId: string
 
 	beforeEach(async () => {
 		owner = await createUser("owner")
@@ -147,10 +154,12 @@ describe("exam paper sharing — end to end", () => {
 		paperId = ids.paperId
 		questionId = ids.questionId
 		submissionId = ids.submissionId
+		batchId = ids.batchId
 	})
 
 	afterEach(async () => {
 		actAs(null)
+		await cleanupBatch(batchId)
 		await cleanupPaper(paperId)
 		await db.user.deleteMany({
 			where: { id: { in: [owner.id, sharee.id, stranger.id, third.id] } },

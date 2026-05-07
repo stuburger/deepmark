@@ -2,6 +2,7 @@ import { ExportMenu } from "@/components/marking/export-menu"
 import { Button } from "@/components/ui/button"
 import type { SubmissionHistoryItem } from "@/lib/marking/types"
 import { RefreshCw } from "lucide-react"
+import { RegradeButton } from "./regrade-button"
 
 export function SubmissionsHeader({
 	paperId,
@@ -31,11 +32,18 @@ export function SubmissionsHeader({
 			<p className="text-sm font-medium text-muted-foreground">{label}</p>
 			<div className="flex items-center gap-2">
 				{markedCount > 0 && (
-					<ExportMenu
-						paperId={paperId}
-						submissions={submissions}
-						selectedIds={selectedIds}
-					/>
+					<>
+						<RegradeButton
+							paperId={paperId}
+							submissions={submissions}
+							selectedIds={selectedIds}
+						/>
+						<ExportMenu
+							paperId={paperId}
+							submissions={submissions}
+							selectedIds={selectedIds}
+						/>
+					</>
 				)}
 				<Button
 					variant="ghost"

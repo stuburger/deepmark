@@ -1,5 +1,6 @@
 import {
 	TEST_EXAM_PAPER_ID,
+	TEST_STAGED_SCRIPT_ID,
 	TEST_USER_ID,
 	cleanupBatch,
 	db,
@@ -27,6 +28,7 @@ async function createSubmissionWithGrading(
 			s3_bucket: "test-bucket",
 			exam_board: "AQA",
 			pages: [],
+			staged_script_id: TEST_STAGED_SCRIPT_ID,
 		},
 	})
 	const ocrRun = await db.ocrRun.create({

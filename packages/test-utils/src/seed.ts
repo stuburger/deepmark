@@ -3,6 +3,10 @@ import { db } from "./db"
 
 export const TEST_EXAM_PAPER_ID = fixture.exam_paper.id
 export const TEST_USER_ID = fixture.user.id
+/** Stable staged_script_id every integration test can reference when it
+ *  doesn't care about version chains. ensureExamPaper() seeds it. */
+export const TEST_BATCH_JOB_ID = "test-batch-job-default"
+export const TEST_STAGED_SCRIPT_ID = "test-staged-script-default"
 
 export async function ensureExamPaper(): Promise<void> {
 	await db.user.upsert({
@@ -89,5 +93,26 @@ export async function ensureExamPaper(): Promise<void> {
 			order: esq.order,
 		})),
 		skipDuplicates: true,
+	})
+
+	await db.batchIngestJob.upsert({
+		where: { id: TEST_BATCH_JOB_ID },
+		create: {
+			id: TEST_BATCH_JOB_ID,
+			exam_paper_id: TEST_EXAM_PAPER_ID,
+			uploaded_by: TEST_USER_ID,
+			status: "uploading",
+		},
+		update: {},
+	})
+	await db.stagedScript.upsert({
+		where: { id: TEST_STAGED_SCRIPT_ID },
+		create: {
+			id: TEST_STAGED_SCRIPT_ID,
+			batch_job_id: TEST_BATCH_JOB_ID,
+			page_keys: [],
+			status: "proposed",
+		},
+		update: {},
 	})
 }

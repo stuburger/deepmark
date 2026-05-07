@@ -73,6 +73,9 @@ export function useCurrentUser(): {
 	user: CurrentUserProfile | null
 	cursorUser: CursorUser | null
 	isAdmin: boolean
+	/** True when paper-credit ledger writes are skipped for this user — admin
+	 *  or unlimited_monthly plan. Mirrors `resolveLedgerContext` on the server. */
+	skipsLedger: boolean
 } {
 	const { data } = useQuery({
 		queryKey: queryKeys.currentUser(),
@@ -83,8 +86,11 @@ export function useCurrentUser(): {
 		staleTime: Number.POSITIVE_INFINITY,
 	})
 
-	if (!data) return { user: null, cursorUser: null, isAdmin: false }
+	if (!data) {
+		return { user: null, cursorUser: null, isAdmin: false, skipsLedger: false }
+	}
 
+	const isAdmin = data.role === "admin"
 	const displayName =
 		data.name?.trim() || data.email?.split("@")[0] || "Teacher"
 	return {
@@ -95,6 +101,7 @@ export function useCurrentUser(): {
 			selectionColor: selectionColorForUserId(data.id),
 			image: data.avatar_url,
 		},
-		isAdmin: data.role === "admin",
+		isAdmin,
+		skipsLedger: isAdmin || data.plan === "unlimited_monthly",
 	}
 }

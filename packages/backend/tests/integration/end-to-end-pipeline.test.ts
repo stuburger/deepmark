@@ -1,7 +1,12 @@
 import * as fs from "node:fs"
 import * as path from "node:path"
 import { SQSClient, SendMessageCommand } from "@aws-sdk/client-sqs"
-import { db, uploadTestFile } from "@mcp-gcse/test-utils"
+import {
+	cleanupBatch,
+	createTestStagedScript,
+	db,
+	uploadTestFile,
+} from "@mcp-gcse/test-utils"
 import type { Node as PmNode } from "@tiptap/pm/model"
 import { Resource } from "sst"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
@@ -183,6 +188,9 @@ async function seedExamPaperAndQuestions(): Promise<void> {
 	}
 }
 
+/** Set during seedSubmission so cleanup() can tear the batch down. */
+let SEEDED_BATCH_ID: string | null = null
+
 async function seedSubmission(): Promise<void> {
 	const pageKeys: Array<{ key: string; order: number; mime_type: string }> = []
 	for (const page of FIXTURE.pages) {
@@ -191,6 +199,12 @@ async function seedSubmission(): Promise<void> {
 		await uploadTestFile(key, bytes, page.mime_type)
 		pageKeys.push({ key, order: page.order, mime_type: page.mime_type })
 	}
+
+	const { batchId, stagedScriptId } = await createTestStagedScript({
+		examPaperId: FIXTURE.examPaperId,
+		uploadedBy: FIXTURE.userId,
+	})
+	SEEDED_BATCH_ID = batchId
 
 	await db.studentSubmission.create({
 		data: {
@@ -203,6 +217,7 @@ async function seedSubmission(): Promise<void> {
 			subject: "business",
 			year: 2026,
 			pages: pageKeys,
+			staged_script_id: stagedScriptId,
 		},
 	})
 }
@@ -226,6 +241,10 @@ async function cleanup(): Promise<void> {
 	await db.studentSubmission
 		.deleteMany({ where: { id: SUBMISSION_ID } })
 		.catch(() => {})
+	if (SEEDED_BATCH_ID) {
+		await cleanupBatch(SEEDED_BATCH_ID).catch(() => {})
+		SEEDED_BATCH_ID = null
+	}
 }
 
 // ─── PM doc inspection helpers ────────────────────────────────────────────

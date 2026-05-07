@@ -1,7 +1,10 @@
 import { randomUUID } from "node:crypto"
 import {
 	TEST_EXAM_PAPER_ID,
+	TEST_STAGED_SCRIPT_ID,
 	TEST_USER_ID,
+	cleanupBatch,
+	createTestStagedScript,
 	db,
 	ensureExamPaper,
 } from "@mcp-gcse/test-utils"
@@ -96,6 +99,10 @@ describe("SSE route /api/submissions/[submissionId]/events", () => {
 				created_by_id: ownerId,
 			},
 		})
+		const { batchId, stagedScriptId } = await createTestStagedScript({
+			examPaperId: paperId,
+			uploadedBy: ownerId,
+		})
 		await db.studentSubmission.create({
 			data: {
 				id: jobId,
@@ -105,6 +112,7 @@ describe("SSE route /api/submissions/[submissionId]/events", () => {
 				s3_bucket: "test-bucket",
 				exam_board: "AQA",
 				pages: [],
+				staged_script_id: stagedScriptId,
 			},
 		})
 
@@ -119,7 +127,7 @@ describe("SSE route /api/submissions/[submissionId]/events", () => {
 			expect(response.status).toBe(403)
 			await expect(response.text()).resolves.toBe("Forbidden")
 		} finally {
-			await db.studentSubmission.deleteMany({ where: { id: jobId } })
+			await cleanupBatch(batchId)
 			await db.examPaper.deleteMany({ where: { id: paperId } })
 			await db.user.deleteMany({ where: { id: ownerId } })
 		}
@@ -136,6 +144,7 @@ describe("SSE route /api/submissions/[submissionId]/events", () => {
 				s3_bucket: "test-bucket",
 				exam_board: "AQA",
 				pages: [],
+				staged_script_id: TEST_STAGED_SCRIPT_ID,
 			},
 		})
 		const ocr = await db.ocrRun.create({

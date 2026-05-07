@@ -1,3 +1,4 @@
+import { stripeConfig } from "./billing"
 import { vapidPrivateKey, vapidPublicKey, webUrl } from "./config"
 import { neonPostgres } from "./database"
 import { email } from "./email"
@@ -38,7 +39,7 @@ bus.subscribe(
 	"EmailSubscriber",
 	{
 		handler: "packages/backend/src/processors/email-subscriber.handler",
-		link: [email, neonPostgres],
+		link: [email, neonPostgres, stripeConfig],
 		timeout: "30 seconds",
 		memory: "512 MB",
 		environment: {

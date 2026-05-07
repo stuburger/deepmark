@@ -9,10 +9,11 @@ import {
 	CommandItem,
 	CommandList,
 } from "@/components/ui/command"
+import { getBookmarkedSubmissions } from "@/lib/marking/submissions/queries"
 import { queryKeys } from "@/lib/query-keys"
 import { searchEverything } from "@/lib/search/queries"
 import { useQuery } from "@tanstack/react-query"
-import { FileText, User } from "lucide-react"
+import { Bookmark, FileText, User } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 
@@ -39,6 +40,8 @@ export function CommandPalette() {
 		if (!paletteOpen) setQ("")
 	}, [paletteOpen])
 
+	const isQuery = q.trim().length > 0
+
 	const { data } = useQuery({
 		queryKey: queryKeys.paletteSearch(q),
 		queryFn: async () => {
@@ -46,8 +49,22 @@ export function CommandPalette() {
 			if (r?.serverError) throw new Error(r.serverError)
 			return r?.data ?? { papers: [], submissions: [] }
 		},
-		enabled: paletteOpen && q.trim().length > 0,
+		enabled: paletteOpen && isQuery,
 		staleTime: 10_000,
+	})
+
+	// Empty-state surface: when no query, show the user's bookmarked
+	// submissions so the palette is useful even before typing. Same query key
+	// as the nav-sheet's BookmarkedSection — single fetch shared across both.
+	const { data: bookmarks = [] } = useQuery({
+		queryKey: queryKeys.bookmarks(),
+		queryFn: async () => {
+			const r = await getBookmarkedSubmissions({})
+			if (r?.serverError) throw new Error(r.serverError)
+			return r?.data?.bookmarks ?? []
+		},
+		enabled: paletteOpen && !isQuery,
+		staleTime: 30_000,
 	})
 
 	function go(url: string) {
@@ -74,13 +91,37 @@ export function CommandPalette() {
 					onValueChange={setQ}
 				/>
 				<CommandList>
-					{q.trim().length === 0 ? (
+					{!isQuery && bookmarks.length === 0 && (
 						<div className="px-3 py-6 text-center text-xs text-muted-foreground">
 							Start typing to search papers and submissions.
 						</div>
-					) : !hasResults ? (
-						<CommandEmpty>No results.</CommandEmpty>
-					) : null}
+					)}
+					{isQuery && !hasResults && <CommandEmpty>No results.</CommandEmpty>}
+
+					{!isQuery && bookmarks.length > 0 && (
+						<CommandGroup heading="Bookmarked">
+							{bookmarks.map((b) => (
+								<CommandItem
+									key={`bm-${b.id}`}
+									value={`bm-${b.id}-${b.student_name ?? "Unnamed"}`}
+									onSelect={() =>
+										go(`/teacher/exam-papers/${b.exam_paper.id}?job=${b.id}`)
+									}
+								>
+									<Bookmark
+										className="size-4 text-primary"
+										fill="currentColor"
+									/>
+									<span className="truncate">
+										{b.student_name ?? "Unnamed"}
+									</span>
+									<span className="ml-auto truncate text-xs text-muted-foreground">
+										{b.exam_paper.title}
+									</span>
+								</CommandItem>
+							))}
+						</CommandGroup>
+					)}
 
 					{papers.length > 0 && (
 						<CommandGroup heading="Papers">

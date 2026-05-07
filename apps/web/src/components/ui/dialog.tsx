@@ -43,21 +43,32 @@ function DialogContent({
 	className,
 	children,
 	showCloseButton = true,
+	size = "default",
 	...props
 }: DialogPrimitive.Popup.Props & {
 	showCloseButton?: boolean
+	size?: "default" | "fullscreen"
 }) {
 	return (
 		<DialogPortal>
 			<DialogOverlay />
 			<DialogPrimitive.Popup
 				data-slot="dialog-content"
+				data-size={size}
 				className={cn(
-					"fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl bg-card p-4 text-sm shadow-float duration-100 outline-none sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
+					"fixed z-50 grid bg-card text-sm shadow-float duration-100 outline-none data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
+					"data-[size=default]:top-1/2 data-[size=default]:left-1/2 data-[size=default]:w-full data-[size=default]:max-w-[calc(100%-2rem)] data-[size=default]:-translate-x-1/2 data-[size=default]:-translate-y-1/2 data-[size=default]:gap-4 data-[size=default]:rounded-xl data-[size=default]:overflow-hidden data-[size=default]:p-4 data-[size=default]:sm:max-w-sm",
+					"data-[size=fullscreen]:inset-4 data-[size=fullscreen]:overflow-hidden data-[size=fullscreen]:rounded-lg",
 					className,
 				)}
 				{...props}
 			>
+				{size === "default" && (
+					<div
+						className="absolute top-0 left-0 h-0.75 w-14 bg-primary pointer-events-none"
+						aria-hidden="true"
+					/>
+				)}
 				{children}
 				{showCloseButton && (
 					<DialogPrimitive.Close

@@ -6,6 +6,7 @@ import { StatusDot } from "@/components/ui/status-dot"
 import { StatusIcon } from "@/components/ui/status-icon"
 import { ArrowRight, Check, Plus } from "lucide-react"
 import type { LoadedTokens } from "../_lib/load-tokens"
+import { DialogsSection } from "./dialogs-section"
 import { IntentBox, Section, SubsectionTitle, WarnBox } from "./section"
 import { ScaleRow, Swatch } from "./swatch"
 
@@ -366,6 +367,15 @@ export function SystemTab({ tokens }: { tokens: LoadedTokens }) {
 						))}
 					</div>
 				</div>
+			</Section>
+
+			{/* Components: Dialogs */}
+			<Section
+				eyebrow="06 · Components"
+				title="Dialogs"
+				description="All dialogs use rounded-xl (10px), shadow-float, and a 3px primary teal top border that creates the branded blue corner accent from Geoff's editor mockup."
+			>
+				<DialogsSection />
 			</Section>
 
 			{/* Components: Badges */}

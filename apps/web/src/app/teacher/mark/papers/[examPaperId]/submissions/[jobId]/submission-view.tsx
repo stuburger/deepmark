@@ -209,7 +209,11 @@ export function SubmissionView({
 			    --shadow-float here are the "modal-styled-as-route" pattern: the
 			    surface reads as a focused workspace without being an actual
 			    overlay (deep-linkable, share-able, prev/next navigable). */}
-			<div className="flex flex-col overflow-hidden h-full rounded-xl border border-border bg-card shadow-float">
+			<div className="relative flex flex-col overflow-hidden h-full rounded-xl border border-border bg-card shadow-float">
+				<div
+					className="absolute top-0 left-0 h-0.75 w-14 bg-primary pointer-events-none z-10"
+					aria-hidden="true"
+				/>
 				<SubmissionToolbar
 					examPaperId={examPaperId}
 					jobId={jobId}

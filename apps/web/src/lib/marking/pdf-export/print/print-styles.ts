@@ -73,6 +73,9 @@ h1, h2, h3, p { margin: 0; }
 	border-bottom: 0.5px solid #E5E7EB;
 	padding: 5pt 0;
 }
+.cover .summary-table th.col-marks,
+.cover .summary-table th.col-percent,
+.cover .summary-table th.col-grade,
 .cover .col-marks, .cover .col-percent, .cover .col-grade { text-align: right; }
 .cover .col-marks   { width: 70pt; }
 .cover .col-percent { width: 50pt; }

@@ -5,7 +5,11 @@
 import { randomUUID } from "node:crypto"
 import { insertConsumesForBatch } from "@/lib/billing/ledger"
 import { db } from "@/lib/db"
-import { SQSClient, SendMessageCommand } from "@aws-sdk/client-sqs"
+import {
+	SQSClient,
+	SendMessageBatchCommand,
+	type SendMessageBatchRequestEntry,
+} from "@aws-sdk/client-sqs"
 import {
 	type BatchStatus,
 	ResourceGrantPrincipalType,
@@ -207,14 +211,62 @@ export async function commitBatchService(
 		return jobs
 	})
 
-	for (const job of createdJobs) {
-		await sqs.send(
-			new SendMessageCommand({
-				QueueUrl: Resource.StudentPaperOcrQueue.url,
-				MessageBody: JSON.stringify({ job_id: job.id }),
-			}),
-		)
+	// SQS sends happen AFTER the DB transaction commits, so any failure here
+	// strands the OcrRun pre-row in `pending` with no events — visually "stuck
+	// in extracting" forever. The fix has two halves:
+	//   1) batch the sends (SendMessageBatchCommand, up to 10 per call) so a
+	//      single network call carries them all, reducing the per-message
+	//      failure surface and round-trips.
+	//   2) collect per-message failures and surface them on OcrRun.status =
+	//      "failed" + error so the UI shows a real error and the teacher can
+	//      hit "Re-scan" instead of staring at an unmoving spinner.
+	const failedSubmissionIds = await enqueueOcrJobs(createdJobs.map((j) => j.id))
+	if (failedSubmissionIds.length > 0) {
+		await db.ocrRun.updateMany({
+			where: { submission_id: { in: failedSubmissionIds } },
+			data: {
+				status: "failed",
+				error: "Failed to enqueue OCR job — please re-scan.",
+			},
+		})
 	}
 
 	return { ok: true, studentJobCount: createdJobs.length }
+}
+
+/**
+ * Enqueues StudentPaperOcrQueue messages for every submission id, batched in
+ * groups of 10 (the SQS limit). Returns the submission ids whose enqueue
+ * failed — callers should mark those OcrRuns failed so they don't sit pending
+ * forever. Never throws; partial failure is the whole point.
+ */
+async function enqueueOcrJobs(submissionIds: string[]): Promise<string[]> {
+	const failed: string[] = []
+	for (let i = 0; i < submissionIds.length; i += 10) {
+		const chunk = submissionIds.slice(i, i + 10)
+		const entries: SendMessageBatchRequestEntry[] = chunk.map(
+			(submissionId, idx) => ({
+				Id: String(idx),
+				MessageBody: JSON.stringify({ job_id: submissionId }),
+			}),
+		)
+		try {
+			const result = await sqs.send(
+				new SendMessageBatchCommand({
+					QueueUrl: Resource.StudentPaperOcrQueue.url,
+					Entries: entries,
+				}),
+			)
+			for (const f of result.Failed ?? []) {
+				const idx = Number(f.Id)
+				const submissionId = chunk[idx]
+				if (submissionId) failed.push(submissionId)
+			}
+		} catch {
+			// Whole-batch failure (auth, network, throttling). Mark every id in
+			// this chunk failed — better one false positive than a silent stall.
+			failed.push(...chunk)
+		}
+	}
+	return failed
 }

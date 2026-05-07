@@ -5,6 +5,7 @@ import { useCollaborators } from "@/components/annotated-answer/use-collaborator
 import { useDocScoreTotals } from "@/components/annotated-answer/use-doc-score-totals"
 import { useYDoc } from "@/components/annotated-answer/use-y-doc"
 import { ShareDialog } from "@/components/sharing/share-dialog"
+import { useTeacherNav } from "@/components/teacher/teacher-nav-context"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { SoftChip } from "@/components/ui/soft-chip"
@@ -37,6 +38,7 @@ import {
 	ChevronRight,
 	Eye,
 	Loader2,
+	Search,
 	Share2,
 	X,
 } from "lucide-react"
@@ -85,6 +87,7 @@ export function SubmissionToolbar({
 	const { doc, provider } = useYDoc(docKey)
 	const collaborators = useCollaborators(provider)
 	const { isAdmin, cursorUser } = useCurrentUser()
+	const { setPaletteOpen } = useTeacherNav()
 	const queryClient = useQueryClient()
 
 	const { data: adjacent } = useQuery({
@@ -289,6 +292,28 @@ export function SubmissionToolbar({
 							<ChevronRight className="h-3.5 w-3.5" />
 						</Button>
 					</div>
+					<Tooltip>
+						<TooltipTrigger
+							render={
+								<Button
+									type="button"
+									variant="ghost"
+									size="sm"
+									aria-label="Search papers and submissions"
+									onClick={() => setPaletteOpen(true)}
+									className="h-7 gap-1.5 text-muted-foreground hover:text-foreground"
+								>
+									<Search className="h-3.5 w-3.5" />
+									<kbd className="hidden lg:inline-flex rounded-sm border border-border-quiet bg-muted px-1 py-0.5 font-mono text-[10px] text-ink-tertiary">
+										⌘K
+									</kbd>
+								</Button>
+							}
+						/>
+						<TooltipContent side="bottom" sideOffset={6}>
+							Search (⌘K)
+						</TooltipContent>
+					</Tooltip>
 					<CollaboratorAvatars users={collaborators} self={cursorUser} />
 					{data.submission_id && !readOnly && (
 						<ShareDialog

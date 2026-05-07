@@ -8,6 +8,7 @@ import {
 	LayoutDashboard,
 	LogOut,
 	Menu,
+	Search,
 	User,
 } from "lucide-react"
 import Link from "next/link"
@@ -54,7 +55,7 @@ const NAV_ICONS = [
 
 export function IconRail({ initials, avatarUrl }: IconRailProps) {
 	const pathname = usePathname()
-	const { open, setOpen } = useTeacherNav()
+	const { open, setOpen, setPaletteOpen } = useTeacherNav()
 
 	return (
 		<aside
@@ -71,6 +72,16 @@ export function IconRail({ initials, avatarUrl }: IconRailProps) {
 					className="flex size-10 items-center justify-center rounded-md text-ink-tertiary transition-colors hover:bg-primary/15 hover:text-primary"
 				>
 					<Menu className="size-[18px]" strokeWidth={1.2} />
+				</button>
+
+				<button
+					type="button"
+					onClick={() => setPaletteOpen(true)}
+					aria-label="Search (⌘K)"
+					title="Search (⌘K)"
+					className="flex size-10 items-center justify-center rounded-md text-ink-tertiary transition-colors hover:bg-primary/15 hover:text-primary"
+				>
+					<Search className="size-[18px]" strokeWidth={1.2} />
 				</button>
 
 				{NAV_ICONS.map(({ href, label, Icon, exact }) => {

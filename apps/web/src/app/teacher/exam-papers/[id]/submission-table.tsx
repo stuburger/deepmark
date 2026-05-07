@@ -14,23 +14,35 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table"
+import {
+	Tooltip,
+	TooltipContent,
+	TooltipProvider,
+	TooltipTrigger,
+} from "@/components/ui/tooltip"
+import { toggleBookmark } from "@/lib/marking/submissions/mutations"
 import type { SubmissionHistoryItem } from "@/lib/marking/types"
+import { queryKeys } from "@/lib/query-keys"
 import { cn } from "@/lib/utils"
 import {
 	type BoundaryMode,
 	type GradeBoundary,
 	computeGrade,
 } from "@mcp-gcse/shared"
+import { useMutation, useQueryClient } from "@tanstack/react-query"
 import {
 	ArrowDown,
 	ArrowUp,
 	ArrowUpDown,
+	Bookmark,
+	CheckCircle2,
 	ChevronRight,
 	Share2,
 	Trash2,
 } from "lucide-react"
 import { parseAsStringLiteral, useQueryState } from "nuqs"
 import { Fragment, useMemo, useState } from "react"
+import { toast } from "sonner"
 import {
 	PHASE_LABEL,
 	formatDate,
@@ -41,7 +53,15 @@ import {
 } from "./submission-grid-config"
 import { SubmissionVersionRows } from "./submission-version-rows"
 
-const SORT_KEYS = ["student", "status", "score", "grade", "date"] as const
+const SORT_KEYS = [
+	"bookmarked",
+	"student",
+	"status",
+	"confirmed",
+	"score",
+	"grade",
+	"date",
+] as const
 type SortKey = (typeof SORT_KEYS)[number]
 
 const SORT_DIRS = ["asc", "desc"] as const
@@ -49,10 +69,13 @@ type SortDir = (typeof SORT_DIRS)[number]
 
 // Default direction applied when first selecting a column. Names sort A→Z;
 // scores/grades/dates sort newest/highest first because that's what teachers
-// usually want to see at the top.
+// usually want to see at the top. Confirmed-first puts signed-off scripts
+// at the top so the teacher can see what's still outstanding.
 const DEFAULT_DIR: Record<SortKey, SortDir> = {
+	bookmarked: "desc",
 	student: "asc",
 	status: "asc",
+	confirmed: "desc",
 	score: "desc",
 	grade: "desc",
 	date: "desc",
@@ -94,6 +117,7 @@ function compareNullable(
 }
 
 export function SubmissionTable({
+	examPaperId,
 	submissions,
 	gradeBoundaries,
 	gradeBoundaryMode,
@@ -102,6 +126,7 @@ export function SubmissionTable({
 	selectedIds,
 	onSelectionChange,
 }: {
+	examPaperId: string
 	submissions: SubmissionHistoryItem[]
 	gradeBoundaries: GradeBoundary[] | null
 	gradeBoundaryMode: BoundaryMode | null
@@ -110,6 +135,57 @@ export function SubmissionTable({
 	selectedIds: Set<string>
 	onSelectionChange: (ids: Set<string>) => void
 }) {
+	const queryClient = useQueryClient()
+	const bookmarkMutation = useMutation({
+		mutationFn: async (vars: { jobId: string; bookmarked: boolean }) => {
+			const r = await toggleBookmark(vars)
+			if (r?.serverError) throw new Error(r.serverError)
+			return r?.data
+		},
+		onMutate: async (vars) => {
+			await queryClient.cancelQueries({
+				queryKey: queryKeys.submissions(examPaperId),
+			})
+			const previous = queryClient.getQueryData(
+				queryKeys.submissions(examPaperId),
+			)
+			queryClient.setQueryData<{
+				submissions: (SubmissionHistoryItem & { version_count: number })[]
+			}>(queryKeys.submissions(examPaperId), (old) =>
+				old
+					? {
+							...old,
+							submissions: old.submissions.map((s) =>
+								s.id === vars.jobId
+									? { ...s, is_bookmarked: vars.bookmarked }
+									: s,
+							),
+						}
+					: old,
+			)
+			return { previous }
+		},
+		onError: (err, _vars, context) => {
+			if (context?.previous !== undefined) {
+				queryClient.setQueryData(
+					queryKeys.submissions(examPaperId),
+					context.previous,
+				)
+			}
+			toast.error(
+				err instanceof Error ? err.message : "Failed to update bookmark",
+			)
+		},
+		onSettled: (_data, _err, vars) => {
+			queryClient.invalidateQueries({ queryKey: queryKeys.bookmarks() })
+			queryClient.invalidateQueries({
+				queryKey: queryKeys.submissions(examPaperId),
+			})
+			queryClient.invalidateQueries({
+				queryKey: queryKeys.studentJob(vars.jobId),
+			})
+		},
+	})
 	const [sort, setSort] = useQueryState("sort", parseAsStringLiteral(SORT_KEYS))
 	const [dir, setDir] = useQueryState("dir", parseAsStringLiteral(SORT_DIRS))
 	const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
@@ -127,6 +203,8 @@ export function SubmissionTable({
 		const list = [...submissions]
 		list.sort((a, b) => {
 			switch (sort) {
+				case "bookmarked":
+					return order * ((a.is_bookmarked ? 1 : 0) - (b.is_bookmarked ? 1 : 0))
 				case "student":
 					return (
 						order *
@@ -138,6 +216,8 @@ export function SubmissionTable({
 						(PHASE_RANK[submissionPhase(a.status)] -
 							PHASE_RANK[submissionPhase(b.status)])
 					)
+				case "confirmed":
+					return order * ((a.is_confirmed ? 1 : 0) - (b.is_confirmed ? 1 : 0))
 				case "score":
 					return compareNullable(pctFor(a), pctFor(b), order)
 				case "grade": {
@@ -203,217 +283,298 @@ export function SubmissionTable({
 	}
 
 	return (
-		<Card>
-			<CardContent className="pt-4">
-				<Table>
-					<TableHeader>
-						<TableRow>
-							<TableHead className="w-8">
-								<Checkbox
-									checked={allSelected}
-									indeterminate={someSelected}
-									onCheckedChange={toggleAll}
-									disabled={selectableIds.length === 0}
-									aria-label="Select all marked submissions"
+		<TooltipProvider>
+			<Card>
+				<CardContent className="pt-4">
+					<Table>
+						<TableHeader>
+							<TableRow>
+								<TableHead className="w-8">
+									<Checkbox
+										checked={allSelected}
+										indeterminate={someSelected}
+										onCheckedChange={toggleAll}
+										disabled={selectableIds.length === 0}
+										aria-label="Select all marked submissions"
+									/>
+								</TableHead>
+								<TableHead className="w-8">
+									<button
+										type="button"
+										onClick={() => handleSort("bookmarked")}
+										aria-label="Sort by bookmarked"
+										className={cn(
+											"-ml-1 inline-flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors",
+											sort === "bookmarked" && "text-foreground",
+										)}
+										title="Bookmarked"
+									>
+										<Bookmark className="h-3.5 w-3.5" />
+									</button>
+								</TableHead>
+								<SortableHeader
+									label="Student"
+									columnKey="student"
+									activeKey={sort}
+									activeDir={dir}
+									onSort={handleSort}
 								/>
-							</TableHead>
-							<SortableHeader
-								label="Student"
-								columnKey="student"
-								activeKey={sort}
-								activeDir={dir}
-								onSort={handleSort}
-							/>
-							<SortableHeader
-								label="Status"
-								columnKey="status"
-								activeKey={sort}
-								activeDir={dir}
-								onSort={handleSort}
-								className="w-32"
-							/>
-							<SortableHeader
-								label="Score"
-								columnKey="score"
-								activeKey={sort}
-								activeDir={dir}
-								onSort={handleSort}
-							/>
-							<SortableHeader
-								label="Grade"
-								columnKey="grade"
-								activeKey={sort}
-								activeDir={dir}
-								onSort={handleSort}
-								className="w-20"
-							/>
-							<SortableHeader
-								label="Date"
-								columnKey="date"
-								activeKey={sort}
-								activeDir={dir}
-								onSort={handleSort}
-							/>
-							<TableHead className="w-20" />
-						</TableRow>
-					</TableHeader>
-					<TableBody>
-						{sorted.map((sub) => {
-							const isMarked = sub.status === "ocr_complete"
-							const phase = submissionPhase(sub.status)
-							const inFlight = isInFlightPhase(phase)
-							const pct =
-								isMarked && sub.total_max > 0
-									? Math.round((sub.total_awarded / sub.total_max) * 100)
+								<SortableHeader
+									label="Status"
+									columnKey="status"
+									activeKey={sort}
+									activeDir={dir}
+									onSort={handleSort}
+									className="w-32"
+								/>
+								<TableHead className="w-10">
+									<button
+										type="button"
+										onClick={() => handleSort("confirmed")}
+										aria-label="Sort by confirmed"
+										className={cn(
+											"-ml-1 inline-flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors",
+											sort === "confirmed" && "text-foreground",
+										)}
+										title="Confirmed"
+									>
+										<CheckCircle2 className="h-3.5 w-3.5" />
+									</button>
+								</TableHead>
+								<SortableHeader
+									label="Score"
+									columnKey="score"
+									activeKey={sort}
+									activeDir={dir}
+									onSort={handleSort}
+								/>
+								<SortableHeader
+									label="Grade"
+									columnKey="grade"
+									activeKey={sort}
+									activeDir={dir}
+									onSort={handleSort}
+									className="w-20"
+								/>
+								<SortableHeader
+									label="Date"
+									columnKey="date"
+									activeKey={sort}
+									activeDir={dir}
+									onSort={handleSort}
+								/>
+								<TableHead className="w-20" />
+							</TableRow>
+						</TableHeader>
+						<TableBody>
+							{sorted.map((sub) => {
+								const isMarked = sub.status === "ocr_complete"
+								const phase = submissionPhase(sub.status)
+								const inFlight = isInFlightPhase(phase)
+								const pct =
+									isMarked && sub.total_max > 0
+										? Math.round((sub.total_awarded / sub.total_max) * 100)
+										: null
+								const grade = isMarked
+									? computeGrade(
+											sub.total_awarded,
+											sub.total_max,
+											gradeBoundaries,
+											gradeBoundaryMode ?? "percent",
+										)
 									: null
-							const grade = isMarked
-								? computeGrade(
-										sub.total_awarded,
-										sub.total_max,
-										gradeBoundaries,
-										gradeBoundaryMode ?? "percent",
-									)
-								: null
-							const versionCount = sub.version_count ?? 1
-							const hasPriorVersions = versionCount > 1
-							const isExpanded = expandedIds.has(sub.id)
-							return (
-								<Fragment key={sub.id}>
-									<TableRow className="group">
-										<TableCell>
-											<Checkbox
-												checked={selectedIds.has(sub.id)}
-												onCheckedChange={(checked) =>
-													toggleOne(sub.id, checked)
-												}
-												disabled={!isMarked}
-												aria-label={`Select ${sub.student_name ?? "submission"}`}
-											/>
-										</TableCell>
-										<TableCell className="text-sm">
-											<div className="flex items-center gap-1.5">
-												{hasPriorVersions ? (
-													<button
-														type="button"
-														onClick={() => toggleExpand(sub.id)}
-														aria-label={
-															isExpanded ? "Hide history" : "Show history"
+								const versionCount = sub.version_count ?? 1
+								const hasPriorVersions = versionCount > 1
+								const isExpanded = expandedIds.has(sub.id)
+								return (
+									<Fragment key={sub.id}>
+										<TableRow className="group">
+											<TableCell>
+												<Checkbox
+													checked={selectedIds.has(sub.id)}
+													onCheckedChange={(checked) =>
+														toggleOne(sub.id, checked)
+													}
+													disabled={!isMarked}
+													aria-label={`Select ${sub.student_name ?? "submission"}`}
+												/>
+											</TableCell>
+											<TableCell>
+												<Tooltip>
+													<TooltipTrigger
+														render={
+															<Button
+																type="button"
+																variant="ghost"
+																size="sm"
+																aria-pressed={sub.is_bookmarked}
+																aria-label={
+																	sub.is_bookmarked
+																		? `Remove bookmark from ${sub.student_name ?? "submission"}`
+																		: `Bookmark ${sub.student_name ?? "submission"}`
+																}
+																onClick={() =>
+																	bookmarkMutation.mutate({
+																		jobId: sub.id,
+																		bookmarked: !sub.is_bookmarked,
+																	})
+																}
+																className={cn(
+																	"h-7 w-7 p-0",
+																	sub.is_bookmarked
+																		? "text-primary hover:text-primary"
+																		: "text-muted-foreground hover:text-foreground",
+																)}
+															>
+																<Bookmark
+																	className="h-3.5 w-3.5"
+																	fill={
+																		sub.is_bookmarked ? "currentColor" : "none"
+																	}
+																/>
+															</Button>
 														}
-														className="-ml-1 inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-													>
-														<ChevronRight
-															className={cn(
-																"h-3.5 w-3.5 transition-transform",
-																isExpanded && "rotate-90",
-															)}
-														/>
-													</button>
-												) : null}
-												<span>
-													{sub.student_name ?? (
-														<span className="text-muted-foreground italic">
-															Unnamed
+													/>
+													<TooltipContent side="right" sideOffset={4}>
+														{sub.is_bookmarked ? "Bookmarked" : "Bookmark"}
+													</TooltipContent>
+												</Tooltip>
+											</TableCell>
+											<TableCell className="text-sm">
+												<div className="flex items-center gap-1.5">
+													{hasPriorVersions ? (
+														<button
+															type="button"
+															onClick={() => toggleExpand(sub.id)}
+															aria-label={
+																isExpanded ? "Hide history" : "Show history"
+															}
+															className="-ml-1 inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+														>
+															<ChevronRight
+																className={cn(
+																	"h-3.5 w-3.5 transition-transform",
+																	isExpanded && "rotate-90",
+																)}
+															/>
+														</button>
+													) : null}
+													<span>
+														{sub.student_name ?? (
+															<span className="text-muted-foreground italic">
+																Unnamed
+															</span>
+														)}
+													</span>
+													{hasPriorVersions && (
+														<span className="text-[10px] tabular-nums font-mono text-muted-foreground">
+															v{versionCount}
 														</span>
 													)}
+												</div>
+											</TableCell>
+											<TableCell>
+												<span className="inline-flex items-center gap-2 text-xs text-muted-foreground">
+													<StatusDot
+														kind={phaseStatusKind(phase)}
+														className={cn(inFlight && "animate-pulse")}
+													/>
+													{PHASE_LABEL[phase]}
 												</span>
-												{hasPriorVersions && (
-													<span className="text-[10px] tabular-nums font-mono text-muted-foreground">
-														v{versionCount}
+											</TableCell>
+											<TableCell>
+												{sub.is_confirmed ? (
+													<span
+														className="inline-flex h-5 w-5 items-center justify-center"
+														title="Confirmed by teacher"
+													>
+														<StatusDot kind="success" />
 													</span>
+												) : null}
+											</TableCell>
+											<TableCell>
+												{pct !== null ? (
+													<SoftChip kind={scoreChipKind(pct)}>
+														<span className="tabular-nums font-mono">
+															{sub.total_awarded}/{sub.total_max}
+														</span>
+														<span className="ml-1.5 tabular-nums font-mono opacity-70">
+															{pct}%
+														</span>
+													</SoftChip>
+												) : (
+													<SoftChip kind="neutral">
+														<span className="tabular-nums font-mono">
+															?/{sub.total_max}
+														</span>
+													</SoftChip>
 												)}
-											</div>
-										</TableCell>
-										<TableCell>
-											<span className="inline-flex items-center gap-2 text-xs text-muted-foreground">
-												<StatusDot
-													kind={phaseStatusKind(phase)}
-													className={cn(inFlight && "animate-pulse")}
-												/>
-												{PHASE_LABEL[phase]}
-											</span>
-										</TableCell>
-										<TableCell>
-											{pct !== null ? (
-												<SoftChip kind={scoreChipKind(pct)}>
-													<span className="tabular-nums font-mono">
-														{sub.total_awarded}/{sub.total_max}
-													</span>
-													<span className="ml-1.5 tabular-nums font-mono opacity-70">
-														{pct}%
-													</span>
-												</SoftChip>
-											) : (
-												<SoftChip kind="neutral">
-													<span className="tabular-nums font-mono">
-														?/{sub.total_max}
-													</span>
-												</SoftChip>
-											)}
-										</TableCell>
-										<TableCell>
-											<span className="tabular-nums font-mono text-sm">
-												{grade ?? (
-													<span className="text-muted-foreground">—</span>
-												)}
-											</span>
-										</TableCell>
-										<TableCell className="text-xs text-muted-foreground tabular-nums">
-											{formatDate(sub.created_at)}
-										</TableCell>
-										<TableCell>
-											<div className="flex items-center justify-end gap-2">
-												<Button
-													type="button"
-													size="sm"
-													variant="ghost"
-													onClick={() => onView(sub.id)}
-													className="h-7 px-2 text-xs"
-												>
-													View
-												</Button>
-												<ShareDialog
-													resourceType="student_submission"
-													resourceId={sub.id}
-													trigger={
-														<Button
-															type="button"
-															size="sm"
-															variant="ghost"
-															className="h-7 px-2 text-xs gap-1"
-														>
-															<Share2 className="h-3.5 w-3.5" />
-															Share
-														</Button>
-													}
-												/>
-												<Button
-													size="sm"
-													variant="ghost"
-													className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
-													title="Delete submission"
-													onClick={() => onDeleteRequest(sub.id)}
-												>
-													<Trash2 className="h-3.5 w-3.5" />
-													<span className="sr-only">Delete submission</span>
-												</Button>
-											</div>
-										</TableCell>
-									</TableRow>
-									{isExpanded && hasPriorVersions && (
-										<SubmissionVersionRows
-											submissionId={sub.id}
-											gradeBoundaries={gradeBoundaries}
-											gradeBoundaryMode={gradeBoundaryMode}
-											onView={onView}
-										/>
-									)}
-								</Fragment>
-							)
-						})}
-					</TableBody>
-				</Table>
-			</CardContent>
-		</Card>
+											</TableCell>
+											<TableCell>
+												<span className="tabular-nums font-mono text-sm">
+													{grade ?? (
+														<span className="text-muted-foreground">—</span>
+													)}
+												</span>
+											</TableCell>
+											<TableCell className="text-xs text-muted-foreground tabular-nums">
+												{formatDate(sub.created_at)}
+											</TableCell>
+											<TableCell>
+												<div className="flex items-center justify-end gap-2">
+													<Button
+														type="button"
+														size="sm"
+														variant="ghost"
+														onClick={() => onView(sub.id)}
+														className="h-7 px-2 text-xs"
+													>
+														View
+													</Button>
+													<ShareDialog
+														resourceType="student_submission"
+														resourceId={sub.id}
+														trigger={
+															<Button
+																type="button"
+																size="sm"
+																variant="ghost"
+																className="h-7 px-2 text-xs gap-1"
+															>
+																<Share2 className="h-3.5 w-3.5" />
+																Share
+															</Button>
+														}
+													/>
+													<Button
+														size="sm"
+														variant="ghost"
+														className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
+														title="Delete submission"
+														onClick={() => onDeleteRequest(sub.id)}
+													>
+														<Trash2 className="h-3.5 w-3.5" />
+														<span className="sr-only">Delete submission</span>
+													</Button>
+												</div>
+											</TableCell>
+										</TableRow>
+										{isExpanded && hasPriorVersions && (
+											<SubmissionVersionRows
+												submissionId={sub.id}
+												gradeBoundaries={gradeBoundaries}
+												gradeBoundaryMode={gradeBoundaryMode}
+												onView={onView}
+											/>
+										)}
+									</Fragment>
+								)
+							})}
+						</TableBody>
+					</Table>
+				</CardContent>
+			</Card>
+		</TooltipProvider>
 	)
 }
 

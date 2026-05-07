@@ -60,6 +60,8 @@ export function student(
 		total_awarded: 0,
 		total_max: 0,
 		created_at: new Date("2026-05-07T10:00:00Z"),
+		confirmed_at: null,
+		is_bookmarked: false,
 		extracted_answers: null,
 		job_events: null,
 		annotation_status: null,

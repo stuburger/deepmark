@@ -95,6 +95,10 @@ export type StudentPaperJobPayload = {
 	total_awarded: number
 	total_max: number
 	created_at: Date
+	/** Confirm-marking sign-off timestamp. Null = unconfirmed. */
+	confirmed_at: Date | null
+	/** True if the requesting user has bookmarked this submission. */
+	is_bookmarked: boolean
 	extracted_answers: ExtractedAnswer[] | null
 	job_events: JobEvent[] | null
 	/** Derived annotation status — annotations now run inside the grade Lambda. */
@@ -152,6 +156,10 @@ export type SubmissionHistoryItem = {
 	total_max: number
 	status: string
 	created_at: Date
+	/** Set when a teacher has signed off the marks as final. */
+	is_confirmed: boolean
+	/** True if the requesting user has bookmarked this submission. */
+	is_bookmarked: boolean
 	/** Number of versions (including superseded). 1 means no re-scans. */
 	version_count?: number
 }

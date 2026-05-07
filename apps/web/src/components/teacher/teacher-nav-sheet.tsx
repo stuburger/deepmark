@@ -2,6 +2,7 @@
 
 import {
 	BarChart3,
+	Bookmark,
 	ClipboardList,
 	Clock,
 	FileText,
@@ -24,7 +25,10 @@ import {
 } from "@/components/ui/sheet"
 import { SoftChip, type SoftChipKind } from "@/components/ui/soft-chip"
 import { logoutFormAction } from "@/lib/actions"
+import { getBookmarkedSubmissions } from "@/lib/marking/submissions/queries"
+import { queryKeys } from "@/lib/query-keys"
 import { cn } from "@/lib/utils"
+import { useQuery } from "@tanstack/react-query"
 
 import { useTeacherNav } from "./teacher-nav-context"
 
@@ -128,9 +132,8 @@ export function TeacherNavSheet({
 
 				<div className="flex-1 overflow-y-auto py-2">
 					<NavSection items={PRIMARY_ITEMS} onNavigate={() => setOpen(false)} />
-					<NavSection items={RECENT_ITEMS} onNavigate={() => setOpen(false)}>
-						<RecentMarkingSubmenuStub />
-					</NavSection>
+					<NavSection items={RECENT_ITEMS} onNavigate={() => setOpen(false)} />
+					<BookmarkedSection onNavigate={() => setOpen(false)} />
 					<NavSection items={ALL_ITEMS} onNavigate={() => setOpen(false)} />
 
 					<NavLabel>Insight</NavLabel>
@@ -223,12 +226,58 @@ function NavLabel({ children }: { children: React.ReactNode }) {
 	)
 }
 
-function RecentMarkingSubmenuStub() {
+function BookmarkedSection({ onNavigate }: { onNavigate: () => void }) {
+	const { data: bookmarks = [] } = useQuery({
+		queryKey: queryKeys.bookmarks(),
+		queryFn: async () => {
+			const r = await getBookmarkedSubmissions({})
+			if (r?.serverError) throw new Error(r.serverError)
+			return r?.data?.bookmarks ?? []
+		},
+	})
+
+	const visible = bookmarks.slice(0, 5)
+
 	return (
-		<div className="ml-2 border-l-2 border-primary/20 bg-primary/5">
-			<div className="px-4 py-2 font-mono text-[10px] uppercase tracking-[0.06em] text-ink-tertiary">
-				Coming soon
-			</div>
+		<div>
+			<NavLabel>Bookmarked</NavLabel>
+			{visible.length === 0 ? (
+				<div className="px-4 py-2 text-[13px] text-muted-foreground">
+					No bookmarks yet
+				</div>
+			) : (
+				visible.map((bm) => (
+					<Link
+						key={bm.id}
+						href={`/teacher/exam-papers/${bm.exam_paper.id}?job=${bm.id}`}
+						onClick={onNavigate}
+						className="flex w-full items-center gap-3 px-4 py-2 text-[14px] text-foreground transition-colors hover:bg-primary/10"
+					>
+						<span className="flex size-5 shrink-0 items-center justify-center text-primary">
+							<Bookmark
+								className="size-4"
+								strokeWidth={1.5 as unknown as number}
+								fill="currentColor"
+							/>
+						</span>
+						<span className="min-w-0 flex-1 truncate">
+							<span className="truncate">{bm.student_name ?? "Unnamed"}</span>
+							<span className="ml-1 text-ink-tertiary">
+								— {bm.exam_paper.title}
+							</span>
+						</span>
+					</Link>
+				))
+			)}
+			{bookmarks.length > 5 && (
+				<Link
+					href="/teacher/bookmarks"
+					onClick={onNavigate}
+					className="block px-4 py-2 font-mono text-[10px] uppercase tracking-[0.06em] text-primary hover:underline"
+				>
+					See all
+				</Link>
+			)}
 		</div>
 	)
 }

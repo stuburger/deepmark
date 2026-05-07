@@ -56,6 +56,7 @@ export function SubmissionsTabContent({
 						isRefreshing={isRefreshing}
 					/>
 					<SubmissionTable
+						examPaperId={paperId}
 						submissions={submissions}
 						gradeBoundaries={gradeBoundaries}
 						gradeBoundaryMode={gradeBoundaryMode}

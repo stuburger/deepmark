@@ -243,6 +243,7 @@ model User {
   push_subscriptions   UserPushSubscription[] @relation("UserPushSubscriptions")
   teacher_overrides    TeacherOverride[]      @relation("UserOverrides")
   submission_feedback  SubmissionFeedback[]   @relation("UserFeedback")
+  bookmarks            StudentSubmissionBookmark[] @relation("UserBookmarks")
   resource_grants_created   ResourceGrant[] @relation("ResourceGrantCreatedBy")
   resource_grants_principal ResourceGrant[] @relation("ResourceGrantPrincipalUser")
 
@@ -718,6 +719,10 @@ model StudentSubmission {
   superseded_at     DateTime?
   /// Why this submission was superseded (e.g. "re-scan", "re-grade"). Null for the current (non-superseded) version.
   supersede_reason  String?
+  /// Set when a teacher signs off the marks as final. Confirmed = `confirmed_at IS NOT NULL`.
+  confirmed_at      DateTime?
+  /// User.id of the teacher who confirmed. No FK relation is needed — this is a soft attribution stamp.
+  confirmed_by      String?
 
   uploader      User                       @relation("SubmissionUploader", fields: [uploaded_by], references: [id])
   exam_paper    ExamPaper                  @relation("SubmissionExamPaper", fields: [exam_paper_id], references: [id])
@@ -734,6 +739,7 @@ model StudentSubmission {
   teacher_overrides  TeacherOverride[]          @relation("SubmissionOverrides")
   feedback           SubmissionFeedback[]       @relation("SubmissionFeedback")
   annotations        StudentPaperAnnotation[]   @relation("SubmissionAnnotations")
+  bookmarks          StudentSubmissionBookmark[] @relation("SubmissionBookmarks")
 
   @@index([processing_batch_id])
   @@map("student_submissions")
@@ -937,6 +943,23 @@ model SubmissionFeedback {
   @@unique([submission_id, created_by])
   @@index([submission_id])
   @@map("submission_feedback")
+}
+
+/// Per-user bookmark on a student submission. Lets teachers flag scripts for
+/// later review (borderline grade, interesting response, second opinion).
+model StudentSubmissionBookmark {
+  id            String   @id @default(cuid())
+  user_id       String
+  submission_id String
+  created_at    DateTime @default(now())
+
+  user       User              @relation("UserBookmarks", fields: [user_id], references: [id], onDelete: Cascade)
+  submission StudentSubmission @relation("SubmissionBookmarks", fields: [submission_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, submission_id])
+  @@index([user_id])
+  @@index([submission_id])
+  @@map("student_submission_bookmarks")
 }
 
 model TeacherOverride {

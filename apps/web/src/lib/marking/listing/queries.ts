@@ -55,6 +55,7 @@ function mapSubmissionToListItem(
 		exam_paper_id: string
 		detected_subject: string | null
 		created_at: Date
+		confirmed_at: Date | null
 		exam_paper: { id: string; title: string } | null
 		grading_runs: Array<{
 			status: GradingStatus
@@ -64,6 +65,7 @@ function mapSubmissionToListItem(
 		teacher_overrides: Array<{ question_id: string; score_override: number }>
 	},
 	paperTotal: number,
+	isBookmarked: boolean,
 ): SubmissionHistoryItem {
 	const latestGrading = sub.grading_runs[0]
 	const latestOcr = sub.ocr_runs[0]
@@ -90,6 +92,8 @@ function mapSubmissionToListItem(
 		total_max: paperTotal,
 		status,
 		created_at: sub.created_at,
+		is_confirmed: sub.confirmed_at !== null,
+		is_bookmarked: isBookmarked,
 	}
 }
 
@@ -105,11 +109,26 @@ export const listMySubmissions = scopedAction({
 		})
 
 		const paperIds = [...new Set(subs.map((s) => s.exam_paper_id))]
-		const paperTotals = await fetchPaperTotals(paperIds)
+		const submissionIds = subs.map((s) => s.id)
+		const [paperTotals, bookmarks] = await Promise.all([
+			fetchPaperTotals(paperIds),
+			db.studentSubmissionBookmark.findMany({
+				where: {
+					user_id: ctx.user.id,
+					submission_id: { in: submissionIds },
+				},
+				select: { submission_id: true },
+			}),
+		])
+		const bookmarkedSet = new Set(bookmarks.map((b) => b.submission_id))
 
 		return {
 			submissions: subs.map((sub) =>
-				mapSubmissionToListItem(sub, paperTotals.get(sub.exam_paper_id) ?? 0),
+				mapSubmissionToListItem(
+					sub,
+					paperTotals.get(sub.exam_paper_id) ?? 0,
+					bookmarkedSet.has(sub.id),
+				),
 			),
 		}
 	},
@@ -148,6 +167,15 @@ export const listSubmissionsForPaper = resourceAction({
 			}),
 		])
 
+		const bookmarks = await db.studentSubmissionBookmark.findMany({
+			where: {
+				user_id: ctx.user.id,
+				submission_id: { in: subs.map((s) => s.id) },
+			},
+			select: { submission_id: true },
+		})
+		const bookmarkedSet = new Set(bookmarks.map((b) => b.submission_id))
+
 		const paperTotal = paperTotals.get(examPaperId) ?? 0
 		const countByKey = new Map(
 			versionCounts.map((v) => [v.staged_script_id, v._count]),
@@ -155,7 +183,7 @@ export const listSubmissionsForPaper = resourceAction({
 
 		return {
 			submissions: subs.map((sub) => ({
-				...mapSubmissionToListItem(sub, paperTotal),
+				...mapSubmissionToListItem(sub, paperTotal, bookmarkedSet.has(sub.id)),
 				version_count: countByKey.get(sub.staged_script_id) ?? 1,
 			})),
 		}

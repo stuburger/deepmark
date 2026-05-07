@@ -1,6 +1,10 @@
 "use server"
 
-import { resourceAction, resourcesAction } from "@/lib/authz"
+import {
+	authenticatedAction,
+	resourceAction,
+	resourcesAction,
+} from "@/lib/authz"
 import { db } from "@/lib/db"
 import type { JobEvent, Prisma } from "@mcp-gcse/db"
 import {
@@ -160,7 +164,10 @@ type RawExtracted = {
 	answers?: ExtractedAnswer[]
 }
 
-function toJobPayload(sub: SubmissionWithDetail) {
+function toJobPayload(
+	sub: SubmissionWithDetail,
+	opts: { isBookmarked: boolean },
+) {
 	const latestOcr = sub.ocr_runs[0] ?? null
 	const latestGrading = sub.grading_runs[0] ?? null
 
@@ -279,6 +286,8 @@ function toJobPayload(sub: SubmissionWithDetail) {
 		tier: sub.exam_paper?.tier ?? null,
 		grade_boundaries: parseStoredBoundaries(sub.exam_paper?.grade_boundaries),
 		grade_boundary_mode: sub.exam_paper?.grade_boundary_mode ?? null,
+		confirmed_at: sub.confirmed_at,
+		is_bookmarked: opts.isBookmarked,
 		submission_id: sub.id,
 		ocr_run_id: latestOcr?.id,
 		grading_run_id: latestGrading?.id,
@@ -298,13 +307,25 @@ export const getStudentPaperJob = resourceAction({
 }).action(
 	async ({
 		parsedInput: { jobId },
+		ctx,
 	}): Promise<{ data: ReturnType<typeof toJobPayload> | null }> => {
-		const sub = await db.studentSubmission.findFirst({
-			where: { id: jobId },
-			include: submissionDetailInclude,
-		})
+		const [sub, bookmark] = await Promise.all([
+			db.studentSubmission.findFirst({
+				where: { id: jobId },
+				include: submissionDetailInclude,
+			}),
+			db.studentSubmissionBookmark.findUnique({
+				where: {
+					user_id_submission_id: {
+						user_id: ctx.user.id,
+						submission_id: jobId,
+					},
+				},
+				select: { id: true },
+			}),
+		])
 		if (!sub) return { data: null }
-		return { data: toJobPayload(sub) }
+		return { data: toJobPayload(sub, { isBookmarked: bookmark !== null }) }
 	},
 )
 
@@ -322,16 +343,28 @@ export const getStudentPaperJobForPaper = resourcesAction({
 }).action(
 	async ({
 		parsedInput: { examPaperId, jobId },
+		ctx,
 	}): Promise<{ data: ReturnType<typeof toJobPayload> | null }> => {
-		const sub = await db.studentSubmission.findFirst({
-			where: {
-				id: jobId,
-				exam_paper_id: examPaperId,
-			},
-			include: submissionDetailInclude,
-		})
+		const [sub, bookmark] = await Promise.all([
+			db.studentSubmission.findFirst({
+				where: {
+					id: jobId,
+					exam_paper_id: examPaperId,
+				},
+				include: submissionDetailInclude,
+			}),
+			db.studentSubmissionBookmark.findUnique({
+				where: {
+					user_id_submission_id: {
+						user_id: ctx.user.id,
+						submission_id: jobId,
+					},
+				},
+				select: { id: true },
+			}),
+		])
 		if (!sub) return { data: null }
-		return { data: toJobPayload(sub) }
+		return { data: toJobPayload(sub, { isBookmarked: bookmark !== null }) }
 	},
 )
 
@@ -470,18 +503,31 @@ export const getStudentPapersForClass = resourcesAction({
 }).action(
 	async ({
 		parsedInput: { examPaperId, submissionIds, includeAnnotations },
+		ctx,
 	}): Promise<ClassPapersResult> => {
-		const subs = await db.studentSubmission.findMany({
-			where: {
-				id: { in: submissionIds },
-				exam_paper_id: examPaperId,
-				superseded_at: null,
-			},
-			orderBy: { created_at: "asc" },
-			include: submissionDetailInclude,
-		})
+		const [subs, bookmarks] = await Promise.all([
+			db.studentSubmission.findMany({
+				where: {
+					id: { in: submissionIds },
+					exam_paper_id: examPaperId,
+					superseded_at: null,
+				},
+				orderBy: { created_at: "asc" },
+				include: submissionDetailInclude,
+			}),
+			db.studentSubmissionBookmark.findMany({
+				where: {
+					user_id: ctx.user.id,
+					submission_id: { in: submissionIds },
+				},
+				select: { submission_id: true },
+			}),
+		])
 
-		const payloads = subs.map(toJobPayload)
+		const bookmarkedSet = new Set(bookmarks.map((b) => b.submission_id))
+		const payloads = subs.map((sub) =>
+			toJobPayload(sub, { isBookmarked: bookmarkedSet.has(sub.id) }),
+		)
 
 		let annotationsBySubmission: Record<string, StudentPaperAnnotation[]> = {}
 		let tokensBySubmission: Record<string, PageToken[]> = {}
@@ -638,6 +684,35 @@ export const getTeacherOverrides = resourceAction({
 	},
 )
 
+/**
+ * Returns the prev/next submission ids for a given jobId within the same exam
+ * paper. Order is `student_name asc, created_at asc` so it matches the way
+ * teachers think about a class set and stays stable across page refreshes.
+ */
+export const getAdjacentSubmissions = resourcesAction({
+	schema: z.object({ examPaperId: z.string(), jobId: z.string() }),
+	resources: [
+		{ type: "examPaper", role: "viewer", id: ({ examPaperId }) => examPaperId },
+		{ type: "submission", role: "viewer", id: ({ jobId }) => jobId },
+	],
+}).action(
+	async ({
+		parsedInput: { examPaperId, jobId },
+	}): Promise<{ prevId: string | null; nextId: string | null }> => {
+		const all = await db.studentSubmission.findMany({
+			where: { exam_paper_id: examPaperId, superseded_at: null },
+			select: { id: true },
+			orderBy: [{ student_name: "asc" }, { created_at: "asc" }],
+		})
+		const idx = all.findIndex((s) => s.id === jobId)
+		if (idx === -1) return { prevId: null, nextId: null }
+		return {
+			prevId: idx > 0 ? all[idx - 1].id : null,
+			nextId: idx < all.length - 1 ? all[idx + 1].id : null,
+		}
+	},
+)
+
 export const getSubmissionFeedback = resourceAction({
 	type: "submission",
 	role: "viewer",
@@ -659,3 +734,33 @@ export const getSubmissionFeedback = resourceAction({
 		return { feedback: row ? toSubmissionFeedback(row) : null }
 	},
 )
+
+export type BookmarkedSubmission = {
+	id: string
+	student_name: string | null
+	exam_paper: { id: string; title: string }
+}
+
+export const getBookmarkedSubmissions = authenticatedAction
+	.schema(z.object({}))
+	.action(async ({ ctx }): Promise<{ bookmarks: BookmarkedSubmission[] }> => {
+		const rows = await db.studentSubmissionBookmark.findMany({
+			where: { user_id: ctx.user.id },
+			orderBy: { created_at: "desc" },
+			take: 20,
+			select: {
+				submission: {
+					select: {
+						id: true,
+						student_name: true,
+						exam_paper: { select: { id: true, title: true } },
+					},
+				},
+			},
+		})
+		return {
+			bookmarks: rows
+				.map((r) => r.submission)
+				.filter((s): s is BookmarkedSubmission => s.exam_paper !== null),
+		}
+	})

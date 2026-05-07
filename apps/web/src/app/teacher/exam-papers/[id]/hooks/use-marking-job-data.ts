@@ -1,9 +1,6 @@
 "use client"
 
-import {
-	getJobPageTokens,
-	getJobScanPages,
-} from "@/lib/marking/scan/queries"
+import { getJobPageTokens, getJobScanPages } from "@/lib/marking/scan/queries"
 import { getJobStages } from "@/lib/marking/stages/queries"
 import type { JobStages } from "@/lib/marking/stages/types"
 import { getStudentPaperJobForPaper } from "@/lib/marking/submissions/queries"

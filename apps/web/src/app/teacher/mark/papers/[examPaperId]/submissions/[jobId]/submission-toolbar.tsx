@@ -7,6 +7,7 @@ import { useYDoc } from "@/components/annotated-answer/use-y-doc"
 import { ShareDialog } from "@/components/sharing/share-dialog"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { SoftChip } from "@/components/ui/soft-chip"
 import {
 	Tooltip,
 	TooltipContent,
@@ -14,15 +15,33 @@ import {
 	TooltipTrigger,
 } from "@/components/ui/tooltip"
 import type { MarkingPhase } from "@/lib/marking/stages/phase"
+import {
+	confirmMarking,
+	toggleBookmark,
+} from "@/lib/marking/submissions/mutations"
+import { getAdjacentSubmissions } from "@/lib/marking/submissions/queries"
 import type {
 	PageToken,
 	StudentPaperAnnotation,
 	StudentPaperJobPayload,
 } from "@/lib/marking/types"
+import { queryKeys } from "@/lib/query-keys"
 import { useCurrentUser } from "@/lib/users/use-current-user"
+import { cn } from "@/lib/utils"
 import { computeGrade } from "@mcp-gcse/shared"
-import { ChevronRight, Eye, Share2, X } from "lucide-react"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import {
+	Bookmark,
+	Check,
+	ChevronLeft,
+	ChevronRight,
+	Eye,
+	Loader2,
+	Share2,
+	X,
+} from "lucide-react"
 import Link from "next/link"
+import { toast } from "sonner"
 import { ReScanButton } from "./re-scan-button"
 import { DownloadPdfButton } from "./results/download-pdf-button"
 import { LlmSpendButton } from "./results/llm-snapshot-panel"
@@ -66,6 +85,103 @@ export function SubmissionToolbar({
 	const { doc, provider } = useYDoc(docKey)
 	const collaborators = useCollaborators(provider)
 	const { isAdmin, cursorUser } = useCurrentUser()
+	const queryClient = useQueryClient()
+
+	const { data: adjacent } = useQuery({
+		queryKey: queryKeys.adjacentSubmissions(examPaperId, jobId),
+		queryFn: async () => {
+			const r = await getAdjacentSubmissions({ examPaperId, jobId })
+			return r?.data ?? { prevId: null, nextId: null }
+		},
+		staleTime: 30_000,
+	})
+	const prevId = adjacent?.prevId ?? null
+	const nextId = adjacent?.nextId ?? null
+	const isConfirmed = data.confirmed_at !== null
+
+	const confirmMutation = useMutation({
+		mutationFn: async () => {
+			const r = await confirmMarking({ jobId })
+			if (r?.serverError) throw new Error(r.serverError)
+			return r?.data
+		},
+		onMutate: async () => {
+			await queryClient.cancelQueries({
+				queryKey: queryKeys.studentJob(jobId),
+			})
+			const previous = queryClient.getQueryData<StudentPaperJobPayload | null>(
+				queryKeys.studentJob(jobId),
+			)
+			if (previous) {
+				queryClient.setQueryData<StudentPaperJobPayload | null>(
+					queryKeys.studentJob(jobId),
+					{ ...previous, confirmed_at: new Date() },
+				)
+			}
+			return { previous }
+		},
+		onError: (err, _vars, context) => {
+			if (context?.previous !== undefined) {
+				queryClient.setQueryData(queryKeys.studentJob(jobId), context.previous)
+			}
+			toast.error(
+				err instanceof Error ? err.message : "Failed to confirm marking",
+			)
+		},
+		onSuccess: () => {
+			toast.success("Marking confirmed")
+			if (nextId) onNavigateToJob(nextId)
+			else onClose?.()
+		},
+		onSettled: () => {
+			queryClient.invalidateQueries({
+				queryKey: queryKeys.submissions(examPaperId),
+			})
+			queryClient.invalidateQueries({
+				queryKey: queryKeys.studentJob(jobId),
+			})
+		},
+	})
+
+	const bookmarkMutation = useMutation({
+		mutationFn: async (next: boolean) => {
+			const r = await toggleBookmark({ jobId, bookmarked: next })
+			if (r?.serverError) throw new Error(r.serverError)
+			return r?.data
+		},
+		onMutate: async (next) => {
+			await queryClient.cancelQueries({
+				queryKey: queryKeys.studentJob(jobId),
+			})
+			const previous = queryClient.getQueryData<StudentPaperJobPayload | null>(
+				queryKeys.studentJob(jobId),
+			)
+			if (previous) {
+				queryClient.setQueryData<StudentPaperJobPayload | null>(
+					queryKeys.studentJob(jobId),
+					{ ...previous, is_bookmarked: next },
+				)
+			}
+			return { previous }
+		},
+		onError: (err, _next, context) => {
+			if (context?.previous !== undefined) {
+				queryClient.setQueryData(queryKeys.studentJob(jobId), context.previous)
+			}
+			toast.error(
+				err instanceof Error ? err.message : "Failed to update bookmark",
+			)
+		},
+		onSettled: () => {
+			queryClient.invalidateQueries({ queryKey: queryKeys.bookmarks() })
+			queryClient.invalidateQueries({
+				queryKey: queryKeys.submissions(examPaperId),
+			})
+			queryClient.invalidateQueries({
+				queryKey: queryKeys.studentJob(jobId),
+			})
+		},
+	})
 
 	// Live totals from the Y.Doc — overrides the server payload so teacher
 	// edits in the editor reflect immediately. Falls back to `data.*` until
@@ -149,6 +265,30 @@ export function SubmissionToolbar({
 							</TooltipContent>
 						</Tooltip>
 					)}
+					<div className="flex items-center gap-1">
+						<Button
+							type="button"
+							variant="ghost"
+							size="sm"
+							onClick={() => prevId && onNavigateToJob(prevId)}
+							disabled={!prevId}
+							className="gap-1"
+						>
+							<ChevronLeft className="h-3.5 w-3.5" />
+							Prev
+						</Button>
+						<Button
+							type="button"
+							variant="ghost"
+							size="sm"
+							onClick={() => nextId && onNavigateToJob(nextId)}
+							disabled={!nextId}
+							className="gap-1"
+						>
+							Next
+							<ChevronRight className="h-3.5 w-3.5" />
+						</Button>
+					</div>
 					<CollaboratorAvatars users={collaborators} self={cursorUser} />
 					{data.submission_id && !readOnly && (
 						<ShareDialog
@@ -161,6 +301,64 @@ export function SubmissionToolbar({
 								</Button>
 							}
 						/>
+					)}
+					{!readOnly && (
+						<>
+							<Tooltip>
+								<TooltipTrigger
+									render={
+										<Button
+											type="button"
+											variant="ghost"
+											size="sm"
+											aria-pressed={data.is_bookmarked}
+											aria-label={
+												data.is_bookmarked
+													? "Remove bookmark"
+													: "Bookmark this submission"
+											}
+											onClick={() =>
+												bookmarkMutation.mutate(!data.is_bookmarked)
+											}
+											className={cn(
+												"h-7 px-2 border",
+												data.is_bookmarked
+													? "border-primary bg-primary/5 text-primary hover:bg-primary/10"
+													: "border-border bg-card text-muted-foreground hover:text-foreground",
+											)}
+										>
+											<Bookmark
+												className="h-3.5 w-3.5"
+												fill={data.is_bookmarked ? "currentColor" : "none"}
+											/>
+										</Button>
+									}
+								/>
+								<TooltipContent side="bottom" sideOffset={6}>
+									{data.is_bookmarked ? "Bookmarked" : "Bookmark"}
+								</TooltipContent>
+							</Tooltip>
+							{isConfirmed ? (
+								<SoftChip kind="success" className="gap-1">
+									<Check className="h-3 w-3" />
+									Confirmed
+								</SoftChip>
+							) : (
+								<Button
+									type="button"
+									variant="confirm"
+									onClick={() => confirmMutation.mutate()}
+									disabled={confirmMutation.isPending}
+								>
+									{confirmMutation.isPending ? (
+										<Loader2 className="h-3.5 w-3.5 animate-spin" />
+									) : (
+										<Check className="h-3.5 w-3.5" />
+									)}
+									Confirm marking
+								</Button>
+							)}
+						</>
 					)}
 					{onClose && (
 						<Tooltip>

@@ -59,6 +59,20 @@ export const linkStudentToJob = resourceAction({
 	},
 )
 
+export const confirmMarking = resourceAction({
+	type: "submission",
+	role: "editor",
+	schema: z.object({ jobId: z.string() }),
+	id: ({ jobId }) => jobId,
+}).action(async ({ parsedInput: { jobId }, ctx }): Promise<{ ok: true }> => {
+	await db.studentSubmission.update({
+		where: { id: jobId },
+		data: { confirmed_at: new Date(), confirmed_by: ctx.user.id },
+	})
+	ctx.log.info("Submission confirmed", { jobId })
+	return { ok: true }
+})
+
 export const deleteSubmission = resourceAction({
 	type: "submission",
 	role: "owner",
@@ -138,6 +152,36 @@ export const updateExtractedAnswer = resourceAction({
 		})
 
 		return { ok: true }
+	},
+)
+
+export const toggleBookmark = resourceAction({
+	type: "submission",
+	role: "viewer",
+	schema: z.object({ jobId: z.string(), bookmarked: z.boolean() }),
+	id: ({ jobId }) => jobId,
+}).action(
+	async ({
+		parsedInput: { jobId, bookmarked },
+		ctx,
+	}): Promise<{ bookmarked: boolean }> => {
+		if (bookmarked) {
+			await db.studentSubmissionBookmark.upsert({
+				where: {
+					user_id_submission_id: {
+						user_id: ctx.user.id,
+						submission_id: jobId,
+					},
+				},
+				create: { user_id: ctx.user.id, submission_id: jobId },
+				update: {},
+			})
+		} else {
+			await db.studentSubmissionBookmark.deleteMany({
+				where: { user_id: ctx.user.id, submission_id: jobId },
+			})
+		}
+		return { bookmarked }
 	},
 )
 

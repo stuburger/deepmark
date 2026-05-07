@@ -6,6 +6,8 @@ export const queryKeys = {
 	unlinkedMarkSchemes: (id: string) => ["unlinkedMarkSchemes", id] as const,
 	examPaperStats: (id: string) => ["examPaperStats", id] as const,
 	submissions: (examPaperId: string) => ["submissions", examPaperId] as const,
+	adjacentSubmissions: (examPaperId: string, jobId: string) =>
+		["adjacentSubmissions", examPaperId, jobId] as const,
 	studentJob: (jobId: string) => ["studentJob", jobId] as const,
 	jobStages: (jobId: string) => ["jobStages", jobId] as const,
 	jobScanPages: (jobId: string) => ["jobScanPages", jobId] as const,
@@ -19,6 +21,8 @@ export const queryKeys = {
 	llmCallSites: () => ["llmCallSites"] as const,
 	submissionFeedback: (submissionId: string) =>
 		["submissionFeedback", submissionId] as const,
+	bookmarks: () => ["bookmarks"] as const,
+	submissionBookmark: (jobId: string) => ["submissionBookmark", jobId] as const,
 	// ─── Batch ingestion ───────────────────────────────────────────────────────
 	activeBatch: (paperId: string) => ["activeBatch", paperId] as const,
 	// ─── Auth / current user ───────────────────────────────────────────────────

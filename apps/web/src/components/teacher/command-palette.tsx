@@ -65,7 +65,7 @@ export function CommandPalette() {
 			onOpenChange={setPaletteOpen}
 			title="Search"
 			description="Search papers and submissions"
-			className="top-[10vh] sm:max-w-xl"
+			className="data-[size=default]:top-[10vh] data-[size=default]:-translate-y-0 sm:max-w-xl!"
 		>
 			<Command shouldFilter={false}>
 				<CommandInput

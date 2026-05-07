@@ -1,0 +1,3 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`AnnotatedAnswer > matches a stable snapshot for the canonical multi-mark fixture 1`] = `"<div class="answer-box"><p class="answer-text"><span style="color:#16A34A;font-weight:700">+ </span><span>Photosynthesis</span><span> </span><span style="text-decoration:underline;text-decoration-color:#3B82F6">happens</span><span class="ao-label" style="color:#3b82f6"> [AO1]</span><span> in </span><span style="background-color:#FEF3C7">chloroplasts</span><span>.</span></p></div>"`;

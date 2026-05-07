@@ -15,6 +15,7 @@ import {
 } from "./config"
 import { neonPostgres } from "./database"
 import { bus } from "./events"
+import { pdfRendererFn } from "./pdf-renderer"
 import {
 	batchClassifyQueue,
 	exemplarQueue,
@@ -65,6 +66,9 @@ export const web = new sst.aws.Nextjs("Web", {
 		// statically imports the SES client from sst-env (so the resource needs
 		// to be reachable at build time for type generation).
 		bus,
+		// Class PDF export sync-invokes this Lambda; SST grants
+		// `lambda:InvokeFunction` and exposes `Resource.PdfRenderer.name`.
+		pdfRendererFn,
 	],
 	dev: {
 		url: "http://localhost:3000",

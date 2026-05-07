@@ -110,6 +110,10 @@ declare module "sst" {
       "type": "sst.sst.Secret"
       "value": string
     }
+    "PdfRenderer": {
+      "name": string
+      "type": "sst.aws.Function"
+    }
     "PushSubscriberDLQ": {
       "type": "sst.aws.Queue"
       "url": string

@@ -72,9 +72,11 @@ const ALLOWED_PATHS: ReadonlyArray<string> = [
 	// than the brand scales; same justification as ao-palette. Centralised
 	// here so the rainbow doesn't leak into product UI for non-subject signals.
 	"src/lib/subjects.ts",
-	// PDF export via @react-pdf/renderer runs outside the browser — CSS
-	// variables don't apply, so all colours must be raw hex. The PDF subtree
-	// is a separate rendering target.
+	// PDF class report renders to standalone HTML printed by Chromium in a
+	// Lambda — there's no globals.css available, so the inlined print
+	// stylesheet and per-segment mark/AO/score colours must be raw hex.
+	// Separate rendering target with its own colour vocabulary (mark
+	// palette + AO palette + score bands).
 	"src/lib/marking/pdf-export/",
 	// Design system reference page. Its entire job is to *display* hex values
 	// alongside the rendered swatches as a visual key for the design team.

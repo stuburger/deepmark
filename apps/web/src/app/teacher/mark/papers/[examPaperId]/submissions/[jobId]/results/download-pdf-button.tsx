@@ -7,7 +7,7 @@ import {
 	DropdownMenuItem,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { slugify, triggerBlobDownload } from "@/lib/marking/listing/csv"
+import { exportClassReport } from "@/lib/marking/pdf-export/export-action"
 import type {
 	PageToken,
 	StudentPaperAnnotation,
@@ -17,6 +17,16 @@ import { ChevronDown, Download, FileText, Loader2 } from "lucide-react"
 import { useState } from "react"
 import { toast } from "sonner"
 
+/**
+ * Single-submission export button. Rides on the same `exportClassReport`
+ * server action as the class-level export (passing one submissionId is
+ * the canonical "single student" form) so we have one rendering pipeline
+ * to maintain.
+ *
+ * `annotations` + `pageTokens` are passed in only so the dropdown can
+ * gate the "Export with Annotations" item — the action re-fetches them
+ * itself from the resolved paper/submission ids.
+ */
 export function DownloadPdfButton({
 	data,
 	annotations,
@@ -27,34 +37,45 @@ export function DownloadPdfButton({
 	pageTokens?: PageToken[]
 }) {
 	const [generating, setGenerating] = useState(false)
-
 	const hasAnnotations =
-		annotations && annotations.length > 0 && pageTokens && pageTokens.length > 0
+		!!annotations &&
+		annotations.length > 0 &&
+		!!pageTokens &&
+		pageTokens.length > 0
 
 	async function handleDownload(includeAnnotations: boolean) {
+		const submissionId = data.submission_id
+		if (!submissionId) {
+			toast.error("Submission missing — cannot generate PDF")
+			return
+		}
 		setGenerating(true)
 		try {
-			const { generateSingleStudentReport } = await import(
-				"@/lib/marking/pdf-export/generate"
-			)
-
-			const bytes = await generateSingleStudentReport({
-				student: data,
-				annotations,
-				pageTokens,
+			const result = await exportClassReport({
+				paperId: data.exam_paper_id,
+				submissionIds: [submissionId],
+				className: "",
+				teacherName: "",
+				printLayout: "none",
 				includeAnnotations,
 			})
-
-			const studentName = data.student_name ?? "unknown-student"
-			const suffix = includeAnnotations ? "-annotated" : ""
-			const filename = `${slugify(studentName)}${suffix}-grading-report.pdf`
-
-			const ab = bytes.buffer.slice(
-				bytes.byteOffset,
-				bytes.byteOffset + bytes.byteLength,
-			) as ArrayBuffer
-			const blob = new Blob([ab], { type: "application/pdf" })
-			triggerBlobDownload(blob, filename, "application/pdf")
+			if (result?.serverError) {
+				toast.error(result.serverError)
+				return
+			}
+			const payload = result?.data
+			if (!payload) {
+				toast.error("Failed to generate PDF")
+				return
+			}
+			// Click a hidden anchor — same pattern as the class export menu
+			// so the user stays on the results page.
+			const link = document.createElement("a")
+			link.href = payload.url
+			link.download = payload.filename
+			document.body.appendChild(link)
+			link.click()
+			document.body.removeChild(link)
 		} catch {
 			toast.error("Failed to generate PDF")
 		} finally {

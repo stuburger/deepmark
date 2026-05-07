@@ -89,7 +89,7 @@ export const triggerClassification = resourceAction({
 		await sqs.send(
 			new SendMessageCommand({
 				QueueUrl: Resource.BatchClassifyQueue.url,
-				MessageBody: JSON.stringify({ batch_job_id: batchJobId }),
+				MessageBody: JSON.stringify({ batch_ingest_job_id: batchJobId }),
 			}),
 		)
 

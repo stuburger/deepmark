@@ -13,7 +13,7 @@ import { z } from "zod/v4"
 const TAG = "batch-classify"
 
 const MessageBodySchema = z.object({
-	batch_job_id: z.string().min(1),
+	batch_ingest_job_id: z.string().min(1),
 })
 
 // ─── Handler ──────────────────────────────────────────────────────────────────
@@ -62,7 +62,7 @@ function parseBatchJobId(record: SqsRecord): string | null {
 		})
 		return null
 	}
-	return parsed.data.batch_job_id
+	return parsed.data.batch_ingest_job_id
 }
 
 // ─── Core classification logic ────────────────────────────────────────────────

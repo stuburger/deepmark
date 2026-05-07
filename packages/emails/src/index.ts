@@ -24,6 +24,7 @@ export {
 } from "./event-payloads"
 export {
 	MarkingCompleteEmail,
+	buildMarkingCompleteCopy,
 	type MarkingCompleteEmailProps,
 } from "./marking-complete"
 export {

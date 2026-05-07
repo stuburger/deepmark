@@ -1,6 +1,9 @@
 import { render } from "@react-email/render"
 
-import { MarkingCompleteEmail } from "./marking-complete"
+import {
+	MarkingCompleteEmail,
+	buildMarkingCompleteCopy,
+} from "./marking-complete"
 import type { MarkingCompleteEmailProps } from "./marking-complete"
 import { PpuThankYouEmail } from "./ppu-thank-you"
 import type { PpuThankYouEmailProps } from "./ppu-thank-you"
@@ -72,12 +75,6 @@ export async function renderTopupThankYouEmail(
 export async function renderMarkingCompleteEmail(
 	props: MarkingCompleteEmailProps,
 ): Promise<RenderedEmail> {
-	const total = props.successCount + props.failedCount
-	const allFailed = total > 0 && props.successCount === 0
-	const subject = allFailed
-		? `Marking failed — ${props.examPaperTitle}`
-		: props.kind === "re_grade"
-			? `Regrades complete — ${props.examPaperTitle}`
-			: `Marking complete — ${props.examPaperTitle}`
+	const { subject } = buildMarkingCompleteCopy(props)
 	return renderBoth(<MarkingCompleteEmail {...props} />, subject)
 }

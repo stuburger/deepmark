@@ -57,7 +57,7 @@ describe("batch-classify smoke (deployed Lambda, GWAUGH 700-page fixture)", () =
 
 		const result = await invokeLambdaWithSqsBody(
 			Resource.BatchClassifyTestRunner.name,
-			{ batch_job_id: batchId },
+			{ batch_ingest_job_id: batchId },
 		)
 
 		if (result.functionError) {

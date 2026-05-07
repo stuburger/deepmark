@@ -29,7 +29,7 @@ describe("batch-classify Lambda", () => {
 
 	async function runBatchAndWait() {
 		await sendToQueue(Resource.BatchClassifyQueue.url, {
-			batch_job_id: batchId,
+			batch_ingest_job_id: batchId,
 		})
 
 		return waitFor(

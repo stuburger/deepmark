@@ -2,7 +2,7 @@ import Link from "next/link"
 
 export function MarketingFooter() {
 	return (
-		<footer className="border-t border-border/40 bg-background">
+		<footer className="border-t border-border-quiet bg-card">
 			<div className="mx-auto grid max-w-6xl gap-8 px-6 py-12 sm:grid-cols-2 md:grid-cols-4">
 				<div className="space-y-2">
 					<p className="text-sm font-semibold">DeepMark</p>
@@ -35,7 +35,7 @@ export function MarketingFooter() {
 					]}
 				/>
 			</div>
-			<div className="border-t border-border/40">
+			<div className="border-t border-border-quiet">
 				<div className="mx-auto max-w-6xl px-6 py-4 text-xs text-muted-foreground">
 					© {new Date().getFullYear()} DeepMark. All rights reserved.
 				</div>

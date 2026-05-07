@@ -1,3 +1,6 @@
+import { MarkTick } from "./mark-ornaments"
+import { SectionHeading } from "./section-heading"
+
 const points = [
 	"Detailed, annotated feedback on every script",
 	"Clear strengths and next steps",
@@ -6,22 +9,24 @@ const points = [
 
 export function StudentImpactSection() {
 	return (
-		<section className="border-b border-border/40 bg-muted/20">
-			<div className="mx-auto max-w-2xl px-6 py-20 sm:py-24">
-				<h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">
-					Better for students too
-				</h2>
-				<ul className="mt-6 space-y-3">
-					{points.map((point) => (
-						<li key={point} className="flex items-start gap-3">
-							<span className="mt-1 size-1.5 shrink-0 rounded-full bg-primary" />
-							<span className="text-base text-muted-foreground">{point}</span>
-						</li>
-					))}
-				</ul>
-				<p className="mt-8 font-medium text-foreground">
-					The kind of feedback you'd give — if you had the time.
-				</p>
+		<section className="marketing-reveal">
+			<div className="mx-auto max-w-3xl px-6 py-20 sm:py-24">
+				<div className="bg-ruled-paper relative overflow-hidden rounded-md border border-border-quiet px-8 py-14 shadow-tile sm:px-12 sm:py-16">
+					<SectionHeading align="left">Better for students too</SectionHeading>
+
+					<ul className="mt-10 space-y-5">
+						{points.map((point) => (
+							<li key={point} className="flex items-start gap-4">
+								<MarkTick className="mt-1 size-6 shrink-0 text-error-500 [transform:rotate(-12deg)]" />
+								<span className="text-lg text-foreground">{point}</span>
+							</li>
+						))}
+					</ul>
+
+					<p className="mt-12 max-w-2xl text-balance text-lg font-medium text-foreground">
+						The kind of feedback you'd give — if you had the time.
+					</p>
+				</div>
 			</div>
 		</section>
 	)

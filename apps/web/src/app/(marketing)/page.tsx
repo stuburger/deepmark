@@ -3,7 +3,7 @@ import { redirect } from "next/navigation"
 
 import { auth } from "@/lib/auth"
 
-import { CaregiverSection } from "./_components/caregiver-section"
+import { EditorialPairSection } from "./_components/editorial-pair-section"
 import { FinalCta } from "./_components/final-cta"
 import { GetTimeBackSection } from "./_components/get-time-back-section"
 import { HeroSection } from "./_components/hero-section"
@@ -32,7 +32,7 @@ export default async function LandingPage() {
 		<>
 			<HeroSection />
 			<ProofSection stats={stats} />
-			<CaregiverSection />
+			<EditorialPairSection />
 			<SageProductSection />
 			<TestimonialsSection />
 			<HowItWorksSection />

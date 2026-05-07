@@ -44,7 +44,7 @@
 		"process-logo": "bun scripts/process-logo.ts",
 		"build": "turbo build",
 		"typecheck": "turbo typecheck",
-		"check": "bunx biome check apps/web/src packages/backend/src packages/shared/src packages/db/src packages/emails/src",
+		"check": "bunx biome check apps/web/src packages/backend/src packages/shared/src packages/db/src packages/emails/src && bun gen:tokens:check && bun lint:tokens",
 		"fix": "bunx biome check --fix --unsafe apps/web/src packages/backend/src packages/shared/src packages/db/src packages/emails/src",
 		"email:preview": "bun --cwd packages/emails preview",
 		"dev": "sst dev",

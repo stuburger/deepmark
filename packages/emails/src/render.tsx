@@ -72,8 +72,12 @@ export async function renderTopupThankYouEmail(
 export async function renderMarkingCompleteEmail(
 	props: MarkingCompleteEmailProps,
 ): Promise<RenderedEmail> {
-	return renderBoth(
-		<MarkingCompleteEmail {...props} />,
-		`Marking complete — ${props.examPaperTitle}`,
-	)
+	const total = props.successCount + props.failedCount
+	const allFailed = total > 0 && props.successCount === 0
+	const subject = allFailed
+		? `Marking failed — ${props.examPaperTitle}`
+		: props.kind === "re_grade"
+			? `Regrades complete — ${props.examPaperTitle}`
+			: `Marking complete — ${props.examPaperTitle}`
+	return renderBoth(<MarkingCompleteEmail {...props} />, subject)
 }

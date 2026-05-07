@@ -16,6 +16,7 @@ export {
 	EventSource,
 	type BatchCompletedDetail,
 	type EventDetailTypeValue,
+	type ProcessingBatchKind,
 	type PpuPurchasedDetail,
 	type SubscriptionUpgradedDetail,
 	type TopupPurchasedDetail,

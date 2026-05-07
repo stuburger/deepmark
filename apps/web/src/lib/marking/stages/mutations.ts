@@ -50,7 +50,7 @@ type SubmissionCloneSource = {
 
 function submissionCloneFields(
 	oldSub: SubmissionCloneSource,
-	parentSubmissionId: string,
+	args: { parentSubmissionId: string; processingBatchId: string },
 ) {
 	return {
 		s3_key: oldSub.s3_key,
@@ -65,7 +65,8 @@ function submissionCloneFields(
 		student_id: oldSub.student_id,
 		batch_job_id: oldSub.batch_job_id,
 		staged_script_id: oldSub.staged_script_id,
-		parent_submission_id: parentSubmissionId,
+		parent_submission_id: args.parentSubmissionId,
+		processing_batch_id: args.processingBatchId,
 	}
 }
 
@@ -104,6 +105,7 @@ async function cloneSubmissionForRegradeTx(
 	tx: Prisma.TransactionClient,
 	oldSubmissionId: string,
 	ledger: LedgerContext,
+	processingBatchId: string,
 ): Promise<string> {
 	const oldSub = await tx.studentSubmission.findFirst({
 		where: { id: oldSubmissionId },
@@ -129,7 +131,10 @@ async function cloneSubmissionForRegradeTx(
 	}
 
 	const created = await tx.studentSubmission.create({
-		data: submissionCloneFields(oldSub, oldSubmissionId),
+		data: submissionCloneFields(oldSub, {
+			parentSubmissionId: oldSubmissionId,
+			processingBatchId,
+		}),
 	})
 
 	await tx.resourceGrant.create({
@@ -241,7 +246,7 @@ export const retriggerGrading = resourceAction({
 	async ({ parsedInput: { jobId }, ctx }): Promise<{ newJobId: string }> => {
 		const oldSub = await db.studentSubmission.findFirst({
 			where: { id: jobId },
-			select: { uploaded_by: true },
+			select: { uploaded_by: true, exam_paper_id: true },
 		})
 		if (!oldSub) throw new Error("Job not found")
 
@@ -249,9 +254,17 @@ export const retriggerGrading = resourceAction({
 
 		const ledger = await resolveLedgerContext(oldSub.uploaded_by)
 
-		const newJobId = await db.$transaction((tx) =>
-			cloneSubmissionForRegradeTx(tx, jobId, ledger),
-		)
+		const newJobId = await db.$transaction(async (tx) => {
+			const processingBatch = await tx.processingBatch.create({
+				data: {
+					exam_paper_id: oldSub.exam_paper_id,
+					triggered_by: oldSub.uploaded_by,
+					kind: "re_grade",
+					total_jobs: 1,
+				},
+			})
+			return cloneSubmissionForRegradeTx(tx, jobId, ledger, processingBatch.id)
+		})
 
 		await sqs.send(
 			new SendMessageCommand({
@@ -322,12 +335,24 @@ export const regradeSubmissions = resourceAction({
 			}
 		}
 
+		// One ProcessingBatch covers the whole regrade action — every cloned
+		// submission lands in the same notification group, so the user gets
+		// one email/push when the full set has settled.
+		const processingBatch = await db.processingBatch.create({
+			data: {
+				exam_paper_id: examPaperId,
+				triggered_by: ctx.user.id,
+				kind: "re_grade",
+				total_jobs: targets.length,
+			},
+		})
+
 		const newJobIds: string[] = []
 		for (const t of targets) {
 			const ledger = ledgerCache.get(t.uploaded_by)
 			if (!ledger) throw new Error("Ledger context missing")
 			const newJobId = await db.$transaction((tx) =>
-				cloneSubmissionForRegradeTx(tx, t.id, ledger),
+				cloneSubmissionForRegradeTx(tx, t.id, ledger, processingBatch.id),
 			)
 			newJobIds.push(newJobId)
 		}
@@ -378,8 +403,19 @@ export const retriggerOcr = resourceAction({
 		const ledger = await resolveLedgerContext(oldSub.uploaded_by)
 
 		const newSub = await db.$transaction(async (tx) => {
+			const processingBatch = await tx.processingBatch.create({
+				data: {
+					exam_paper_id: oldSub.exam_paper_id,
+					triggered_by: oldSub.uploaded_by,
+					kind: "re_extract",
+					total_jobs: 1,
+				},
+			})
 			const created = await tx.studentSubmission.create({
-				data: submissionCloneFields(oldSub, jobId),
+				data: submissionCloneFields(oldSub, {
+					parentSubmissionId: jobId,
+					processingBatchId: processingBatch.id,
+				}),
 			})
 			await tx.resourceGrant.create({
 				data: {

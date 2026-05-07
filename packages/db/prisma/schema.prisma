@@ -158,6 +158,22 @@ enum StagedScriptStatus {
   submitted
 }
 
+/// What kind of work this ProcessingBatch represents. Drives email copy and
+/// UI grouping; does not branch the pipeline. `initial` covers a fresh upload
+/// (full OCR + grade), `re_extract` is OCR + grade rerun, `re_grade` reuses
+/// existing OCR data and only re-runs grading.
+enum ProcessingBatchKind {
+  initial
+  re_extract
+  re_grade
+}
+
+enum ProcessingBatchStatus {
+  pending
+  complete
+  failed
+}
+
 enum StimulusContentType {
   text
   image
@@ -224,6 +240,7 @@ model User {
   pdf_ingestion_jobs   PdfIngestionJob[]      @relation("PdfIngestionJobUploader")
   student_submissions  StudentSubmission[]    @relation("SubmissionUploader")
   batch_ingest_jobs    BatchIngestJob[]       @relation("BatchIngestJobUploader")
+  triggered_processing_batches ProcessingBatch[] @relation("ProcessingBatchTriggerer")
   push_subscriptions   UserPushSubscription[] @relation("UserPushSubscriptions")
   teacher_overrides    TeacherOverride[]      @relation("UserOverrides")
   submission_feedback  SubmissionFeedback[]   @relation("UserFeedback")
@@ -437,6 +454,7 @@ model ExamPaper {
   pdf_ingestion_jobs   PdfIngestionJob[]
   student_submissions  StudentSubmission[] @relation("SubmissionExamPaper")
   batch_ingest_jobs    BatchIngestJob[]
+  processing_batches   ProcessingBatch[]   @relation("ProcessingBatchExamPaper")
 
   @@map("exam_papers")
 }
@@ -688,6 +706,12 @@ model StudentSubmission {
   detected_subject Subject?
   batch_job_id     String?
   staged_script_id String
+  /// The ProcessingBatch this submission belongs to — the notification group
+  /// that fires one email/push when every member has reached a terminal
+  /// state. Nullable during the additive migration phase; flipped to non-null
+  /// once backfill + Phase C writes complete. Set on every fresh upload, every
+  /// regrade, and every re-extract.
+  processing_batch_id String?
   /// The submission this one was directly cloned from (re-grade or re-scan).
   /// Preserves the true DAG lineage; the listing UI shows linear history by
   /// superseding all active siblings on each new version, but this column
@@ -704,6 +728,7 @@ model StudentSubmission {
   student       Student?                   @relation("SubmissionStudent", fields: [student_id], references: [id])
   batch_job     BatchIngestJob?            @relation("BatchIngestSubmissions", fields: [batch_job_id], references: [id])
   staged_script StagedScript              @relation("StagedScriptSubmission", fields: [staged_script_id], references: [id])
+  processing_batch ProcessingBatch?       @relation("ProcessingBatchSubmissions", fields: [processing_batch_id], references: [id])
   parent        StudentSubmission?         @relation("SubmissionLineage", fields: [parent_submission_id], references: [id])
   children      StudentSubmission[]        @relation("SubmissionLineage")
   ocr_runs      OcrRun[]
@@ -715,6 +740,7 @@ model StudentSubmission {
   feedback           SubmissionFeedback[]       @relation("SubmissionFeedback")
   annotations        StudentPaperAnnotation[]   @relation("SubmissionAnnotations")
 
+  @@index([processing_batch_id])
   @@map("student_submissions")
 }
 
@@ -839,8 +865,45 @@ model BatchIngestJob {
   exam_paper          ExamPaper           @relation(fields: [exam_paper_id], references: [id])
   student_submissions StudentSubmission[] @relation("BatchIngestSubmissions")
   staged_scripts      StagedScript[]
+  processing_batches  ProcessingBatch[]   @relation("ProcessingBatchIngest")
 
   @@map("batch_ingest_jobs")
+}
+
+/// A group of submissions being processed together (OCR + grading), the unit
+/// for completion notifications. Decoupled from BatchIngestJob so regrades and
+/// re-extracts each get their own notification group instead of reusing the
+/// upload's batch (which fired its email when the original run finished).
+///
+/// One `initial` ProcessingBatch is created per upload commit; one `re_grade`
+/// per regradeSubmissions / retriggerGrading call; one `re_extract` per
+/// retriggerOcr call. The completion check fires when every child submission
+/// reaches a terminal state (grading complete/failed/cancelled, or OCR failed).
+model ProcessingBatch {
+  id                   String                @id @default(cuid())
+  exam_paper_id        String
+  /// User who triggered this batch — uploader (initial), or whoever invoked
+  /// the regrade/re-extract action. Recipient of the completion email.
+  triggered_by         String
+  kind                 ProcessingBatchKind
+  status               ProcessingBatchStatus @default(pending)
+  total_jobs           Int                   @default(0)
+  notification_sent_at DateTime?
+  /// Lineage back to the upload — populated for `initial` batches; null for
+  /// `re_grade` and `re_extract` (which can target submissions across many
+  /// original ingests).
+  ingest_batch_id      String?
+  created_at           DateTime              @default(now())
+  completed_at         DateTime?
+
+  exam_paper   ExamPaper           @relation("ProcessingBatchExamPaper", fields: [exam_paper_id], references: [id])
+  triggerer    User                @relation("ProcessingBatchTriggerer", fields: [triggered_by], references: [id])
+  ingest_batch BatchIngestJob?     @relation("ProcessingBatchIngest", fields: [ingest_batch_id], references: [id])
+  submissions  StudentSubmission[] @relation("ProcessingBatchSubmissions")
+
+  @@index([exam_paper_id, created_at])
+  @@index([triggered_by, created_at])
+  @@map("processing_batches")
 }
 
 model StagedScript {

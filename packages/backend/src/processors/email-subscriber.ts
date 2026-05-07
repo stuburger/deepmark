@@ -174,23 +174,25 @@ async function dispatchTopupPurchased(
 async function dispatchBatchCompleted(
 	detail: BatchCompletedDetail,
 ): Promise<Dispatched> {
-	const batch = await db.batchIngestJob.findUnique({
-		where: { id: detail.batchJobId },
+	const batch = await db.processingBatch.findUnique({
+		where: { id: detail.processingBatchId },
 		select: {
 			exam_paper_id: true,
 			exam_paper: { select: { title: true } },
-			uploader: { select: { email: true, name: true } },
+			triggerer: { select: { email: true, name: true } },
 		},
 	})
-	if (!batch?.uploader?.email) return null
+	if (!batch?.triggerer?.email) return null
 	const email = await renderMarkingCompleteEmail({
-		firstName: firstNameFrom(batch.uploader.name),
+		firstName: firstNameFrom(batch.triggerer.name),
 		examPaperTitle: batch.exam_paper?.title ?? "your batch",
-		studentCount: detail.totalSubmissions,
+		kind: detail.kind,
+		successCount: detail.successCount,
+		failedCount: detail.failedCount,
 		submissionsUrl: `${WEB_URL}/teacher/exam-papers/${batch.exam_paper_id}?tab=submissions`,
 		logoUrl: LOGO_URL,
 	})
-	return { to: batch.uploader.email, email }
+	return { to: batch.triggerer.email, email }
 }
 
 function firstNameFrom(name: string | null): string | null {

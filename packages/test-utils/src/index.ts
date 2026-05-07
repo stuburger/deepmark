@@ -2,6 +2,7 @@ export { db } from "./db"
 export {
 	createTestBatch,
 	createTestStagedScript,
+	createTestProcessingBatch,
 	cleanupBatch,
 } from "./fixtures"
 export { invokeLambdaWithSqsBody } from "./lambda"
@@ -12,6 +13,7 @@ export {
 	TEST_USER_ID,
 	TEST_STAGED_SCRIPT_ID,
 	TEST_BATCH_JOB_ID,
+	TEST_PROCESSING_BATCH_ID,
 	ensureExamPaper,
 } from "./seed"
 export { sendToQueue } from "./sqs"

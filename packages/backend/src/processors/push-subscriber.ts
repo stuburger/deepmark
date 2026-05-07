@@ -26,8 +26,7 @@ function configureVapid(): void {
  *
  * Replaces the inline `sendBatchCompleteNotification` call previously made
  * directly from the grading processor. Same contract — one push per batch,
- * addressed to the teacher (`uploaded_by`) — just driven by the bus instead
- * of an in-process import.
+ * addressed to whoever triggered it (`triggered_by` on ProcessingBatch).
  *
  * Filtered to `deepmark.marking` + `batch.completed` at the subscription
  * level, so any other detail-type reaching this handler is a config bug.
@@ -45,18 +44,18 @@ export async function handler(
 	const detail = event.detail as BatchCompletedDetail
 
 	const subscriptions = await db.userPushSubscription.findMany({
-		where: { user_id: detail.uploadedBy },
+		where: { user_id: detail.triggeredBy },
 	})
 	if (subscriptions.length === 0) {
 		logger.info(TAG, "No push subscriptions registered; skipping", {
-			batchJobId: detail.batchJobId,
-			uploadedBy: detail.uploadedBy,
+			processingBatchId: detail.processingBatchId,
+			triggeredBy: detail.triggeredBy,
 		})
 		return
 	}
 
-	const batch = await db.batchIngestJob.findUnique({
-		where: { id: detail.batchJobId },
+	const batch = await db.processingBatch.findUnique({
+		where: { id: detail.processingBatchId },
 		select: { exam_paper: { select: { title: true } } },
 	})
 	const examPaperTitle = batch?.exam_paper?.title ?? "your batch"
@@ -64,9 +63,9 @@ export async function handler(
 	configureVapid()
 
 	const payload = JSON.stringify({
-		title: "Batch marking complete",
-		body: `${detail.totalSubmissions} script${detail.totalSubmissions === 1 ? "" : "s"} marked for ${examPaperTitle}`,
-		batchJobId: detail.batchJobId,
+		title: buildPushTitle(detail),
+		body: buildPushBody(detail, examPaperTitle),
+		processingBatchId: detail.processingBatchId,
 	})
 
 	const results = await Promise.allSettled(
@@ -84,14 +83,36 @@ export async function handler(
 	const failed = results.filter((r) => r.status === "rejected").length
 	if (failed > 0) {
 		logger.warn(TAG, "Some push deliveries failed", {
-			batchJobId: detail.batchJobId,
+			processingBatchId: detail.processingBatchId,
 			total: subscriptions.length,
 			failed,
 		})
 	} else {
 		logger.info(TAG, "Push delivered to all subscriptions", {
-			batchJobId: detail.batchJobId,
+			processingBatchId: detail.processingBatchId,
 			total: subscriptions.length,
 		})
 	}
+}
+
+function buildPushTitle(detail: BatchCompletedDetail): string {
+	if (detail.successCount === 0 && detail.failedCount > 0)
+		return "Marking failed"
+	if (detail.kind === "re_grade") return "Regrades complete"
+	return "Batch marking complete"
+}
+
+function buildPushBody(
+	detail: BatchCompletedDetail,
+	examPaperTitle: string,
+): string {
+	const total = detail.successCount + detail.failedCount
+	const verb = detail.kind === "re_grade" ? "regraded" : "marked"
+	if (detail.failedCount === 0) {
+		return `${total} script${total === 1 ? "" : "s"} ${verb} for ${examPaperTitle}`
+	}
+	if (detail.successCount === 0) {
+		return `Couldn't process ${total} script${total === 1 ? "" : "s"} for ${examPaperTitle}`
+	}
+	return `${detail.successCount}/${total} scripts ${verb} for ${examPaperTitle} — ${detail.failedCount} failed`
 }

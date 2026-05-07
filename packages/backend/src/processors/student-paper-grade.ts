@@ -381,7 +381,7 @@ async function completeGradingJob(args: CompleteGradingJobArgs): Promise<void> {
 		examinerSummary: args.examinerSummary,
 	})
 	logGradingCompleteEvent(args.jobId, totals)
-	await notifyBatchIfComplete(args.sub.batch_job_id)
+	await notifyBatchIfComplete(args.sub.processing_batch_id)
 }
 
 function computeTotals(gradingResults: GradingResult[]): {
@@ -447,59 +447,99 @@ function logGradingCompleteEvent(
 	})
 }
 
-async function notifyBatchIfComplete(batchJobId: string | null): Promise<void> {
-	if (!batchJobId) return
-	await checkAndNotifyBatchCompletion(batchJobId)
+async function notifyBatchIfComplete(
+	processingBatchId: string | null,
+): Promise<void> {
+	if (!processingBatchId) return
+	await checkAndNotifyBatchCompletion(processingBatchId)
 }
 
 // ─── Batch completion check ───────────────────────────────────────────────────
 
 /**
- * Atomically checks whether all child submissions for a batch have a terminal
- * grading run and, if so, marks the batch complete and sends a push notification.
- * Uses an UPDATE...WHERE pattern so only one Lambda invocation can win the race.
- * Safe to call multiple times — idempotent once notification_sent_at is set.
+ * Atomically checks whether every submission in a ProcessingBatch has reached
+ * a terminal state (grading complete/failed/cancelled, or OCR failed — once
+ * OCR fails, grading never starts so the OCR failure IS the terminal). If so,
+ * marks the batch complete and emits the batch.completed event. Uses an
+ * UPDATE...WHERE pattern so only one Lambda invocation can win the race;
+ * safe to call multiple times — idempotent once notification_sent_at is set.
+ *
+ * Called from:
+ *  - the grading processor on success
+ *  - the OCR-DLQ handler after a permanently-failed OCR
+ *  - the grading-DLQ handler after a permanently-failed grade
+ *
+ * Without the DLQ wiring, a batch with one permanently-failing job never
+ * reached terminalCount === total and silently dropped the email.
  */
 export async function checkAndNotifyBatchCompletion(
-	batchJobId: string,
+	processingBatchId: string,
 ): Promise<void> {
-	const batch = await db.batchIngestJob.findUnique({
-		where: { id: batchJobId },
+	const batch = await db.processingBatch.findUnique({
+		where: { id: processingBatchId },
 		select: {
 			id: true,
-			total_student_jobs: true,
+			kind: true,
+			total_jobs: true,
 			notification_sent_at: true,
-			uploaded_by: true,
-			exam_paper: { select: { title: true } },
+			triggered_by: true,
 		},
 	})
 
-	if (!batch || batch.notification_sent_at || batch.total_student_jobs === 0) {
+	if (!batch || batch.notification_sent_at || batch.total_jobs === 0) {
 		return
 	}
 
 	const terminalCount = await db.studentSubmission.count({
 		where: {
-			batch_job_id: batchJobId,
-			grading_runs: {
-				some: { status: { in: ["complete", "failed", "cancelled"] } },
-			},
+			processing_batch_id: processingBatchId,
+			OR: [
+				{
+					grading_runs: {
+						some: { status: { in: ["complete", "failed", "cancelled"] } },
+					},
+				},
+				{ ocr_runs: { some: { status: "failed" } } },
+			],
 		},
 	})
 
-	if (terminalCount < batch.total_student_jobs) return
+	if (terminalCount < batch.total_jobs) return
+
+	const failedCount = await db.studentSubmission.count({
+		where: {
+			processing_batch_id: processingBatchId,
+			OR: [
+				{
+					grading_runs: {
+						some: { status: { in: ["failed", "cancelled"] } },
+					},
+				},
+				{ ocr_runs: { some: { status: "failed" } } },
+			],
+		},
+	})
+	const successCount = batch.total_jobs - failedCount
+	const overallStatus = failedCount === batch.total_jobs ? "failed" : "complete"
 
 	const now = new Date()
-	const updated = await db.batchIngestJob.updateMany({
-		where: { id: batchJobId, notification_sent_at: null },
-		data: { status: "complete", notification_sent_at: now },
+	const updated = await db.processingBatch.updateMany({
+		where: { id: processingBatchId, notification_sent_at: null },
+		data: {
+			status: overallStatus,
+			notification_sent_at: now,
+			completed_at: now,
+		},
 	})
 
 	if (updated.count === 0) return
 
 	logger.info(TAG, "Batch complete — emitting batch.completed event", {
-		batchJobId,
-		studentCount: batch.total_student_jobs,
+		processingBatchId,
+		kind: batch.kind,
+		totalJobs: batch.total_jobs,
+		successCount,
+		failedCount,
 	})
 
 	// Email + push are both subscribers of `deepmark.marking → batch.completed`
@@ -510,9 +550,12 @@ export async function checkAndNotifyBatchCompletion(
 		source: EventSource.marking,
 		detailType: EventDetailType.batchCompleted,
 		detail: {
-			batchJobId,
-			uploadedBy: batch.uploaded_by,
-			totalSubmissions: batch.total_student_jobs,
+			processingBatchId,
+			kind: batch.kind,
+			triggeredBy: batch.triggered_by,
+			totalSubmissions: batch.total_jobs,
+			successCount,
+			failedCount,
 		},
 	})
 }

@@ -7,6 +7,9 @@ export const TEST_USER_ID = fixture.user.id
  *  doesn't care about version chains. ensureExamPaper() seeds it. */
 export const TEST_BATCH_JOB_ID = "test-batch-job-default"
 export const TEST_STAGED_SCRIPT_ID = "test-staged-script-default"
+/** Stable processing_batch_id for tests that create submissions but don't
+ *  care about notification grouping. ensureExamPaper() seeds it. */
+export const TEST_PROCESSING_BATCH_ID = "test-processing-batch-default"
 
 export async function ensureExamPaper(): Promise<void> {
 	await db.user.upsert({
@@ -112,6 +115,17 @@ export async function ensureExamPaper(): Promise<void> {
 			batch_job_id: TEST_BATCH_JOB_ID,
 			page_keys: [],
 			status: "proposed",
+		},
+		update: {},
+	})
+	await db.processingBatch.upsert({
+		where: { id: TEST_PROCESSING_BATCH_ID },
+		create: {
+			id: TEST_PROCESSING_BATCH_ID,
+			exam_paper_id: TEST_EXAM_PAPER_ID,
+			triggered_by: TEST_USER_ID,
+			kind: "initial",
+			total_jobs: 0,
 		},
 		update: {},
 	})

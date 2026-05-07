@@ -1,3 +1,4 @@
+import type { ProcessingBatchKind } from "@mcp-gcse/db"
 import { db } from "./db"
 
 export async function createTestBatch(examPaperId: string, userId: string) {
@@ -8,6 +9,32 @@ export async function createTestBatch(examPaperId: string, userId: string) {
 			status: "uploading",
 		},
 	})
+}
+
+/**
+ * Creates a ProcessingBatch row tied to the given exam paper + user. Use this
+ * when a test creates submissions and wants the completion check to settle
+ * (the check filters on processing_batch_id, so submissions without one get
+ * silently skipped from the count).
+ *
+ * `totalJobs` defaults to 0; pass the number of submissions you intend to
+ * attach so the completion check trips at the right point.
+ */
+export async function createTestProcessingBatch(args: {
+	examPaperId: string
+	triggeredBy: string
+	kind?: ProcessingBatchKind
+	totalJobs?: number
+}): Promise<{ id: string }> {
+	const batch = await db.processingBatch.create({
+		data: {
+			exam_paper_id: args.examPaperId,
+			triggered_by: args.triggeredBy,
+			kind: args.kind ?? "initial",
+			total_jobs: args.totalJobs ?? 0,
+		},
+	})
+	return { id: batch.id }
 }
 
 /**
@@ -35,18 +62,50 @@ export async function createTestStagedScript(args: {
 }
 
 export async function cleanupBatch(batchId: string) {
-	// Delete child runs first (no cascade)
+	// Some tests create the submission with `staged_script_id` only (no
+	// batch_job_id); previously those tripped a FK violation when
+	// stagedScript.deleteMany ran with the submission still referencing it.
+	// Find submissions via either link so the cleanup is total.
+	const stagedScriptIds = (
+		await db.stagedScript.findMany({
+			where: { batch_job_id: batchId },
+			select: { id: true },
+		})
+	).map((s) => s.id)
 	const submissions = await db.studentSubmission.findMany({
-		where: { batch_job_id: batchId },
-		select: { id: true },
+		where: {
+			OR: [
+				{ batch_job_id: batchId },
+				...(stagedScriptIds.length > 0
+					? [{ staged_script_id: { in: stagedScriptIds } }]
+					: []),
+			],
+		},
+		select: { id: true, processing_batch_id: true },
 	})
 	const subIds = submissions.map((s) => s.id)
+	const processingBatchIds = Array.from(
+		new Set(
+			submissions
+				.map((s) => s.processing_batch_id)
+				.filter((v): v is string => v !== null),
+		),
+	)
 	if (subIds.length > 0) {
 		// AI annotations cascade-delete with their grading run.
 		await db.gradingRun.deleteMany({ where: { submission_id: { in: subIds } } })
 		await db.ocrRun.deleteMany({ where: { submission_id: { in: subIds } } })
+		await db.studentSubmission.deleteMany({ where: { id: { in: subIds } } })
 	}
-	await db.studentSubmission.deleteMany({ where: { batch_job_id: batchId } })
 	await db.stagedScript.deleteMany({ where: { batch_job_id: batchId } })
+	if (processingBatchIds.length > 0) {
+		// Catches both `initial` PBs (ingest_batch_id = batchId) and the
+		// `re_grade` / `re_extract` PBs created by clone paths that don't
+		// link back to the ingest batch.
+		await db.processingBatch.deleteMany({
+			where: { id: { in: processingBatchIds } },
+		})
+	}
+	await db.processingBatch.deleteMany({ where: { ingest_batch_id: batchId } })
 	await db.batchIngestJob.delete({ where: { id: batchId } })
 }

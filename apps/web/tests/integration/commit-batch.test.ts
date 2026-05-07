@@ -77,6 +77,14 @@ describe("commitBatch", () => {
 		expect(subs).toHaveLength(1)
 		expect(subs[0]?.student_name).toBe("Sofia")
 		expect(subs[0]?.batch_job_id).toBe(batchId)
+		expect(subs[0]?.processing_batch_id).not.toBeNull()
+
+		const processingBatch = await db.processingBatch.findFirstOrThrow({
+			where: { ingest_batch_id: batchId },
+		})
+		expect(processingBatch.kind).toBe("initial")
+		expect(processingBatch.total_jobs).toBe(1)
+		expect(processingBatch.id).toBe(subs[0]?.processing_batch_id)
 	})
 
 	it("creates 2 StudentSubmissions from 2 confirmed StagedScripts", async () => {

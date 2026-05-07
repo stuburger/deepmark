@@ -38,10 +38,15 @@ export type TopupPurchasedDetail = {
 	papersGranted: number
 }
 
+export type ProcessingBatchKind = "initial" | "re_extract" | "re_grade"
+
 export type BatchCompletedDetail = {
-	batchJobId: string
-	uploadedBy: string
+	processingBatchId: string
+	kind: ProcessingBatchKind
+	triggeredBy: string
 	totalSubmissions: number
+	successCount: number
+	failedCount: number
 }
 
 /**

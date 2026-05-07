@@ -3,6 +3,7 @@ import * as path from "node:path"
 import { SQSClient, SendMessageCommand } from "@aws-sdk/client-sqs"
 import {
 	cleanupBatch,
+	createTestProcessingBatch,
 	createTestStagedScript,
 	db,
 	uploadTestFile,
@@ -206,6 +207,13 @@ async function seedSubmission(): Promise<void> {
 	})
 	SEEDED_BATCH_ID = batchId
 
+	const processingBatch = await createTestProcessingBatch({
+		examPaperId: FIXTURE.examPaperId,
+		triggeredBy: FIXTURE.userId,
+		kind: "initial",
+		totalJobs: 1,
+	})
+
 	await db.studentSubmission.create({
 		data: {
 			id: SUBMISSION_ID,
@@ -218,6 +226,7 @@ async function seedSubmission(): Promise<void> {
 			year: 2026,
 			pages: pageKeys,
 			staged_script_id: stagedScriptId,
+			processing_batch_id: processingBatch.id,
 		},
 	})
 }

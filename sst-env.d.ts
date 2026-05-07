@@ -34,6 +34,10 @@ declare module "sst" {
       "type": "sst.aws.Queue"
       "url": string
     }
+    "BatchClassifyTestRunner": {
+      "name": string
+      "type": "sst.aws.Function"
+    }
     "CloudVisionApiKey": {
       "type": "sst.sst.Secret"
       "value": string
@@ -86,8 +90,7 @@ declare module "sst" {
       "value": string
     }
     "HocuspocusServer": {
-      "service": string
-      "type": "sst.aws.Service"
+      "type": "sst.sst.Linkable"
       "url": string
     }
     "Interactions": {
@@ -239,9 +242,6 @@ declare module "sst" {
     "VapidPublicKey": {
       "type": "sst.sst.Secret"
       "value": string
-    }
-    "Vpc": {
-      "type": "sst.aws.Vpc"
     }
     "Web": {
       "type": "sst.aws.Nextjs"

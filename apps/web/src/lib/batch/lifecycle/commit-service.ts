@@ -90,6 +90,21 @@ export async function commitBatchService(
 			})
 
 	const createdJobs = await db.$transaction(async (tx) => {
+		// One ProcessingBatch per commit-event. Each commit produces a fresh
+		// notification group: if a teacher commits the upload in chunks (3 +
+		// 12 + 5), each chunk gets its own ProcessingBatch and its own email
+		// when grading finishes. That matches user mental model — they kicked
+		// off three jobs, they get three confirmations.
+		const processingBatch = await tx.processingBatch.create({
+			data: {
+				exam_paper_id: batch.exam_paper.id,
+				triggered_by: uploadedBy,
+				kind: "initial",
+				total_jobs: confirmedScripts.length,
+				ingest_batch_id: batchJobId,
+			},
+		})
+
 		const jobs = await Promise.all(
 			confirmedScripts.map(async (script) => {
 				const pageKeys = parsePageKeys(script.page_keys)
@@ -117,6 +132,7 @@ export async function commitBatchService(
 						pages: pagesJson as never,
 						student_name: studentName,
 						batch_job_id: batchJobId,
+						processing_batch_id: processingBatch.id,
 						staged_script_id: script.id,
 					},
 				})

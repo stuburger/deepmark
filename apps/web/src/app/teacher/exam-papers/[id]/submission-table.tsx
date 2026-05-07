@@ -149,19 +149,12 @@ export function SubmissionTable({
 			const previous = queryClient.getQueryData(
 				queryKeys.submissions(examPaperId),
 			)
-			queryClient.setQueryData<{
-				submissions: (SubmissionHistoryItem & { version_count: number })[]
-			}>(queryKeys.submissions(examPaperId), (old) =>
-				old
-					? {
-							...old,
-							submissions: old.submissions.map((s) =>
-								s.id === vars.jobId
-									? { ...s, is_bookmarked: vars.bookmarked }
-									: s,
-							),
-						}
-					: old,
+			queryClient.setQueryData<
+				(SubmissionHistoryItem & { version_count: number })[]
+			>(queryKeys.submissions(examPaperId), (old) =>
+				old?.map((s) =>
+					s.id === vars.jobId ? { ...s, is_bookmarked: vars.bookmarked } : s,
+				),
 			)
 			return { previous }
 		},

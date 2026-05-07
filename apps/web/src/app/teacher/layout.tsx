@@ -3,6 +3,7 @@ import { Suspense } from "react"
 
 import { PurchaseSuccessToast } from "@/components/purchase-success-toast"
 import { PushRegistration } from "@/components/push-registration"
+import { CommandPalette } from "@/components/teacher/command-palette"
 import { IconRail } from "@/components/teacher/icon-rail"
 import { MobileAppBar } from "@/components/teacher/mobile-app-bar"
 import { TeacherNavProvider } from "@/components/teacher/teacher-nav-context"
@@ -111,6 +112,7 @@ export default async function TeacherLayout({
 					planChip={planChip}
 					showUpgradeCard={showUpgradeCard}
 				/>
+				<CommandPalette />
 				<PushRegistration />
 				{/* useSearchParams reads the current location; wrap in Suspense per
 				    Next.js's static-bailout requirement. */}

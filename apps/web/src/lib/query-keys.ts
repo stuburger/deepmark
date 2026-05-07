@@ -23,6 +23,7 @@ export const queryKeys = {
 		["submissionFeedback", submissionId] as const,
 	bookmarks: () => ["bookmarks"] as const,
 	submissionBookmark: (jobId: string) => ["submissionBookmark", jobId] as const,
+	paletteSearch: (q: string) => ["paletteSearch", q] as const,
 	// ─── Batch ingestion ───────────────────────────────────────────────────────
 	activeBatch: (paperId: string) => ["activeBatch", paperId] as const,
 	// ─── Auth / current user ───────────────────────────────────────────────────

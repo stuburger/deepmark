@@ -9,6 +9,7 @@ import {
 	HelpCircle,
 	LayoutDashboard,
 	LogOut,
+	Search,
 	Settings,
 	X,
 } from "lucide-react"
@@ -88,7 +89,7 @@ export function TeacherNavSheet({
 	planChip,
 	showUpgradeCard,
 }: TeacherNavSheetProps) {
-	const { open, setOpen } = useTeacherNav()
+	const { open, setOpen, setPaletteOpen } = useTeacherNav()
 
 	return (
 		<Sheet open={open} onOpenChange={setOpen}>
@@ -131,6 +132,25 @@ export function TeacherNavSheet({
 				</div>
 
 				<div className="flex-1 overflow-y-auto py-2">
+					<button
+						type="button"
+						onClick={() => {
+							setOpen(false)
+							setPaletteOpen(true)
+						}}
+						className="flex w-full items-center gap-3 px-4 py-2.5 text-[14px] text-muted-foreground transition-colors hover:bg-primary/10 hover:text-foreground"
+					>
+						<span className="flex size-5 shrink-0 items-center justify-center text-current">
+							<Search
+								className="size-4"
+								strokeWidth={1.5 as unknown as number}
+							/>
+						</span>
+						<span className="flex-1 text-left">Search…</span>
+						<kbd className="rounded-sm border border-border-quiet bg-card px-1.5 py-0.5 font-mono text-[10px] text-ink-tertiary">
+							⌘K
+						</kbd>
+					</button>
 					<NavSection items={PRIMARY_ITEMS} onNavigate={() => setOpen(false)} />
 					<NavSection items={RECENT_ITEMS} onNavigate={() => setOpen(false)} />
 					<BookmarkedSection onNavigate={() => setOpen(false)} />

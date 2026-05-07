@@ -11,6 +11,8 @@ import {
 type TeacherNavContextValue = {
 	open: boolean
 	setOpen: (open: boolean) => void
+	paletteOpen: boolean
+	setPaletteOpen: (open: boolean) => void
 }
 
 const TeacherNavContext = createContext<TeacherNavContextValue | null>(null)
@@ -25,6 +27,7 @@ export function useTeacherNav(): TeacherNavContextValue {
 
 export function TeacherNavProvider({ children }: { children: ReactNode }) {
 	const [open, setOpen] = useState(false)
+	const [paletteOpen, setPaletteOpen] = useState(false)
 
 	// The body class lets us blur the page chrome (icon rail + content) while
 	// the slide-over menu is open. The blur rule lives in globals.css.
@@ -34,7 +37,9 @@ export function TeacherNavProvider({ children }: { children: ReactNode }) {
 	}, [open])
 
 	return (
-		<TeacherNavContext.Provider value={{ open, setOpen }}>
+		<TeacherNavContext.Provider
+			value={{ open, setOpen, paletteOpen, setPaletteOpen }}
+		>
 			{children}
 		</TeacherNavContext.Provider>
 	)

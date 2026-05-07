@@ -34,6 +34,7 @@ import {
 import { useState } from "react"
 import { ObservationsSheet } from "./ocr-sheets"
 import { AnnotatedScanColumn } from "./results/annotated-scan-column"
+import { ScanPanelSkeleton } from "./scan-panel-skeleton"
 import type { ScanViewSettings, ScanViewToggle } from "./use-scan-view-settings"
 
 export function ScanPanel({
@@ -74,6 +75,8 @@ export function ScanPanel({
 	const inspectMode = viewMode === "inspect"
 	const [observationsOpen, setObservationsOpen] = useState(false)
 	const [copied, setCopied] = useState(false)
+
+	if (scanPages.length === 0) return <ScanPanelSkeleton />
 
 	const hasOcr = scanPages.some((p) => p.analysis != null)
 	const hasRegions = gradingResults.some(

@@ -1,15 +1,9 @@
 "use client"
 
-import { Dialog, DialogContent } from "@/components/ui/dialog"
-import { getJobPageTokens, getJobScanPages } from "@/lib/marking/scan/queries"
-import { getJobStages } from "@/lib/marking/stages/queries"
-import type { JobStages } from "@/lib/marking/stages/types"
-import { getStudentPaperJobForPaper } from "@/lib/marking/submissions/queries"
-import type { StudentPaperJobPayload } from "@/lib/marking/types"
-import { queryKeys } from "@/lib/query-keys"
-import { useQuery } from "@tanstack/react-query"
-import { Loader2 } from "lucide-react"
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { SubmissionView } from "../../mark/papers/[examPaperId]/submissions/[jobId]/submission-view"
+import { SubmissionViewSkeleton } from "../../mark/papers/[examPaperId]/submissions/[jobId]/submission-view-skeleton"
+import { useMarkingJobData } from "./hooks/use-marking-job-data"
 
 export function MarkingJobDialog({
 	examPaperId,
@@ -24,68 +18,16 @@ export function MarkingJobDialog({
 	onOpenChange: (open: boolean) => void
 	onNavigateToJob: (newJobId: string) => void
 }) {
-	const enabled = open && !!jobId
+	const { jobData, scanPages, pageTokens, stages, isLoading } =
+		useMarkingJobData({ examPaperId, jobId, enabled: open })
 
-	// Three separate queries keyed correctly so that SubmissionView's internal
-	// queries (useJobQuery, jobScanPages, jobPageTokens) hit warm cache immediately
-	// instead of seeing a mis-typed combined object under the same key.
-	const { data: jobData } = useQuery<StudentPaperJobPayload | null>({
-		queryKey: queryKeys.studentJob(jobId ?? ""),
-		queryFn: async () => {
-			if (!jobId) return null
-			const result = await getStudentPaperJobForPaper({ examPaperId, jobId })
-			return result?.data?.data ?? null
-		},
-		enabled,
-		staleTime: 0,
-	})
-
-	const { data: scanPages = [] } = useQuery({
-		queryKey: queryKeys.jobScanPages(jobId ?? ""),
-		queryFn: async () => {
-			if (!jobId) return []
-			const result = await getJobScanPages({ jobId })
-			return result?.data?.pages ?? []
-		},
-		enabled,
-		staleTime: Number.POSITIVE_INFINITY,
-	})
-
-	const { data: pageTokens = [] } = useQuery({
-		queryKey: queryKeys.jobPageTokens(jobId ?? ""),
-		queryFn: async () => {
-			if (!jobId) return []
-			const result = await getJobPageTokens({ jobId })
-			return result?.data?.tokens ?? []
-		},
-		enabled,
-		staleTime: Number.POSITIVE_INFINITY,
-	})
-
-	const { data: stages } = useQuery<JobStages | null>({
-		queryKey: queryKeys.jobStages(jobId ?? ""),
-		queryFn: async () => {
-			if (!jobId) return null
-			const result = await getJobStages({ jobId })
-			return result?.data?.stages ?? null
-		},
-		enabled,
-		staleTime: 0,
-	})
-
-	const isLoading = enabled && (!jobData || !stages)
+	const ready = !isLoading && jobData && stages && jobId
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent
-				showCloseButton={false}
-				className="inset-4! w-auto! translate-x-0! translate-y-0! max-w-none! rounded-2xl p-0 overflow-hidden ring-0 shadow-2xl"
-			>
-				{isLoading || !jobData || !stages || !jobId ? (
-					<div className="flex h-full items-center justify-center">
-						<Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-					</div>
-				) : (
+			<DialogContent size="fullscreen" showCloseButton={false}>
+				<DialogTitle className="sr-only">Submission</DialogTitle>
+				{ready ? (
 					<SubmissionView
 						examPaperId={examPaperId}
 						jobId={jobId}
@@ -96,6 +38,8 @@ export function MarkingJobDialog({
 						onNavigateToJob={onNavigateToJob}
 						onClose={() => onOpenChange(false)}
 					/>
+				) : (
+					<SubmissionViewSkeleton />
 				)}
 			</DialogContent>
 		</Dialog>

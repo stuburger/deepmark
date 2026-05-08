@@ -20,6 +20,7 @@ export function MarkingResults({
 	overridesByQuestionId,
 	onDerivedAnnotations,
 	onTokenHighlight,
+	onAskDeepMark,
 }: {
 	jobId: string
 	data: StudentPaperJobPayload
@@ -27,6 +28,10 @@ export function MarkingResults({
 	overridesByQuestionId?: Map<string, TeacherOverride>
 	onDerivedAnnotations?: (annotations: StudentPaperAnnotation[]) => void
 	onTokenHighlight?: (tokenIds: string[] | null) => void
+	onAskDeepMark?: (input: {
+		text: string
+		questionNumber: string | null
+	}) => void
 }) {
 	const [answers, setAnswers] = useState<Record<string, string>>(
 		Object.fromEntries(
@@ -46,6 +51,7 @@ export function MarkingResults({
 			overridesByQuestionId={overridesByQuestionId}
 			onDerivedAnnotations={onDerivedAnnotations}
 			onTokenHighlight={onTokenHighlight}
+			onAskDeepMark={onAskDeepMark}
 		/>
 	)
 }

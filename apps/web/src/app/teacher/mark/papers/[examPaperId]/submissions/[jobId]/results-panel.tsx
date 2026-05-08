@@ -27,6 +27,10 @@ type SharedPanelProps = {
 	overridesByQuestionId?: Map<string, TeacherOverride>
 	onDerivedAnnotations?: (annotations: StudentPaperAnnotation[]) => void
 	onTokenHighlight?: (tokenIds: string[] | null) => void
+	onAskDeepMark?: (input: {
+		text: string
+		questionNumber: string | null
+	}) => void
 }
 
 export function ResultsPanel({
@@ -37,13 +41,11 @@ export function ResultsPanel({
 	overridesByQuestionId,
 	onDerivedAnnotations,
 	onTokenHighlight,
+	onAskDeepMark,
 }: SharedPanelProps) {
 	return (
-		<ScrollArea
-			data-results-panel
-			className="h-full w-full bg-zinc-100 dark:bg-zinc-900"
-		>
-			<div className="p-4 space-y-5 w-full">
+		<ScrollArea data-results-panel className="h-full w-full">
+			<div className="px-3 pt-2 pb-4 space-y-4 w-full">
 				{phase === "failed" && <FailedPanel data={data} jobId={jobId} />}
 				{phase === "cancelled" && <CancelledPanel />}
 
@@ -54,6 +56,7 @@ export function ResultsPanel({
 					overridesByQuestionId={overridesByQuestionId}
 					onDerivedAnnotations={onDerivedAnnotations}
 					onTokenHighlight={onTokenHighlight}
+					onAskDeepMark={onAskDeepMark}
 				/>
 			</div>
 		</ScrollArea>

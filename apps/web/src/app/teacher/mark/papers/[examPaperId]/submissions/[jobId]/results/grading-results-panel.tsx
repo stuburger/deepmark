@@ -8,8 +8,6 @@ import {
 import { useDocHasQuestionBlocks } from "@/components/annotated-answer/use-doc-has-question-blocks"
 import { useYDoc } from "@/components/annotated-answer/use-y-doc"
 import { OrganicMarkingLoader } from "@/components/marking-loader"
-import { Badge } from "@/components/ui/badge"
-import { Progress } from "@/components/ui/progress"
 import type {
 	GradingResult,
 	StudentPaperAnnotation,
@@ -18,17 +16,6 @@ import type {
 } from "@/lib/marking/types"
 import { LockKeyhole } from "lucide-react"
 import { useMemo } from "react"
-
-function scoreBadgeVariant(
-	awarded: number,
-	max: number,
-): "default" | "secondary" | "destructive" | "outline" {
-	if (max === 0) return "outline"
-	const pct = (awarded / max) * 100
-	if (pct >= 70) return "default"
-	if (pct >= 40) return "secondary"
-	return "destructive"
-}
 
 export function GradingResultsPanel({
 	jobId,
@@ -39,6 +26,7 @@ export function GradingResultsPanel({
 	overridesByQuestionId,
 	onDerivedAnnotations,
 	onTokenHighlight,
+	onAskDeepMark,
 }: {
 	jobId: string
 	data: StudentPaperResultPayload
@@ -48,20 +36,11 @@ export function GradingResultsPanel({
 	overridesByQuestionId?: Map<string, TeacherOverride>
 	onDerivedAnnotations?: (annotations: StudentPaperAnnotation[]) => void
 	onTokenHighlight?: (tokenIds: string[] | null) => void
+	onAskDeepMark?: (input: {
+		text: string
+		questionNumber: string | null
+	}) => void
 }) {
-	// Compute effective totals using overrides where present
-	const effectiveTotalAwarded = data.grading_results.reduce((sum, r) => {
-		const override = overridesByQuestionId?.get(r.question_id)
-		return sum + (override?.score_override ?? r.awarded_score)
-	}, 0)
-
-	const hasOverrides = overridesByQuestionId && overridesByQuestionId.size > 0
-
-	const scorePercent =
-		data.total_max > 0
-			? Math.round((effectiveTotalAwarded / data.total_max) * 100)
-			: 0
-
 	// Build grading results lookup map for context
 	const gradingResultsMap = useMemo(() => {
 		const map = new Map<string, GradingResult>()
@@ -93,10 +72,6 @@ export function GradingResultsPanel({
 		],
 	)
 
-	// Hide the score bar until grading has produced real totals. Once
-	// grading completes, total_max becomes non-zero and the bar appears.
-	const showScoreBar = data.total_max > 0
-
 	// Collaborative Y.Doc keyed by submission_id (falls back to jobId for
 	// legacy jobs that predate the Submission model). The hook owns lifecycle:
 	// IndexedDB offline cache + HocuspocusProvider sync + clean teardown.
@@ -119,58 +94,39 @@ export function GradingResultsPanel({
 					: "ready"
 
 	return (
-		<div className="space-y-4">
-			{showScoreBar && (
-				<div className="flex items-center gap-3 px-1">
-					<Badge
-						variant={scoreBadgeVariant(effectiveTotalAwarded, data.total_max)}
-						className="text-xs px-2 py-0.5 shrink-0"
-					>
-						{effectiveTotalAwarded} / {data.total_max}
-					</Badge>
-					<Progress value={scorePercent} className="h-1.5 flex-1" />
-					<span className="text-xs text-muted-foreground tabular-nums shrink-0">
-						{scorePercent}%
-					</span>
-					{hasOverrides && (
-						<span className="text-[10px] text-primary shrink-0">Adjusted</span>
-					)}
+		// Answer sheet — gated on Y.Doc sync so AI annotations applied
+		// server-side don't race an empty initial doc.
+		<GradingDataProvider value={ctxValue}>
+			{editorState === "auth-failed" ? (
+				<div className="flex h-[60vh] flex-col items-center justify-center gap-3 text-center">
+					<LockKeyhole className="h-10 w-10 text-muted-foreground" />
+					<div className="space-y-1">
+						<p className="text-sm font-medium">Access denied</p>
+						<p className="text-xs text-muted-foreground max-w-sm">
+							The collaboration server rejected your session for this
+							submission. Ask the owner to re-share it with you.
+						</p>
+					</div>
 				</div>
+			) : editorState === "loading" ? (
+				<div className="flex h-[60vh] items-center justify-center">
+					<OrganicMarkingLoader label="Loading" />
+				</div>
+			) : editorState === "marking" ? (
+				<div className="flex h-[60vh] items-center justify-center">
+					<OrganicMarkingLoader label="Marking" />
+				</div>
+			) : (
+				ydoc && (
+					<AnnotatedAnswerSheet
+						ydoc={ydoc}
+						provider={provider}
+						onDerivedAnnotations={onDerivedAnnotations}
+						onTokenHighlight={onTokenHighlight}
+						onAskDeepMark={onAskDeepMark}
+					/>
+				)
 			)}
-
-			{/* Answer sheet — gated on Y.Doc sync so AI annotations applied
-			    server-side don't race an empty initial doc. */}
-			<GradingDataProvider value={ctxValue}>
-				{editorState === "auth-failed" ? (
-					<div className="flex h-[60vh] flex-col items-center justify-center gap-3 text-center">
-						<LockKeyhole className="h-10 w-10 text-muted-foreground" />
-						<div className="space-y-1">
-							<p className="text-sm font-medium">Access denied</p>
-							<p className="text-xs text-muted-foreground max-w-sm">
-								The collaboration server rejected your session for this
-								submission. Ask the owner to re-share it with you.
-							</p>
-						</div>
-					</div>
-				) : editorState === "loading" ? (
-					<div className="flex h-[60vh] items-center justify-center">
-						<OrganicMarkingLoader label="Loading" />
-					</div>
-				) : editorState === "marking" ? (
-					<div className="flex h-[60vh] items-center justify-center">
-						<OrganicMarkingLoader label="Marking" />
-					</div>
-				) : (
-					ydoc && (
-						<AnnotatedAnswerSheet
-							ydoc={ydoc}
-							provider={provider}
-							onDerivedAnnotations={onDerivedAnnotations}
-							onTokenHighlight={onTokenHighlight}
-						/>
-					)
-				)}
-			</GradingDataProvider>
-		</div>
+		</GradingDataProvider>
 	)
 }

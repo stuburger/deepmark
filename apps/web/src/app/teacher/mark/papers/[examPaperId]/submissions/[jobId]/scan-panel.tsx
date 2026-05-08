@@ -29,6 +29,7 @@ import {
 	Crosshair,
 	Layers,
 	Lightbulb,
+	Sparkles,
 	ZoomIn,
 } from "lucide-react"
 import { useState } from "react"
@@ -50,6 +51,7 @@ export function ScanPanel({
 	annotations = [],
 	hasAnnotations = false,
 	highlightedTokenIds,
+	onSwitchToChat,
 }: {
 	submissionId: string
 	scanPages: ScanPage[]
@@ -63,6 +65,7 @@ export function ScanPanel({
 	annotations?: StudentPaperAnnotation[]
 	hasAnnotations?: boolean
 	highlightedTokenIds?: Set<string> | null
+	onSwitchToChat?: () => void
 }) {
 	const {
 		showOcr,
@@ -100,6 +103,29 @@ export function ScanPanel({
 			<div className="flex flex-col h-full">
 				{/* ── Scan panel header ─────────────────────────────────────────── */}
 				<div className="shrink-0 flex items-center gap-1 border-b bg-background px-3 h-9">
+					{onSwitchToChat && (
+						<>
+							<Tooltip>
+								<TooltipTrigger
+									render={
+										<button
+											type="button"
+											onClick={onSwitchToChat}
+											aria-label="Talk to DeepMark"
+											className="inline-flex items-center justify-center h-6 w-6 rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+										>
+											<Sparkles className="h-3.5 w-3.5" />
+										</button>
+									}
+								/>
+								<TooltipContent side="bottom" sideOffset={6}>
+									Talk to DeepMark
+								</TooltipContent>
+							</Tooltip>
+							<div className="h-3.5 w-px bg-border mx-1" />
+						</>
+					)}
+
 					{/* Overlays dropdown */}
 					<DropdownMenu>
 						<DropdownMenuTrigger

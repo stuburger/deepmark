@@ -17,8 +17,9 @@ import type {
 	StudentPaperJobPayload,
 } from "@/lib/marking/types"
 import { useCurrentUser } from "@/lib/users/use-current-user"
-import { parseAsString, useQueryState } from "nuqs"
+import { parseAsString, parseAsStringLiteral, useQueryState } from "nuqs"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { ChatPanel } from "./chat-panel"
 import { EventLog } from "./event-log"
 import { useScrollToQuestion } from "./hooks/use-scroll-to-question"
 import { useSubmissionData } from "./hooks/use-submission-data"
@@ -26,6 +27,9 @@ import { ResultsPanel } from "./results-panel"
 import { ScanPanel } from "./scan-panel"
 import { SubmissionToolbar } from "./submission-toolbar"
 import { useScanViewSettings } from "./use-scan-view-settings"
+
+const LHS_VALUES = ["scan", "chat"] as const
+type LhsValue = (typeof LHS_VALUES)[number]
 
 export function SubmissionView({
 	examPaperId,
@@ -143,6 +147,36 @@ export function SubmissionView({
 		parseAsString,
 	)
 	const scrollToQuestion = useScrollToQuestion(setActiveQuestionNumber)
+
+	// LHS slot toggles between Scan and Chat. Default is scan so existing
+	// links/sessions behave unchanged; switching is reflected in the URL so it
+	// survives reloads.
+	const [lhs, setLhs] = useQueryState<LhsValue>(
+		"lhs",
+		parseAsStringLiteral(LHS_VALUES).withDefault("scan"),
+	)
+	const showChat = lhs === "chat"
+	const switchToChat = useCallback(() => setLhs("chat"), [setLhs])
+	const switchToScan = useCallback(() => setLhs("scan"), [setLhs])
+
+	// Selection → "Talk to DeepMark". The bubble menu emits a {text,
+	// questionNumber} pair; we open the chat panel and push it through as a
+	// context chip. ChatPanel calls `consumeChatPrefill` once it has read
+	// the prefill so a second selection re-fires the effect (otherwise a
+	// repeat selection of the same text wouldn't trigger React's referential
+	// re-evaluation).
+	const [chatPrefill, setChatPrefill] = useState<{
+		text: string
+		questionNumber: string | null
+	} | null>(null)
+	const askDeepMark = useCallback(
+		(input: { text: string; questionNumber: string | null }) => {
+			setChatPrefill(input)
+			setLhs("chat")
+		},
+		[setLhs],
+	)
+	const consumeChatPrefill = useCallback(() => setChatPrefill(null), [])
 
 	const [mobileTab, setMobileTab] = useState(
 		phase === "completed" || phase === "failed" || phase === "cancelled"
@@ -274,6 +308,7 @@ export function SubmissionView({
 									overridesByQuestionId={overridesByQuestionId}
 									onDerivedAnnotations={handleDerivedAnnotations}
 									onTokenHighlight={handleTokenHighlight}
+									onAskDeepMark={askDeepMark}
 								/>
 							</TabsContent>
 						</Tabs>
@@ -287,20 +322,31 @@ export function SubmissionView({
 						className="flex-1 min-h-0 flex"
 					>
 						<ResizablePanel defaultSize={20} minSize={15}>
-							<ScanPanel
-								submissionId={docSubmissionId}
-								scanPages={scanPages}
-								pageTokens={pageTokens}
-								gradingResults={data.grading_results}
-								levelDescriptors={data.level_descriptors}
-								settings={settings}
-								toggle={toggle}
-								onGradedRegionClick={handleGradedRegionClick}
-								debugMode={debugMode}
-								annotations={annotations}
-								hasAnnotations={hasAnnotations}
-								highlightedTokenIds={highlightedTokenIds}
-							/>
+							{showChat ? (
+								<ChatPanel
+									submissionId={docSubmissionId}
+									studentName={data.student_name}
+									onSwitchToScan={switchToScan}
+									prefill={chatPrefill}
+									onPrefillConsumed={consumeChatPrefill}
+								/>
+							) : (
+								<ScanPanel
+									submissionId={docSubmissionId}
+									scanPages={scanPages}
+									pageTokens={pageTokens}
+									gradingResults={data.grading_results}
+									levelDescriptors={data.level_descriptors}
+									settings={settings}
+									toggle={toggle}
+									onGradedRegionClick={handleGradedRegionClick}
+									debugMode={debugMode}
+									annotations={annotations}
+									hasAnnotations={hasAnnotations}
+									highlightedTokenIds={highlightedTokenIds}
+									onSwitchToChat={switchToChat}
+								/>
+							)}
 						</ResizablePanel>
 
 						<ResizableHandle withHandle />
@@ -314,6 +360,7 @@ export function SubmissionView({
 								overridesByQuestionId={overridesByQuestionId}
 								onDerivedAnnotations={handleDerivedAnnotations}
 								onTokenHighlight={handleTokenHighlight}
+								onAskDeepMark={askDeepMark}
 							/>
 						</ResizablePanel>
 					</ResizablePanelGroup>

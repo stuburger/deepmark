@@ -198,9 +198,9 @@ export function SubmissionToolbar({
 	return (
 		<TooltipProvider>
 			{/* ── Row 1: Context / breadcrumb ─────────────────────────────────── */}
-			<div className="shrink-0 flex items-center gap-2 border-b border-border-quiet bg-background px-4 h-9 text-sm">
+			<div className="shrink-0 flex items-center gap-1.5 sm:gap-2 border-b border-border-quiet bg-background px-2 sm:px-4 h-9 text-sm">
 				{!onClose && (
-					<>
+					<div className="hidden md:flex items-center gap-2 shrink-0">
 						<Link
 							href={paperAccessible ? "/teacher/exam-papers" : "/teacher/mark"}
 							className="text-muted-foreground hover:text-foreground transition-colors shrink-0"
@@ -231,7 +231,7 @@ export function SubmissionToolbar({
 						)}
 
 						<ChevronRight className="h-3.5 w-3.5 text-muted-foreground/40 shrink-0" />
-					</>
+					</div>
 				)}
 
 				<StudentNameEditor jobId={jobId} initialName={data.student_name} />
@@ -252,7 +252,7 @@ export function SubmissionToolbar({
 					</span>
 				)}
 
-				<div className="ml-auto flex items-center gap-3">
+				<div className="ml-auto flex items-center gap-1.5 sm:gap-3">
 					{readOnly && (
 						<Tooltip>
 							<TooltipTrigger
@@ -268,17 +268,18 @@ export function SubmissionToolbar({
 							</TooltipContent>
 						</Tooltip>
 					)}
-					<div className="flex items-center gap-1">
+					<div className="flex items-center gap-0.5 sm:gap-1">
 						<Button
 							type="button"
 							variant="ghost"
 							size="sm"
 							onClick={() => prevId && onNavigateToJob(prevId)}
 							disabled={!prevId}
-							className="gap-1"
+							aria-label="Previous submission"
+							className="gap-1 px-2 sm:px-3"
 						>
 							<ChevronLeft className="h-3.5 w-3.5" />
-							Prev
+							<span className="hidden sm:inline">Prev</span>
 						</Button>
 						<Button
 							type="button"
@@ -286,9 +287,10 @@ export function SubmissionToolbar({
 							size="sm"
 							onClick={() => nextId && onNavigateToJob(nextId)}
 							disabled={!nextId}
-							className="gap-1"
+							aria-label="Next submission"
+							className="gap-1 px-2 sm:px-3"
 						>
-							Next
+							<span className="hidden sm:inline">Next</span>
 							<ChevronRight className="h-3.5 w-3.5" />
 						</Button>
 					</div>
@@ -301,7 +303,7 @@ export function SubmissionToolbar({
 									size="sm"
 									aria-label="Search papers and submissions"
 									onClick={() => setPaletteOpen(true)}
-									className="h-7 gap-1.5 text-muted-foreground hover:text-foreground"
+									className="hidden sm:inline-flex h-7 gap-1.5 text-muted-foreground hover:text-foreground"
 								>
 									<Search className="h-3.5 w-3.5" />
 									<kbd className="hidden lg:inline-flex rounded-sm border border-border-quiet bg-muted px-1 py-0.5 font-mono text-[10px] text-ink-tertiary">
@@ -320,7 +322,11 @@ export function SubmissionToolbar({
 							resourceType="student_submission"
 							resourceId={data.submission_id}
 							trigger={
-								<Button variant="ghost" size="sm" className="h-7 gap-1.5">
+								<Button
+									variant="ghost"
+									size="sm"
+									className="hidden md:inline-flex h-7 gap-1.5"
+								>
 									<Share2 className="h-3.5 w-3.5" />
 									Share
 								</Button>
@@ -380,7 +386,8 @@ export function SubmissionToolbar({
 									) : (
 										<Check className="h-3.5 w-3.5" />
 									)}
-									Confirm marking
+									<span className="hidden sm:inline">Confirm marking</span>
+									<span className="sm:hidden">Confirm</span>
 								</Button>
 							)}
 						</>
@@ -408,7 +415,7 @@ export function SubmissionToolbar({
 			</div>
 
 			{/* ── Row 2: Job-level controls ────────────────────────────────────── */}
-			<div className="shrink-0 flex items-center gap-2 border-b border-border-quiet bg-background px-4 h-11">
+			<div className="shrink-0 flex items-center gap-1.5 sm:gap-2 border-b border-border-quiet bg-background px-2 sm:px-4 h-11">
 				<div className="flex-1" />
 
 				{/* LLM spend — admin-only (exposes model + per-call costs) */}

@@ -44,7 +44,7 @@ const MARK_ICONS: Record<string, React.ReactNode> = {
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function Divider() {
-	return <div className="mx-1 h-4 w-px bg-border" />
+	return <div className="mx-1 h-4 w-px bg-white/15" />
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -69,7 +69,7 @@ export function AnnotationToolbar({
 
 	return (
 		<TooltipProvider delay={300}>
-			<div className="sticky top-0 z-10 flex items-center gap-0.5 border-b bg-white/90 dark:bg-zinc-950/90 backdrop-blur-sm px-4 py-1.5 rounded-t">
+			<div className="sticky top-1 z-10 mx-auto my-1 w-fit max-w-full flex items-center gap-0.5 rounded-xl border border-white/10 bg-foreground/85 text-background backdrop-blur-md px-1.5 py-1 shadow-toolbar overflow-x-auto">
 				{/* ── Formatting zone: always available when there's a selection ── */}
 				{(
 					[
@@ -107,8 +107,8 @@ export function AnnotationToolbar({
 									}}
 									disabled={!hasSelection}
 									className={cn(
-										"relative flex items-center justify-center rounded w-8 h-7 text-xs font-medium transition-colors",
-										"hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed",
+										"relative flex items-center justify-center rounded w-7 h-6 sm:w-8 sm:h-7 text-xs font-medium transition-colors",
+										"hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed",
 										editor.isActive(key) &&
 											"bg-primary text-primary-foreground hover:bg-primary/90",
 									)}
@@ -150,8 +150,8 @@ export function AnnotationToolbar({
 										}}
 										disabled={!canAnnotate}
 										className={cn(
-											"relative flex items-center justify-center rounded w-8 h-7 text-xs font-medium transition-colors",
-											"hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed",
+											"relative flex items-center justify-center rounded w-7 h-6 sm:w-8 sm:h-7 text-xs font-medium transition-colors",
+											"hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed",
 											isActive &&
 												"bg-primary text-primary-foreground hover:bg-primary/90",
 										)}
@@ -159,7 +159,7 @@ export function AnnotationToolbar({
 								}
 							>
 								{MARK_ICONS[action.name]}
-								<span className="absolute -bottom-0.5 -right-0.5 text-[8px] font-mono text-muted-foreground leading-none">
+								<span className="absolute -bottom-0.5 -right-0.5 text-[8px] font-mono text-background/40 leading-none">
 									{action.key}
 								</span>
 							</TooltipTrigger>
@@ -189,7 +189,7 @@ export function AnnotationToolbar({
 									!annotationContextOk || !hasAnnotationMarkInSelection(editor)
 								}
 								className={cn(
-									"relative flex items-center justify-center rounded w-8 h-7 text-xs font-medium transition-colors",
+									"relative flex items-center justify-center rounded w-7 h-6 sm:w-8 sm:h-7 text-xs font-medium transition-colors",
 									"hover:bg-destructive/10 hover:text-destructive",
 									"disabled:opacity-30 disabled:cursor-not-allowed",
 								)}
@@ -200,13 +200,6 @@ export function AnnotationToolbar({
 					</TooltipTrigger>
 					<TooltipContent side="bottom">Remove all annotations</TooltipContent>
 				</Tooltip>
-
-				<div className="ml-auto text-[10px] text-muted-foreground hidden sm:block">
-					Select text, then press{" "}
-					<kbd className="rounded border bg-muted px-1 py-0.5 font-mono">1</kbd>
-					–
-					<kbd className="rounded border bg-muted px-1 py-0.5 font-mono">7</kbd>
-				</div>
 			</div>
 		</TooltipProvider>
 	)

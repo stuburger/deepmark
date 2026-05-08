@@ -2,7 +2,6 @@
 
 import type { StudentPaperAnnotation } from "@/lib/marking/types"
 import { useCurrentUser } from "@/lib/users/use-current-user"
-import { cn } from "@/lib/utils"
 import type { HocuspocusProvider } from "@hocuspocus/provider"
 import { OcrTokenMark, ParagraphNode, annotationMarks } from "@mcp-gcse/shared"
 import BoldExtension from "@tiptap/extension-bold"
@@ -15,29 +14,12 @@ import Text from "@tiptap/extension-text"
 import UnderlineExtension from "@tiptap/extension-underline"
 import { EditorContent, useEditor } from "@tiptap/react"
 import { BubbleMenu } from "@tiptap/react/menus"
-import {
-	Bold,
-	Box,
-	Check,
-	ChevronsUp,
-	Circle,
-	Eraser,
-	Italic,
-	Link2,
-	Underline,
-	X,
-} from "lucide-react"
+import { Sparkles } from "lucide-react"
 import { useCallback, useEffect, useRef, useState } from "react"
 import type * as Y from "yjs"
 import "./annotation-marks.css"
 import { AnnotationShortcuts } from "./annotation-shortcuts"
 import { AnnotationToolbar } from "./annotation-toolbar"
-import {
-	applyAnnotationMark,
-	canApplyAnnotations,
-	hasAnnotationMarkInSelection,
-	removeAllAnnotationMarks,
-} from "./apply-annotation-mark"
 import { CommentSidebar } from "./comment-sidebar"
 import {
 	HoverHighlightPlugin,
@@ -49,20 +31,6 @@ import { McqTableNode } from "./mcq-table-node"
 import { QuestionAnswerNode } from "./question-answer-node"
 import { useDerivedAnnotations } from "./use-derived-annotations"
 import { useTokenHighlight } from "./use-token-highlight"
-
-// ─── Bubble menu icons ─────────────────────────────────────────────────────
-
-const BUBBLE_ICONS: Record<string, React.ReactNode> = {
-	tick: <Check className="h-3.5 w-3.5" />,
-	cross: <X className="h-3.5 w-3.5" />,
-	annotationUnderline: <Underline className="h-3.5 w-3.5" />,
-	doubleUnderline: <ChevronsUp className="h-3.5 w-3.5 rotate-90" />,
-	box: <Box className="h-3.5 w-3.5" />,
-	circle: <Circle className="h-3.5 w-3.5" />,
-	chain: <Link2 className="h-3.5 w-3.5" />,
-}
-
-const BUBBLE_ERASER = <Eraser className="h-3.5 w-3.5" />
 
 // ─── Main component ─────────────────────────────────────────────────────────
 
@@ -83,6 +51,7 @@ export function AnnotatedAnswerSheet({
 	provider,
 	onDerivedAnnotations,
 	onTokenHighlight,
+	onAskDeepMark,
 }: {
 	ydoc: Y.Doc
 	/**
@@ -93,6 +62,20 @@ export function AnnotatedAnswerSheet({
 	provider?: HocuspocusProvider | null
 	onDerivedAnnotations?: (annotations: StudentPaperAnnotation[]) => void
 	onTokenHighlight?: (tokenIds: string[] | null) => void
+	/**
+	 * Selection → "Talk to DeepMark". When the user selects text and clicks
+	 * the bubble trigger, the host opens the chat panel with this text
+	 * attached as a context chip. `questionNumber` is `null` when the
+	 * selection isn't inside a `questionAnswer` node (cover page, stray
+	 * paragraph) — the chat shows it as a "Selection" chip instead.
+	 * Marking actions (formatting, AO marks, eraser) are handled by the
+	 * floating toolbar + 1–7 keyboard shortcuts, so the bubble is now a
+	 * single-purpose entry point to the chat.
+	 */
+	onAskDeepMark?: (input: {
+		text: string
+		questionNumber: string | null
+	}) => void
 }) {
 	const { cursorUser } = useCurrentUser()
 	// Active annotation card state — driven by cursor position, sidebar clicks,
@@ -177,7 +160,7 @@ export function AnnotatedAnswerSheet({
 			editorProps: {
 				attributes: {
 					class:
-						"prose prose-sm dark:prose-invert max-w-none focus:outline-none px-12 py-10",
+						"prose prose-sm dark:prose-invert max-w-none focus:outline-none pl-3 pr-4 py-6 sm:pl-4 sm:pr-6 sm:py-8",
 				},
 			},
 		},
@@ -224,12 +207,53 @@ export function AnnotatedAnswerSheet({
 		setAnnotationHighlight(editor, activeAnnotationId)
 	}, [editor, activeAnnotationId])
 
+	// Resolve the scrollable ancestor for BubbleMenu's Floating UI autoUpdate.
+	// Default is `window`, but our editor scrolls inside Base UI's ScrollArea
+	// viewport, so window scroll never fires — without this the bubble stays
+	// pinned to viewport coords as the page scrolls under it. We render the
+	// bubble only after we've found the target so Floating UI's autoUpdate is
+	// wired correctly on first mount.
+	const [bubbleScrollTarget, setBubbleScrollTarget] = useState<
+		HTMLElement | undefined
+	>()
+	useEffect(() => {
+		if (!editor) return
+		const target = editor.view.dom.closest('[data-slot="scroll-area-viewport"]')
+		if (target instanceof HTMLElement) setBubbleScrollTarget(target)
+	}, [editor])
+
+	// Floating UI's autoUpdate can't keep up with fast scrolling — even with
+	// updateDelay: 0 the bubble lags behind the selection rect during the
+	// scroll, then snaps to the right place when the user stops. We hide it
+	// for the duration of the scroll instead and let it reappear in its
+	// settled position. The bubble's intrinsic show/hide (selection-driven)
+	// uses `display`, so toggling `visibility` here doesn't fight with it.
+	const bubbleRef = useRef<HTMLDivElement>(null)
+	useEffect(() => {
+		if (!bubbleScrollTarget) return
+		let revealTimer: ReturnType<typeof setTimeout> | null = null
+		const onScroll = () => {
+			const el = bubbleRef.current
+			if (el) el.style.visibility = "hidden"
+			if (revealTimer) clearTimeout(revealTimer)
+			revealTimer = setTimeout(() => {
+				const cur = bubbleRef.current
+				if (cur) cur.style.visibility = "visible"
+			}, 250)
+		}
+		bubbleScrollTarget.addEventListener("scroll", onScroll, { passive: true })
+		return () => {
+			bubbleScrollTarget.removeEventListener("scroll", onScroll)
+			if (revealTimer) clearTimeout(revealTimer)
+		}
+	}, [bubbleScrollTarget])
+
 	if (!editor) return null
 
 	return (
-		<div className="flex justify-center gap-0">
-			{/* A4 page — the document */}
-			<div className="w-full max-w-[210mm] bg-white dark:bg-zinc-950 shadow-lg rounded border border-zinc-200 dark:border-zinc-800 min-h-[297mm] flex flex-col">
+		<div className="flex items-start gap-3">
+			{/* Document body — flows directly on the page surface (no inner sheet) */}
+			<div className="flex-1 min-w-0 max-w-[210mm] flex flex-col">
 				{/* Floating toolbar — sticky at top of page */}
 				<AnnotationToolbar
 					editor={editor}
@@ -237,111 +261,48 @@ export function AnnotatedAnswerSheet({
 					onMarkApplied={handleMarkApplied}
 				/>
 
-				{/* Bubble menu — appears on selection */}
-				<BubbleMenu
-					editor={editor}
-					className="flex items-center gap-0.5 rounded-lg border bg-background shadow-lg px-1 py-0.5"
-				>
-					{/* Formatting: always available */}
-					{(
-						[
-							{
-								cmd: "toggleBold",
-								key: "bold",
-								icon: <Bold className="h-3.5 w-3.5" />,
-								label: "Bold",
-							},
-							{
-								cmd: "toggleItalic",
-								key: "italic",
-								icon: <Italic className="h-3.5 w-3.5" />,
-								label: "Italic",
-							},
-							{
-								cmd: "toggleUnderline",
-								key: "underline",
-								icon: <Underline className="h-3.5 w-3.5" />,
-								label: "Underline",
-							},
-						] as const
-					).map(({ cmd, key, icon, label }) => (
+				{/* Selection bubble — single-purpose "Talk to DeepMark" trigger.
+				    Marking actions (formatting + AO marks + eraser) live on the
+				    floating toolbar and 1–7 keyboard shortcuts.
+				    Gated on `bubbleScrollTarget` so Floating UI's autoUpdate
+				    binds to the ScrollArea viewport on first mount. */}
+				{onAskDeepMark && bubbleScrollTarget && (
+					<BubbleMenu
+						ref={bubbleRef}
+						editor={editor}
+						updateDelay={0}
+						options={{ scrollTarget: bubbleScrollTarget }}
+					>
 						<button
-							key={key}
 							type="button"
 							onMouseDown={(e) => {
 								e.preventDefault()
-								editor.chain().focus()[cmd]().run()
+								const { from, to, $from } = editor.state.selection
+								const text = editor.state.doc.textBetween(from, to, " ").trim()
+								if (!text) return
+								// Walk up the selection ancestors to find the enclosing
+								// questionAnswer node (if any) and pull its question
+								// number off the attrs so the chat can label the chip.
+								let questionNumber: string | null = null
+								for (let depth = $from.depth; depth > 0; depth--) {
+									const node = $from.node(depth)
+									if (node.type.name === "questionAnswer") {
+										const attrs = node.attrs as {
+											questionNumber?: string | null
+										}
+										questionNumber = attrs.questionNumber ?? null
+										break
+									}
+								}
+								onAskDeepMark({ text, questionNumber })
 							}}
-							className={cn(
-								"flex items-center justify-center rounded w-7 h-7 transition-colors",
-								"hover:bg-muted",
-								editor.isActive(key) &&
-									"bg-primary text-primary-foreground hover:bg-primary/90",
-							)}
-							title={label}
+							className="inline-flex items-center gap-1.5 rounded-md border border-primary/40 bg-foreground/95 backdrop-blur-md px-2.5 py-1.5 text-xs font-medium text-background shadow-toolbar"
 						>
-							{icon}
+							<Sparkles className="h-3.5 w-3.5 text-primary" aria-hidden />
+							Talk to <span className="text-primary">DeepMark</span>
 						</button>
-					))}
-
-					{/* Annotation marks: only in questionAnswer context */}
-					{canApplyAnnotations(editor) && (
-						<>
-							<div className="mx-0.5 h-4 w-px bg-border" />
-
-							{MARK_ACTIONS.map((action) => {
-								const isActive = editor.isActive(action.name)
-								return (
-									<button
-										key={action.name}
-										type="button"
-										onMouseDown={(e) => {
-											e.preventDefault()
-											const id = applyAnnotationMark(
-												editor,
-												action.name,
-												action.attrs,
-											)
-											if (id) handleMarkApplied(id)
-										}}
-										className={cn(
-											"flex items-center gap-1 rounded px-2 py-1 text-xs font-medium transition-colors",
-											"hover:bg-muted",
-											isActive &&
-												"bg-primary text-primary-foreground hover:bg-primary/90",
-										)}
-										title={`${action.label} (${action.key})`}
-									>
-										{BUBBLE_ICONS[action.name]}
-										<kbd className="text-[9px] font-mono opacity-50 ml-0.5">
-											{action.key}
-										</kbd>
-									</button>
-								)
-							})}
-
-							<div className="mx-0.5 h-4 w-px bg-border" />
-
-							<button
-								type="button"
-								onMouseDown={(e) => {
-									e.preventDefault()
-									removeAllAnnotationMarks(editor)
-								}}
-								disabled={!hasAnnotationMarkInSelection(editor)}
-								className={cn(
-									"flex items-center gap-1 rounded px-2 py-1 text-xs font-medium transition-colors",
-									"hover:bg-destructive/10 hover:text-destructive",
-									"disabled:opacity-30 disabled:cursor-not-allowed",
-								)}
-								title="Remove all annotations"
-							>
-								{BUBBLE_ERASER}
-								<span className="hidden sm:inline">Clear</span>
-							</button>
-						</>
-					)}
-				</BubbleMenu>
+					</BubbleMenu>
+				)}
 
 				{/* Editor content */}
 				<div className="flex-1">
@@ -350,7 +311,7 @@ export function AnnotatedAnswerSheet({
 			</div>
 
 			{/* Comment sidebar — right margin, outside the page */}
-			<div className="w-52 shrink-0 hidden xl:block">
+			<div className="w-52 shrink-0 hidden lg:block">
 				<CommentSidebar
 					editor={editor}
 					activeAnnotationId={activeAnnotationId}

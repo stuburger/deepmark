@@ -115,6 +115,22 @@ export async function segmentPdfScripts(
 
 	// A page is blank if upstream flagged it OR Cloud Vision returned no tokens.
 	const blankIndices = pageTexts.filter((p) => p.empty).map((p) => p.order)
+
+	// All pages blank → Vision couldn't read anything (dark photo, smudged
+	// scan, blank doc). The LLM has no signal to segment on; calling it
+	// would either produce one script that snapBlankStartPages drops to
+	// zero, or N scripts the teacher has to manually correct anyway.
+	// Return one placeholder script covering the whole doc — the teacher
+	// drags-splits as needed in staging review.
+	if (blankIndices.length === totalPages) {
+		logger.info(TAG, "All pages blank — falling back to single script", {
+			totalPages,
+		})
+		return {
+			scripts: [{ startPage: 0, endPage: totalPages - 1, studentName: null }],
+		}
+	}
+
 	const prompt = buildSegmentationPrompt({
 		totalPages,
 		blankIndices,
@@ -161,9 +177,18 @@ export async function segmentPdfScripts(
 		scripts = await attempt()
 		validation = validateScripts(scripts, totalPages)
 		if (!validation.ok) {
-			throw new Error(
-				`Segmentation output invalid after retry: ${validation.error}`,
+			// Don't fail the whole batch — fall back to one script covering all
+			// pages. The teacher drags-splits in staging review. Throwing here
+			// would mean a single bad LLM run wipes the entire upload, even
+			// though the source PDFs / images themselves are fine.
+			logger.warn(
+				TAG,
+				"Segmentation output invalid after retry — falling back to single script",
+				{ totalPages, reason: validation.error },
 			)
+			return {
+				scripts: [{ startPage: 0, endPage: totalPages - 1, studentName: null }],
+			}
 		}
 	}
 

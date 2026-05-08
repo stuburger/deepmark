@@ -16,24 +16,24 @@ export const getActiveBatchForPaper = resourceAction({
 	async ({
 		parsedInput: { examPaperId },
 	}): Promise<{ batch: ActiveBatchInfo }> => {
-		// `committed` is intentionally not in this filter — once the user has
-		// finished review and committed, the staging banner disappears and
-		// grading progress is rendered by the submissions tab itself.
-		// `failed` stays so the UI can surface the failure to the teacher.
+		// Pull the most recent batch overall — if the teacher has already
+		// committed (or abandoned older staging/failed batches by re-uploading),
+		// only the freshest batch is meaningful. Filtering directly on status
+		// here would surface a stale `failed` over a newer `committed`, which
+		// makes a healed paper look broken. We treat as "active" only if the
+		// most-recent batch is itself in flight.
 		const batch = await db.batchIngestJob.findFirst({
-			where: {
-				exam_paper_id: examPaperId,
-				status: {
-					in: ["classifying", "staging", "failed"] as BatchStatus[],
-				},
-			},
+			where: { exam_paper_id: examPaperId },
 			orderBy: { created_at: "desc" },
 			include: {
 				staged_scripts: { orderBy: { created_at: "asc" } },
 			},
 		})
 
-		if (!batch) return { batch: null }
+		const ACTIVE: BatchStatus[] = ["classifying", "staging", "failed"]
+		if (!batch || !ACTIVE.includes(batch.status as BatchStatus)) {
+			return { batch: null }
+		}
 
 		return {
 			batch: {

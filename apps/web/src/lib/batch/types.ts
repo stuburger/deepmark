@@ -6,7 +6,11 @@ export const pageKeySchema = z.object({
 	s3_key: z.string(),
 	order: z.number(),
 	mime_type: z.string(),
-	source_file: z.string(),
+	// Tolerated as missing for legacy rows that pre-date the fix in
+	// `lib/batch/scripts/mutations.ts:pageKeySchema` — without this default
+	// `parsePageKeys` would throw on those rows and `getActiveBatchForPaper`
+	// would return null, blanking the staging panel.
+	source_file: z.string().optional().default(""),
 })
 
 export type PageKey = z.infer<typeof pageKeySchema>

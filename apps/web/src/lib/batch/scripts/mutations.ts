@@ -6,10 +6,15 @@ import type { StagedScriptStatus } from "@mcp-gcse/db"
 import { z } from "zod"
 import { type PageKey, parsePageKeys } from "../types"
 
+// Must match the read-side schema in `lib/batch/types.ts` — Zod object schemas
+// strip unknown keys by default, so a missing field here would silently drop
+// data on every drag-drop persist and the next refetch would crash on the
+// strict read schema. Keep this aligned.
 const pageKeySchema = z.object({
 	s3_key: z.string(),
 	order: z.number().int(),
 	mime_type: z.string(),
+	source_file: z.string(),
 })
 
 export const updateStagedScript = resourceAction({

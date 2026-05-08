@@ -2,6 +2,7 @@
 
 import { resourceAction } from "@/lib/authz"
 import { db } from "@/lib/db"
+import { redactName } from "@mcp-gcse/shared"
 import { z } from "zod"
 import type { SubmissionFeedback, SubmissionFeedbackRating } from "../types"
 import { toSubmissionFeedback } from "./feedback-mapper"
@@ -20,7 +21,7 @@ export const updateStudentName = resourceAction({
 
 	await db.studentSubmission.update({
 		where: { id: jobId },
-		data: { student_name: name },
+		data: { student_name: redactName(name) },
 	})
 	return { ok: true }
 })
@@ -51,7 +52,10 @@ export const linkStudentToJob = resourceAction({
 
 		await db.studentSubmission.update({
 			where: { id: jobId },
-			data: { student_id: studentId, student_name: student.name },
+			data: {
+				student_id: studentId,
+				student_name: redactName(student.name),
+			},
 		})
 
 		ctx.log.info("Student linked to job", { jobId, studentId })
@@ -62,16 +66,23 @@ export const linkStudentToJob = resourceAction({
 export const confirmMarking = resourceAction({
 	type: "submission",
 	role: "editor",
-	schema: z.object({ jobId: z.string() }),
+	schema: z.object({ jobId: z.string(), confirmed: z.boolean() }),
 	id: ({ jobId }) => jobId,
-}).action(async ({ parsedInput: { jobId }, ctx }): Promise<{ ok: true }> => {
-	await db.studentSubmission.update({
-		where: { id: jobId },
-		data: { confirmed_at: new Date(), confirmed_by: ctx.user.id },
-	})
-	ctx.log.info("Submission confirmed", { jobId })
-	return { ok: true }
-})
+}).action(
+	async ({ parsedInput: { jobId, confirmed }, ctx }): Promise<{ ok: true }> => {
+		await db.studentSubmission.update({
+			where: { id: jobId },
+			data: confirmed
+				? { confirmed_at: new Date(), confirmed_by: ctx.user.id }
+				: { confirmed_at: null, confirmed_by: null },
+		})
+		ctx.log.info(
+			confirmed ? "Submission confirmed" : "Submission unconfirmed",
+			{ jobId },
+		)
+		return { ok: true }
+	},
+)
 
 export const deleteSubmission = resourceAction({
 	type: "submission",

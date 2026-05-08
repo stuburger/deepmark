@@ -149,6 +149,10 @@ export type LinkStudentToJobResult = { ok: true } | { ok: false; error: string }
 export type SubmissionHistoryItem = {
 	id: string
 	student_name: string | null
+	/** Linked Student.id when the submission has been matched/quick-assigned. */
+	student_id: string | null
+	/** Number the OCR pulled off page 1 — set whether or not it matched a roster row. */
+	detected_student_number: string | null
 	exam_paper_id: string | null
 	exam_paper_title: string | null
 	detected_subject: string | null

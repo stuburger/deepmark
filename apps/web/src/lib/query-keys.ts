@@ -22,6 +22,8 @@ export const queryKeys = {
 	submissionFeedback: (submissionId: string) =>
 		["submissionFeedback", submissionId] as const,
 	bookmarks: () => ["bookmarks"] as const,
+	students: () => ["students"] as const,
+	nextStudentNumber: () => ["nextStudentNumber"] as const,
 	submissionBookmark: (jobId: string) => ["submissionBookmark", jobId] as const,
 	paletteSearch: (q: string) => ["paletteSearch", q] as const,
 	// ─── Batch ingestion ───────────────────────────────────────────────────────

@@ -26,6 +26,7 @@ export type HandwritingAnalysis = {
 	transcript: string
 	observations: string[]
 	studentName?: string | null
+	studentNumber?: string | null
 	detectedSubject?: string | null
 	mcqSelections: OcrMcqSelection[]
 	questionsOnPage: OcrQuestionOnPage[]
@@ -51,6 +52,13 @@ const TranscriptSchema = z.object({
 		.nullable()
 		.optional()
 		.describe("Student's name if visible on the page, null if not found"),
+	student_number: z
+		.string()
+		.nullable()
+		.optional()
+		.describe(
+			"Handwritten student identifier near the name/header area. Typical shapes: a 1-2 letter prefix + dash + digits (e.g. 'S-042', 'T-12'), or plain digits (e.g. '042'). Return the value verbatim including any prefix/dash. Do NOT confuse with question numbers, marks, dates, or paper reference codes. Null if no clear student identifier is visible.",
+		),
 	detected_subject: z
 		.string()
 		.nullable()
@@ -120,7 +128,7 @@ export async function runOcr(
 		: "Cover individual words, lines, corrections, crossed-out text, punctuation, and any diagrams."
 
 	const metadataInstruction = options.extractMetadata
-		? " Also extract the student's name if visible, and detect the exam subject (as a lowercase single word) from headers or content."
+		? " Also extract the student's name if visible, the student's handwritten ID number if any (e.g. 'S-042', 'T-12', '042') usually in the header area near the name — distinct from question numbers, marks, or paper reference codes — and detect the exam subject (as a lowercase single word) from headers or content."
 		: ""
 
 	const { output } = await callLlmWithFallback(
@@ -165,6 +173,7 @@ export async function runOcr(
 		transcript: output.transcript,
 		observations: output.observations,
 		studentName: output.student_name ?? null,
+		studentNumber: output.student_number?.trim() || null,
 		detectedSubject: output.detected_subject ?? null,
 		mcqSelections: (output.mcq_selections ?? []).map((s) => ({
 			question_number: s.question_number,

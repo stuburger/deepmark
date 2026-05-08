@@ -362,17 +362,22 @@ model MarkScheme {
 }
 
 model Student {
-  id         String   @id @default(cuid())
-  name       String
-  class_name String?
-  year_group String?
-  teacher_id String
-  created_at DateTime @default(now())
-  updated_at DateTime @updatedAt
+  id             String   @id @default(cuid())
+  name           String
+  /// Teacher-namespaced identifier handwritten on scripts so OCR can
+  /// deterministically match a submission to a roster row. Auto-assigned
+  /// on create (teacher can override). Format is application-enforced.
+  student_number String
+  class_name     String?
+  year_group     String?
+  teacher_id     String
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
 
   teacher              User                @relation("TeacherStudents", fields: [teacher_id], references: [id])
   student_submissions  StudentSubmission[] @relation("SubmissionStudent")
 
+  @@unique([teacher_id, student_number])
   @@map("students")
 }
 
@@ -700,6 +705,9 @@ model StudentSubmission {
   pages            Json
   student_name     String?
   student_id       String?
+  /// Student number the OCR pulled off page 1 (preserved even when no roster
+  /// row matches, so the quick-assign UI can show "we saw S-042 — link it").
+  detected_student_number String?
   subject          Subject?
   year             Int?
   paper_reference  String?

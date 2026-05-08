@@ -52,6 +52,8 @@ function mapSubmissionToListItem(
 	sub: {
 		id: string
 		student_name: string | null
+		student_id: string | null
+		detected_student_number: string | null
 		exam_paper_id: string
 		detected_subject: string | null
 		created_at: Date
@@ -82,6 +84,8 @@ function mapSubmissionToListItem(
 	return {
 		id: sub.id,
 		student_name: sub.student_name,
+		student_id: sub.student_id,
+		detected_student_number: sub.detected_student_number,
 		exam_paper_id: sub.exam_paper_id,
 		exam_paper_title: sub.exam_paper?.title ?? null,
 		detected_subject: sub.detected_subject,

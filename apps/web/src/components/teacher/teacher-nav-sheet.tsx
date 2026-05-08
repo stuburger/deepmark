@@ -11,6 +11,7 @@ import {
 	LogOut,
 	Search,
 	Settings,
+	Users,
 	X,
 } from "lucide-react"
 import Image from "next/image"
@@ -57,6 +58,7 @@ const RECENT_ITEMS: NavItem[] = [
 
 const ALL_ITEMS: NavItem[] = [
 	{ href: "/teacher/exam-papers", label: "All papers", Icon: ClipboardList },
+	{ href: "/teacher/students", label: "All students", Icon: Users },
 ]
 
 const INSIGHT_ITEMS: NavItem[] = [

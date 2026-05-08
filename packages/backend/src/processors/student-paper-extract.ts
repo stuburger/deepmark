@@ -25,6 +25,7 @@ import { resolveMcqAnswers } from "@/lib/scan-extraction/resolve-mcq-answers"
 import { saveVisionRaw } from "@/lib/scan-extraction/save-vision-raw"
 import { SQSClient, SendMessageCommand } from "@aws-sdk/client-sqs"
 import { type OcrStatus, type Subject, logOcrRunEvent } from "@mcp-gcse/db"
+import { redactName } from "@mcp-gcse/shared"
 import { Resource } from "sst"
 
 const TAG = "student-paper-extract"
@@ -164,7 +165,26 @@ export async function handler(event: SqsEvent): Promise<void> {
 		const rawSubject = firstPageOcr?.detectedSubject?.trim().toLowerCase()
 		const detectedSubject: Subject | null =
 			rawSubject && isValidSubject(rawSubject) ? rawSubject : null
-		const studentName = firstPageOcr?.studentName?.trim() || null
+		const detectedStudentNumber = firstPageOcr?.studentNumber?.trim() || null
+
+		// Deterministic match against the uploader's roster. No fuzzy matching,
+		// no auto-create — a number with no roster row stays as `detected_*`
+		// and the teacher quick-assigns from the UI.
+		const matchedStudent = detectedStudentNumber
+			? await db.student.findFirst({
+					where: {
+						teacher_id: job.uploaded_by,
+						student_number: detectedStudentNumber,
+					},
+				})
+			: null
+
+		// Full extracted name is held only in firstPageOcr — we redact before
+		// it touches the DB, event log, or extracted_answers_raw blob. When a
+		// roster row matched, prefer its name (teacher-typed source of truth).
+		const studentName = redactName(
+			matchedStudent?.name ?? firstPageOcr?.studentName ?? null,
+		)
 
 		const pageAnalyses = sortedPages.map((page, i) => ({
 			page: page.order,
@@ -175,6 +195,8 @@ export async function handler(event: SqsEvent): Promise<void> {
 		logger.info(TAG, "Gemini OCR complete", {
 			jobId,
 			student_name: studentName,
+			detected_student_number: detectedStudentNumber,
+			matched_student_id: matchedStudent?.id ?? null,
 			detected_subject: detectedSubject,
 			pages_analysed: pageAnalyses.length,
 		})
@@ -191,6 +213,8 @@ export async function handler(event: SqsEvent): Promise<void> {
 			where: { id: jobId },
 			data: {
 				student_name: studentName,
+				student_id: matchedStudent?.id ?? null,
+				detected_student_number: detectedStudentNumber,
 				detected_subject: detectedSubject,
 			},
 		})

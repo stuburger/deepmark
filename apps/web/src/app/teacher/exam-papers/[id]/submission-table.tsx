@@ -1,5 +1,6 @@
 "use client"
 
+import { QuickAssignStudentDialog } from "@/components/marking/quick-assign-student-dialog"
 import { ShareDialog } from "@/components/sharing/share-dialog"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -35,8 +36,8 @@ import {
 	ArrowUp,
 	ArrowUpDown,
 	Bookmark,
-	CheckCircle2,
 	ChevronRight,
+	Link2,
 	Share2,
 	Trash2,
 } from "lucide-react"
@@ -57,7 +58,6 @@ const SORT_KEYS = [
 	"bookmarked",
 	"student",
 	"status",
-	"confirmed",
 	"score",
 	"grade",
 	"date",
@@ -69,13 +69,11 @@ type SortDir = (typeof SORT_DIRS)[number]
 
 // Default direction applied when first selecting a column. Names sort A→Z;
 // scores/grades/dates sort newest/highest first because that's what teachers
-// usually want to see at the top. Confirmed-first puts signed-off scripts
-// at the top so the teacher can see what's still outstanding.
+// usually want to see at the top.
 const DEFAULT_DIR: Record<SortKey, SortDir> = {
 	bookmarked: "desc",
 	student: "asc",
 	status: "asc",
-	confirmed: "desc",
 	score: "desc",
 	grade: "desc",
 	date: "desc",
@@ -182,6 +180,10 @@ export function SubmissionTable({
 	const [sort, setSort] = useQueryState("sort", parseAsStringLiteral(SORT_KEYS))
 	const [dir, setDir] = useQueryState("dir", parseAsStringLiteral(SORT_DIRS))
 	const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
+	const [assigningJob, setAssigningJob] = useState<{
+		jobId: string
+		detectedNumber: string | null
+	} | null>(null)
 
 	function toggleExpand(id: string) {
 		const next = new Set(expandedIds)
@@ -209,8 +211,6 @@ export function SubmissionTable({
 						(PHASE_RANK[submissionPhase(a.status)] -
 							PHASE_RANK[submissionPhase(b.status)])
 					)
-				case "confirmed":
-					return order * ((a.is_confirmed ? 1 : 0) - (b.is_confirmed ? 1 : 0))
 				case "score":
 					return compareNullable(pctFor(a), pctFor(b), order)
 				case "grade": {
@@ -277,6 +277,17 @@ export function SubmissionTable({
 
 	return (
 		<TooltipProvider>
+			{assigningJob && (
+				<QuickAssignStudentDialog
+					open={true}
+					onOpenChange={(open) => {
+						if (!open) setAssigningJob(null)
+					}}
+					jobId={assigningJob.jobId}
+					examPaperId={examPaperId}
+					detectedNumber={assigningJob.detectedNumber}
+				/>
+			)}
 			<Card>
 				<CardContent className="pt-4">
 					<Table>
@@ -320,20 +331,6 @@ export function SubmissionTable({
 									onSort={handleSort}
 									className="w-32"
 								/>
-								<TableHead className="w-10">
-									<button
-										type="button"
-										onClick={() => handleSort("confirmed")}
-										aria-label="Sort by confirmed"
-										className={cn(
-											"-ml-1 inline-flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors",
-											sort === "confirmed" && "text-foreground",
-										)}
-										title="Confirmed"
-									>
-										<CheckCircle2 className="h-3.5 w-3.5" />
-									</button>
-								</TableHead>
 								<SortableHeader
 									label="Score"
 									columnKey="score"
@@ -459,6 +456,30 @@ export function SubmissionTable({
 															</span>
 														)}
 													</span>
+													{sub.student_id === null && (
+														<>
+															{sub.detected_student_number && (
+																<span className="rounded-sm border border-border-quiet bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+																	{sub.detected_student_number}
+																</span>
+															)}
+															<Button
+																type="button"
+																variant="ghost"
+																size="sm"
+																className="h-6 gap-1 px-1.5 text-[11px] text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover:opacity-100 focus:opacity-100"
+																onClick={() =>
+																	setAssigningJob({
+																		jobId: sub.id,
+																		detectedNumber: sub.detected_student_number,
+																	})
+																}
+															>
+																<Link2 className="size-3" strokeWidth={1.5} />
+																Link
+															</Button>
+														</>
+													)}
 													{hasPriorVersions && (
 														<span className="text-[10px] tabular-nums font-mono text-muted-foreground">
 															v{versionCount}
@@ -469,21 +490,17 @@ export function SubmissionTable({
 											<TableCell>
 												<span className="inline-flex items-center gap-2 text-xs text-muted-foreground">
 													<StatusDot
-														kind={phaseStatusKind(phase)}
+														kind={
+															phase === "done" && !sub.is_confirmed
+																? "info"
+																: phaseStatusKind(phase)
+														}
 														className={cn(inFlight && "animate-pulse")}
 													/>
-													{PHASE_LABEL[phase]}
+													{phase === "done" && sub.is_confirmed
+														? "Confirmed"
+														: PHASE_LABEL[phase]}
 												</span>
-											</TableCell>
-											<TableCell>
-												{sub.is_confirmed ? (
-													<span
-														className="inline-flex h-5 w-5 items-center justify-center"
-														title="Confirmed by teacher"
-													>
-														<StatusDot kind="success" />
-													</span>
-												) : null}
 											</TableCell>
 											<TableCell>
 												{pct !== null ? (

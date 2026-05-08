@@ -10,6 +10,7 @@ import {
 	Menu,
 	Search,
 	User,
+	Users,
 } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
@@ -37,6 +38,12 @@ const NAV_ICONS = [
 		href: "/teacher/exam-papers",
 		label: "Exam papers",
 		Icon: ClipboardList,
+		exact: false,
+	},
+	{
+		href: "/teacher/students",
+		label: "Students",
+		Icon: Users,
 		exact: false,
 	},
 	{

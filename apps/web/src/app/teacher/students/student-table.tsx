@@ -13,9 +13,10 @@ import { queryKeys } from "@/lib/query-keys"
 import { listStudents } from "@/lib/students/queries"
 import type { StudentRow } from "@/lib/students/queries"
 import { useQuery } from "@tanstack/react-query"
-import { Pencil } from "lucide-react"
+import { Pencil, Users } from "lucide-react"
 import { useState } from "react"
 import { EditStudentDialog } from "./edit-student-dialog"
+import { NewStudentButton } from "./new-student-button"
 
 type Props = {
 	initialStudents: StudentRow[]
@@ -36,9 +37,26 @@ export function StudentTable({ initialStudents }: Props) {
 
 	if (students.length === 0) {
 		return (
-			<p className="py-12 text-center text-sm text-muted-foreground">
-				No students yet. Add one to start matching uploaded scripts.
-			</p>
+			<div className="flex min-h-[60vh] items-center justify-center">
+				<div className="flex max-w-sm flex-col items-center text-center">
+					<div className="mb-4 flex size-14 items-center justify-center rounded-md bg-muted">
+						<Users
+							className="size-6 text-muted-foreground"
+							strokeWidth={1.5}
+						/>
+					</div>
+					<h2 className="text-lg font-semibold text-foreground">
+						No students yet
+					</h2>
+					<p className="mt-1 text-sm text-muted-foreground">
+						Add the students in your class. Their work will link up
+						automatically when you upload scripts.
+					</p>
+					<div className="mt-5">
+						<NewStudentButton />
+					</div>
+				</div>
+			</div>
 		)
 	}
 

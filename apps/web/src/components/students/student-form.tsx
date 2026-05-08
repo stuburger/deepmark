@@ -62,7 +62,7 @@ export function StudentForm({
 					<FieldLabel htmlFor="student-name">Name</FieldLabel>
 					<Input
 						id="student-name"
-						placeholder="e.g. Stuart Bourhill"
+						placeholder="e.g. Daisy C"
 						{...register("name")}
 					/>
 					{errors.name && <FieldError>{errors.name.message}</FieldError>}

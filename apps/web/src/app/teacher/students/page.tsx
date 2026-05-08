@@ -13,10 +13,7 @@ export default async function StudentsPage() {
 				<div>
 					<h1 className="text-2xl font-semibold">Students</h1>
 					<p className="mt-1 text-sm text-muted-foreground">
-						Build your roster so OCR can match uploaded scripts to the right
-						student. Numbers handwritten on page 1 of each script (e.g.{" "}
-						<code className="font-mono text-xs">S-042</code>) are how the
-						extraction step links a submission deterministically.
+						Your class roster.
 					</p>
 				</div>
 				<NewStudentButton />

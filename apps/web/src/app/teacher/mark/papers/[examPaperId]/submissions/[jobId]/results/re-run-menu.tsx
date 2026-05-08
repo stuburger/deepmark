@@ -16,10 +16,6 @@ import { ChevronDown, Loader2, RefreshCw, ScanText } from "lucide-react"
 /**
  * Teacher-facing menu to re-run any pipeline stage from a single entry point.
  *
- * The per-pip popovers in `StagePips` also expose stage-specific re-runs, but
- * this dropdown is the discoverable starting point teachers reach for when
- * they know something went wrong but haven't yet looked at individual stages.
- *
  * Both Re-scan and Re-grade create a new superseded submission so the original
  * result is preserved as history — no in-place re-run path exists.
  */

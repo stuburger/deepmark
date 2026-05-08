@@ -26,11 +26,11 @@ import {
 	Check,
 	ChevronDown,
 	Copy,
-	Crosshair,
+	FileText,
 	Layers,
 	Lightbulb,
+	Settings2,
 	Sparkles,
-	ZoomIn,
 } from "lucide-react"
 import { useState } from "react"
 import { ObservationsSheet } from "./ocr-sheets"
@@ -122,6 +122,11 @@ export function ScanPanel({
 									Talk to DeepMark
 								</TooltipContent>
 							</Tooltip>
+							<div className="h-3.5 w-px bg-border mx-1" />
+							<span className="inline-flex items-center gap-1.5 text-xs font-medium text-foreground">
+								<FileText className="h-3.5 w-3.5 text-primary" aria-hidden />
+								Scan
+							</span>
 							<div className="h-3.5 w-px bg-border mx-1" />
 						</>
 					)}
@@ -245,55 +250,37 @@ export function ScanPanel({
 					)}
 
 					{/* Right-aligned mode toggles */}
+					{/* View settings — boolean view toggles collapsed into a
+					    single dropdown so the header isn't crowded by per-toggle
+					    icons. State is reflected via DropdownMenuCheckboxItem
+					    checks rather than active styling on the trigger. */}
 					<div className="ml-auto flex items-center gap-0.5">
-						<Tooltip>
-							<TooltipTrigger
-								render={
-									<button
-										type="button"
-										onClick={() => toggle("viewMode")}
-										className={cn(
-											"inline-flex items-center justify-center h-6 w-6 rounded transition-colors",
-											inspectMode
-												? "bg-foreground text-background"
-												: "text-muted-foreground hover:bg-muted hover:text-foreground",
-										)}
-										aria-pressed={inspectMode}
-										aria-label="Toggle inspect mode"
-									>
-										<Crosshair className="h-3.5 w-3.5" />
-									</button>
-								}
-							/>
-							<TooltipContent side="bottom" sideOffset={6}>
-								{inspectMode
-									? "Inspect mode (word-level highlights)"
-									: "Focus mode (no word highlights)"}
-							</TooltipContent>
-						</Tooltip>
-						<Tooltip>
-							<TooltipTrigger
-								render={
-									<button
-										type="button"
-										onClick={() => toggle("showZoomControls")}
-										className={cn(
-											"inline-flex items-center justify-center h-6 w-6 rounded transition-colors",
-											showZoomControls
-												? "bg-foreground text-background"
-												: "text-muted-foreground hover:bg-muted hover:text-foreground",
-										)}
-										aria-pressed={showZoomControls}
-										aria-label="Toggle zoom controls"
-									>
-										<ZoomIn className="h-3.5 w-3.5" />
-									</button>
-								}
-							/>
-							<TooltipContent side="bottom" sideOffset={6}>
-								{showZoomControls ? "Hide zoom controls" : "Show zoom controls"}
-							</TooltipContent>
-						</Tooltip>
+						<DropdownMenu>
+							<DropdownMenuTrigger
+								className={cn(
+									"inline-flex items-center justify-center h-6 w-6 rounded transition-colors",
+									"text-muted-foreground hover:bg-muted hover:text-foreground",
+									"data-popup-open:bg-muted data-popup-open:text-foreground",
+								)}
+								aria-label="View settings"
+							>
+								<Settings2 className="h-3.5 w-3.5" />
+							</DropdownMenuTrigger>
+							<DropdownMenuContent align="end" className="w-48">
+								<DropdownMenuCheckboxItem
+									checked={inspectMode}
+									onCheckedChange={() => toggle("viewMode")}
+								>
+									Inspect mode
+								</DropdownMenuCheckboxItem>
+								<DropdownMenuCheckboxItem
+									checked={showZoomControls}
+									onCheckedChange={() => toggle("showZoomControls")}
+								>
+									Zoom controls
+								</DropdownMenuCheckboxItem>
+							</DropdownMenuContent>
+						</DropdownMenu>
 					</div>
 				</div>
 

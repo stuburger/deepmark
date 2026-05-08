@@ -2,6 +2,7 @@
 
 import type { StudentPaperAnnotation } from "@/lib/marking/types"
 import { useCurrentUser } from "@/lib/users/use-current-user"
+import { cn } from "@/lib/utils"
 import type { HocuspocusProvider } from "@hocuspocus/provider"
 import { OcrTokenMark, ParagraphNode, annotationMarks } from "@mcp-gcse/shared"
 import BoldExtension from "@tiptap/extension-bold"
@@ -16,6 +17,7 @@ import { EditorContent, useEditor } from "@tiptap/react"
 import { BubbleMenu } from "@tiptap/react/menus"
 import { Sparkles } from "lucide-react"
 import { useCallback, useEffect, useRef, useState } from "react"
+import { createPortal } from "react-dom"
 import type * as Y from "yjs"
 import "./annotation-marks.css"
 import { AnnotationShortcuts } from "./annotation-shortcuts"
@@ -52,6 +54,8 @@ export function AnnotatedAnswerSheet({
 	onDerivedAnnotations,
 	onTokenHighlight,
 	onAskDeepMark,
+	toolbarSlot,
+	aoOpen,
 }: {
 	ydoc: Y.Doc
 	/**
@@ -76,6 +80,21 @@ export function AnnotatedAnswerSheet({
 		text: string
 		questionNumber: string | null
 	}) => void
+	/**
+	 * DOM target for the AnnotationToolbar pill. When set (the editor's
+	 * identity bar in ResultsPanel passes its centre slot), the toolbar
+	 * renders into it via React Portal so it visually lives in the chrome
+	 * bar; otherwise the toolbar is rendered inline above the editor body
+	 * (loading-state fallback, in case the slot hasn't mounted yet).
+	 */
+	toolbarSlot?: HTMLElement | null
+	/**
+	 * Whether the comment sidebar is toggled open below `lg`. At lg+ the
+	 * sidebar is always visible regardless of this flag (it's the default
+	 * inline column). Below lg the host (ResultsPanel chrome bar) drives
+	 * this via a trigger button.
+	 */
+	aoOpen?: boolean
 }) {
 	const { cursorUser } = useCurrentUser()
 	// Active annotation card state — driven by cursor position, sidebar clicks,
@@ -250,16 +269,30 @@ export function AnnotatedAnswerSheet({
 
 	if (!editor) return null
 
+	const annotationToolbar = (
+		<AnnotationToolbar
+			editor={editor}
+			actions={MARK_ACTIONS}
+			onMarkApplied={handleMarkApplied}
+		/>
+	)
+
 	return (
-		<div className="flex items-start gap-3">
-			{/* Document body — flows directly on the page surface (no inner sheet) */}
-			<div className="flex-1 min-w-0 max-w-[210mm] flex flex-col">
-				{/* Floating toolbar — sticky at top of page */}
-				<AnnotationToolbar
-					editor={editor}
-					actions={MARK_ACTIONS}
-					onMarkApplied={handleMarkApplied}
-				/>
+		// items-stretch so the AO sidebar column grows to match the editor's
+		// height — without it the divider border-l on the sidebar would only
+		// span the cards' intrinsic height, not the full editor surface.
+		<div className="flex items-stretch">
+			{/* Document body — flows directly on the page surface (no inner sheet).
+			    No max-width: editor takes whatever horizontal space the panel
+			    gives it (minus the AO sidebar when visible). */}
+			<div className="flex-1 min-w-0 flex flex-col">
+				{/* Annotation toolbar pill — portaled into the editor identity
+				    bar's centre slot when available. Falls back to inline
+				    rendering above the document body if the slot hasn't
+				    mounted yet (e.g. transient initial render). */}
+				{toolbarSlot
+					? createPortal(annotationToolbar, toolbarSlot)
+					: annotationToolbar}
 
 				{/* Selection bubble — single-purpose "Talk to DeepMark" trigger.
 				    Marking actions (formatting + AO marks + eraser) live on the
@@ -310,8 +343,16 @@ export function AnnotatedAnswerSheet({
 				</div>
 			</div>
 
-			{/* Comment sidebar — right margin, outside the page */}
-			<div className="w-52 shrink-0 hidden lg:block">
+			{/* Comment sidebar — always visible at lg+; below lg it's
+			    toggleable via the trigger in the editor identity bar
+			    (drives the `aoOpen` prop). Light left border distinguishes
+			    the AO column from the editor surface (non-resizable). */}
+			<div
+				className={cn(
+					"w-52 shrink-0 border-l border-border-quiet pl-3",
+					aoOpen ? "block" : "hidden lg:block",
+				)}
+			>
 				<CommentSidebar
 					editor={editor}
 					activeAnnotationId={activeAnnotationId}

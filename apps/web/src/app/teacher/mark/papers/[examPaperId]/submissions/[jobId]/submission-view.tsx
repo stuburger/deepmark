@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { useTeacherOverrides } from "@/lib/marking/overrides/hooks"
 import type { JobStages } from "@/lib/marking/stages/types"
+import { useAdjacentSubmissions } from "@/lib/marking/submissions/hooks"
 import type {
 	PageToken,
 	ScanPage,
@@ -228,6 +229,16 @@ export function SubmissionView({
 	// writes target the same Y.Doc.
 	const docSubmissionId = initialData.submission_id ?? jobId
 
+	// Top-left teal flare doubles as a batch-progress indicator on this
+	// surface. The flare keeps its 56px decorative width as the floor (so
+	// it's visually consistent with the static flare on other dialogs at
+	// 0%), and grows to the full card width as `confirmedCount` approaches
+	// `totalCount`. Done with `calc(...)` so it scales with the modal
+	// without measuring widths in JS.
+	const { data: batch } = useAdjacentSubmissions(examPaperId, jobId)
+	const progress =
+		batch && batch.totalCount > 0 ? batch.confirmedCount / batch.totalCount : 0
+
 	// Mount only one layout at a time. Tailwind `hidden md:flex` /
 	// `md:hidden` only toggles CSS visibility; both subtrees would otherwise
 	// stay mounted, both <ResultsPanel> instances would render their own
@@ -245,7 +256,8 @@ export function SubmissionView({
 			    overlay (deep-linkable, share-able, prev/next navigable). */}
 			<div className="relative flex flex-col overflow-hidden h-full rounded-xl border border-border bg-card shadow-float">
 				<div
-					className="absolute top-0 left-0 h-0.75 w-14 bg-primary pointer-events-none z-10"
+					className="absolute top-0 left-0 h-0.75 bg-primary pointer-events-none z-10 transition-[width] duration-500 ease-out"
+					style={{ width: `calc(56px + (100% - 56px) * ${progress})` }}
 					aria-hidden="true"
 				/>
 				<SubmissionToolbar
@@ -308,7 +320,9 @@ export function SubmissionView({
 									overridesByQuestionId={overridesByQuestionId}
 									onDerivedAnnotations={handleDerivedAnnotations}
 									onTokenHighlight={handleTokenHighlight}
-									onAskDeepMark={askDeepMark}
+									// No chat tab on mobile — gating disables the
+									// selection bubble so the URL doesn't silently
+									// flip to ?lhs=chat with no visible change.
 								/>
 							</TabsContent>
 						</Tabs>

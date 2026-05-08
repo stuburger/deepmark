@@ -69,7 +69,7 @@ export function AnnotationToolbar({
 
 	return (
 		<TooltipProvider delay={300}>
-			<div className="sticky top-1 z-10 mx-auto my-1 w-fit max-w-full flex items-center gap-0.5 rounded-xl border border-white/10 bg-foreground/85 text-background backdrop-blur-md px-1.5 py-1 shadow-toolbar overflow-x-auto">
+			<div className="w-fit flex items-center gap-0.5 rounded-xl border border-white/10 bg-foreground/85 text-background backdrop-blur-md px-1.5 py-0.5 shadow-toolbar">
 				{/* ── Formatting zone: always available when there's a selection ── */}
 				{(
 					[

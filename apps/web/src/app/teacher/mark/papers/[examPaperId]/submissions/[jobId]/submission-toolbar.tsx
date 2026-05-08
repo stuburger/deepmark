@@ -5,10 +5,8 @@ import { useCollaborators } from "@/components/annotated-answer/use-collaborator
 import { useDocScoreTotals } from "@/components/annotated-answer/use-doc-score-totals"
 import { useYDoc } from "@/components/annotated-answer/use-y-doc"
 import { ShareDialog } from "@/components/sharing/share-dialog"
-import { useTeacherNav } from "@/components/teacher/teacher-nav-context"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { SoftChip } from "@/components/ui/soft-chip"
 import {
 	Tooltip,
 	TooltipContent,
@@ -17,10 +15,13 @@ import {
 } from "@/components/ui/tooltip"
 import type { MarkingPhase } from "@/lib/marking/stages/phase"
 import {
+	type BatchAdjacency,
+	useAdjacentSubmissions,
+} from "@/lib/marking/submissions/hooks"
+import {
 	confirmMarking,
 	toggleBookmark,
 } from "@/lib/marking/submissions/mutations"
-import { getAdjacentSubmissions } from "@/lib/marking/submissions/queries"
 import type {
 	PageToken,
 	StudentPaperAnnotation,
@@ -29,16 +30,12 @@ import type {
 import { queryKeys } from "@/lib/query-keys"
 import { useCurrentUser } from "@/lib/users/use-current-user"
 import { cn } from "@/lib/utils"
-import { computeGrade } from "@mcp-gcse/shared"
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { useMutation, useQueryClient } from "@tanstack/react-query"
 import {
 	Bookmark,
-	Check,
 	ChevronLeft,
 	ChevronRight,
 	Eye,
-	Loader2,
-	Search,
 	Share2,
 	X,
 } from "lucide-react"
@@ -50,8 +47,7 @@ import { LlmSpendButton } from "./results/llm-snapshot-panel"
 import { ReRunMenu } from "./results/re-run-menu"
 import { StudentNameEditor } from "./results/student-name-editor"
 import { SubmissionFeedbackButton } from "./results/submission-feedback"
-import { StagePips } from "./stage-pips"
-import { GradeBadge, ScoreBadge } from "./submission-toolbar-controls"
+import { StatusBadge } from "./status-badge"
 import { VersionSwitcher } from "./version-switcher"
 
 // ─── Main toolbar ─────────────────────────────────────────────────────────────
@@ -87,54 +83,80 @@ export function SubmissionToolbar({
 	const { doc, provider } = useYDoc(docKey)
 	const collaborators = useCollaborators(provider)
 	const { isAdmin, cursorUser } = useCurrentUser()
-	const { setPaletteOpen } = useTeacherNav()
 	const queryClient = useQueryClient()
 
-	const { data: adjacent } = useQuery({
-		queryKey: queryKeys.adjacentSubmissions(examPaperId, jobId),
-		queryFn: async () => {
-			const r = await getAdjacentSubmissions({ examPaperId, jobId })
-			return r?.data ?? { prevId: null, nextId: null }
-		},
-		staleTime: 30_000,
-	})
+	const { data: adjacent } = useAdjacentSubmissions(examPaperId, jobId)
 	const prevId = adjacent?.prevId ?? null
 	const nextId = adjacent?.nextId ?? null
 	const isConfirmed = data.confirmed_at !== null
 
+	// Prefix-only key for the batch-progress cache: matches every cached
+	// (examPaperId, *) entry, so confirming bumps the count for ALL cached
+	// submissions in the batch — not just the one being confirmed.
+	const batchAdjacencyPrefix = ["adjacentSubmissions", examPaperId] as const
+
 	const confirmMutation = useMutation({
-		mutationFn: async () => {
-			const r = await confirmMarking({ jobId })
+		mutationFn: async (confirmed: boolean) => {
+			const r = await confirmMarking({ jobId, confirmed })
 			if (r?.serverError) throw new Error(r.serverError)
 			return r?.data
 		},
-		onMutate: async () => {
+		onMutate: async (confirmed) => {
 			await queryClient.cancelQueries({
 				queryKey: queryKeys.studentJob(jobId),
 			})
+			await queryClient.cancelQueries({ queryKey: batchAdjacencyPrefix })
 			const previous = queryClient.getQueryData<StudentPaperJobPayload | null>(
 				queryKeys.studentJob(jobId),
 			)
 			if (previous) {
 				queryClient.setQueryData<StudentPaperJobPayload | null>(
 					queryKeys.studentJob(jobId),
-					{ ...previous, confirmed_at: new Date() },
+					{ ...previous, confirmed_at: confirmed ? new Date() : null },
 				)
 			}
-			return { previous }
+			// Optimistically nudge confirmedCount in the right direction across
+			// every cached batch progress entry for this paper so the
+			// top-of-modal flare animates instantly.
+			const delta = confirmed ? 1 : -1
+			queryClient.setQueriesData<BatchAdjacency>(
+				{ queryKey: batchAdjacencyPrefix },
+				(old) =>
+					old
+						? {
+								...old,
+								confirmedCount: Math.max(0, old.confirmedCount + delta),
+							}
+						: old,
+			)
+			return { previous, delta }
 		},
-		onError: (err, _vars, context) => {
+		onError: (err, confirmed, context) => {
 			if (context?.previous !== undefined) {
 				queryClient.setQueryData(queryKeys.studentJob(jobId), context.previous)
 			}
+			// Roll back the optimistic count nudge in the opposite direction.
+			const delta = context?.delta ?? (confirmed ? 1 : -1)
+			queryClient.setQueriesData<BatchAdjacency>(
+				{ queryKey: batchAdjacencyPrefix },
+				(old) =>
+					old
+						? {
+								...old,
+								confirmedCount: Math.max(0, old.confirmedCount - delta),
+							}
+						: old,
+			)
 			toast.error(
-				err instanceof Error ? err.message : "Failed to confirm marking",
+				err instanceof Error
+					? err.message
+					: confirmed
+						? "Failed to confirm marking"
+						: "Failed to unconfirm marking",
 			)
 		},
-		onSuccess: () => {
-			toast.success("Marking confirmed")
-			if (nextId) onNavigateToJob(nextId)
-			else onClose?.()
+		onSuccess: (_data, confirmed) => {
+			toast.success(confirmed ? "Marking confirmed" : "Marking unconfirmed")
 		},
 		onSettled: () => {
 			queryClient.invalidateQueries({
@@ -143,6 +165,9 @@ export function SubmissionToolbar({
 			queryClient.invalidateQueries({
 				queryKey: queryKeys.studentJob(jobId),
 			})
+			// Invalidate every cached (examPaperId, *) entry so any submission
+			// the user navigates to next refetches the live count.
+			queryClient.invalidateQueries({ queryKey: batchAdjacencyPrefix })
 		},
 	})
 
@@ -198,7 +223,7 @@ export function SubmissionToolbar({
 	return (
 		<TooltipProvider>
 			{/* ── Row 1: Context / breadcrumb ─────────────────────────────────── */}
-			<div className="shrink-0 flex items-center gap-1.5 sm:gap-2 border-b border-border-quiet bg-background px-2 sm:px-4 h-9 text-sm">
+			<div className="shrink-0 flex items-center gap-1.5 sm:gap-2 border-b border-border-quiet bg-background px-2 sm:px-4 min-h-9 py-1 text-sm">
 				{!onClose && (
 					<div className="hidden md:flex items-center gap-2 shrink-0">
 						<Link
@@ -237,41 +262,11 @@ export function SubmissionToolbar({
 				<StudentNameEditor jobId={jobId} initialName={data.student_name} />
 				<VersionSwitcher jobId={jobId} onVersionChange={onNavigateToJob} />
 
-				{phase === "completed" && totalMax > 0 && (
-					<span className="ml-2 inline-flex items-center gap-1.5">
-						<ScoreBadge awarded={totalAwarded} max={totalMax} />
-						{(() => {
-							const grade = computeGrade(
-								totalAwarded,
-								totalMax,
-								data.grade_boundaries,
-								data.grade_boundary_mode ?? "percent",
-							)
-							return grade ? <GradeBadge grade={grade} /> : null
-						})()}
-					</span>
-				)}
-
 				<div className="ml-auto flex items-center gap-1.5 sm:gap-3">
-					{readOnly && (
-						<Tooltip>
-							<TooltipTrigger
-								render={
-									<Badge variant="outline" className="gap-1">
-										<Eye className="h-3 w-3" />
-										Read only
-									</Badge>
-								}
-							/>
-							<TooltipContent side="bottom" sideOffset={6}>
-								You have viewer access — edits are disabled
-							</TooltipContent>
-						</Tooltip>
-					)}
-					<div className="flex items-center gap-0.5 sm:gap-1">
+					<div className="flex items-center gap-1">
 						<Button
 							type="button"
-							variant="ghost"
+							variant="outline"
 							size="sm"
 							onClick={() => prevId && onNavigateToJob(prevId)}
 							disabled={!prevId}
@@ -283,7 +278,7 @@ export function SubmissionToolbar({
 						</Button>
 						<Button
 							type="button"
-							variant="ghost"
+							variant="outline"
 							size="sm"
 							onClick={() => nextId && onNavigateToJob(nextId)}
 							disabled={!nextId}
@@ -294,29 +289,6 @@ export function SubmissionToolbar({
 							<ChevronRight className="h-3.5 w-3.5" />
 						</Button>
 					</div>
-					<Tooltip>
-						<TooltipTrigger
-							render={
-								<Button
-									type="button"
-									variant="ghost"
-									size="sm"
-									aria-label="Search papers and submissions"
-									onClick={() => setPaletteOpen(true)}
-									className="hidden sm:inline-flex h-7 gap-1.5 text-muted-foreground hover:text-foreground"
-								>
-									<Search className="h-3.5 w-3.5" />
-									<kbd className="hidden lg:inline-flex rounded-sm border border-border-quiet bg-muted px-1 py-0.5 font-mono text-[10px] text-ink-tertiary">
-										⌘K
-									</kbd>
-								</Button>
-							}
-						/>
-						<TooltipContent side="bottom" sideOffset={6}>
-							Search (⌘K)
-						</TooltipContent>
-					</Tooltip>
-					<CollaboratorAvatars users={collaborators} self={cursorUser} />
 					{data.submission_id && !readOnly && (
 						<ShareDialog
 							resourceType="student_submission"
@@ -333,65 +305,7 @@ export function SubmissionToolbar({
 							}
 						/>
 					)}
-					{!readOnly && (
-						<>
-							<Tooltip>
-								<TooltipTrigger
-									render={
-										<Button
-											type="button"
-											variant="ghost"
-											size="sm"
-											aria-pressed={data.is_bookmarked}
-											aria-label={
-												data.is_bookmarked
-													? "Remove bookmark"
-													: "Bookmark this submission"
-											}
-											onClick={() =>
-												bookmarkMutation.mutate(!data.is_bookmarked)
-											}
-											className={cn(
-												"h-7 px-2 border",
-												data.is_bookmarked
-													? "border-primary bg-primary/5 text-primary hover:bg-primary/10"
-													: "border-border bg-card text-muted-foreground hover:text-foreground",
-											)}
-										>
-											<Bookmark
-												className="h-3.5 w-3.5"
-												fill={data.is_bookmarked ? "currentColor" : "none"}
-											/>
-										</Button>
-									}
-								/>
-								<TooltipContent side="bottom" sideOffset={6}>
-									{data.is_bookmarked ? "Bookmarked" : "Bookmark"}
-								</TooltipContent>
-							</Tooltip>
-							{isConfirmed ? (
-								<SoftChip kind="success" className="gap-1">
-									<Check className="h-3 w-3" />
-									Confirmed
-								</SoftChip>
-							) : (
-								<Button
-									type="button"
-									variant="confirm"
-									onClick={() => confirmMutation.mutate()}
-									disabled={confirmMutation.isPending}
-								>
-									{confirmMutation.isPending ? (
-										<Loader2 className="h-3.5 w-3.5 animate-spin" />
-									) : (
-										<Check className="h-3.5 w-3.5" />
-									)}
-									<span className="hidden sm:inline">Confirm marking</span>
-									<span className="sm:hidden">Confirm</span>
-								</Button>
-							)}
-						</>
-					)}
+					<CollaboratorAvatars users={collaborators} self={cursorUser} />
 					{onClose && (
 						<Tooltip>
 							<TooltipTrigger
@@ -414,42 +328,107 @@ export function SubmissionToolbar({
 				</div>
 			</div>
 
-			{/* ── Row 2: Job-level controls ────────────────────────────────────── */}
-			<div className="shrink-0 flex items-center gap-1.5 sm:gap-2 border-b border-border-quiet bg-background px-2 sm:px-4 h-11">
-				<div className="flex-1" />
-
-				{/* LLM spend — admin-only (exposes model + per-call costs) */}
-				{isAdmin && (
-					<LlmSpendButton
-						ocrSnapshot={data.ocr_llm_snapshot}
-						gradingSnapshot={data.grading_llm_snapshot}
-						annotationSnapshot={data.annotation_llm_snapshot}
-					/>
-				)}
-
-				{/* Pipeline stage pips */}
-				<StagePips jobId={jobId} onNavigateToJob={onNavigateToJob} />
-
-				{/* Completed-phase output actions */}
-				{phase === "completed" && (
-					<div className="flex items-center gap-2">
-						{data.submission_id && (
-							<SubmissionFeedbackButton submissionId={data.submission_id} />
-						)}
-						<DownloadPdfButton
-							data={data}
-							annotations={annotations}
-							pageTokens={pageTokens}
+			{/* ── Row 2: Submission state ────────────────────────────────────────
+			    Left cluster: state of THIS submission (read-only? bookmarked?
+			    what stage? final score/grade?). Right cluster: completed-phase
+			    output actions on the result. */}
+			<div className="shrink-0 flex items-center gap-1.5 sm:gap-2 border-b border-border-quiet bg-background px-2 sm:px-4 min-h-11 py-1">
+				{readOnly && (
+					<Tooltip>
+						<TooltipTrigger
+							render={
+								<Badge variant="outline" className="gap-1">
+									<Eye className="h-3 w-3" />
+									Read only
+								</Badge>
+							}
 						/>
-						<ReRunMenu jobId={jobId} onNavigateToJob={onNavigateToJob} />
-					</div>
+						<TooltipContent side="bottom" sideOffset={6}>
+							You have viewer access — edits are disabled
+						</TooltipContent>
+					</Tooltip>
+				)}
+				{!readOnly && (
+					<Tooltip>
+						<TooltipTrigger
+							render={
+								<Button
+									type="button"
+									variant="ghost"
+									size="sm"
+									aria-pressed={data.is_bookmarked}
+									aria-label={
+										data.is_bookmarked
+											? "Remove bookmark"
+											: "Bookmark this submission"
+									}
+									onClick={() => bookmarkMutation.mutate(!data.is_bookmarked)}
+									className={cn(
+										"h-7 px-2 border",
+										data.is_bookmarked
+											? "border-primary bg-primary/5 text-primary hover:bg-primary/10"
+											: "border-border bg-card text-muted-foreground hover:text-foreground",
+									)}
+								>
+									<Bookmark
+										className="h-3.5 w-3.5"
+										fill={data.is_bookmarked ? "currentColor" : "none"}
+									/>
+								</Button>
+							}
+						/>
+						<TooltipContent side="bottom" sideOffset={6}>
+							{data.is_bookmarked ? "Bookmarked" : "Bookmark"}
+						</TooltipContent>
+					</Tooltip>
 				)}
 
-				{/* Scan recovery */}
-				{data.pages_count > 0 &&
-					(phase === "scan_processing" || phase === "failed") && (
-						<ReScanButton jobId={jobId} onNavigateToJob={onNavigateToJob} />
+				{/* State-aware status: extracting / grading / ready-to-confirm /
+				    confirmed / failed / cancelled. Subsumes StagePips,
+				    standalone Confirm button, and Score/Grade badges. */}
+				<StatusBadge
+					jobId={jobId}
+					isConfirmed={isConfirmed}
+					onConfirm={() => confirmMutation.mutate(!isConfirmed)}
+					isPending={confirmMutation.isPending}
+					totalAwarded={totalAwarded}
+					totalMax={totalMax}
+					gradeBoundaries={data.grade_boundaries}
+					gradeBoundaryMode={data.grade_boundary_mode}
+					readOnly={readOnly}
+				/>
+
+				<div className="ml-auto flex items-center gap-2">
+					{/* LLM spend — admin-only (exposes model + per-call costs) */}
+					{isAdmin && (
+						<LlmSpendButton
+							ocrSnapshot={data.ocr_llm_snapshot}
+							gradingSnapshot={data.grading_llm_snapshot}
+							annotationSnapshot={data.annotation_llm_snapshot}
+						/>
 					)}
+
+					{/* Completed-phase output actions */}
+					{phase === "completed" && (
+						<>
+							{data.submission_id && (
+								<SubmissionFeedbackButton submissionId={data.submission_id} />
+							)}
+							<DownloadPdfButton
+								data={data}
+								annotations={annotations}
+								pageTokens={pageTokens}
+							/>
+							<ReRunMenu jobId={jobId} onNavigateToJob={onNavigateToJob} />
+						</>
+					)}
+
+					{/* Scan recovery */}
+					{data.pages_count > 0 &&
+						(phase === "scan_processing" || phase === "failed") && (
+							<ReScanButton jobId={jobId} onNavigateToJob={onNavigateToJob} />
+						)}
+				</div>
 			</div>
 		</TooltipProvider>
 	)

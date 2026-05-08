@@ -27,6 +27,8 @@ export function GradingResultsPanel({
 	onDerivedAnnotations,
 	onTokenHighlight,
 	onAskDeepMark,
+	toolbarSlot,
+	aoOpen,
 }: {
 	jobId: string
 	data: StudentPaperResultPayload
@@ -40,6 +42,8 @@ export function GradingResultsPanel({
 		text: string
 		questionNumber: string | null
 	}) => void
+	toolbarSlot?: HTMLElement | null
+	aoOpen?: boolean
 }) {
 	// Build grading results lookup map for context
 	const gradingResultsMap = useMemo(() => {
@@ -124,6 +128,8 @@ export function GradingResultsPanel({
 						onDerivedAnnotations={onDerivedAnnotations}
 						onTokenHighlight={onTokenHighlight}
 						onAskDeepMark={onAskDeepMark}
+						toolbarSlot={toolbarSlot}
+						aoOpen={aoOpen}
 					/>
 				)
 			)}

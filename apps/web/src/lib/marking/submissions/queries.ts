@@ -686,8 +686,11 @@ export const getTeacherOverrides = resourceAction({
 
 /**
  * Returns the prev/next submission ids for a given jobId within the same exam
- * paper. Order is `student_name asc, created_at asc` so it matches the way
- * teachers think about a class set and stays stable across page refreshes.
+ * paper, plus batch-level totals (count of submissions and how many are
+ * confirmed). Counts are produced from the same `findMany` we already need
+ * for prev/next lookup so they're effectively free. Order is `student_name
+ * asc, created_at asc` so it matches the way teachers think about a class
+ * set and stays stable across page refreshes.
  */
 export const getAdjacentSubmissions = resourcesAction({
 	schema: z.object({ examPaperId: z.string(), jobId: z.string() }),
@@ -698,17 +701,28 @@ export const getAdjacentSubmissions = resourcesAction({
 }).action(
 	async ({
 		parsedInput: { examPaperId, jobId },
-	}): Promise<{ prevId: string | null; nextId: string | null }> => {
+	}): Promise<{
+		prevId: string | null
+		nextId: string | null
+		totalCount: number
+		confirmedCount: number
+	}> => {
 		const all = await db.studentSubmission.findMany({
 			where: { exam_paper_id: examPaperId, superseded_at: null },
-			select: { id: true },
+			select: { id: true, confirmed_at: true },
 			orderBy: [{ student_name: "asc" }, { created_at: "asc" }],
 		})
+		const totalCount = all.length
+		const confirmedCount = all.filter((s) => s.confirmed_at !== null).length
 		const idx = all.findIndex((s) => s.id === jobId)
-		if (idx === -1) return { prevId: null, nextId: null }
+		if (idx === -1) {
+			return { prevId: null, nextId: null, totalCount, confirmedCount }
+		}
 		return {
 			prevId: idx > 0 ? all[idx - 1].id : null,
 			nextId: idx < all.length - 1 ? all[idx + 1].id : null,
+			totalCount,
+			confirmedCount,
 		}
 	},
 )

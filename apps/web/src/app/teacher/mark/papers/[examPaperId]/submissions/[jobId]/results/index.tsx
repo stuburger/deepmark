@@ -21,6 +21,8 @@ export function MarkingResults({
 	onDerivedAnnotations,
 	onTokenHighlight,
 	onAskDeepMark,
+	toolbarSlot,
+	aoOpen,
 }: {
 	jobId: string
 	data: StudentPaperJobPayload
@@ -32,6 +34,8 @@ export function MarkingResults({
 		text: string
 		questionNumber: string | null
 	}) => void
+	toolbarSlot?: HTMLElement | null
+	aoOpen?: boolean
 }) {
 	const [answers, setAnswers] = useState<Record<string, string>>(
 		Object.fromEntries(
@@ -52,6 +56,8 @@ export function MarkingResults({
 			onDerivedAnnotations={onDerivedAnnotations}
 			onTokenHighlight={onTokenHighlight}
 			onAskDeepMark={onAskDeepMark}
+			toolbarSlot={toolbarSlot}
+			aoOpen={aoOpen}
 		/>
 	)
 }

@@ -1,5 +1,10 @@
 "use client"
 
+import {
+	EMPTY_STUDENT,
+	StudentForm,
+	type StudentFormValues,
+} from "@/components/students/student-form"
 import { Button } from "@/components/ui/button"
 import {
 	Dialog,
@@ -17,31 +22,40 @@ import {
 } from "@/components/ui/select"
 import { linkStudentToJob } from "@/lib/marking/submissions/mutations"
 import { queryKeys } from "@/lib/query-keys"
-import { listStudents } from "@/lib/students/queries"
+import { createStudent } from "@/lib/students/mutations"
+import {
+	getNextStudentNumber,
+	listStudents,
+} from "@/lib/students/queries"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import Link from "next/link"
-import { useState } from "react"
+import { Plus, UserPlus } from "lucide-react"
+import { useEffect, useState } from "react"
 import { toast } from "sonner"
 
 type Props = {
 	open: boolean
 	onOpenChange: (open: boolean) => void
 	jobId: string
-	examPaperId: string
 	detectedNumber: string | null
+	/** Called after a successful link/create-and-link so the parent can
+	 *  invalidate its own list query or refresh the route. */
+	onLinked?: () => void
 }
+
+type Mode = "select" | "create"
 
 export function QuickAssignStudentDialog({
 	open,
 	onOpenChange,
 	jobId,
-	examPaperId,
 	detectedNumber,
+	onLinked,
 }: Props) {
 	const queryClient = useQueryClient()
+	const [mode, setMode] = useState<Mode>("select")
 	const [selectedId, setSelectedId] = useState<string | null>(null)
 
-	const { data: students = [], isLoading } = useQuery({
+	const { data: students = [], isLoading: studentsLoading } = useQuery({
 		queryKey: queryKeys.students(),
 		queryFn: async () => {
 			const r = await listStudents()
@@ -51,7 +65,35 @@ export function QuickAssignStudentDialog({
 		enabled: open,
 	})
 
-	const mutation = useMutation({
+	const { data: nextNumber } = useQuery({
+		queryKey: queryKeys.nextStudentNumber(),
+		queryFn: async () => {
+			const r = await getNextStudentNumber()
+			if (r?.serverError) throw new Error(r.serverError)
+			return r?.data?.student_number ?? "S-001"
+		},
+		enabled: open && mode === "create" && !detectedNumber,
+	})
+
+	// Empty roster → jump straight into create mode the first time the dialog
+	// opens, so the teacher isn't faced with an empty dropdown. Once they've
+	// added someone, "select" is the right default again.
+	useEffect(() => {
+		if (open && !studentsLoading && students.length === 0) {
+			setMode("create")
+		}
+	}, [open, studentsLoading, students.length])
+
+	function invalidateAfterLink() {
+		queryClient.invalidateQueries({ queryKey: queryKeys.studentJob(jobId) })
+		queryClient.invalidateQueries({ queryKey: queryKeys.students() })
+		queryClient.invalidateQueries({
+			queryKey: queryKeys.nextStudentNumber(),
+		})
+		onLinked?.()
+	}
+
+	const linkMutation = useMutation({
 		mutationFn: async (studentId: string) => {
 			const r = await linkStudentToJob({ jobId, studentId })
 			if (r?.serverError) throw new Error(r.serverError)
@@ -59,98 +101,173 @@ export function QuickAssignStudentDialog({
 		},
 		onSuccess: () => {
 			toast.success("Student linked")
-			queryClient.invalidateQueries({
-				queryKey: queryKeys.submissions(examPaperId),
-			})
-			onOpenChange(false)
-			setSelectedId(null)
+			invalidateAfterLink()
+			handleOpenChange(false)
 		},
 		onError: (err) => toast.error(err.message),
 	})
 
+	const createAndLinkMutation = useMutation({
+		mutationFn: async (values: StudentFormValues) => {
+			const create = await createStudent({
+				name: values.name,
+				student_number: values.student_number,
+				class_name: values.class_name || null,
+				year_group: values.year_group || null,
+			})
+			if (create?.serverError) throw new Error(create.serverError)
+			if (!create?.data) throw new Error("Failed to create student")
+
+			const link = await linkStudentToJob({
+				jobId,
+				studentId: create.data.id,
+			})
+			if (link?.serverError) throw new Error(link.serverError)
+
+			return create.data
+		},
+		onSuccess: () => {
+			toast.success("Student added and linked")
+			invalidateAfterLink()
+			handleOpenChange(false)
+		},
+		onError: (err) => toast.error(err.message),
+	})
+
+	function handleOpenChange(next: boolean) {
+		if (!next) {
+			setSelectedId(null)
+			setMode("select")
+		}
+		onOpenChange(next)
+	}
+
+	const initialFormValue: StudentFormValues = {
+		...EMPTY_STUDENT,
+		student_number: detectedNumber ?? nextNumber ?? "",
+	}
+
+	const isPending = linkMutation.isPending || createAndLinkMutation.isPending
+
 	return (
-		<Dialog open={open} onOpenChange={onOpenChange}>
+		<Dialog open={open} onOpenChange={handleOpenChange}>
 			<DialogContent className="sm:max-w-md">
 				<DialogHeader>
-					<DialogTitle>Link to a student</DialogTitle>
+					<DialogTitle>
+						{mode === "create" ? "Add and link a student" : "Link to a student"}
+					</DialogTitle>
 					<DialogDescription>
 						{detectedNumber ? (
 							<>
 								The OCR pulled{" "}
 								<code className="font-mono text-xs">{detectedNumber}</code> off
-								this script but we couldn&rsquo;t find a roster row with that
-								number. Pick the right student below — or add them first.
+								this script but no roster row matches.{" "}
+								{mode === "select"
+									? "Pick the right student or add them now."
+									: "Save the new student to link this script."}
 							</>
+						) : mode === "select" ? (
+							"No student number was detected. Pick the right student manually."
 						) : (
-							<>
-								No student number was detected on this script. Pick the right
-								student manually.
-							</>
+							"Add a new student to your roster and link this script."
 						)}
 					</DialogDescription>
 				</DialogHeader>
 
-				<div className="space-y-4">
-					{isLoading ? (
-						<p className="text-sm text-muted-foreground">Loading roster…</p>
-					) : students.length === 0 ? (
-						<p className="text-sm text-muted-foreground">
-							You don&rsquo;t have any students yet.{" "}
-							<Link
-								href="/teacher/students"
-								className="text-primary hover:underline"
+				{mode === "select" ? (
+					<div className="space-y-4">
+						{studentsLoading ? (
+							<p className="text-sm text-muted-foreground">Loading roster…</p>
+						) : students.length === 0 ? (
+							<p className="text-sm text-muted-foreground">
+								Your roster is empty. Add a student to link this script.
+							</p>
+						) : (
+							<Select
+								value={selectedId ?? undefined}
+								onValueChange={setSelectedId}
 							>
-								Add one
-							</Link>{" "}
-							before linking.
-						</p>
-					) : (
-						<Select
-							value={selectedId ?? undefined}
-							onValueChange={setSelectedId}
-						>
-							<SelectTrigger>
-								<SelectValue placeholder="Select a student" />
-							</SelectTrigger>
-							<SelectContent>
-								{students.map((s) => (
-									<SelectItem key={s.id} value={s.id}>
-										<span className="font-mono text-xs text-muted-foreground">
-											{s.student_number}
-										</span>
-										<span className="ml-2">{s.name}</span>
-									</SelectItem>
-								))}
-							</SelectContent>
-						</Select>
-					)}
+								<SelectTrigger>
+									<SelectValue placeholder="Select a student" />
+								</SelectTrigger>
+								<SelectContent>
+									{students.map((s) => (
+										<SelectItem key={s.id} value={s.id}>
+											<span className="font-mono text-xs text-muted-foreground">
+												{s.student_number}
+											</span>
+											<span className="ml-2">{s.name}</span>
+										</SelectItem>
+									))}
+								</SelectContent>
+							</Select>
+						)}
 
-					<div className="flex items-center justify-between">
-						<Link
-							href="/teacher/students"
-							className="text-xs text-muted-foreground hover:text-foreground hover:underline"
-						>
-							Manage roster →
-						</Link>
-						<div className="flex gap-2">
+						<div className="flex items-center justify-between">
 							<Button
 								type="button"
-								variant="outline"
-								onClick={() => onOpenChange(false)}
-								disabled={mutation.isPending}
+								variant="ghost"
+								size="sm"
+								className="gap-1.5"
+								onClick={() => setMode("create")}
+								disabled={isPending}
 							>
-								Cancel
+								<UserPlus className="size-3.5" strokeWidth={1.5} />
+								Add new student
 							</Button>
-							<Button
-								type="button"
-								onClick={() => selectedId && mutation.mutate(selectedId)}
-								disabled={!selectedId || mutation.isPending}
-							>
-								{mutation.isPending ? "Linking…" : "Link"}
-							</Button>
+							<div className="flex gap-2">
+								<Button
+									type="button"
+									variant="outline"
+									onClick={() => handleOpenChange(false)}
+									disabled={isPending}
+								>
+									Cancel
+								</Button>
+								<Button
+									type="button"
+									onClick={() =>
+										selectedId && linkMutation.mutate(selectedId)
+									}
+									disabled={!selectedId || isPending}
+								>
+									{linkMutation.isPending ? "Linking…" : "Link"}
+								</Button>
+							</div>
 						</div>
 					</div>
-				</div>
+				) : (
+					<div className="space-y-3">
+						<StudentForm
+							key={initialFormValue.student_number}
+							initialValue={initialFormValue}
+							submitting={createAndLinkMutation.isPending}
+							onSubmit={async (values) => {
+								await createAndLinkMutation.mutateAsync(values)
+							}}
+							onCancel={() => {
+								if (students.length > 0) {
+									setMode("select")
+								} else {
+									handleOpenChange(false)
+								}
+							}}
+						/>
+						{students.length > 0 && (
+							<Button
+								type="button"
+								variant="ghost"
+								size="sm"
+								className="gap-1.5"
+								onClick={() => setMode("select")}
+								disabled={isPending}
+							>
+								<Plus className="size-3.5 rotate-45" strokeWidth={1.5} />
+								Pick from roster instead
+							</Button>
+						)}
+					</div>
+				)}
 			</DialogContent>
 		</Dialog>
 	)

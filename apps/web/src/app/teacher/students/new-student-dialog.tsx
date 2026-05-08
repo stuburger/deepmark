@@ -17,7 +17,7 @@ import {
 	EMPTY_STUDENT,
 	StudentForm,
 	type StudentFormValues,
-} from "./student-form"
+} from "@/components/students/student-form"
 
 type Props = {
 	open: boolean

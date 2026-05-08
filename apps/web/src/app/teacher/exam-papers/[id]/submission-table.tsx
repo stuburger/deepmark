@@ -284,8 +284,12 @@ export function SubmissionTable({
 						if (!open) setAssigningJob(null)
 					}}
 					jobId={assigningJob.jobId}
-					examPaperId={examPaperId}
 					detectedNumber={assigningJob.detectedNumber}
+					onLinked={() =>
+						queryClient.invalidateQueries({
+							queryKey: queryKeys.submissions(examPaperId),
+						})
+					}
 				/>
 			)}
 			<Card>

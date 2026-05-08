@@ -19,6 +19,7 @@ import { listMySubmissions } from "@/lib/marking/listing/queries"
 import type { SubmissionHistoryItem } from "@/lib/marking/types"
 import { PlusCircle } from "lucide-react"
 import Link from "next/link"
+import { StudentLinkCell } from "./student-link-cell"
 
 function formatDate(date: Date) {
 	return new Intl.DateTimeFormat("en-GB", {
@@ -73,15 +74,13 @@ function SubmissionRow({ sub }: { sub: SubmissionHistoryItem }) {
 	return (
 		<TableRow className="cursor-pointer hover:bg-muted/50">
 			<TableCell>
-				<Link href={href} className="block">
-					{sub.student_name ? (
-						<span className="font-medium">{sub.student_name}</span>
-					) : (
-						<span className="text-muted-foreground italic">
-							Unknown student
-						</span>
-					)}
-				</Link>
+				<StudentLinkCell
+					jobId={sub.id}
+					studentId={sub.student_id}
+					studentName={sub.student_name}
+					detectedStudentNumber={sub.detected_student_number}
+					href={href}
+				/>
 			</TableCell>
 			<TableCell className="max-w-xs">
 				{sub.exam_paper_id ? (

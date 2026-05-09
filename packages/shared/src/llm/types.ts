@@ -290,10 +290,10 @@ export const LLM_CALL_SITE_DEFAULTS: Array<{
 	// ── OCR & Answer Detection ───────────────────────────────────────────
 	// Phase 1 of the marking pipeline: extract answers from scanned scripts.
 	{
-		key: "handwriting-ocr",
-		display_name: "Handwriting OCR",
+		key: "page-comprehension",
+		display_name: "Page comprehension",
 		description:
-			"Transcribes handwritten text from page images. The first-page call also extracts student name and detected subject.",
+			"Comprehends a page image like a literate human reader: produces a clean transcript and handwriting observations. The first-page call also extracts student name, ID number, and detected subject.",
 		input_type: "vision",
 		phase: "answer-detection",
 		step: 1,

@@ -17,7 +17,7 @@ const cache = new Map<string, CacheEntry>()
  * Pure function — the caller provides the DB lookup. This keeps packages/shared
  * free of SST and Prisma dependencies.
  *
- * @param key The call site key (e.g. "grading", "handwriting-ocr")
+ * @param key The call site key (e.g. "grading", "page-comprehension")
  * @param dbLookup Async function that reads the models JSON from the DB. Returns null if not found.
  */
 export async function getLlmConfig(

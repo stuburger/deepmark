@@ -19,7 +19,7 @@ import {
 	attributeScript,
 } from "@/lib/scan-extraction/attribute-script"
 import { runVisionOcr } from "@/lib/scan-extraction/cloud-vision-ocr"
-import { runOcr } from "@/lib/scan-extraction/gemini-ocr"
+import { comprehendPage } from "@/lib/scan-extraction/comprehend-page"
 import { persistTokens } from "@/lib/scan-extraction/persist-tokens"
 import { saveVisionRaw } from "@/lib/scan-extraction/save-vision-raw"
 import { SQSClient, SendMessageCommand } from "@aws-sdk/client-sqs"
@@ -117,7 +117,7 @@ export async function handler(event: SqsEvent): Promise<void> {
 
 		// Fan out: per-page Gemini transcript + Cloud Vision word token detection — all in parallel.
 		// First page also extracts student name and detected subject.
-		const [pageOcrResults, ...visionResults] = await Promise.all([
+		const [pageComprehensions, ...visionResults] = await Promise.all([
 			Promise.all(
 				sortedPages.map((page, i) => {
 					const pageEntry = pageData[i]
@@ -126,7 +126,7 @@ export async function handler(event: SqsEvent): Promise<void> {
 							`pageData[${i}] is undefined — sortedPages and pageData are out of sync`,
 						)
 					}
-					return runOcr(
+					return comprehendPage(
 						pageEntry.data,
 						page.mime_type,
 						{ extractMetadata: i === 0 },
@@ -159,12 +159,12 @@ export async function handler(event: SqsEvent): Promise<void> {
 			return
 		}
 
-		// Extract student metadata from first-page OCR result
-		const firstPageOcr = pageOcrResults[0]
-		const rawSubject = firstPageOcr?.detectedSubject?.trim().toLowerCase()
+		// Extract student metadata from the first page's comprehension result.
+		const firstPage = pageComprehensions[0]
+		const rawSubject = firstPage?.detectedSubject?.trim().toLowerCase()
 		const detectedSubject: Subject | null =
 			rawSubject && isValidSubject(rawSubject) ? rawSubject : null
-		const detectedStudentNumber = firstPageOcr?.studentNumber?.trim() || null
+		const detectedStudentNumber = firstPage?.studentNumber?.trim() || null
 
 		// Deterministic match against the uploader's roster. No fuzzy matching,
 		// no auto-create — a number with no roster row stays as `detected_*`
@@ -178,20 +178,20 @@ export async function handler(event: SqsEvent): Promise<void> {
 				})
 			: null
 
-		// Full extracted name is held only in firstPageOcr — we redact before
+		// Full extracted name is held only in firstPage — we redact before
 		// it touches the DB, event log, or extracted_answers_raw blob. When a
 		// roster row matched, prefer its name (teacher-typed source of truth).
 		const studentName = redactName(
-			matchedStudent?.name ?? firstPageOcr?.studentName ?? null,
+			matchedStudent?.name ?? firstPage?.studentName ?? null,
 		)
 
 		const pageAnalyses = sortedPages.map((page, i) => ({
 			page: page.order,
-			transcript: pageOcrResults[i]?.transcript ?? "",
-			observations: pageOcrResults[i]?.observations ?? [],
+			transcript: pageComprehensions[i]?.transcript ?? "",
+			observations: pageComprehensions[i]?.observations ?? [],
 		}))
 
-		logger.info(TAG, "Gemini OCR complete", {
+		logger.info(TAG, "Page comprehension complete", {
 			jobId,
 			student_name: studentName,
 			detected_student_number: detectedStudentNumber,
@@ -234,7 +234,7 @@ export async function handler(event: SqsEvent): Promise<void> {
 		const pageTranscripts = new Map(
 			sortedPages.map((page, i) => [
 				page.order,
-				pageOcrResults[i]?.transcript ?? "",
+				pageComprehensions[i]?.transcript ?? "",
 			]),
 		)
 

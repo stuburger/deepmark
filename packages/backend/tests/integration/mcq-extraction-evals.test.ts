@@ -7,7 +7,7 @@ import {
 	type AttributeScriptQuestion,
 	attributeScript,
 } from "../../src/lib/scan-extraction/attribute-script"
-import { runOcr } from "../../src/lib/scan-extraction/gemini-ocr"
+import { comprehendPage } from "../../src/lib/scan-extraction/comprehend-page"
 import { AHMED_ALI_MCQ_FIXTURE } from "./fixtures/attribution/ahmed-ali-mcq/fixture"
 import { ARNAU_SINGH_MCQ_FIXTURE } from "./fixtures/attribution/arnau-singh-mcq/fixture"
 import { JACK_KINNARD_MCQ_FIXTURE } from "./fixtures/attribution/jack-kinnard-mcq/fixture"
@@ -60,11 +60,11 @@ describe.each(FIXTURES)("MCQ extraction evals — $name", (fixture) => {
 
 		const sortedPages = [...fixture.pages].sort((a, b) => a.order - b.order)
 
-		const pageOcrResults = await Promise.all(
+		const pageComprehensions = await Promise.all(
 			sortedPages.map((page, i) => {
 				const filePath = path.join(fixture.dir, page.image_filename)
 				const imageBase64 = fs.readFileSync(filePath).toString("base64")
-				return runOcr(
+				return comprehendPage(
 					imageBase64,
 					page.mime_type,
 					{ extractMetadata: i === 0 },
@@ -76,7 +76,7 @@ describe.each(FIXTURES)("MCQ extraction evals — $name", (fixture) => {
 		const pageTranscripts = new Map(
 			sortedPages.map((page, i) => [
 				page.order,
-				pageOcrResults[i]?.transcript ?? "",
+				pageComprehensions[i]?.transcript ?? "",
 			]),
 		)
 

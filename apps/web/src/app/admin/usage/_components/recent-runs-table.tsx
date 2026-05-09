@@ -22,7 +22,7 @@ const STAGE_VARIANT: Record<string, "default" | "secondary" | "outline"> = {
 
 const CALL_SITE_LABELS: Record<string, string> = {
 	"student-paper-extraction": "Answer Extraction",
-	"handwriting-ocr": "Handwriting OCR",
+	"page-comprehension": "Page comprehension",
 	"vision-attribution": "Vision Attribution",
 	"token-answer-mapping": "Token Correction + Mapping",
 	grading: "Grading",

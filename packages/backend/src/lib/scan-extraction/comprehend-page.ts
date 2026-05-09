@@ -12,7 +12,7 @@ export type HandwritingAnalysis = {
 	detectedSubject?: string | null
 }
 
-export type RunOcrOptions = {
+export type ComprehendPageOptions = {
 	analysisFocus?: string
 	/** When true, also extract student name and detected subject. Use only for the first page. */
 	extractMetadata?: boolean
@@ -49,17 +49,28 @@ const TranscriptSchema = z.object({
 })
 
 /**
- * Run LLM OCR on a base64-encoded image to get a full transcript and
- * handwriting observations. Precise word-level bounding boxes are obtained
- * separately via Cloud Vision (cloud-vision-ocr.ts).
+ * Comprehend a single page image — read it as a literate human would.
  *
- * Pass `extractMetadata: true` for the first page to also extract student name
- * and detected subject.
+ * The vision LLM produces:
+ *   - a clean reading-order transcript of all handwritten text,
+ *   - observations about handwriting style/legibility,
+ *   - (first page only) the student's handwritten name, ID number, and the
+ *     detected exam subject.
+ *
+ * This is the comprehension layer above Cloud Vision: Cloud Vision
+ * (`cloud-vision-ocr.ts`) returns word-level positions and characters but no
+ * understanding of meaning, identity, or content type. This call provides
+ * that semantic layer — its transcript feeds `attributeScript` as a
+ * per-page semantic guide; its first-page metadata seeds the submission
+ * record so the teacher doesn't have to type names by hand.
+ *
+ * Pass `extractMetadata: true` for the first page to also extract student
+ * name, ID number, and detected subject.
  */
-export async function runOcr(
+export async function comprehendPage(
 	imageBase64: string,
 	mimeType: string,
-	options: RunOcrOptions = {},
+	options: ComprehendPageOptions = {},
 	llm?: LlmRunner,
 ): Promise<HandwritingAnalysis> {
 	const focusInstruction = options.analysisFocus
@@ -71,7 +82,7 @@ export async function runOcr(
 		: ""
 
 	const { output } = await callLlmWithFallback(
-		"handwriting-ocr",
+		"page-comprehension",
 		async (model, entry, report, signal) => {
 			const result = await generateText({
 				model,

@@ -6,6 +6,7 @@ import { segmentPdfScripts } from "@/lib/script-ingestion/segment-script"
 import type { PageKey, StagedScriptData } from "@/lib/script-ingestion/types"
 import { guessMime } from "@/lib/script-ingestion/utils"
 import { ListObjectsV2Command } from "@aws-sdk/client-s3"
+import { redactName } from "@mcp-gcse/shared"
 import { Resource } from "sst"
 
 const TAG = "batch-classify"
@@ -114,7 +115,7 @@ export async function processSourceFile(
 			if (pageKeys.length === 0) return null
 			return {
 				page_keys: pageKeys,
-				proposed_name: script.studentName,
+				proposed_name: redactName(script.studentName),
 				confidence: 1.0,
 			}
 		})

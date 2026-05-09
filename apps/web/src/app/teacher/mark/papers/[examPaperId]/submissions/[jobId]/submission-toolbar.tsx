@@ -45,7 +45,7 @@ import { ReScanButton } from "./re-scan-button"
 import { DownloadPdfButton } from "./results/download-pdf-button"
 import { LlmSpendButton } from "./results/llm-snapshot-panel"
 import { ReRunMenu } from "./results/re-run-menu"
-import { StudentNameEditor } from "./results/student-name-editor"
+import { StudentLabel } from "./results/student-label"
 import { SubmissionFeedbackButton } from "./results/submission-feedback"
 import { StatusBadge } from "./status-badge"
 import { VersionSwitcher } from "./version-switcher"
@@ -259,7 +259,12 @@ export function SubmissionToolbar({
 					</div>
 				)}
 
-				<StudentNameEditor jobId={jobId} initialName={data.student_name} />
+				<StudentLabel
+					jobId={jobId}
+					studentId={data.student_id}
+					studentName={data.student_name}
+					detectedStudentNumber={data.detected_student_number}
+				/>
 				<VersionSwitcher jobId={jobId} onVersionChange={onNavigateToJob} />
 
 				<div className="ml-auto flex items-center gap-1.5 sm:gap-3">

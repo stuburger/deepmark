@@ -52,6 +52,7 @@ export function student(
 		error: null,
 		student_name: "Pat Doe",
 		student_id: null,
+		detected_student_number: null,
 		detected_subject: null,
 		pages_count: 2,
 		grading_results: [],

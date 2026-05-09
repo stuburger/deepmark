@@ -8,6 +8,7 @@ import {
 	type SegmentedScript,
 	segmentPdfScripts,
 } from "../../src/lib/script-ingestion/segment-script"
+import { GEOFF_BUSINESS_Y9_214_FIXTURE } from "./fixtures/segmentation/geoff-business-y9-214"
 import type { SegmentationFixture } from "./fixtures/segmentation/y10-scanpaper-1"
 import { Y10_SCANPAPER_1_FIXTURE } from "./fixtures/segmentation/y10-scanpaper-1"
 import { Y10_SCANPAPERS_MERGED_FIXTURE } from "./fixtures/segmentation/y10-scanpapers-merged"
@@ -27,14 +28,17 @@ import { Y10_SCANPAPERS_MERGED_FIXTURE } from "./fixtures/segmentation/y10-scanp
 const FIXTURES: SegmentationFixture[] = [
 	Y10_SCANPAPER_1_FIXTURE,
 	Y10_SCANPAPERS_MERGED_FIXTURE,
+	GEOFF_BUSINESS_Y9_214_FIXTURE,
 ]
 
 const BLANK_THRESHOLD = 0.005
-// A full segmentation run (Vision per page + one Gemini call) lands around
-// 15–30s per fixture. Two minutes leaves comfortable headroom without
-// masking a regression — per CLAUDE.md, integration tests shouldn't exceed
-// 30s of actual work, and a tight timeout is our canary for that.
-const SEGMENT_TIMEOUT_MS = 2 * 60_000
+// Hand-labelled small fixtures land in 15–30s. The 214-page geoff fixture
+// is the deliberate slow case (currently failing at the LLM call's own 90s
+// wall-clock; expected to land in 60–300s once the timeout/abort-signal
+// fix ships). Set the hook ceiling above (LLM timeout + Vision + extract)
+// for the largest fixture so the actual LLM error propagates as the test
+// failure rather than a generic hook timeout swallowing it.
+const SEGMENT_TIMEOUT_MS = 6 * 60_000
 
 describe.each(FIXTURES)("pdf segmentation evals — $name", (fixture) => {
 	let segmented: SegmentedScript[]

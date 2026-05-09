@@ -7,25 +7,6 @@ import { z } from "zod"
 import type { SubmissionFeedback, SubmissionFeedbackRating } from "../types"
 import { toSubmissionFeedback } from "./feedback-mapper"
 
-export const updateStudentName = resourceAction({
-	type: "submission",
-	role: "editor",
-	schema: z.object({ jobId: z.string(), name: z.string() }),
-	id: ({ jobId }) => jobId,
-}).action(async ({ parsedInput: { jobId, name } }): Promise<{ ok: true }> => {
-	const sub = await db.studentSubmission.findFirst({
-		where: { id: jobId },
-		select: { id: true },
-	})
-	if (!sub) throw new Error("Job not found")
-
-	await db.studentSubmission.update({
-		where: { id: jobId },
-		data: { student_name: redactName(name) },
-	})
-	return { ok: true }
-})
-
 /**
  * Associates a Student record with a submission so that graded answers
  * are subsequently written to the normalised Answer / MarkingResult tables.

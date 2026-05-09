@@ -35,6 +35,9 @@ export const updateStagedScript = resourceAction({
 		})
 		if (!script) throw new Error("Staged script not found")
 
+		// Teacher input is preserved verbatim — the staging editor is the one
+		// place a teacher can deliberately label a script with whatever name
+		// they choose. The OCR pipeline still redacts its own LLM extractions.
 		await db.stagedScript.update({
 			where: { id: scriptId },
 			data: {

@@ -2,6 +2,24 @@ import type { McqQuestionGrade, QuestionWithMarkScheme } from "../grading/types"
 import type { Marker, MarkerContext } from "./marker"
 
 /**
+ * Extract selected option letters from a noisy student answer string.
+ *
+ * OCR/attribution is told to return only letters (e.g. "D" or "AB" for
+ * multi-select), but occasionally the option text bleeds through —
+ * "D Allows the customisation of products". Stripping all non-letters and
+ * splitting would explode that into [A,A,C,D,F,H,I,L,L,M,N,O,...] and zero
+ * the question. Instead, take only the leading uppercase letter run (1–5
+ * letters), bounded by a non-letter or end-of-string. Mixed-case words like
+ * "Plc" / "Ltd" are not all-uppercase and won't match the leading run.
+ */
+function parseSelectedOptionLabels(answer: string): string[] {
+	const upper = answer.trim().toUpperCase()
+	const match = upper.match(/^[A-Z]{1,5}(?=$|[^A-Z])/)
+	if (!match) return []
+	return [...new Set(match[0].split(""))].sort()
+}
+
+/**
  * Deterministic marker for multiple_choice questions when correctOptionLabels are known.
  * Compares student-selected option letters to the correct set; no LLM.
  */
@@ -28,12 +46,7 @@ export class DeterministicMarker implements Marker {
 			)
 		}
 
-		const studentSelected = answer
-			.toUpperCase()
-			.replace(/[^A-Z]/g, "")
-			.split("")
-			.filter(Boolean)
-			.sort()
+		const studentSelected = parseSelectedOptionLabels(answer)
 		const correct = [...correctOptionLabels].map((l) => l.toUpperCase()).sort()
 
 		const isCorrect =

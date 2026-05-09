@@ -270,6 +270,7 @@ function toJobPayload(
 		error,
 		student_name: sub.student_name,
 		student_id: sub.student_id,
+		detected_student_number: sub.detected_student_number,
 		detected_subject: sub.detected_subject,
 		pages_count: pages.length,
 		grading_results: gradingResults,

@@ -87,6 +87,8 @@ export type StudentPaperJobPayload = {
 	error: string | null
 	student_name: string | null
 	student_id: string | null
+	/** OCR-detected student number — set whether or not it matched a roster row. */
+	detected_student_number: string | null
 	detected_subject: string | null
 	pages_count: number
 	grading_results: GradingResult[]

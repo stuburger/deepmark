@@ -256,37 +256,39 @@ questionPaperQueue.subscribe({
 //   Phase 2b (awaited): Gemini vision attribution — assigns corrected tokens to questions,
 //     derives precise answer region bboxes. Runs after Phase 2a so corrected text is available.
 // On completion enqueues studentPaperQueue for grading.
-studentPaperOcrQueue.subscribe({
-	handler: "packages/backend/src/processors/student-paper-extract.handler",
-	link: [
-		neonPostgres,
-		geminiApiKey,
-		cloudVisionApiKey,
-		openAiApiKey,
-		anthropicApiKey,
-		scansBucket,
-		studentPaperQueue,
-		batchClassifyQueue,
-		// seedSkeleton + fillAnswerTexts open a HeadlessEditor against Hocuspocus
-		// to stream the document scaffolding + OCR text in real time.
-		collabServer,
-		collabServiceSecret,
-	],
-	environment: {
-		STAGE: $app.stage,
+studentPaperOcrQueue.subscribe(
+	{
+		handler: "packages/backend/src/processors/student-paper-extract.handler",
+		link: [
+			neonPostgres,
+			geminiApiKey,
+			cloudVisionApiKey,
+			openAiApiKey,
+			anthropicApiKey,
+			scansBucket,
+			studentPaperQueue,
+			batchClassifyQueue,
+			// seedSkeleton + fillAnswerTexts open a HeadlessEditor against Hocuspocus
+			// to stream the document scaffolding + OCR text in real time.
+			collabServer,
+			collabServiceSecret,
+		],
+		environment: {
+			STAGE: $app.stage,
+		},
+		// 5 min is a deliberate fail-fast: a clean OCR run on a single paper is 1–3 min,
+		// so anything longer means the LLM call hung or the input is wrong shape.
+		// Better to kill it and route to the DLQ than burn money on a doomed retry.
+		timeout: STUDENT_PAPER_LAMBDA_TIMEOUT,
+		memory: "1 GB",
 	},
-	// 5 min is a deliberate fail-fast: a clean OCR run on a single paper is 1–3 min,
-	// so anything longer means the LLM call hung or the input is wrong shape.
-	// Better to kill it and route to the DLQ than burn money on a doomed retry.
-	timeout: STUDENT_PAPER_LAMBDA_TIMEOUT,
-	memory: "1 GB",
 	// One paper per Lambda invocation. OCR runs are 1–3 min of LLM + Vision
 	// work; batching multiple sequentially blew the function timeout and
 	// dragged successful runs into the DLQ when one bad record poisoned the
 	// batch (no `partialResponses`, so any throw failed the whole batch).
 	// At size=1, blast radius is one job and a clean throw redelivers in seconds.
-	batch: { size: 1 },
-})
+	{ batch: { size: 1 } },
+)
 
 // Triggered automatically by student-paper-extract once OCR + reconciliation + attribution completes.
 // Handler: loads questions + mark schemes, grades each answer via the MarkerOrchestrator
@@ -295,30 +297,32 @@ studentPaperOcrQueue.subscribe({
 // Streams incremental grading results to the DB; writes annotations and LLM snapshots on the
 // GradingRun when complete. If a Student record is linked, also writes normalised Answer +
 // MarkingResult rows.
-studentPaperQueue.subscribe({
-	handler: "packages/backend/src/processors/student-paper-grade.handler",
-	link: [
-		neonPostgres,
-		geminiApiKey,
-		openAiApiKey,
-		anthropicApiKey,
-		scansBucket,
-		// Batch-complete is now emitted onto the bus; PushSubscriber is the
-		// only consumer that needs VAPID, but linking here keeps a clean
-		// rollback if we ever revert the migration.
-		collabServer,
-		collabServiceSecret,
-		bus,
-	],
-	environment: {
-		STAGE: $app.stage,
+studentPaperQueue.subscribe(
+	{
+		handler: "packages/backend/src/processors/student-paper-grade.handler",
+		link: [
+			neonPostgres,
+			geminiApiKey,
+			openAiApiKey,
+			anthropicApiKey,
+			scansBucket,
+			// Batch-complete is now emitted onto the bus; PushSubscriber is the
+			// only consumer that needs VAPID, but linking here keeps a clean
+			// rollback if we ever revert the migration.
+			collabServer,
+			collabServiceSecret,
+			bus,
+		],
+		environment: {
+			STAGE: $app.stage,
+		},
+		// 5 min fail-fast — same reasoning as the OCR queue.
+		timeout: STUDENT_PAPER_LAMBDA_TIMEOUT,
+		memory: "1 GB",
 	},
-	// 5 min fail-fast — same reasoning as the OCR queue.
-	timeout: STUDENT_PAPER_LAMBDA_TIMEOUT,
-	memory: "1 GB",
 	// One paper per Lambda invocation — same reasoning as the OCR queue.
-	batch: { size: 1 },
-})
+	{ batch: { size: 1 } },
+)
 
 // DLQ handlers: each queue has its own dedicated DLQ handler that already knows
 // which phase failed — no job state inspection required.

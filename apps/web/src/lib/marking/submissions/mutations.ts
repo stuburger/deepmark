@@ -44,6 +44,35 @@ export const linkStudentToJob = resourceAction({
 	},
 )
 
+/**
+ * Severs the Student↔Submission link. We also clear student_name because
+ * its current value is the previously-linked student's redacted name —
+ * leaving it would mislabel the script as the wrong student until OCR
+ * re-runs or the teacher re-links.
+ */
+export const unlinkStudentFromJob = resourceAction({
+	type: "submission",
+	role: "editor",
+	schema: z.object({ jobId: z.string() }),
+	id: ({ jobId }) => jobId,
+}).action(
+	async ({ parsedInput: { jobId }, ctx }): Promise<{ ok: true }> => {
+		const sub = await db.studentSubmission.findFirst({
+			where: { id: jobId },
+			select: { id: true },
+		})
+		if (!sub) throw new Error("Job not found")
+
+		await db.studentSubmission.update({
+			where: { id: jobId },
+			data: { student_id: null, student_name: null },
+		})
+
+		ctx.log.info("Student unlinked from job", { jobId })
+		return { ok: true }
+	},
+)
+
 export const confirmMarking = resourceAction({
 	type: "submission",
 	role: "editor",

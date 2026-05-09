@@ -38,6 +38,7 @@ import {
 	Bookmark,
 	ChevronRight,
 	Link2,
+	Pencil,
 	Share2,
 	Trash2,
 } from "lucide-react"
@@ -183,6 +184,7 @@ export function SubmissionTable({
 	const [assigningJob, setAssigningJob] = useState<{
 		jobId: string
 		detectedNumber: string | null
+		currentStudentId: string | null
 	} | null>(null)
 
 	function toggleExpand(id: string) {
@@ -285,6 +287,7 @@ export function SubmissionTable({
 					}}
 					jobId={assigningJob.jobId}
 					detectedNumber={assigningJob.detectedNumber}
+					currentStudentId={assigningJob.currentStudentId}
 					onLinked={() =>
 						queryClient.invalidateQueries({
 							queryKey: queryKeys.submissions(examPaperId),
@@ -460,7 +463,7 @@ export function SubmissionTable({
 															</span>
 														)}
 													</span>
-													{sub.student_id === null && (
+													{sub.student_id === null ? (
 														<>
 															{sub.detected_student_number && (
 																<span className="rounded-sm border border-border-quiet bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
@@ -476,6 +479,7 @@ export function SubmissionTable({
 																	setAssigningJob({
 																		jobId: sub.id,
 																		detectedNumber: sub.detected_student_number,
+																		currentStudentId: null,
 																	})
 																}
 															>
@@ -483,6 +487,24 @@ export function SubmissionTable({
 																Link
 															</Button>
 														</>
+													) : (
+														<Button
+															type="button"
+															variant="ghost"
+															size="sm"
+															aria-label={`Change linked student for ${sub.student_name ?? "submission"}`}
+															className="h-6 w-6 p-0 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover:opacity-100 focus:opacity-100"
+															onClick={() =>
+																setAssigningJob({
+																	jobId: sub.id,
+																	detectedNumber:
+																		sub.detected_student_number,
+																	currentStudentId: sub.student_id,
+																})
+															}
+														>
+															<Pencil className="size-3" strokeWidth={1.5} />
+														</Button>
 													)}
 													{hasPriorVersions && (
 														<span className="text-[10px] tabular-nums font-mono text-muted-foreground">

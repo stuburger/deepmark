@@ -50,6 +50,22 @@ describe.each(FIXTURES)("pdf segmentation evals — $name", (fixture) => {
 
 		const result = await segmentPdfScripts(pages)
 		segmented = result.scripts
+		// One-off capture for hand-labelling new fixtures. Writes to /tmp
+		// (vitest swallows passing-test console.log by default).
+		if (fixture.scripts.length === 0) {
+			fs.writeFileSync(
+				`/tmp/segmentation-capture-${fixture.name}.json`,
+				JSON.stringify(
+					segmented.map((s) => ({
+						startPage: s.startPage,
+						endPage: s.endPage,
+						studentName: s.studentName,
+					})),
+					null,
+					2,
+				),
+			)
+		}
 	}, SEGMENT_TIMEOUT_MS)
 
 	it(`returns a plausible number of scripts (within ${fixture.thresholds.scriptCountTolerance} of ground truth)`, () => {

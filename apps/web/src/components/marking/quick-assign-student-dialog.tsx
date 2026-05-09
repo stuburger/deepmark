@@ -20,7 +20,10 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@/components/ui/select"
-import { linkStudentToJob } from "@/lib/marking/submissions/mutations"
+import {
+	linkStudentToJob,
+	unlinkStudentFromJob,
+} from "@/lib/marking/submissions/mutations"
 import { queryKeys } from "@/lib/query-keys"
 import { createStudent } from "@/lib/students/mutations"
 import {
@@ -37,7 +40,10 @@ type Props = {
 	onOpenChange: (open: boolean) => void
 	jobId: string
 	detectedNumber: string | null
-	/** Called after a successful link/create-and-link so the parent can
+	/** When set, the dialog runs in re-link mode: the dropdown pre-selects this
+	 *  student, an Unlink button appears, and copy/title shifts to "change". */
+	currentStudentId?: string | null
+	/** Called after a successful link/create-and-link/unlink so the parent can
 	 *  invalidate its own list query or refresh the route. */
 	onLinked?: () => void
 }
@@ -49,11 +55,18 @@ export function QuickAssignStudentDialog({
 	onOpenChange,
 	jobId,
 	detectedNumber,
+	currentStudentId = null,
 	onLinked,
 }: Props) {
 	const queryClient = useQueryClient()
+	const isRelink = currentStudentId !== null
 	const [mode, setMode] = useState<Mode>("select")
-	const [selectedId, setSelectedId] = useState<string | null>(null)
+	const [selectedId, setSelectedId] = useState<string | null>(currentStudentId)
+
+	// Re-sync the dropdown when the dialog opens against a different submission.
+	useEffect(() => {
+		if (open) setSelectedId(currentStudentId)
+	}, [open, currentStudentId])
 
 	const { data: students = [], isLoading: studentsLoading } = useQuery({
 		queryKey: queryKeys.students(),
@@ -100,7 +113,21 @@ export function QuickAssignStudentDialog({
 			return r?.data
 		},
 		onSuccess: () => {
-			toast.success("Student linked")
+			toast.success(isRelink ? "Student updated" : "Student linked")
+			invalidateAfterLink()
+			handleOpenChange(false)
+		},
+		onError: (err) => toast.error(err.message),
+	})
+
+	const unlinkMutation = useMutation({
+		mutationFn: async () => {
+			const r = await unlinkStudentFromJob({ jobId })
+			if (r?.serverError) throw new Error(r.serverError)
+			return r?.data
+		},
+		onSuccess: () => {
+			toast.success("Student unlinked")
 			invalidateAfterLink()
 			handleOpenChange(false)
 		},
@@ -136,7 +163,7 @@ export function QuickAssignStudentDialog({
 
 	function handleOpenChange(next: boolean) {
 		if (!next) {
-			setSelectedId(null)
+			setSelectedId(currentStudentId)
 			setMode("select")
 		}
 		onOpenChange(next)
@@ -147,17 +174,26 @@ export function QuickAssignStudentDialog({
 		student_number: detectedNumber ?? nextNumber ?? "",
 	}
 
-	const isPending = linkMutation.isPending || createAndLinkMutation.isPending
+	const isPending =
+		linkMutation.isPending ||
+		createAndLinkMutation.isPending ||
+		unlinkMutation.isPending
 
 	return (
 		<Dialog open={open} onOpenChange={handleOpenChange}>
 			<DialogContent className="sm:max-w-md">
 				<DialogHeader>
 					<DialogTitle>
-						{mode === "create" ? "Add and link a student" : "Link to a student"}
+						{mode === "create"
+							? "Add and link a student"
+							: isRelink
+								? "Change linked student"
+								: "Link to a student"}
 					</DialogTitle>
 					<DialogDescription>
-						{detectedNumber ? (
+						{isRelink && mode === "select" ? (
+							"Pick a different student, or unlink to leave this script unattributed."
+						) : detectedNumber ? (
 							<>
 								The OCR pulled{" "}
 								<code className="font-mono text-xs">{detectedNumber}</code> off
@@ -204,17 +240,30 @@ export function QuickAssignStudentDialog({
 						)}
 
 						<div className="flex items-center justify-between">
-							<Button
-								type="button"
-								variant="ghost"
-								size="sm"
-								className="gap-1.5"
-								onClick={() => setMode("create")}
-								disabled={isPending}
-							>
-								<UserPlus className="size-3.5" strokeWidth={1.5} />
-								Add new student
-							</Button>
+							{isRelink ? (
+								<Button
+									type="button"
+									variant="ghost"
+									size="sm"
+									className="gap-1.5 text-muted-foreground hover:text-destructive"
+									onClick={() => unlinkMutation.mutate()}
+									disabled={isPending}
+								>
+									{unlinkMutation.isPending ? "Unlinking…" : "Unlink"}
+								</Button>
+							) : (
+								<Button
+									type="button"
+									variant="ghost"
+									size="sm"
+									className="gap-1.5"
+									onClick={() => setMode("create")}
+									disabled={isPending}
+								>
+									<UserPlus className="size-3.5" strokeWidth={1.5} />
+									Add new student
+								</Button>
+							)}
 							<div className="flex gap-2">
 								<Button
 									type="button"
@@ -229,9 +278,19 @@ export function QuickAssignStudentDialog({
 									onClick={() =>
 										selectedId && linkMutation.mutate(selectedId)
 									}
-									disabled={!selectedId || isPending}
+									disabled={
+										!selectedId ||
+										selectedId === currentStudentId ||
+										isPending
+									}
 								>
-									{linkMutation.isPending ? "Linking…" : "Link"}
+									{linkMutation.isPending
+										? isRelink
+											? "Updating…"
+											: "Linking…"
+										: isRelink
+											? "Update"
+											: "Link"}
 								</Button>
 							</div>
 						</div>

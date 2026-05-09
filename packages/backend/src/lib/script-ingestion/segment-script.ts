@@ -2,6 +2,7 @@ import { concurrencyLimit } from "@/lib/concurrency"
 import { callLlmWithFallback } from "@/lib/infra/llm-runtime"
 import { logger } from "@/lib/infra/logger"
 import { outputSchema } from "@/lib/infra/output-schema"
+import { DEFAULT_LLM_TIMEOUT_MS } from "@mcp-gcse/shared"
 import {
 	type VisionToken,
 	runVisionOcr,
@@ -52,7 +53,19 @@ export type SegmentPdfScriptsOptions = {
 	 * Caller is responsible for any persistence (e.g. job_events writes).
 	 */
 	onVisionProgress?: (processed: number, total: number) => void
+	/**
+	 * Remaining-time-in-Lambda probe (`context.getRemainingTimeInMillis`).
+	 * When provided, the segmentation LLM call's wall-clock budget is set
+	 * to `remaining - 10s` (clamped to a 90s floor) so we bail before the
+	 * Lambda is killed mid-call — that would otherwise leave an in-flight
+	 * Gemini fetch un-cancelled and billed. When omitted (tests, web
+	 * server actions, anywhere outside an SQS Lambda), the runner uses
+	 * its default 90s budget.
+	 */
+	getRemainingTimeMs?: () => number
 }
+
+const SEGMENTATION_LAMBDA_HEADROOM_MS = 10_000
 
 const VISION_PROGRESS_STRIDE = 50
 
@@ -137,6 +150,21 @@ export async function segmentPdfScripts(
 		pages: pageTexts,
 	})
 
+	// Lambda-aware timeout: when invoked from an SQS handler the caller
+	// supplies `getRemainingTimeMs`, and we set the LLM wall-clock budget
+	// to (remaining − 10s) clamped to a 90s floor. Gives us as much room
+	// as the Lambda has, while still leaving headroom to capture a clean
+	// failure status and DLQ-route before the runtime kills us mid-call.
+	// Outside Lambda (tests, web server actions): undefined → runner default.
+	const remainingMs = options.getRemainingTimeMs?.()
+	const segmentationTimeoutMs =
+		remainingMs !== undefined
+			? Math.max(
+					DEFAULT_LLM_TIMEOUT_MS,
+					remainingMs - SEGMENTATION_LAMBDA_HEADROOM_MS,
+				)
+			: undefined
+
 	const attempt = async (): Promise<SegmentedScript[]> => {
 		const { output } = await callLlmWithFallback(
 			"pdf-script-segmentation",
@@ -150,6 +178,10 @@ export async function segmentPdfScripts(
 				report.usage = result.usage
 				return result
 			},
+			undefined,
+			segmentationTimeoutMs !== undefined
+				? { timeoutMs: segmentationTimeoutMs }
+				: undefined,
 		)
 
 		const raw = lengthsToRanges(

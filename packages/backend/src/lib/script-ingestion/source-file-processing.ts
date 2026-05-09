@@ -40,6 +40,7 @@ export async function listSourceFiles(batchJobId: string): Promise<string[]> {
 export async function processSourceFile(
 	batchJobId: string,
 	sourceKey: string,
+	opts: { getRemainingTimeMs?: () => number } = {},
 ): Promise<{ scripts: StagedScriptData[]; pageCount: number }> {
 	const mime = guessMime(sourceKey)
 
@@ -81,6 +82,7 @@ export async function processSourceFile(
 					total,
 				})
 			},
+			getRemainingTimeMs: opts.getRemainingTimeMs,
 		},
 	)
 

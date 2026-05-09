@@ -12,6 +12,20 @@ import type { LlmModelEntry, LlmProvider } from "./types"
  * single-page OCR / structured-extraction call (5–30s observed). Call sites
  * with a known higher budget (multi-page attribution, long completions)
  * should pass an explicit `timeoutMs` to `LlmRunner.call`.
+ *
+ * Why 90s and why we keep it: this is a deliberate canary, not a per-call
+ * ceiling. The vast majority of our LLM calls finish in well under 30s; a
+ * call that runs past 90s is almost always genuinely stuck (model loop,
+ * upstream throttling, network blackhole) and burning money for no return.
+ * The pre-launch operating mode in CLAUDE.md treats wasted LLM seconds as
+ * money flowing out of the founder's pocket, so the floor stays tight to
+ * fail those fast.
+ *
+ * Outliers go through opt-in `timeoutMs` overrides at the call site —
+ * `pdf-script-segmentation` is the canonical example: it derives its
+ * budget from the Lambda's remaining execution time when invoked from
+ * SQS, and falls back to this default when invoked outside Lambda (tests,
+ * web server actions). Don't bump the default just to fit one call site.
  */
 export const DEFAULT_LLM_TIMEOUT_MS = 90_000
 

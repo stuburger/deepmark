@@ -8,6 +8,7 @@ import {
 } from "@/lib/script-ingestion/source-file-processing"
 import type { StagedScriptData } from "@/lib/script-ingestion/types"
 import type { BatchStatus, StagedScriptStatus } from "@mcp-gcse/db"
+import type { Context } from "aws-lambda"
 import { z } from "zod/v4"
 
 const TAG = "batch-classify"
@@ -20,15 +21,22 @@ const MessageBodySchema = z.object({
 
 export async function handler(
 	event: SqsEvent,
+	context?: Context,
 ): Promise<{ batchItemFailures?: { itemIdentifier: string }[] }> {
 	const failures: { itemIdentifier: string }[] = []
+	// AWS passes a Context object with `getRemainingTimeInMillis` whenever
+	// this runs inside Lambda. Wrap it as a closure so downstream callees
+	// can be Lambda-runtime-agnostic and just see "ms remaining".
+	const getRemainingTimeMs = context
+		? () => context.getRemainingTimeInMillis()
+		: undefined
 
 	for (const record of event.Records) {
 		const batchJobId = parseBatchJobId(record)
 		if (!batchJobId) continue
 
 		try {
-			await classifyBatch(batchJobId)
+			await classifyBatch(batchJobId, { getRemainingTimeMs })
 		} catch (err) {
 			const errMsg =
 				err instanceof Error
@@ -67,7 +75,10 @@ function parseBatchJobId(record: SqsRecord): string | null {
 
 // ─── Core classification logic ────────────────────────────────────────────────
 
-async function classifyBatch(batchJobId: string): Promise<void> {
+async function classifyBatch(
+	batchJobId: string,
+	opts: { getRemainingTimeMs?: () => number } = {},
+): Promise<void> {
 	logger.info(TAG, "Starting batch classification", { batchJobId })
 
 	await db.batchIngestJob.update({
@@ -84,7 +95,9 @@ async function classifyBatch(batchJobId: string): Promise<void> {
 
 	const allStagedScripts: StagedScriptData[] = []
 	for (const sourceKey of sourceKeys) {
-		const { scripts } = await processSourceFile(batchJobId, sourceKey)
+		const { scripts } = await processSourceFile(batchJobId, sourceKey, {
+			getRemainingTimeMs: opts.getRemainingTimeMs,
+		})
 		allStagedScripts.push(...scripts)
 	}
 

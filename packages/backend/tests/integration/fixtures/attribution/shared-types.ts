@@ -97,6 +97,22 @@ export type FixtureExpectations = {
 		questionNumber: string
 		substrings: string[]
 	}>
+	/**
+	 * Eval 7 — MCQ extraction. For every listed question, the pipeline's final
+	 * `answer_text` must equal the expected option letter(s) exactly.
+	 *
+	 * "Letter only" is the contract: `"C"`, never `"Farming"`, `"D Allows..."`,
+	 * or any other prose. Multi-select expects letters concatenated (e.g.
+	 * `"AB"`) — the same shape `resolveMcqAnswers` produces today.
+	 *
+	 * Reproduces the printed-checkbox failure mode where attribution leaks
+	 * the printed option text into `answer_text` when the per-page MCQ
+	 * detection misses the tick/cross.
+	 */
+	expectedMcqAnswers?: Array<{
+		questionNumber: string
+		expectedLetter: string
+	}>
 }
 
 export type FixtureSpec = {

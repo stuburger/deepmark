@@ -175,5 +175,14 @@ export const KAI_JASSI_FIXTURE: FixtureSpec = {
 				minTokensPerAnswer: 10,
 			},
 		],
+		// Handwritten-letter MCQs on page 1 (no printed checkboxes — student
+		// wrote the letter in the margin). Useful contrast to the
+		// jack-kinnard-mcq fixture, which is a printed-checkbox paper.
+		expectedMcqAnswers: [
+			{ questionNumber: "1.1", expectedLetter: "C" },
+			{ questionNumber: "1.2", expectedLetter: "D" },
+			{ questionNumber: "1.3", expectedLetter: "C" },
+			{ questionNumber: "1.4", expectedLetter: "C" },
+		],
 	},
 }

@@ -58,6 +58,10 @@ describe.each(FIXTURES)("script-level attribution evals — $name", (fixture) =>
 				question_number: q.question_number,
 				question_text: q.text,
 				is_mcq: q.question_type === "multiple_choice",
+				mcq_option_labels:
+					q.question_type === "multiple_choice"
+						? q.multiple_choice_options.map((o) => o.option_label)
+						: undefined,
 			}),
 		)
 

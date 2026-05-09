@@ -21,7 +21,6 @@ import {
 import { runVisionOcr } from "@/lib/scan-extraction/cloud-vision-ocr"
 import { runOcr } from "@/lib/scan-extraction/gemini-ocr"
 import { persistTokens } from "@/lib/scan-extraction/persist-tokens"
-import { resolveMcqAnswers } from "@/lib/scan-extraction/resolve-mcq-answers"
 import { saveVisionRaw } from "@/lib/scan-extraction/save-vision-raw"
 import { SQSClient, SendMessageCommand } from "@aws-sdk/client-sqs"
 import { type OcrStatus, type Subject, logOcrRunEvent } from "@mcp-gcse/db"
@@ -260,10 +259,17 @@ export async function handler(event: SqsEvent): Promise<void> {
 				question_number: s.question_number,
 				question_text: s.question_text,
 				is_mcq: s.question_type === "multiple_choice",
+				mcq_option_labels: s.multiple_choice_options?.map(
+					(o) => o.option_label,
+				),
 			}),
 		)
 
-		const { answers: baseAnswers } = await attributeScript({
+		// Single attribution call handles both prose answers (token spans +
+		// answer_text) and MCQ selections (per-question enum-constrained
+		// `mcq_answers`, projected into `answer_text` as the option letter).
+		// No separate MCQ pass, no resolveMcqAnswers merge.
+		const { answers: reconstructedAnswers } = await attributeScript({
 			questions: attributeQuestions,
 			pageTranscripts,
 			pages: sortedPages,
@@ -271,15 +277,6 @@ export async function handler(event: SqsEvent): Promise<void> {
 			tokens: insertedTokens,
 			jobId,
 			llm,
-		})
-
-		// MCQ answer_text comes from the OCR pass, which reads ticks/crosses/
-		// circles/fills/handwriting holistically. Non-MCQ answers keep the
-		// LLM-authored text that attribution produced.
-		const reconstructedAnswers = resolveMcqAnswers({
-			baseAnswers,
-			ocrSelectionsByPage: pageOcrResults.map((r) => r.mcqSelections),
-			questionSeeds,
 		})
 
 		const answersExtracted = reconstructedAnswers.filter((a) =>

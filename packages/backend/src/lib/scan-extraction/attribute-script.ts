@@ -11,10 +11,11 @@ import {
 } from "@mcp-gcse/shared"
 import { generateText } from "ai"
 import {
+	type McqSchemaQuestion,
 	type PagePromptBlock,
 	type ScriptAttributionOutput,
-	ScriptAttributionSchema,
 	buildScriptAttributionPrompt,
+	buildScriptAttributionSchema,
 } from "./attribute-script-prompt"
 import type { ReconstructedAnswer } from "./reconstruct-answers"
 
@@ -27,6 +28,10 @@ export type AttributeScriptQuestion = {
 	question_number: string
 	question_text: string
 	is_mcq: boolean
+	/** Required when `is_mcq` is true; ignored otherwise. The schema's MCQ
+	 *  branch enum is built from these labels, so the model literally cannot
+	 *  return a letter that isn't one of them. */
+	mcq_option_labels?: string[]
 }
 
 export type AttributeScriptPage = {
@@ -263,11 +268,26 @@ export async function attributeScript({
 	})
 
 	const questionsText = questions
-		.map(
-			(q) =>
-				`Q${q.question_number} (id: ${q.question_id})${q.is_mcq ? " [multiple-choice — written answer unusual]" : ""}: ${q.question_text}`,
-		)
+		.map((q) => {
+			const mcqHint = q.is_mcq
+				? ` [multiple-choice — options: ${(q.mcq_option_labels ?? []).join(", ")}]`
+				: ""
+			return `Q${q.question_number} (id: ${q.question_id})${mcqHint}: ${q.question_text}`
+		})
 		.join("\n")
+
+	// Build the output schema per-call from the MCQ questions on this script.
+	// Each MCQ branch literal-matches its question_id and enum-matches against
+	// its actual option labels — invalid letters can't parse and trigger a
+	// retry with explicit feedback.
+	const mcqSchemaQuestions: McqSchemaQuestion[] = questions
+		.filter((q) => q.is_mcq && (q.mcq_option_labels?.length ?? 0) > 0)
+		.map((q) => ({
+			question_id: q.question_id,
+			// biome-ignore lint/style/noNonNullAssertion: filtered above
+			option_labels: q.mcq_option_labels!,
+		}))
+	const attributionSchema = buildScriptAttributionSchema(mcqSchemaQuestions)
 
 	// ── 4. LLM call with validation + retry ───────────────────────────────
 	let parsed: ScriptAttributionOutput | null = null
@@ -303,7 +323,7 @@ export async function attributeScript({
 								],
 							},
 						],
-						output: outputSchema(ScriptAttributionSchema),
+						output: outputSchema(attributionSchema),
 					})
 					report.usage = result.usage
 					return result
@@ -315,8 +335,22 @@ export async function attributeScript({
 				// timeout — a hung Gemini call fails fast, not at lambda kill.
 				{ timeoutMs: 240_000 },
 			)
-			output = rawOutput
+			output = rawOutput as ScriptAttributionOutput
 		} catch (err) {
+			// LLM-side or schema-parse failure. The schema for `mcq_answers`
+			// is per-question strict — an invalid letter or unknown
+			// question_id makes the parse fail. Treat that as retryable
+			// feedback (the next attempt sees the error in the prompt header)
+			// rather than a hard failure, but only up to MAX_ATTEMPTS.
+			if (attempt < MAX_ATTEMPTS) {
+				logger.warn(TAG, "Attribution call failed — retrying with feedback", {
+					jobId,
+					attempt,
+					error: String(err),
+				})
+				retryFeedback = `Your previous response failed schema validation: ${String(err)}`
+				continue
+			}
 			void logOcrRunEvent(db, jobId, {
 				type: "region_attribution_failed",
 				at: new Date().toISOString(),
@@ -473,11 +507,23 @@ export async function attributeScript({
 	}
 
 	// ── 8. Build per-question answer_text return value ────────────────────
-	// LLM-authored, punctuation-preserving. Unanswered questions → empty string.
+	// LLM-authored, punctuation-preserving for written questions; the option
+	// letter for MCQs (sourced from `mcq_answers`, which is per-question
+	// enum-constrained — invalid letters can't reach this point). Unanswered
+	// questions → empty string.
 	const answerTextById = new Map<string, string>()
 	for (const span of parsed.answer_spans) {
 		if (!validQuestionIds.has(span.question_id)) continue
 		answerTextById.set(span.question_id, span.answer_text)
+	}
+	const mcqQuestionIds = new Set(
+		questions.filter((q) => q.is_mcq).map((q) => q.question_id),
+	)
+	let mcqAnswered = 0
+	for (const mcq of parsed.mcq_answers) {
+		if (!mcqQuestionIds.has(mcq.question_id)) continue
+		answerTextById.set(mcq.question_id, mcq.selected_label)
+		mcqAnswered += 1
 	}
 	const answers: ReconstructedAnswer[] = questions.map((q) => ({
 		question_id: q.question_id,
@@ -490,6 +536,7 @@ export async function attributeScript({
 		questions: questions.length,
 		answers_detected: parsed.answer_spans.length,
 		answers_with_text: answers.filter((a) => a.answer_text.length > 0).length,
+		mcq_answered: mcqAnswered,
 		tokens_assigned: tokensAssigned,
 		regions_created: regionRows.length,
 		corrections_applied: correctionsApplied,

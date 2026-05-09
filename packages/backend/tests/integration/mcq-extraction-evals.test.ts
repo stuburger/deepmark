@@ -8,9 +8,10 @@ import {
 	attributeScript,
 } from "../../src/lib/scan-extraction/attribute-script"
 import { runOcr } from "../../src/lib/scan-extraction/gemini-ocr"
-import { resolveMcqAnswers } from "../../src/lib/scan-extraction/resolve-mcq-answers"
-import type { QuestionSeed } from "../../src/lib/types"
+import { AHMED_ALI_MCQ_FIXTURE } from "./fixtures/attribution/ahmed-ali-mcq/fixture"
+import { ARNAU_SINGH_MCQ_FIXTURE } from "./fixtures/attribution/arnau-singh-mcq/fixture"
 import { JACK_KINNARD_MCQ_FIXTURE } from "./fixtures/attribution/jack-kinnard-mcq/fixture"
+import { KAI_JASSI_FIXTURE } from "./fixtures/attribution/kai-jassi/fixture"
 import {
 	cleanupSubmission,
 	seedFixture,
@@ -22,20 +23,25 @@ import type { FixtureSpec } from "./fixtures/attribution/shared-types"
  *
  * Different concern from `attribution-evals.test.ts`. Those evals call
  * `attributeScript` directly and check token-level attribution. These run the
- * FULL extract path used by the production Lambda — per-page Gemini OCR +
- * attribution + `resolveMcqAnswers` — and assert that each MCQ question's
- * final `answer_text` is the option letter only (`"C"`), never the printed
- * option text (`"Farming"`) or the letter glued to prose
- * (`"D Allows the customisation of products"`).
+ * full extract path the production Lambda uses — per-page transcript pass +
+ * whole-script attribution (which now also returns per-question MCQ letters
+ * via the enum-constrained `mcq_answers` field) — and assert that each MCQ
+ * question's final `answer_text` is the option letter only (`"C"`), never
+ * the printed option text (`"Farming"`).
  *
- * Scope today: a single fixture (Jack Kinnard, AQA Business, page 2). Reproduces
- * the printed-checkbox failure mode where the per-page Gemini call misses the
- * tick and attribution leaks the printed option text.
+ * Two fixtures: jack-kinnard-mcq (printed checkboxes — the original bug
+ * shape) and kai-jassi (handwritten letters — different visual signal but
+ * same letter-only output contract).
  *
  * No mocks — real Gemini, real attribution. Expensive, deliberately so.
  */
 
-const FIXTURES: FixtureSpec[] = [JACK_KINNARD_MCQ_FIXTURE]
+const FIXTURES: FixtureSpec[] = [
+	JACK_KINNARD_MCQ_FIXTURE,
+	AHMED_ALI_MCQ_FIXTURE,
+	ARNAU_SINGH_MCQ_FIXTURE,
+	KAI_JASSI_FIXTURE,
+]
 
 const PIPELINE_TIMEOUT_MS = 5 * 60_000
 
@@ -46,8 +52,10 @@ describe.each(FIXTURES)("MCQ extraction evals — $name", (fixture) => {
 	beforeAll(async () => {
 		const seeded = await seedFixture(fixture, submissionId)
 
-		// Mirror the production extract handler: per-page Gemini OCR in
-		// parallel, then whole-script attribution, then MCQ resolution.
+		// Mirror the production extract handler: per-page transcript pass
+		// (for `pageTranscripts`), then whole-script attribution. Attribution
+		// owns MCQ extraction directly via its enum-constrained `mcq_answers`
+		// field, projected into the returned `answer_text` for each MCQ.
 		const llm = createLlmRunner()
 
 		const sortedPages = [...fixture.pages].sort((a, b) => a.order - b.order)
@@ -78,10 +86,14 @@ describe.each(FIXTURES)("MCQ extraction evals — $name", (fixture) => {
 				question_number: q.question_number,
 				question_text: q.text,
 				is_mcq: q.question_type === "multiple_choice",
+				mcq_option_labels:
+					q.question_type === "multiple_choice"
+						? q.multiple_choice_options.map((o) => o.option_label)
+						: undefined,
 			}),
 		)
 
-		const { answers: baseAnswers } = await attributeScript({
+		const { answers } = await attributeScript({
 			jobId: submissionId,
 			s3Bucket: Resource.ScansBucket.name,
 			pages: seeded.pages,
@@ -91,26 +103,11 @@ describe.each(FIXTURES)("MCQ extraction evals — $name", (fixture) => {
 			llm,
 		})
 
-		const questionSeeds: QuestionSeed[] = fixture.questions.map((q) => ({
-			question_id: q.id,
-			question_number: q.question_number,
-			question_text: q.text,
-			question_type: q.question_type,
-			max_score: q.points,
-			multiple_choice_options: q.multiple_choice_options,
-		}))
-
-		const reconstructed = resolveMcqAnswers({
-			baseAnswers,
-			ocrSelectionsByPage: pageOcrResults.map((r) => r.mcqSelections),
-			questionSeeds,
-		})
-
 		const questionIdToNumber = new Map(
 			fixture.questions.map((q) => [q.id, q.question_number]),
 		)
 		answerTextByQuestionNumber = new Map(
-			reconstructed.flatMap((a) => {
+			answers.flatMap((a) => {
 				const num = questionIdToNumber.get(a.question_id)
 				return num ? [[num, a.answer_text]] : []
 			}),

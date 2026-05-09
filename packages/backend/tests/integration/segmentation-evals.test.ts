@@ -9,6 +9,7 @@ import {
 	segmentPdfScripts,
 } from "../../src/lib/script-ingestion/segment-script"
 import { GEOFF_BUSINESS_Y9_214_FIXTURE } from "./fixtures/segmentation/geoff-business-y9-214"
+import { GWAUGH_700_PAGE_FIXTURE } from "./fixtures/segmentation/gwaugh-700-page"
 import type { SegmentationFixture } from "./fixtures/segmentation/y10-scanpaper-1"
 import { Y10_SCANPAPER_1_FIXTURE } from "./fixtures/segmentation/y10-scanpaper-1"
 import { Y10_SCANPAPERS_MERGED_FIXTURE } from "./fixtures/segmentation/y10-scanpapers-merged"
@@ -29,6 +30,7 @@ const FIXTURES: SegmentationFixture[] = [
 	Y10_SCANPAPER_1_FIXTURE,
 	Y10_SCANPAPERS_MERGED_FIXTURE,
 	GEOFF_BUSINESS_Y9_214_FIXTURE,
+	GWAUGH_700_PAGE_FIXTURE,
 ]
 
 const BLANK_THRESHOLD = 0.005
@@ -40,7 +42,19 @@ const BLANK_THRESHOLD = 0.005
 // failure rather than a generic hook timeout swallowing it.
 const SEGMENT_TIMEOUT_MS = 6 * 60_000
 
-describe.each(FIXTURES)("pdf segmentation evals — $name", (fixture) => {
+// Filter out fixtures whose PDFs aren't on disk. Some (e.g. GWAUGH 700-pager)
+// are too big to commit and live in gitignored y10_papers — fine on the
+// founder's machine where they're cached locally, silently skipped on a
+// clean checkout / CI box rather than crashing beforeAll.
+const AVAILABLE_FIXTURES = FIXTURES.filter((f) => {
+	if (fs.existsSync(f.pdfPath)) return true
+	console.warn(
+		`[segmentation-evals] skipping fixture "${f.name}" — PDF missing at ${f.pdfPath}`,
+	)
+	return false
+})
+
+describe.each(AVAILABLE_FIXTURES)("pdf segmentation evals — $name", (fixture) => {
 	let segmented: SegmentedScript[]
 
 	beforeAll(async () => {
@@ -48,7 +62,20 @@ describe.each(FIXTURES)("pdf segmentation evals — $name", (fixture) => {
 		const pages = await extractPages(new Uint8Array(pdfBytes))
 		expect(pages).toHaveLength(fixture.totalPages)
 
-		const result = await segmentPdfScripts(pages)
+		const result = await segmentPdfScripts(pages, {
+			// Simulate the Lambda budget: prod runs with `remaining ≈ 210s`
+			// once extract+Vision is done. Without this stub the eval would
+			// run against the 90s runner default and a slow run on the
+			// 214-page fixture lands above 90s — that's a property of the
+			// inputs being characterised, not a regression we want to flag.
+			getRemainingTimeMs: () => 240_000,
+			onSegmentationMetrics: (m) => {
+				fs.writeFileSync(
+					`/tmp/segmentation-metrics-${fixture.name}.json`,
+					JSON.stringify(m, null, 2),
+				)
+			},
+		})
 		segmented = result.scripts
 		// One-off capture for hand-labelling new fixtures. Writes to /tmp
 		// (vitest swallows passing-test console.log by default).

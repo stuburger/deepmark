@@ -148,20 +148,29 @@ export const batchClassifyQueue = new sst.aws.Queue("BatchClassifyQueue", {
 	transform: prelaunchRetention,
 })
 
-batchClassifyQueue.subscribe({
-	handler: "packages/backend/src/processors/batch-classify.handler",
-	link: [
-		neonPostgres,
-		geminiApiKey,
-		openAiApiKey,
-		anthropicApiKey,
-		cloudVisionApiKey,
-		scansBucket,
-	],
-	timeout: "4 minutes",
-	memory: "2 GB",
-	nodejs: { install: ["sharp", "mupdf"] },
-})
+batchClassifyQueue.subscribe(
+	{
+		handler: "packages/backend/src/processors/batch-classify.handler",
+		link: [
+			neonPostgres,
+			geminiApiKey,
+			openAiApiKey,
+			anthropicApiKey,
+			cloudVisionApiKey,
+			scansBucket,
+		],
+		timeout: "4 minutes",
+		memory: "2 GB",
+		nodejs: { install: ["sharp", "mupdf"] },
+	},
+	// One batch per Lambda invocation — same reasoning as the student paper
+	// queues. Extract + Vision + segmentation for one source PDF can hit 2
+	// minutes; sequencing two of them in a single invocation would push past
+	// the 4-minute Lambda ceiling, and the dynamic LLM-timeout budget I just
+	// added assumes one segmentation per Lambda lifecycle. Without size: 1
+	// the budget calculation is meaningless once a second message lands.
+	{ batch: { size: 1 } },
+)
 
 // Test-only Lambda — same handler module as the BatchClassifyQueue subscriber,
 // invokable directly via the AWS SDK with a synthetic SQS event payload. Lets

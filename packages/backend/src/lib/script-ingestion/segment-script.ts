@@ -63,6 +63,22 @@ export type SegmentPdfScriptsOptions = {
 	 * its default 90s budget.
 	 */
 	getRemainingTimeMs?: () => number
+	/**
+	 * Instrumentation hook: fired once per successful segmentation with
+	 * prompt size, blank/script counts, LLM token usage, and elapsed
+	 * wall-clock for the LLM call. Used by `segmentation-evals` to compare
+	 * fixtures (e.g. why does a 700-page input segment in 16s while a
+	 * 214-page input takes 95s).
+	 */
+	onSegmentationMetrics?: (m: {
+		totalPages: number
+		blankCount: number
+		promptChars: number
+		scriptCount: number
+		inputTokens: number | undefined
+		outputTokens: number | undefined
+		llmElapsedMs: number
+	}) => void
 }
 
 const SEGMENTATION_LAMBDA_HEADROOM_MS = 10_000
@@ -165,7 +181,12 @@ export async function segmentPdfScripts(
 				)
 			: undefined
 
+	let capturedUsage:
+		| { inputTokens: number | undefined; outputTokens: number | undefined }
+		| undefined
+	let llmElapsedMs = 0
 	const attempt = async (): Promise<SegmentedScript[]> => {
+		const t0 = Date.now()
 		const { output } = await callLlmWithFallback(
 			"pdf-script-segmentation",
 			async (model, entry, report) => {
@@ -176,6 +197,7 @@ export async function segmentPdfScripts(
 					output: outputSchema(SegmentationSchema),
 				})
 				report.usage = result.usage
+				capturedUsage = result.usage
 				return result
 			},
 			undefined,
@@ -183,6 +205,7 @@ export async function segmentPdfScripts(
 				? { timeoutMs: segmentationTimeoutMs }
 				: undefined,
 		)
+		llmElapsedMs = Date.now() - t0
 
 		const raw = lengthsToRanges(
 			output.scripts.map(
@@ -223,6 +246,16 @@ export async function segmentPdfScripts(
 			}
 		}
 	}
+
+	options.onSegmentationMetrics?.({
+		totalPages,
+		blankCount: blankIndices.length,
+		promptChars: prompt.length,
+		scriptCount: scripts.length,
+		inputTokens: capturedUsage?.inputTokens,
+		outputTokens: capturedUsage?.outputTokens,
+		llmElapsedMs,
+	})
 
 	return { scripts }
 }

@@ -176,12 +176,18 @@ export async function segmentPdfScripts(
 				)
 			: undefined
 
-	let capturedUsage:
-		| { inputTokens: number | undefined; outputTokens: number | undefined }
-		| undefined
-	let llmElapsedMs = 0
-	const attempt = async (): Promise<SegmentedScript[]> => {
+	type AttemptResult = {
+		scripts: SegmentedScript[]
+		llmElapsedMs: number
+		inputTokens: number | undefined
+		outputTokens: number | undefined
+	}
+
+	const attempt = async (): Promise<AttemptResult> => {
 		const t0 = Date.now()
+		let usage:
+			| { inputTokens: number | undefined; outputTokens: number | undefined }
+			| undefined
 		const { output } = await callLlmWithFallback(
 			"pdf-script-segmentation",
 			async (model, entry, report) => {
@@ -192,15 +198,13 @@ export async function segmentPdfScripts(
 					output: outputSchema(SegmentationSchema),
 				})
 				report.usage = result.usage
-				capturedUsage = result.usage
+				usage = result.usage
 				return result
 			},
-			undefined,
 			segmentationTimeoutMs !== undefined
 				? { timeoutMs: segmentationTimeoutMs }
 				: undefined,
 		)
-		llmElapsedMs = Date.now() - t0
 
 		const raw = lengthsToRanges(
 			output.scripts.map(
@@ -213,19 +217,24 @@ export async function segmentPdfScripts(
 				}),
 			),
 		)
-		return snapBlankStartPages(raw, new Set(blankIndices), totalPages)
+		return {
+			scripts: snapBlankStartPages(raw, new Set(blankIndices), totalPages),
+			llmElapsedMs: Date.now() - t0,
+			inputTokens: usage?.inputTokens,
+			outputTokens: usage?.outputTokens,
+		}
 	}
 
-	let scripts = await attempt()
-	let validation = validateScripts(scripts, totalPages)
+	let result = await attempt()
+	let validation = validateScripts(result.scripts, totalPages)
 	if (!validation.ok) {
 		logger.warn(TAG, "Segmentation output failed validation — retrying once", {
 			totalPages,
 			reason: validation.error,
-			scripts,
+			scripts: result.scripts,
 		})
-		scripts = await attempt()
-		validation = validateScripts(scripts, totalPages)
+		result = await attempt()
+		validation = validateScripts(result.scripts, totalPages)
 		if (!validation.ok) {
 			// Don't fail the whole batch — fall back to one script covering all
 			// pages. The teacher drags-splits in staging review. Throwing here
@@ -246,13 +255,13 @@ export async function segmentPdfScripts(
 		totalPages,
 		blankCount: blankIndices.length,
 		promptChars: prompt.length,
-		scriptCount: scripts.length,
-		inputTokens: capturedUsage?.inputTokens,
-		outputTokens: capturedUsage?.outputTokens,
-		llmElapsedMs,
+		scriptCount: result.scripts.length,
+		inputTokens: result.inputTokens,
+		outputTokens: result.outputTokens,
+		llmElapsedMs: result.llmElapsedMs,
 	})
 
-	return { scripts }
+	return { scripts: result.scripts }
 }
 
 function reconstructRegionText(

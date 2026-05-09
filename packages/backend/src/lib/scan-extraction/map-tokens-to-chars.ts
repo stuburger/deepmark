@@ -75,7 +75,7 @@ export async function mapTokensToChars({
 			report.usage = result.usage
 			return result
 		},
-		llm,
+		{ llm },
 	)
 
 	const mappings: TokenCharMapping[] = output.mappings.map((m) => {

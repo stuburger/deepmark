@@ -65,14 +65,20 @@ function getDefaultRunner(): LlmRunner {
 /**
  * Loads the model config for a call site and executes with fallback.
  *
- * When `llm` is provided (run-scoped), delegates to the runner which
- * records selected/effective config for the snapshot. When omitted,
- * uses a shared default runner (no snapshot persistence).
+ * When `opts.llm` is provided (run-scoped), delegates to that runner which
+ * records selected/effective config for the snapshot. When omitted, uses a
+ * shared default runner (no snapshot persistence).
  *
  * The 4th `signal` argument to `fn` is an AbortSignal driven by the
  * per-attempt wall-clock timeout — forward it to `generateText({ ...,
  * abortSignal: signal })` so a hung LLM call is actually cancelled.
  * Pass `opts.timeoutMs` to override the default (90 s).
+ *
+ * Single options bag instead of separate trailing positionals: a previous
+ * iteration had `(callSiteKey, fn, llm?, opts?)` and it was easy to pass
+ * `{ timeoutMs }` in the 3rd slot by mistake — the type system happily
+ * accepted it (no required-method discriminator on `LlmRunner`) and it
+ * crashed at runtime with `call is not a function`.
  */
 export async function callLlmWithFallback<T>(
 	callSiteKey: string,
@@ -82,10 +88,10 @@ export async function callLlmWithFallback<T>(
 		report: LlmCallReport,
 		signal: AbortSignal,
 	) => Promise<T>,
-	llm?: LlmRunner,
-	opts?: { timeoutMs?: number },
+	opts?: { llm?: LlmRunner; timeoutMs?: number },
 ): Promise<T> {
-	return (llm ?? getDefaultRunner()).call(callSiteKey, fn, opts)
+	const { llm, timeoutMs } = opts ?? {}
+	return (llm ?? getDefaultRunner()).call(callSiteKey, fn, { timeoutMs })
 }
 
 /**

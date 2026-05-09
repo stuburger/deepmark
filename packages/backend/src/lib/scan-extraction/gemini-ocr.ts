@@ -105,7 +105,7 @@ export async function runOcr(
 			report.usage = result.usage
 			return result
 		},
-		llm,
+		{ llm },
 	)
 
 	return {

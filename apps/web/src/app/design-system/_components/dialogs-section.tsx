@@ -21,10 +21,10 @@ export function DialogsSection() {
 			<SubsectionTitle>Standard dialog — default size</SubsectionTitle>
 			<p className="text-[11px] text-muted-foreground mb-4 leading-relaxed max-w-xl">
 				Every <span className="font-mono">DialogContent</span> receives a 3px
-				primary teal top border automatically. Combined with{" "}
+				primary blue top border automatically. Combined with{" "}
 				<span className="font-mono">rounded-xl</span>, the left corner shows a
-				distinctive branded blue accent — the same visual punctuation Geoff uses
-				in the editor mockup.
+				distinctive branded accent — the same visual punctuation Geoff uses in
+				the editor mockup.
 			</p>
 
 			<div className="rounded-md bg-card border border-border-subtle p-6 shadow-tile-quiet">
@@ -217,7 +217,7 @@ const DIALOG_TOKENS = [
 	},
 	{
 		property: "top accent border",
-		value: "3px solid var(--primary) — teal #01ADD0, always present",
+		value: "3px solid var(--primary) — blue #3A96C3, always present",
 	},
 	{ property: "shadow", value: "--shadow-float (0 20px 60px + 0 6px 20px)" },
 	{ property: "background", value: "--card (white tile)" },

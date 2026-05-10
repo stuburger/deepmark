@@ -40,7 +40,7 @@ export default async function DesignSystemPage() {
 						Geist + Lora
 					</span>
 					<span className="font-mono text-[10px] px-2.5 py-0.5 rounded-sm bg-warning-50 text-warning-700 border border-warning-200">
-						No Inter · No pill radius · No soft glow · No purple
+						No Inter · No pill radius · No purple
 					</span>
 				</div>
 			</header>

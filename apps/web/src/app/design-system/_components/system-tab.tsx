@@ -12,26 +12,44 @@ import { ScaleRow, Swatch } from "./swatch"
 
 const SHADOW_SAMPLES = [
 	{
+		name: "shadow-card",
+		usage: "Dashboard / shell cards — soft diffuse two-layer (v2 default)",
+		className: "shadow-card",
+		raw: "0 2px 6px rgba(0,0,0,0.06), 0 8px 24px rgba(0,0,0,0.045)",
+	},
+	{
+		name: "shadow-card-hover",
+		usage: "Card hover state — deeper diffuse two-layer",
+		className: "shadow-card-hover",
+		raw: "0 4px 14px rgba(0,0,0,0.09), 0 14px 36px rgba(0,0,0,0.07)",
+	},
+	{
+		name: "shadow-hero",
+		usage: "Hero / greeting card",
+		className: "shadow-hero",
+		raw: "0 2px 8px rgba(0,0,0,0.07), 0 8px 28px rgba(0,0,0,0.05)",
+	},
+	{
+		name: "shadow-confirm",
+		usage: "Primary CTA + confirm button — soft brand glow",
+		className: "shadow-confirm",
+		raw: "0 2px 10px rgba(58,150,195,0.32)",
+	},
+	{
+		name: "shadow-btn",
+		usage: "Secondary buttons — soft shallow",
+		className: "shadow-btn",
+		raw: "0 1px 3px rgba(0,0,0,0.06)",
+	},
+	{
 		name: "shadow-tile",
-		usage: "Cards, tiles, AO annotation items, thumbnails",
+		usage: "Script reader tiles only — retained from v1.1",
 		className: "shadow-tile",
 		raw: "3px 3px 0px rgba(0,0,0,0.12), 1px 1px 4px rgba(0,0,0,0.07)",
 	},
 	{
-		name: "shadow-btn",
-		usage: "Primary and secondary buttons",
-		className: "shadow-btn",
-		raw: "3px 3px 0px rgba(0,0,0,0.2)",
-	},
-	{
-		name: "shadow-confirm",
-		usage: "Confirm marking button only",
-		className: "shadow-confirm",
-		raw: "2px 2px 0px rgba(0,90,110,0.28)",
-	},
-	{
 		name: "shadow-float",
-		usage: "Modals and dialogs over the dot grid",
+		usage: "Modals and dialogs",
 		className: "shadow-float",
 		raw: "0 20px 60px rgba(0,0,0,0.18), 0 6px 20px rgba(0,0,0,0.10)",
 	},
@@ -39,7 +57,7 @@ const SHADOW_SAMPLES = [
 		name: "shadow-toolbar",
 		usage: "Floating editing toolbar only",
 		className: "shadow-toolbar",
-		raw: "0 4px 16px rgba(0,0,0,0.22), 0 1px 4px rgba(1,173,208,0.18)",
+		raw: "0 4px 16px rgba(0,0,0,0.22), 0 1px 4px rgba(58,150,195,0.18)",
 	},
 	{
 		name: "shadow-sidebar",
@@ -95,14 +113,15 @@ export function SystemTab({ tokens }: { tokens: LoadedTokens }) {
 					<strong>Pill radius (20px+)</strong> — radii max out at 10px. No
 					exceptions.
 					<br />
-					<strong>Soft brand-coloured glows</strong> — all shadows are hard SE
-					offset in black only.
+					<strong>Hard SE-offset shadows on new screens</strong> — v2 cards use
+					soft diffuse two-layer; primary CTAs use a soft brand glow. Hard
+					SE-offset shadows are retained for the script reader only.
 					<br />
-					<strong>Purple #6B4FA0</strong> — replaced with teal #01ADD0.
+					<strong>Purple #6B4FA0</strong> — replaced with blue #3A96C3.
 				</WarnBox>
 				<IntentBox label="Design intent">
-					Brand identity is carried by typography and texture — not colour
-					fills. Teal appears as punctuation only. Everything else should feel
+					Brand identity is carried by typography and space — not colour fills.
+					Accent blue appears as punctuation only. Everything else should feel
 					like a serious professional tool.
 				</IntentBox>
 			</Section>
@@ -116,20 +135,20 @@ export function SystemTab({ tokens }: { tokens: LoadedTokens }) {
 				<div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
 					<Swatch
 						cssVar="color-teal-500"
-						name="Accent (teal)"
-						hex="#01ADD0"
+						name="Accent (blue)"
+						hex="#3A96C3"
 						usage="Primary CTA · active states · confirm buttons"
 					/>
 					<Swatch
 						cssVar="color-ink-950"
 						name="Ink"
-						hex="#1A1A1A"
-						usage="All text, headings, wordmark. Warm, not pure black."
+						hex="#0C0C0C"
+						usage="All text, headings, wordmark. Near-black, not pure."
 					/>
 					<Swatch
 						cssVar="color-success-500"
 						name="Success"
-						hex="#3C8A62"
+						hex="#1E8A5E"
 						usage="Confirmed / complete states."
 					/>
 					<Swatch
@@ -141,7 +160,7 @@ export function SystemTab({ tokens }: { tokens: LoadedTokens }) {
 					<Swatch
 						cssVar="color-error-500"
 						name="Error"
-						hex="#C23B3B"
+						hex="#C04444"
 						usage="Destructive actions and error states only. Never brand."
 					/>
 				</div>
@@ -163,19 +182,19 @@ export function SystemTab({ tokens }: { tokens: LoadedTokens }) {
 					<Swatch
 						cssVar="status-marking"
 						name="Marking"
-						hex="rgba(255,0,0,0.5)"
-						usage="Card border + badge — actively marking"
+						hex="rgba(58,150,195,0.55)"
+						usage="Progress fill / badge tint — actively marking"
 					/>
 					<Swatch
 						cssVar="status-review"
 						name="Review"
-						hex="#7FFFA7"
-						usage="Card border + badge — ready for teacher review"
+						hex="rgba(30,138,94,0.50)"
+						usage="Progress fill / badge tint — awaiting teacher confirmation"
 					/>
 					<Swatch
 						cssVar="status-done"
 						name="Done"
-						hex="rgba(0,0,0,0.09)"
+						hex="rgba(0,0,0,0.16)"
 						usage="Neutral. Done is quiet."
 					/>
 				</div>
@@ -184,7 +203,7 @@ export function SystemTab({ tokens }: { tokens: LoadedTokens }) {
 				<div className="grid grid-cols-4 gap-2.5">
 					<Swatch cssVar="phase-queued" name="Queued" hex="rgba(0,0,0,0.12)" />
 					<Swatch cssVar="phase-extract" name="Extract" hex="#E8A83A" />
-					<Swatch cssVar="phase-grading" name="Grading" hex="#01ADD0" />
+					<Swatch cssVar="phase-grading" name="Grading" hex="#3A96C3" />
 					<Swatch cssVar="phase-annotate" name="Annotate" hex="#9B6DD4" />
 				</div>
 			</Section>
@@ -296,7 +315,7 @@ export function SystemTab({ tokens }: { tokens: LoadedTokens }) {
 			<Section
 				eyebrow="04 · Shadows"
 				title="Shadow system"
-				description="Hard SE-offset shadows only. No diffuse drop shadows. No brand-coloured glows (one exception: --shadow-toolbar carries a minimal teal glow)."
+				description="v2: cards use soft diffuse two-layer (--shadow-card / --shadow-card-hover / --shadow-hero); the primary CTA uses a soft brand glow (--shadow-confirm). Hard SE-offset shadows are retained for the script reader only (--shadow-tile)."
 			>
 				<div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
 					{SHADOW_SAMPLES.map((s) => (
@@ -319,10 +338,10 @@ export function SystemTab({ tokens }: { tokens: LoadedTokens }) {
 			{/* Background */}
 			<Section
 				eyebrow="05 · Background"
-				title="Page background — dot grid"
-				description="Full bleed behind all content. Never contained in a box. White tiles sit on top."
+				title="Page background — ruled lines"
+				description="v2 swaps the v1.1 dot grid for horizontal ruled lines at a 28px rhythm — references the lined paper of an exam script. Full bleed behind all content. Never contained in a box. White tiles sit on top."
 			>
-				<div className="rounded-md h-24 bg-background shadow-tile-quiet border border-border-subtle" />
+				<div className="rounded-md h-24 bg-background border border-border-subtle" />
 				<p className="text-[11px] text-muted-foreground mt-3 leading-relaxed">
 					Applied to <span className="font-mono">body</span> in light mode via{" "}
 					<span className="font-mono">--texture-image</span>. Dropped in dark
@@ -373,7 +392,7 @@ export function SystemTab({ tokens }: { tokens: LoadedTokens }) {
 			<Section
 				eyebrow="06 · Components"
 				title="Dialogs"
-				description="All dialogs use rounded-xl (10px), shadow-float, and a 3px primary teal top border that creates the branded blue corner accent from Geoff's editor mockup."
+				description="All dialogs use rounded-xl (10px), shadow-float, and a 3px primary blue top border that creates the branded corner accent from Geoff's editor mockup."
 			>
 				<DialogsSection />
 			</Section>
@@ -539,7 +558,7 @@ export function SystemTab({ tokens }: { tokens: LoadedTokens }) {
 							Modal-style elevation
 						</p>
 						<p className="text-xs text-muted-foreground mt-1">
-							Used for dialogs over the dot grid.
+							Used for dialogs over the page texture.
 						</p>
 					</Card>
 				</div>

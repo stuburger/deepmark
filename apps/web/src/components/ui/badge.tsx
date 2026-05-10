@@ -22,17 +22,17 @@ const badgeVariants = cva(
 					"hover:bg-muted hover:text-muted-foreground dark:hover:bg-muted/50",
 				link: "text-primary underline-offset-4 hover:underline",
 
-				/* Domain badges — DeepMark v1.1 spec.
+				/* Domain badges — DeepMark v2.0 spec.
 				   All mono, uppercase, tighter tracking. Explicit colour values
 				   below come from the spec's badge palette and don't appear elsewhere. */
 				"status-marking":
-					"font-mono uppercase tracking-[0.06em] text-[9px] bg-[rgba(255,0,0,0.1)] text-[rgba(160,0,0,0.85)] border-[rgba(255,0,0,0.25)]",
+					"font-mono uppercase tracking-[0.06em] text-[9px] bg-[rgba(58,150,195,0.10)] text-[#1E618A] border-[rgba(58,150,195,0.25)]",
 				"status-review":
-					"font-mono uppercase tracking-[0.06em] text-[9px] bg-[rgba(127,255,167,0.2)] text-[#1A5E3A] border-[rgba(127,255,167,0.5)]",
+					"font-mono uppercase tracking-[0.06em] text-[9px] bg-[rgba(30,138,94,0.09)] text-[#156644] border-[rgba(30,138,94,0.25)]",
 				"status-done":
 					"font-mono uppercase tracking-[0.06em] text-[9px] bg-transparent text-ink-secondary border-black/15",
 
-				ao1: "font-mono uppercase tracking-[0.06em] text-[9px] bg-teal-light text-[#016E88] border-[rgba(1,173,208,0.22)]",
+				ao1: "font-mono uppercase tracking-[0.06em] text-[9px] bg-teal-light text-[#1E618A] border-[rgba(58,150,195,0.22)]",
 				ao2: "font-mono uppercase tracking-[0.06em] text-[9px] bg-[rgba(107,79,160,0.08)] text-[#4A2D8E] border-[rgba(107,79,160,0.18)]",
 				ao3: "font-mono uppercase tracking-[0.06em] text-[9px] bg-[rgba(60,138,98,0.09)] text-[#1F5E38] border-[rgba(60,138,98,0.2)]",
 

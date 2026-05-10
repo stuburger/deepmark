@@ -8,19 +8,22 @@ import {
 import { db } from "@/lib/db"
 import type { DashboardData, DashboardPaper, PaperStatus } from "./types"
 
-const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000
-
 type SubmissionBucket = "marking" | "review" | "done"
 
-function bucketSubmission(
-	gradingStatus: string | null,
-	createdAt: Date,
-	now: number,
+/**
+ * Submission lifecycle:
+ *   marking → AI hasn't finished grading + annotating yet
+ *   review  → AI is done; awaiting teacher sign-off (confirmed_at is null)
+ *   done    → teacher has confirmed (confirmed_at is set)
+ *
+ * `gradingStatus === "complete"` means *AI* complete, not workflow complete.
+ */
+function submissionBucket(
+	aiGradingStatus: string | null,
+	confirmedAt: Date | null,
 ): SubmissionBucket {
-	if (gradingStatus === "complete") {
-		const ageMs = now - createdAt.getTime()
-		return ageMs <= SEVEN_DAYS_MS ? "review" : "done"
-	}
+	if (confirmedAt != null) return "done"
+	if (aiGradingStatus === "complete") return "review"
 	return "marking"
 }
 
@@ -52,6 +55,7 @@ export const getDashboardData = authenticatedAction.action(
 			select: {
 				exam_paper_id: true,
 				created_at: true,
+				confirmed_at: true,
 				grading_runs: {
 					orderBy: { created_at: "desc" },
 					take: 1,
@@ -60,18 +64,16 @@ export const getDashboardData = authenticatedAction.action(
 			},
 		})
 
-		const now = Date.now()
 		const counts = { review: 0, marking: 0, done: 0 }
 		const bucketsByPaper = new Map<string, SubmissionBucket[]>()
 		const submissionCountByPaper = new Map<string, number>()
+		const aiCompleteCountByPaper = new Map<string, number>()
+		const confirmedCountByPaper = new Map<string, number>()
 		const lastActivityByPaper = new Map<string, number>()
 
 		for (const sub of submissions) {
-			const bucket = bucketSubmission(
-				sub.grading_runs[0]?.status ?? null,
-				sub.created_at,
-				now,
-			)
+			const aiGradingStatus = sub.grading_runs[0]?.status ?? null
+			const bucket = submissionBucket(aiGradingStatus, sub.confirmed_at)
 			counts[bucket]++
 			const arr = bucketsByPaper.get(sub.exam_paper_id) ?? []
 			arr.push(bucket)
@@ -80,7 +82,19 @@ export const getDashboardData = authenticatedAction.action(
 				sub.exam_paper_id,
 				(submissionCountByPaper.get(sub.exam_paper_id) ?? 0) + 1,
 			)
-			const ts = sub.created_at.getTime()
+			if (aiGradingStatus === "complete") {
+				aiCompleteCountByPaper.set(
+					sub.exam_paper_id,
+					(aiCompleteCountByPaper.get(sub.exam_paper_id) ?? 0) + 1,
+				)
+			}
+			if (sub.confirmed_at != null) {
+				confirmedCountByPaper.set(
+					sub.exam_paper_id,
+					(confirmedCountByPaper.get(sub.exam_paper_id) ?? 0) + 1,
+				)
+			}
+			const ts = (sub.confirmed_at ?? sub.created_at).getTime()
 			const prev = lastActivityByPaper.get(sub.exam_paper_id) ?? 0
 			if (ts > prev) lastActivityByPaper.set(sub.exam_paper_id, ts)
 		}
@@ -106,13 +120,33 @@ export const getDashboardData = authenticatedAction.action(
 			.sort((a, b) => b.lastActivity - a.lastActivity)
 			.slice(0, 6)
 
-		const recentPapers: DashboardPaper[] = sorted.map(({ paper }) => ({
-			id: paper.id,
-			title: paper.title,
-			subject: paper.subject,
-			scriptCount: submissionCountByPaper.get(paper.id) ?? 0,
-			status: paperStatusFromBuckets(bucketsByPaper.get(paper.id) ?? []),
-		}))
+		const recentPapers: DashboardPaper[] = sorted.map(({ paper }) => {
+			const total = submissionCountByPaper.get(paper.id) ?? 0
+			const aiComplete = aiCompleteCountByPaper.get(paper.id) ?? 0
+			const confirmed = confirmedCountByPaper.get(paper.id) ?? 0
+			const status = paperStatusFromBuckets(bucketsByPaper.get(paper.id) ?? [])
+
+			// Bar fills with the next-step completion: AI-grading progress while
+			// the paper is being marked, teacher-confirmation progress once AI
+			// is done, full once every script is signed off.
+			const progress =
+				total === 0
+					? 0
+					: status === "marking"
+						? Math.round((aiComplete / total) * 100)
+						: status === "review"
+							? Math.round((confirmed / total) * 100)
+							: 100
+
+			return {
+				id: paper.id,
+				title: paper.title,
+				subject: paper.subject,
+				scriptCount: total,
+				status,
+				progress,
+			}
+		})
 
 		return {
 			displayName: deriveDisplayName(userRecord),

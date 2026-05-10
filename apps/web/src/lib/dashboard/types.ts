@@ -6,6 +6,7 @@ export type DashboardPaper = {
 	subject: string
 	scriptCount: number
 	status: PaperStatus
+	progress: number
 }
 
 export type DashboardCounts = {

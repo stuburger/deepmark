@@ -6,12 +6,12 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
- * DeepMark v1.1 design system → shadcn semantic mapping.
+ * DeepMark v2.0 design system → shadcn semantic mapping.
  *
- * Spec: geoff_ui_claude_design/v2/deepmark_design_system.html
+ * Spec: geoff_ui_claude_design/v3/deepmark_design_system_v2.md
  * Tokens: geoff_ui_claude_design/v2/deepmark_tokens.json
  *
- * The spec uses --color-accent (teal) for primary CTAs. In code that
+ * The spec uses --color-accent (blue #3A96C3) for primary CTAs. In code that
  * maps to shadcn's --primary — use bg-primary, text-primary, border-primary.
  * Spec → shadcn translation:
  *   spec --color-accent        → shadcn --primary           (bg-primary)
@@ -73,6 +73,7 @@
 	--color-ink-tertiary: var(--ink-tertiary);
 	--color-ink-disabled: var(--ink-disabled);
 	--color-teal-dark: var(--teal-dark);
+	--color-accent-dark: var(--teal-dark);
 	--color-success: var(--success);
 	--color-warning: var(--warning);
 	--color-status-marking: var(--status-marking);
@@ -88,16 +89,23 @@
 	--color-border-subtle: var(--border-subtle);
 	--color-border-quiet: var(--border-quiet);
 
-	/* Shadows — hard SE offset only, no soft brand glows */
+	/* Shadows.
+	 * v2.0: cards use soft diffuse two-layer; primary CTAs use a soft brand
+	 * glow; hard SE-offset shadows are retained for the script reader only
+	 * (--shadow-tile) until that surface is rebuilt to v2. */
+	--shadow-card: 0 2px 6px rgba(0, 0, 0, 0.06), 0 8px 24px rgba(0, 0, 0, 0.045);
+	--shadow-card-hover: 0 4px 14px rgba(0, 0, 0, 0.09), 0 14px 36px
+		rgba(0, 0, 0, 0.07);
+	--shadow-hero: 0 2px 8px rgba(0, 0, 0, 0.07), 0 8px 28px rgba(0, 0, 0, 0.05);
 	--shadow-tile: 3px 3px 0px rgba(0, 0, 0, 0.12), 1px 1px 4px
 		rgba(0, 0, 0, 0.07);
 	--shadow-tile-quiet: 3px 3px 0px rgba(0, 0, 0, 0.05), 1px 1px 4px
 		rgba(0, 0, 0, 0.04);
-	--shadow-btn: 3px 3px 0px rgba(0, 0, 0, 0.2);
-	--shadow-confirm: 2px 2px 0px rgba(0, 90, 110, 0.28);
+	--shadow-btn: 0 1px 3px rgba(0, 0, 0, 0.06);
+	--shadow-confirm: 0 2px 10px rgba(58, 150, 195, 0.32);
 	--shadow-float: 0 20px 60px rgba(0, 0, 0, 0.18), 0 6px 20px rgba(0, 0, 0, 0.1);
 	--shadow-toolbar: 0 4px 16px rgba(0, 0, 0, 0.22), 0 1px 4px
-		rgba(1, 173, 208, 0.18);
+		rgba(58, 150, 195, 0.18);
 	--shadow-sidebar: 4px 0 24px rgba(0, 0, 0, 0.14), 2px 0 6px
 		rgba(0, 0, 0, 0.07);
 
@@ -131,36 +139,39 @@
 	   so the relationship to the scale is visible in the markup. The aliases
 	   stay so that existing `bg-success` / `text-ink` usages keep working. */
 	--ink: var(--color-ink-950);
-	--ink-secondary: rgba(0, 0, 0, 0.45);
+	--ink-secondary: rgba(0, 0, 0, 0.44);
 	--ink-tertiary: rgba(0, 0, 0, 0.28);
 	--ink-disabled: rgba(0, 0, 0, 0.18);
 	--teal: var(--color-teal-500);
 	--teal-dark: var(--color-teal-600);
-	--teal-light: rgba(1, 173, 208, 0.08);
-	--teal-ring: rgba(1, 173, 208, 0.25);
-	--paper: #ffffff;
-	--paper-surface: #f5f4f0;
+	--teal-light: rgba(58, 150, 195, 0.08);
+	--teal-ring: rgba(58, 150, 195, 0.25);
+	--paper: #eff0f0;
+	--paper-surface: #f7f8f8;
 	--paper-white: #ffffff;
 	--success: var(--color-success-500);
 	--warning: var(--color-warning-500);
-	--status-marking: rgba(255, 0, 0, 0.5);
-	--status-review: #7fffa7;
-	--status-done: rgba(0, 0, 0, 0.09);
+	--status-marking: rgba(58, 150, 195, 0.55);
+	--status-review: rgba(30, 138, 94, 0.5);
+	--status-done: rgba(0, 0, 0, 0.16);
 	--phase-queued: rgba(0, 0, 0, 0.12);
 	--phase-extract: #e8a83a;
-	--phase-grading: #01add0;
+	--phase-grading: #3a96c3;
 	--phase-annotate: #9b6dd4;
 
 	/* Page texture — applied to body in light mode. Values come straight from
-	   deepmark_tokens.json (`texture-image` / `texture-size`): 1px dots of
-	   rgba(0,0,0,0.18) on a 22px grid. The slide-over menu uses the same
+	   deepmark_tokens.json (`texture-image` / `texture-size`). v2.0 swaps the
+	   v1.1 dot grid for horizontal ruled lines at a 28px rhythm — references
+	   the lined paper of an exam script. The slide-over menu uses the same
 	   variables so it reads as a continuation of the page. */
-	--texture-image: radial-gradient(
-		circle,
-		rgba(0, 0, 0, 0.18) 1px,
-		transparent 1px
+	--texture-image: repeating-linear-gradient(
+		to bottom,
+		transparent 0,
+		transparent 27px,
+		rgba(0, 0, 0, 0.042) 27px,
+		rgba(0, 0, 0, 0.042) 28px
 	);
-	--texture-size: 22px 22px;
+	--texture-size: auto;
 
 	/* shadcn semantic vars — mapped onto DeepMark primitives.
 	   Component code references these (bg-primary, bg-card, etc.) */
@@ -259,23 +270,23 @@
 	--secondary-foreground: #ebebeb;
 	--muted: #2a2a2a;
 	--muted-foreground: rgba(232, 230, 224, 0.55);
-	--accent: rgba(1, 173, 208, 0.15);
+	--accent: rgba(58, 150, 195, 0.15);
 	--accent-foreground: #ebebeb;
 	--destructive: #e04848;
 	--border: rgba(255, 255, 255, 0.1);
 	--border-quiet: rgba(255, 255, 255, 0.07);
 	--border-subtle: rgba(255, 255, 255, 0.08);
 	--input: rgba(255, 255, 255, 0.15);
-	--ring: rgba(1, 173, 208, 0.35);
+	--ring: rgba(58, 150, 195, 0.35);
 
 	--sidebar: #232323;
 	--sidebar-foreground: #ebebeb;
 	--sidebar-primary: var(--teal);
 	--sidebar-primary-foreground: #1a1a1a;
-	--sidebar-accent: rgba(1, 173, 208, 0.15);
+	--sidebar-accent: rgba(58, 150, 195, 0.15);
 	--sidebar-accent-foreground: #ebebeb;
 	--sidebar-border: rgba(255, 255, 255, 0.1);
-	--sidebar-ring: rgba(1, 173, 208, 0.35);
+	--sidebar-ring: rgba(58, 150, 195, 0.35);
 
 	--chart-1: oklch(0.488 0.243 264.376);
 	--chart-2: oklch(0.696 0.17 162.48);

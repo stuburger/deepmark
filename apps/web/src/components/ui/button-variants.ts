@@ -5,13 +5,13 @@ export const buttonVariants = cva(
 	{
 		variants: {
 			variant: {
-				/* Primary teal CTA — page-level primary actions. */
+				/* Primary blue CTA — page-level primary actions. v2: soft brand glow. */
 				default:
-					"bg-primary text-primary-foreground shadow-btn hover:bg-teal-dark",
-				/* White-tile + SE shadow — supporting actions, the dominant chrome. */
+					"bg-primary text-primary-foreground shadow-confirm hover:bg-teal-dark",
+				/* White tile + soft shallow shadow — supporting actions. */
 				secondary:
 					"bg-card text-foreground border-border shadow-btn hover:bg-muted aria-expanded:bg-muted",
-				/* DeepMark-specific. Brand-tinted shadow signals "commits work" —
+				/* DeepMark-specific. Soft brand glow signals "commits work" —
 				   used on the marking confirm button only. */
 				confirm:
 					"h-[34px] gap-2 px-[18px] bg-primary text-primary-foreground shadow-confirm font-semibold hover:bg-teal-dark",

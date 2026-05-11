@@ -23,8 +23,18 @@ export type McqSchemaQuestion = {
  */
 function buildMcqAnswersSchema(mcqQuestions: McqSchemaQuestion[]) {
 	if (mcqQuestions.length === 0) {
-		// No MCQs on this script — only the empty array satisfies the schema.
-		return z.array(z.never())
+		// No MCQs on this script. Schema is permissive (element shape only,
+		// no array-length constraint) because Anthropic's structured-output
+		// validator rejects both `not` and `maxItems`. Runtime code in
+		// `attribute-script.ts` filters MCQ entries against `mcqQuestionIds`,
+		// so any spurious entries the model emits would be discarded anyway —
+		// the prompt instructs the model to return [].
+		return z.array(
+			z.object({
+				question_id: z.string(),
+				selected_label: z.string(),
+			}),
+		)
 	}
 
 	const branches = mcqQuestions.map((q) =>
@@ -80,7 +90,7 @@ export function buildScriptAttributionSchema(
 								page: z
 									.number()
 									.describe(
-										"Page number (1-based, matches the page labels in the prompt)",
+										"Page number — must be one of the page numbers explicitly listed in the prompt (1-based). Never 0.",
 									),
 								token_start: z
 									.number()
@@ -100,12 +110,12 @@ export function buildScriptAttributionSchema(
 					answer_text: z
 						.string()
 						.describe(
-							"The student's complete answer text for this question, concatenated across all pages it spans, in reading order. PRESERVE original punctuation (-, =, +, commas, full stops, etc.) and mathematical symbols exactly as the student wrote them — read them from the image and transcript, not from the OCR token list (which often drops punctuation). Include line breaks between paragraphs as '\\n'. Do NOT include printed exam text (question labels, stems, headers, footers).",
+							"The student's complete answer text for this question, concatenated across all pages it spans, in reading order. PRESERVE original punctuation (-, =, +, commas, full stops, etc.) and mathematical symbols exactly as the student wrote or typed them — read them from the image and transcript, not from the OCR token list (which often drops punctuation). Include line breaks between paragraphs as '\\n'. Do NOT include printed exam text (question labels, stems, headers, footers).",
 						),
 				}),
 			)
 			.describe(
-				"For every question the student ANSWERED, the token ranges that contain the student's handwritten answer and the clean answer text. Omit questions with no answer anywhere in the script. Omit pages where this question is not answered.",
+				"For every question the student ANSWERED (handwritten OR typed inline), the token ranges that contain the student's answer and the clean answer text. Omit questions with no answer anywhere in the script. Omit pages where this question is not answered.",
 			),
 		corrections: z
 			.array(
@@ -117,15 +127,15 @@ export function buildScriptAttributionSchema(
 					corrected: z
 						.string()
 						.describe(
-							"The correct word as written by the student, read from the image. Use the page transcript as a reference.",
+							"The correct word as written or typed by the student, read from the image. Use the page transcript as a reference.",
 						),
 				}),
 			)
 			.describe(
-				"Tokens where Cloud Vision misread the handwriting. Compare each token against the transcript; include a correction only where Vision clearly got a word wrong. Do NOT correct genuine student spelling mistakes — only Vision OCR failures. Return an empty array if there are no corrections.",
+				"Tokens where Cloud Vision misread the text. Compare each token against the transcript; include a correction only where Vision clearly got a word wrong. Do NOT correct genuine student spelling mistakes — only Vision OCR failures. Return an empty array if there are no corrections.",
 			),
 		mcq_answers: buildMcqAnswersSchema(mcqQuestions).describe(
-			"For each MCQ question the student answered, the option letter they picked. Read the student's selection however they indicated it: tick or cross in a checkbox, circled letter, circled option text, filled-in box, or handwritten letter on blank space. Omit MCQ questions the student did not answer (no entry — do not return an entry with a fabricated label). Empty array if the script has no MCQs or none were answered.",
+			"For each MCQ question the student answered, the option letter they picked. Read the student's selection however they indicated it: tick or cross in a checkbox, circled letter, circled option text, filled-in box, or a handwritten or typed letter on blank space. Omit MCQ questions the student did not answer (no entry — do not return an entry with a fabricated label). Empty array if the script has no MCQs or none were answered.",
 		),
 	})
 }
@@ -161,18 +171,31 @@ ${b.tokenList || "(no tokens)"}`,
 		)
 		.join("\n\n")
 
+	const validPagesList = pageBlocks
+		.map((b) => b.order)
+		.sort((a, b) => a - b)
+		.join(", ")
+
 	const header = retryFeedback
 		? `Your previous response was rejected for the following reason(s):
 ${retryFeedback}
+
+Valid page numbers on this script: ${validPagesList}. Do not return any other page number.
 
 Return a corrected response that fixes the problem. Keep everything else the same.
 
 `
 		: ""
 
-	return `${header}You are examining a student's complete handwritten exam script. It has ${pageBlocks.length} page(s), provided below both as images (attached in order) and as per-page OCR token lists.
+	return `${header}You are examining a student's complete exam script. It has ${pageBlocks.length} page(s), provided below both as images (attached in order) and as per-page OCR token lists.
 
-You must attribute the student's handwritten answers to the exam's questions — reasoning about the WHOLE script at once, not page by page. Many answers span multiple pages; mid-sentence continuation pages often have NO visible question label and must be inferred from the semantic flow of the student's argument.
+Student answers may be HANDWRITTEN or TYPED inline on the page (e.g. typed directly onto the question paper for homework, mock submissions, or accessibility). Distinguish the student's answer from the printed exam content by CONTENT and POSITION, not by whether the text is handwritten or typed:
+  - Printed exam content: question stems, numbering, instructions, headers, footers, "END OF QUESTIONS", "X | Page". These are identical across every script.
+  - Student answer: everything written or typed by the student in response to a question — under or alongside the question, on continuation pages, in answer boxes/lines, or directly below the printed prompt.
+
+You must attribute the student's answers to the exam's questions — reasoning about the WHOLE script at once, not page by page. Many answers span multiple pages; mid-sentence continuation pages often have NO visible question label and must be inferred from the semantic flow of the student's argument.
+
+The pages of this script are numbered: ${validPagesList}. Every \`page\` field you return MUST be one of these numbers — never 0, never higher than ${pageBlocks.length}, never a page that isn't in this list.
 
 ${pageSections}
 
@@ -184,10 +207,11 @@ Do FOUR things:
 1. ASSIGN tokens to questions (holistic, whole-script reasoning):
    - For each question the student answered, return one entry per page the answer appears on, with \`[token_start, token_end)\` — a half-open range over that page's token list.
    - A single answer that spans pages (continuation) must have one range on EACH page it covers — including pure continuation pages with no visible question label.
+   - The student's answer may be HANDWRITTEN or TYPED inline on the page. Treat both the same way — the modality doesn't change what counts as an answer.
    - Reason from CONTENT, not just labels:
      • Use printed question numbers when visible.
-     • When a page has no visible label, infer which open answer it continues from the semantic flow, argument structure, and layout of the handwriting.
-     • Printed exam text (question stems, instructions, page headers/footers, "END OF QUESTIONS", "X | Page") is NOT part of any answer — leave those tokens outside every range.
+     • When a page has no visible label, infer which open answer it continues from the semantic flow, argument structure, and layout of the student's writing/typing.
+     • Printed exam text (question stems, instructions, page headers/footers, "END OF QUESTIONS", "X | Page") is NOT part of any answer — leave those tokens outside every range. This holds even when the student's answer is also typed: the question stems are identical to every other copy of the exam paper, while the student's answer is unique to this script.
      • Cover pages, blank pages, and template-only pages contain NO ranges at all.
    - Ranges on the SAME page must be pairwise DISJOINT. For any two ranges on the same page, \`token_end\` of the earlier range must be less than or equal to \`token_start\` of the later range. A single token index may appear in at most ONE range. Examples:
      • Valid (adjacent, no overlap):   Q1 [0,10), Q2 [10,25), Q3 [25,40)
@@ -198,11 +222,11 @@ Do FOUR things:
    - Omit questions the student didn't answer. Omit MCQ questions from \`answer_spans\` and \`answer_text\` — MCQ selections are returned in \`mcq_answers\` (step 4 below).
 
 2. WRITE answer_text per question:
-   - For every question you produced a span for, also return \`answer_text\` — the student's clean, complete answer as written.
-   - PRESERVE punctuation and mathematical symbols the student actually wrote: \`-\`, \`=\`, \`+\`, \`.\`, \`,\`, \`%\`, \`£\`, \`$\`, brackets, arrows, etc. The OCR token list routinely drops these because Cloud Vision's word-level output skips tight/small standalone marks — read them from the image and transcript, not from the tokens.
+   - For every question you produced a span for, also return \`answer_text\` — the student's clean, complete answer as written or typed.
+   - PRESERVE punctuation and mathematical symbols the student actually wrote or typed: \`-\`, \`=\`, \`+\`, \`.\`, \`,\`, \`%\`, \`£\`, \`$\`, brackets, arrows, etc. The OCR token list routinely drops these because Cloud Vision's word-level output skips tight/small standalone marks — read them from the image and transcript, not from the tokens.
    - Concatenate multi-page answers in reading order. Separate paragraphs with a single newline (\`\\n\`).
    - Keep the student's own spelling and grammar — do NOT silently correct genuine student errors.
-   - Do NOT include printed exam text (question labels like "9.", question stems, "END OF QUESTIONS", page footers). Only what the student wrote.
+   - Do NOT include printed exam text (question labels like "9.", question stems, "END OF QUESTIONS", page footers). Only what the student wrote or typed.
 
 3. CORRECT OCR misreads (optional):
    - Compare each token's text against the transcript for that page.
@@ -212,7 +236,7 @@ Do FOUR things:
 
 4. EXTRACT MCQ selections (\`mcq_answers\`):
    - For every question marked [multiple-choice] in the question list, identify the single option letter the student selected by inspecting the page image.
-   - Students indicate their choice in many ways: a tick or cross in a checkbox next to a letter, circling a letter, circling option text, filling in a box, or simply writing the letter on blank space next to the question.
+   - Students indicate their choice in many ways: a tick or cross in a checkbox next to a letter, circling a letter, circling option text, filling in a box, writing the letter on blank space, or typing the letter inline next to the question.
    - Return ONLY the letter as \`selected_label\`. The schema enforces that the letter must be one of the option labels actually listed for that question (A, B, C, D, etc.) — do not invent letters. NEVER return the option's printed text.
    - If a student crossed out one selection and ticked another, return the final selection.
    - Omit MCQs the student didn't answer (no entry in \`mcq_answers\`).

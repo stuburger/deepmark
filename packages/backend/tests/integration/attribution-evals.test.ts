@@ -10,6 +10,7 @@ import {
 import { sortTokensSpatially } from "@mcp-gcse/shared"
 import { AARON_BROWN_FIXTURE } from "./fixtures/attribution/aaron-brown/fixture"
 import { KAI_JASSI_FIXTURE } from "./fixtures/attribution/kai-jassi/fixture"
+import { RYAN_C_TYPED_FIXTURE } from "./fixtures/attribution/ryan-c-typed/fixture"
 import {
 	cleanupSubmission,
 	seedFixture,
@@ -40,7 +41,11 @@ import type { FixtureSpec } from "./fixtures/attribution/shared-types"
  * is what turns them green.
  */
 
-const FIXTURES: FixtureSpec[] = [AARON_BROWN_FIXTURE, KAI_JASSI_FIXTURE]
+const FIXTURES: FixtureSpec[] = [
+	AARON_BROWN_FIXTURE,
+	KAI_JASSI_FIXTURE,
+	RYAN_C_TYPED_FIXTURE,
+]
 
 const ATTRIBUTION_TIMEOUT_MS = 5 * 60_000
 

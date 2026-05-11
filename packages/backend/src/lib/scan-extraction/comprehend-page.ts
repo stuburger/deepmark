@@ -21,23 +21,27 @@ export type ComprehendPageOptions = {
 const TranscriptSchema = z.object({
 	transcript: z
 		.string()
-		.describe("Full transcription of all handwritten text in reading order"),
+		.describe(
+			"Full transcription of all student-authored text on the page in reading order — whether handwritten or typed inline. Include only what the student wrote/typed in response to the questions; exclude printed exam content (question stems, instructions, headers, footers, page numbers).",
+		),
 	observations: z
 		.array(z.string())
 		.describe(
-			"Observations about handwriting style, legibility, and notable characteristics",
+			"Observations about the student's writing — style, legibility, modality (handwritten or typed), and notable characteristics.",
 		),
 	student_name: z
 		.string()
 		.nullable()
 		.optional()
-		.describe("Student's name if visible on the page, null if not found"),
+		.describe(
+			"Student's name if visible on the page (handwritten or typed), null if not found",
+		),
 	student_number: z
 		.string()
 		.nullable()
 		.optional()
 		.describe(
-			"Handwritten student identifier near the name/header area. Typical shapes: a 1-2 letter prefix + dash + digits (e.g. 'S-042', 'T-12'), or plain digits (e.g. '042'). Return the value verbatim including any prefix/dash. Do NOT confuse with question numbers, marks, dates, or paper reference codes. Null if no clear student identifier is visible.",
+			"Student identifier near the name/header area (handwritten or typed). Typical shapes: a 1-2 letter prefix + dash + digits (e.g. 'S-042', 'T-12'), or plain digits (e.g. '042'). Return the value verbatim including any prefix/dash. Do NOT confuse with question numbers, marks, dates, or paper reference codes. Null if no clear student identifier is visible.",
 		),
 	detected_subject: z
 		.string()
@@ -78,7 +82,7 @@ export async function comprehendPage(
 		: "Cover individual words, lines, corrections, crossed-out text, punctuation, and any diagrams."
 
 	const metadataInstruction = options.extractMetadata
-		? " Also extract the student's name if visible, the student's handwritten ID number if any (e.g. 'S-042', 'T-12', '042') usually in the header area near the name — distinct from question numbers, marks, or paper reference codes — and detect the exam subject (as a lowercase single word) from headers or content."
+		? " Also extract the student's name if visible (handwritten or typed), the student's ID number if any (e.g. 'S-042', 'T-12', '042') usually in the header area near the name — distinct from question numbers, marks, or paper reference codes — and detect the exam subject (as a lowercase single word) from headers or content."
 		: ""
 
 	const { output } = await callLlmWithFallback(
@@ -89,8 +93,8 @@ export async function comprehendPage(
 				abortSignal: signal,
 				temperature: entry.temperature,
 				system:
-					"You are an expert at reading handwritten student exam scripts. " +
-					"Transcribe all text accurately. " +
+					"You are an expert at reading student exam scripts. The student's answer may be HANDWRITTEN or TYPED inline on the page (e.g. typed directly onto the question paper for homework, mock submissions, or accessibility). Treat both modalities the same way — distinguish the student's answer from printed exam content (question stems, instructions, headers, footers) by CONTENT and POSITION, not by whether it is handwritten or typed. " +
+					"Transcribe all student-authored text accurately. " +
 					"When letterforms are ambiguous, use English vocabulary and context to resolve to the most likely intended word — " +
 					"output 'method' not 'methoed', 'loyalty' not 'loyaltty', 'therefore' not 'therfore'. " +
 					"Preserve genuine student spelling errors that are consistently and clearly misspelled " +
@@ -106,7 +110,7 @@ export async function comprehendPage(
 							},
 							{
 								type: "text",
-								text: `Transcribe all handwritten text in reading order and provide observations about the handwriting quality and style. ${focusInstruction}${metadataInstruction}`,
+								text: `Transcribe the student's text on this page in reading order — whether handwritten or typed inline — and provide observations about its style and legibility. Exclude printed exam content (question stems, instructions, headers, footers). ${focusInstruction}${metadataInstruction}`,
 							},
 						],
 					},

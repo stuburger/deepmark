@@ -97,29 +97,38 @@ function parseBbox(
 }
 
 /**
- * Validates the LLM's answer_spans output. Returns an array of human-readable
- * error strings — empty means valid. Out-of-range indices are NOT errors:
- * they're filtered silently by the Phase 2 fill. Overlap is — it means two
- * questions are fighting for the same token, which is the failure mode we
- * explicitly retry on.
+ * Filters out span entries referencing pages that have no tokens (model
+ * hallucinated a page index outside the valid set) and validates what
+ * remains. Bad pages are soft-dropped — they're returned in `droppedPages`
+ * for logging, not as retry-able errors, because re-running the LLM rarely
+ * recovers and burns vision calls. Phase 2's deterministic fill already
+ * tolerates missing pages, so the rest of the span is safe to use.
+ *
+ * Errors returned by this function are the genuinely retry-able classes:
+ * non-integer indices, empty/reversed ranges, and cross-question overlap.
  */
-function validateAnswerSpans(
+function filterAndValidateAnswerSpans(
 	output: ScriptAttributionOutput,
 	tokensByPage: Map<number, PageToken[]>,
 	validQuestionIds: Set<string>,
-): string[] {
+): {
+	filtered: ScriptAttributionOutput
+	errors: string[]
+	droppedPages: string[]
+} {
 	const errors: string[] = []
+	const droppedPages: string[] = []
 	type Range = { qid: string; start: number; end: number }
 	const rangesByPage = new Map<number, Range[]>()
+	const filteredSpans: ScriptAttributionOutput["answer_spans"] = []
 
 	for (const span of output.answer_spans ?? []) {
 		if (!validQuestionIds.has(span.question_id)) continue
+		const keptPages: typeof span.pages = []
 		for (const page of span.pages ?? []) {
 			const pagePts = tokensByPage.get(page.page)
 			if (!pagePts) {
-				errors.push(
-					`Q(${span.question_id}): returned range for page ${page.page} but no tokens exist on that page`,
-				)
+				droppedPages.push(`Q(${span.question_id}) page ${page.page}`)
 				continue
 			}
 			if (
@@ -137,6 +146,7 @@ function validateAnswerSpans(
 				)
 				continue
 			}
+			keptPages.push(page)
 			const list = rangesByPage.get(page.page) ?? []
 			list.push({
 				qid: span.question_id,
@@ -144,6 +154,9 @@ function validateAnswerSpans(
 				end: page.token_end,
 			})
 			rangesByPage.set(page.page, list)
+		}
+		if (keptPages.length > 0) {
+			filteredSpans.push({ ...span, pages: keptPages })
 		}
 	}
 
@@ -160,7 +173,11 @@ function validateAnswerSpans(
 		}
 	}
 
-	return errors
+	return {
+		filtered: { ...output, answer_spans: filteredSpans },
+		errors,
+		droppedPages,
+	}
 }
 
 /**
@@ -364,13 +381,23 @@ export async function attributeScript({
 			)
 		}
 
-		const errors = validateAnswerSpans(
+		const { filtered, errors, droppedPages } = filterAndValidateAnswerSpans(
 			output,
 			orderedTokensByPage,
 			validQuestionIds,
 		)
+
+		if (droppedPages.length > 0) {
+			logger.warn(TAG, "Attribution returned spans on unknown pages — dropped", {
+				jobId,
+				attempt,
+				droppedPages,
+				validPages: [...orderedTokensByPage.keys()].sort((a, b) => a - b),
+			})
+		}
+
 		if (errors.length === 0) {
-			parsed = output
+			parsed = filtered
 			break
 		}
 

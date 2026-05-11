@@ -10,7 +10,10 @@ export const STALE_PROCESSING_MS = 15 * 60 * 1000
 
 export type ClaimResult =
 	| { ok: true }
-	| { ok: false; reason: "already_complete" | "already_processing" }
+	| {
+			ok: false
+			reason: "already_complete" | "already_processing" | "already_failed"
+	  }
 
 /**
  * Minimal prisma-like surface needed by `claimOcrRun`. Lets the
@@ -45,10 +48,21 @@ export type OcrRunStore = {
 
 /**
  * Atomically claim the OcrRun for `jobId`. If another Lambda has already
- * claimed it (status=processing within the stale window) or finished
- * (status=complete), returns `{ ok: false, reason }` and the caller
- * acks the SQS message without doing work. Otherwise the caller owns
- * the run and proceeds to OCR.
+ * claimed it (status=processing within the stale window), finished
+ * (status=complete), or terminally failed (status=failed), returns
+ * `{ ok: false, reason }` and the caller acks the SQS message without
+ * doing work. Otherwise the caller owns the run and proceeds to OCR.
+ *
+ * `failed` is INTENTIONALLY non-claimable. Submissions are immutable —
+ * the architectural retry path is user-initiated `retriggerGrading` /
+ * `re-scan`, which clones the submission and creates a new OcrRun. SQS
+ * auto-retries on a deterministic failure (e.g. attribution validation
+ * error) would otherwise mutate the same submission's tokens and answer
+ * regions on every redelivery, doubling token rows (no unique
+ * constraint on word position) and silently burning Cloud Vision /
+ * Gemini calls. Making `failed` sticky turns SQS retries into no-op
+ * acks for failed runs — the user explicitly re-scans if they want a
+ * fresh attempt.
  *
  * The race we're guarding against: SQS at-least-once delivery + a slow
  * poller ack window can re-deliver a message whose handler already
@@ -79,9 +93,10 @@ export async function claimOcrRun(
 		where: {
 			id: jobId,
 			OR: [
-				// Never started (lifecycle row pre-created at submit time) or in
-				// a terminal-not-success state — fair game.
-				{ status: { in: ["pending", "failed", "cancelled"] } },
+				// Never started (lifecycle row pre-created at submit time) or
+				// admin-cancelled (eligible for re-open) — fair game. `failed`
+				// is deliberately excluded; see header for why.
+				{ status: { in: ["pending", "cancelled"] } },
 				// Stale processing — previous Lambda died, take over.
 				{ status: "processing", started_at: { lt: staleCutoff } },
 			],
@@ -115,6 +130,9 @@ export async function claimOcrRun(
 
 	if (existing.status === "complete") {
 		return { ok: false, reason: "already_complete" }
+	}
+	if (existing.status === "failed") {
+		return { ok: false, reason: "already_failed" }
 	}
 	return { ok: false, reason: "already_processing" }
 }

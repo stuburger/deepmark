@@ -15,7 +15,11 @@ import {
  * - Cold start (no row) → claim succeeds (creates row).
  * - Concurrent cold start losing the create race → claim fails with
  *   `already_processing` (P2002 path).
- * - Row in `pending`/`failed`/`cancelled` → claim succeeds (takes over).
+ * - Row in `pending`/`cancelled` → claim succeeds (takes over).
+ * - Row in `failed` → claim fails with `already_failed`. Submissions
+ *   are immutable; the retry path is user-initiated re-scan, which
+ *   creates a new submission + OcrRun. SQS redeliveries on failed
+ *   runs become no-op acks.
  * - Row in `processing` within stale window → claim fails.
  * - Row in `processing` past stale window → claim succeeds (takeover).
  * - Row in `complete` → claim fails with `already_complete` — this is
@@ -112,15 +116,21 @@ describe("claimOcrRun", () => {
 		expect(r).toEqual({ ok: true })
 	})
 
-	it("row in 'failed' is claimable (DLQ recovery / manual retry)", async () => {
+	it("row in 'failed' is NOT claimable — submissions are immutable, retry is via user-initiated re-scan", async () => {
+		// SQS auto-retries on a deterministic failure (e.g. attribution
+		// validation error) would otherwise mutate the same submission's
+		// tokens on every redelivery, doubling rows since there's no unique
+		// constraint on (submission, page, para, line, word). Stickiness
+		// turns the retry into a no-op ack; the user re-scans through the
+		// immutable cloning path if they want a fresh attempt.
 		const { store, rows } = makeStore({
 			id: JOB,
 			status: "failed",
 			started_at: NOW,
 		})
 		const r = await claimOcrRun(store, JOB, NOW)
-		expect(r).toEqual({ ok: true })
-		expect(rows.get(JOB)?.status).toBe("processing")
+		expect(r).toEqual({ ok: false, reason: "already_failed" })
+		expect(rows.get(JOB)?.status).toBe("failed")
 	})
 
 	it("row in 'cancelled' is claimable", async () => {

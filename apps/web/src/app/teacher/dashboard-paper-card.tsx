@@ -4,21 +4,9 @@ import { Badge } from "@/components/ui/badge"
 import type { DashboardPaper } from "@/lib/dashboard/types"
 import { cn } from "@/lib/utils"
 
-const STATUS_BORDER: Record<DashboardPaper["status"], string> = {
-	marking: "border-status-marking",
-	review: "border-status-review",
-	done: "border-status-done",
-}
-
-// Per Geoff's v2 spec: active tiles (marking, review) carry the standard tile
-// shadow; inactive (done) tiles render flat for quick state recognition.
-const STATUS_SHADOW: Record<DashboardPaper["status"], string> = {
-	marking: "shadow-tile",
-	review: "shadow-tile",
-	done: "shadow-none",
-}
-
 const STATUS_LABEL: Record<DashboardPaper["status"], string> = {
+	setup: "Setup",
+	ready: "Ready",
 	marking: "Marking",
 	review: "Review",
 	done: "Done",
@@ -26,36 +14,73 @@ const STATUS_LABEL: Record<DashboardPaper["status"], string> = {
 
 const STATUS_BADGE_VARIANT: Record<
 	DashboardPaper["status"],
-	"status-marking" | "status-review" | "status-done"
+	| "status-setup"
+	| "status-ready"
+	| "status-marking"
+	| "status-review"
+	| "status-done"
 > = {
+	setup: "status-setup",
+	ready: "status-ready",
 	marking: "status-marking",
 	review: "status-review",
 	done: "status-done",
 }
 
-type DashboardPaperCardProps = {
-	paper: DashboardPaper
+// Progress bar fill — direct utilities so we don't ripple --status-* changes
+// through other consumers.
+//   amber  → setup, review (action needed by you)
+//   green  → ready (drop scripts in)
+//   neutral → marking (AI's turn, fades into background)
+//   teal   → done (brand-positive: closed loop)
+const STATUS_FILL: Record<DashboardPaper["status"], string> = {
+	setup: "bg-warning",
+	ready: "bg-success",
+	marking: "bg-foreground/15",
+	review: "bg-warning",
+	done: "bg-primary",
 }
 
-export function DashboardPaperCard({ paper }: DashboardPaperCardProps) {
+// Active states carry the v1.1 hard SE-offset shadow; resting states (ready,
+// done) render flat so the eye is drawn to the live work.
+const STATUS_SHADOW: Record<DashboardPaper["status"], string> = {
+	setup: "shadow-tile",
+	ready: "shadow-none",
+	marking: "shadow-tile",
+	review: "shadow-tile",
+	done: "shadow-none",
+}
+
+export function DashboardPaperCard({ paper }: { paper: DashboardPaper }) {
 	return (
 		<Link
 			href={`/teacher/exam-papers/${paper.id}`}
 			className={cn(
-				"flex flex-col gap-0 rounded-md bg-card p-4 transition-transform hover:-translate-y-0.5",
-				"min-h-[96px] border-[1.5px]",
-				STATUS_BORDER[paper.status],
+				"flex min-h-[132px] flex-col gap-2.5 rounded-md border border-border-subtle bg-card",
+				"px-4 pt-4 pb-3 transition-transform hover:-translate-y-0.5",
 				STATUS_SHADOW[paper.status],
 			)}
 		>
-			<div className="font-mono text-[9px] tracking-[0.1em] uppercase text-ink-tertiary mb-1.5">
+			<div className="font-mono text-[9px] font-bold tracking-[0.1em] uppercase text-ink-tertiary">
 				{paper.subject}
 			</div>
-			<div className="text-[13px] font-medium leading-snug text-foreground flex-1 mb-3.5">
+			<div className="flex-1 text-[13px] font-medium leading-snug text-foreground">
 				{paper.title}
 			</div>
-			<div className="flex items-center justify-between mt-auto">
-				<span className="font-mono text-[10px] text-ink-tertiary">
+			<div
+				aria-hidden
+				className="h-[2px] w-full overflow-hidden rounded-[2px] bg-foreground/5"
+			>
+				<div
+					className={cn(
+						"h-full rounded-[2px] transition-[width] duration-500 ease-out",
+						STATUS_FILL[paper.status],
+					)}
+					style={{ width: `${paper.progress}%` }}
+				/>
+			</div>
+			<div className="flex items-center justify-between border-t border-border-quiet pt-2.5">
+				<span className="font-mono text-[10px] tabular-nums text-ink-tertiary">
 					{paper.scriptCount} {paper.scriptCount === 1 ? "script" : "scripts"}
 				</span>
 				<Badge variant={STATUS_BADGE_VARIANT[paper.status]}>
@@ -70,7 +95,7 @@ export function DashboardEmptyCardSlot() {
 	return (
 		<div
 			aria-hidden
-			className="flex min-h-[96px] flex-col gap-0 rounded-md border-[1.5px] border-border-quiet bg-card/50 p-4 shadow-tile-quiet"
+			className="min-h-[132px] rounded-md border border-dashed border-border-quiet bg-card/40"
 		/>
 	)
 }

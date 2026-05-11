@@ -18,7 +18,7 @@ export async function logoutFormAction() {
 	redirect("/login")
 }
 
-async function authorizeWith(provider: "github" | "google") {
+async function authorizeWith(provider: "google") {
 	const headersList = await headers()
 	const host = headersList.get("host")
 
@@ -34,10 +34,6 @@ async function authorizeWith(provider: "github" | "google") {
 
 	redirect(url)
 }
-
-export const login = publicAction.action(async () => {
-	await authorizeWith("github")
-})
 
 export const loginWithGoogle = publicAction.action(async () => {
 	await authorizeWith("google")

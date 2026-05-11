@@ -22,15 +22,22 @@ const badgeVariants = cva(
 					"hover:bg-muted hover:text-muted-foreground dark:hover:bg-muted/50",
 				link: "text-primary underline-offset-4 hover:underline",
 
-				/* Domain badges — DeepMark v1.1 spec.
-				   All mono, uppercase, tighter tracking. Explicit colour values
-				   below come from the spec's badge palette and don't appear elsewhere. */
+				/* Paper-status badges — five-state lifecycle.
+				   Mono, uppercase, tight. Colour rule:
+				     amber   → setup, review (action needed by the teacher)
+				     green   → ready (configured, awaiting scripts)
+				     neutral → marking (AI's turn, fades into background)
+				     teal    → done (brand-positive: closed loop) */
+				"status-setup":
+					"font-mono uppercase tracking-[0.06em] text-[9px] bg-warning-50 text-warning-800 border-warning-200",
+				"status-ready":
+					"font-mono uppercase tracking-[0.06em] text-[9px] bg-success-50 text-success-800 border-success-200",
 				"status-marking":
-					"font-mono uppercase tracking-[0.06em] text-[9px] bg-[rgba(255,0,0,0.1)] text-[rgba(160,0,0,0.85)] border-[rgba(255,0,0,0.25)]",
+					"font-mono uppercase tracking-[0.06em] text-[9px] bg-muted text-ink-tertiary border-border-quiet",
 				"status-review":
-					"font-mono uppercase tracking-[0.06em] text-[9px] bg-[rgba(127,255,167,0.2)] text-[#1A5E3A] border-[rgba(127,255,167,0.5)]",
+					"font-mono uppercase tracking-[0.06em] text-[9px] bg-warning-50 text-warning-800 border-warning-200",
 				"status-done":
-					"font-mono uppercase tracking-[0.06em] text-[9px] bg-transparent text-ink-secondary border-black/15",
+					"font-mono uppercase tracking-[0.06em] text-[9px] bg-teal-50 text-teal-700 border-teal-200",
 
 				ao1: "font-mono uppercase tracking-[0.06em] text-[9px] bg-teal-light text-[#016E88] border-[rgba(1,173,208,0.22)]",
 				ao2: "font-mono uppercase tracking-[0.06em] text-[9px] bg-[rgba(107,79,160,0.08)] text-[#4A2D8E] border-[rgba(107,79,160,0.18)]",

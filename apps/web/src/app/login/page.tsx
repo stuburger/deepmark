@@ -1,16 +1,10 @@
-import { login, loginWithGoogle } from "@/lib/actions"
+import { loginWithGoogle } from "@/lib/actions"
 import { auth } from "@/lib/auth"
-
-async function loginFormAction() {
-	"use server"
-	await login()
-}
 
 async function loginWithGoogleFormAction() {
 	"use server"
 	await loginWithGoogle()
 }
-import { Github } from "lucide-react"
 import Image from "next/image"
 import { redirect } from "next/navigation"
 
@@ -44,24 +38,13 @@ export default async function LoginPage() {
 						Sign in
 					</h1>
 					<p className="text-sm text-white/60">
-						Sign in with GitHub or Google to access Deepmark.
+						Sign in with Google to access Deepmark.
 					</p>
 				</div>
 
 				<Separator className="bg-white/15" />
 
 				<div className="flex flex-col gap-3">
-					<form action={loginFormAction}>
-						<Button
-							type="submit"
-							variant="outline"
-							className="w-full border-white/20 bg-white/10 text-white hover:bg-white/20 hover:text-white"
-						>
-							<Github className="size-4" />
-							Continue with GitHub
-						</Button>
-					</form>
-
 					<form action={loginWithGoogleFormAction}>
 						<Button
 							type="submit"

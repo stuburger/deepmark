@@ -1,4 +1,4 @@
-export type PaperStatus = "marking" | "review" | "done"
+export type PaperStatus = "setup" | "ready" | "marking" | "review" | "done"
 
 export type DashboardPaper = {
 	id: string
@@ -6,6 +6,7 @@ export type DashboardPaper = {
 	subject: string
 	scriptCount: number
 	status: PaperStatus
+	progress: number
 }
 
 export type DashboardCounts = {

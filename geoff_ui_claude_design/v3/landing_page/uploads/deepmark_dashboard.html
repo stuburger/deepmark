@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DeepMark — Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Inter', -apple-system, sans-serif;
+  background-color: #EFF0F0;
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent,
+    transparent 27px,
+    rgba(0,0,0,0.042) 27px,
+    rgba(0,0,0,0.042) 28px
+  );
+  min-height: 100vh;
+  display: flex;
+}
+
+.shell {
+  display: flex;
+  width: 100%;
+  min-height: 100vh;
+  position: relative;
+  overflow: hidden;
+}
+
+.watermark {
+  position: fixed;
+  bottom: -44px;
+  right: -28px;
+  width: 320px;
+  height: 320px;
+  opacity: 0.07;
+  pointer-events: none;
+  z-index: 0;
+  filter: grayscale(40%) brightness(0.9);
+  object-fit: contain;
+}
+
+.sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  z-index: 10;
+  width: 56px;
+  background: rgba(255,255,255,0.82);
+  border-right: 1px solid rgba(0,0,0,0.07);
+  backdrop-filter: blur(8px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 16px 0 14px;
+  gap: 4px;
+}
+
+.sb-logo {
+  width: 30px;
+  height: 30px;
+  margin-bottom: 16px;
+  flex-shrink: 0;
+  object-fit: contain;
+}
+
+.sb-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: rgba(0,0,0,0.27);
+  font-size: 18px;
+  transition: background 0.12s, color 0.12s;
+  text-decoration: none;
+}
+.sb-icon:hover { background: rgba(0,0,0,0.05); color: rgba(0,0,0,0.55); }
+.sb-icon.active { background: rgba(58,150,195,0.12); color: #2878A8; }
+
+.sb-spacer { flex: 1; }
+
+.sb-avatar {
+  width: 30px; height: 30px; border-radius: 50%;
+  background: #2878A8;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10px; font-weight: 700; color: white;
+  margin-top: 6px;
+}
+
+.main {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 28px 28px 28px 84px;
+  gap: 16px;
+  min-width: 0;
+  max-width: 1200px;
+}
+
+.top-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.greeting-card {
+  background: white;
+  border-radius: 14px;
+  border: 1px solid rgba(0,0,0,0.065);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.07), 0 8px 28px rgba(0,0,0,0.05);
+  padding: 22px 26px;
+  flex: 1;
+  min-width: 0;
+}
+
+.datestamp {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: rgba(0,0,0,0.22);
+  margin-bottom: 4px;
+}
+
+.greeting {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 28px;
+  font-weight: 400;
+  color: #0C0C0C;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  margin-bottom: 18px;
+}
+
+.pulse {
+  display: flex;
+  gap: 0;
+  border: 1px solid rgba(0,0,0,0.08);
+  border-radius: 9px;
+  overflow: hidden;
+  width: fit-content;
+  background: #FAFAFA;
+}
+
+.pulse-item {
+  padding: 8px 18px;
+  border-right: 1px solid rgba(0,0,0,0.07);
+}
+.pulse-item:last-child { border-right: none; }
+
+.pulse-n {
+  font-size: 22px;
+  font-weight: 700;
+  color: #0C0C0C;
+  line-height: 1;
+  margin-bottom: 3px;
+}
+.pulse-n.hi { color: #2878A8; }
+.pulse-l {
+  font-size: 10px;
+  font-weight: 500;
+  color: rgba(0,0,0,0.33);
+  white-space: nowrap;
+}
+
+.actions-col {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 188px;
+  flex-shrink: 0;
+}
+
+.btn-primary {
+  height: 40px;
+  padding: 0 16px;
+  background: #3A96C3;
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  width: 100%;
+  letter-spacing: 0.01em;
+  box-shadow: 0 2px 10px rgba(58,150,195,0.32);
+  font-family: 'Inter', -apple-system, sans-serif;
+  transition: background 0.12s;
+}
+.btn-primary i { font-size: 17px; flex-shrink: 0; }
+.btn-primary:hover { background: #2F87B0; }
+
+.btn-secondary {
+  height: 36px;
+  padding: 0 14px;
+  background: white;
+  color: rgba(0,0,0,0.44);
+  border: 1px solid rgba(0,0,0,0.09);
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  width: 100%;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+  font-family: 'Inter', -apple-system, sans-serif;
+  transition: border-color 0.12s, color 0.12s;
+}
+.btn-secondary i { font-size: 16px; flex-shrink: 0; color: rgba(0,0,0,0.32); }
+.btn-secondary:hover { border-color: rgba(40,120,168,0.3); color: #2878A8; }
+.btn-secondary:hover i { color: #2878A8; }
+
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 2px;
+}
+
+.section-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(0,0,0,0.22);
+}
+
+.view-all {
+  font-size: 11px;
+  font-weight: 600;
+  color: #3A96C3;
+  cursor: pointer;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0,1fr));
+  gap: 12px;
+}
+
+@media (max-width: 900px) {
+  .grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
+  .top-row { flex-direction: column; }
+  .actions-col { width: 100%; flex-direction: row; flex-wrap: wrap; }
+  .btn-primary, .btn-secondary { width: auto; flex: 1; min-width: 140px; }
+}
+
+@media (max-width: 600px) {
+  .grid { grid-template-columns: 1fr; }
+  .main { padding: 20px 16px 20px 72px; }
+}
+
+.card {
+  background: white;
+  border-radius: 13px;
+  border: 1px solid rgba(0,0,0,0.062);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.06), 0 8px 24px rgba(0,0,0,0.045);
+  padding: 16px 18px 15px;
+  cursor: pointer;
+  transition: box-shadow 0.18s, transform 0.18s;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.card:hover {
+  box-shadow: 0 4px 14px rgba(0,0,0,0.09), 0 14px 36px rgba(0,0,0,0.07);
+  transform: translateY(-2px);
+}
+
+.card-subject {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(0,0,0,0.2);
+}
+
+.card-paper {
+  font-size: 13px;
+  font-weight: 600;
+  color: #0C0C0C;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+  flex: 1;
+}
+
+.card-progress {
+  height: 2px;
+  background: rgba(0,0,0,0.05);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.card-fill {
+  height: 100%;
+  border-radius: 2px;
+}
+.card-fill.marking { background: rgba(58,150,195,0.4); }
+.card-fill.review  { background: rgba(30,138,94,0.38); }
+.card-fill.done    { background: rgba(0,0,0,0.12); width: 100%; }
+
+.card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 1px solid rgba(0,0,0,0.05);
+  padding-top: 10px;
+}
+
+.card-scripts {
+  font-size: 11px;
+  color: rgba(0,0,0,0.28);
+  font-weight: 500;
+}
+
+.status-tag {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 3px 9px;
+  border-radius: 4px;
+}
+.status-tag.marking { background: rgba(58,150,195,0.1); color: #1E618A; }
+.status-tag.review  { background: rgba(30,138,94,0.09); color: #156644; }
+.status-tag.done    { background: rgba(0,0,0,0.05); color: rgba(0,0,0,0.27); }
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <img class="watermark" src="https://i.ibb.co/ynBPQTnk/icon.jpg" alt="" aria-hidden="true" />
+
+  <div class="sidebar">
+    <img class="sb-logo" src="https://i.ibb.co/ynBPQTnk/icon.jpg" alt="DeepMark" />
+    <div class="sb-icon active" title="Dashboard"><i class="ti ti-layout-grid"></i></div>
+    <div class="sb-icon" title="Recent marking"><i class="ti ti-clock"></i></div>
+    <div class="sb-icon" title="Papers"><i class="ti ti-clipboard-list"></i></div>
+    <div class="sb-icon" title="Students"><i class="ti ti-users"></i></div>
+    <div class="sb-icon" title="Analytics"><i class="ti ti-chart-bar"></i></div>
+    <div class="sb-icon" title="Reports"><i class="ti ti-file-text"></i></div>
+    <div class="sb-spacer"></div>
+    <div class="sb-icon" title="Settings"><i class="ti ti-settings"></i></div>
+    <div class="sb-avatar">GW</div>
+  </div>
+
+  <div class="main">
+
+    <div class="top-row">
+      <div class="greeting-card">
+        <div class="datestamp">Friday, 9 May 2026</div>
+        <div class="greeting">Good afternoon,<br>Geoffrey.</div>
+        <div class="pulse">
+          <div class="pulse-item">
+            <div class="pulse-n hi">56</div>
+            <div class="pulse-l">To review</div>
+          </div>
+          <div class="pulse-item">
+            <div class="pulse-n">27</div>
+            <div class="pulse-l">In marking</div>
+          </div>
+          <div class="pulse-item">
+            <div class="pulse-n">125</div>
+            <div class="pulse-l">Marked</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="actions-col">
+        <button class="btn-primary">
+          <i class="ti ti-plus"></i>
+          Mark new paper
+        </button>
+        <button class="btn-secondary">
+          <i class="ti ti-player-play"></i>
+          Resume marking
+        </button>
+        <button class="btn-secondary">
+          <i class="ti ti-chart-bar"></i>
+          Analytics
+        </button>
+      </div>
+    </div>
+
+    <div class="section-header">
+      <div class="section-label">Recent batches</div>
+      <div class="view-all">View all</div>
+    </div>
+
+    <div class="grid">
+
+      <div class="card">
+        <div class="card-subject">English</div>
+        <div class="card-paper">Pearson Edexcel GCSE Language Paper 1</div>
+        <div class="card-progress"><div class="card-fill marking" style="width:4%"></div></div>
+        <div class="card-foot">
+          <div class="card-scripts">0 scripts</div>
+          <div class="status-tag marking">Marking</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-subject">Business</div>
+        <div class="card-paper">Y10 GCSE Business Paper 1 — Mr Waugh</div>
+        <div class="card-progress"><div class="card-fill review" style="width:78%"></div></div>
+        <div class="card-foot">
+          <div class="card-scripts">26 scripts</div>
+          <div class="status-tag review">Review</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-subject">Business</div>
+        <div class="card-paper">Year 10 — lined paper circle back</div>
+        <div class="card-progress"><div class="card-fill marking" style="width:22%"></div></div>
+        <div class="card-foot">
+          <div class="card-scripts">7 scripts</div>
+          <div class="status-tag marking">Marking</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-subject">Business</div>
+        <div class="card-paper">Y10 Business Mock exams</div>
+        <div class="card-progress"><div class="card-fill marking" style="width:40%"></div></div>
+        <div class="card-foot">
+          <div class="card-scripts">25 scripts</div>
+          <div class="status-tag marking">Marking</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-subject">Biology</div>
+        <div class="card-paper">Test</div>
+        <div class="card-progress"><div class="card-fill marking" style="width:2%"></div></div>
+        <div class="card-foot">
+          <div class="card-scripts">0 scripts</div>
+          <div class="status-tag marking">Marking</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-subject">Business</div>
+        <div class="card-paper">MS Extraction 4</div>
+        <div class="card-progress"><div class="card-fill done"></div></div>
+        <div class="card-foot">
+          <div class="card-scripts">4 scripts</div>
+          <div class="status-tag done">Done</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

@@ -64,8 +64,6 @@ export const cloudVisionApiKey = new sst.Secret("CloudVisionApiKey")
 export const openAiApiKey = new sst.Secret("OpenAiApiKey")
 
 // OAuth provider credentials used by the auth issuer.
-export const githubClientId = new sst.Secret("GithubClientId")
-export const githubClientSecret = new sst.Secret("GithubClientSecret")
 export const googleClientId = new sst.Secret("GoogleClientId")
 export const googleClientSecret = new sst.Secret("GoogleClientSecret")
 export const anthropicApiKey = new sst.Secret("AnthropicApiKey")

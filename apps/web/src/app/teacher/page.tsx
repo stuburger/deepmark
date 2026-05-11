@@ -6,10 +6,7 @@ import { getDashboardData } from "@/lib/dashboard/queries"
 import { AskAnythingPill } from "./ask-anything-pill"
 import { DashboardActions } from "./dashboard-actions"
 import { DashboardDateEyebrow } from "./dashboard-date-eyebrow"
-import {
-	DashboardEmptyCardSlot,
-	DashboardPaperCard,
-} from "./dashboard-paper-card"
+import { RecentBatchesGrid } from "./recent-batches-grid"
 
 export const dynamic = "force-dynamic"
 
@@ -20,10 +17,6 @@ export default async function TeacherDashboardPage() {
 	if (!data) throw new Error("Dashboard data unavailable")
 
 	const { displayName, counts, recentPapers } = data
-
-	const visiblePapers = recentPapers.slice(0, 6)
-	const slotCount = Math.max(3, Math.ceil(visiblePapers.length / 3) * 3)
-	const emptySlotCount = Math.max(0, slotCount - visiblePapers.length)
 
 	return (
 		<div className="mx-auto flex min-h-full w-full max-w-[1040px] flex-col px-2 py-8">
@@ -64,7 +57,7 @@ export default async function TeacherDashboardPage() {
 				</div>
 
 				{/* Recent marking section */}
-				{visiblePapers.length > 0 && (
+				{recentPapers.length > 0 && (
 					<>
 						<div className="mb-2.5 flex items-center justify-between">
 							<span className="font-mono text-[9px] uppercase tracking-[0.1em] text-ink-secondary">
@@ -77,15 +70,7 @@ export default async function TeacherDashboardPage() {
 								View all
 							</Link>
 						</div>
-						<div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-							{visiblePapers.map((paper) => (
-								<DashboardPaperCard key={paper.id} paper={paper} />
-							))}
-							{Array.from({ length: emptySlotCount }, (_, i) => (
-								// biome-ignore lint/suspicious/noArrayIndexKey: empty slots have no identity
-								<DashboardEmptyCardSlot key={`empty-${i}`} />
-							))}
-						</div>
+						<RecentBatchesGrid papers={recentPapers} />
 					</>
 				)}
 			</div>

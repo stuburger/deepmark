@@ -204,7 +204,6 @@ model User {
   name       String?
   /// Global system role only. Resource permissions live in ResourceGrant.role.
   role       UserRole @default(teacher)
-  github_id  String?  @unique
   avatar_url String?
   is_active  Boolean  @default(true)
   created_at DateTime @default(now())

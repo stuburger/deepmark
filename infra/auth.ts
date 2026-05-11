@@ -1,7 +1,5 @@
 import { stripeConfig } from "./billing"
 import {
-	githubClientId,
-	githubClientSecret,
 	googleClientId,
 	googleClientSecret,
 	hostedZoneId,
@@ -45,8 +43,6 @@ export const auth = new sst.aws.Auth("Auth", {
 			neonPostgres,
 			authUrlLink,
 			authTable,
-			githubClientId,
-			githubClientSecret,
 			googleClientId,
 			googleClientSecret,
 			// `seedTrialGrant` reads `Resource.StripeConfig.trialPaperCap` on signup.

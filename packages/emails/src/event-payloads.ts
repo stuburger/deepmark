@@ -13,7 +13,7 @@ import type { ActiveDiscount } from "./discount"
 export type UserSignedUpDetail = {
 	userId: string
 	email: string
-	signupMethod: "github" | "google"
+	signupMethod: "google"
 }
 
 export type SubscriptionUpgradedDetail = {

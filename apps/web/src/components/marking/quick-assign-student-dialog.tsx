@@ -224,7 +224,21 @@ export function QuickAssignStudentDialog({
 								onValueChange={setSelectedId}
 							>
 								<SelectTrigger>
-									<SelectValue placeholder="Select a student" />
+									<SelectValue placeholder="Select a student">
+										{(value: string | null) => {
+											if (!value) return null
+											const s = students.find((s) => s.id === value)
+											if (!s) return value
+											return (
+												<span className="flex items-center gap-2">
+													<span className="font-mono text-xs text-muted-foreground">
+														{s.student_number}
+													</span>
+													<span>{s.name}</span>
+												</span>
+											)
+										}}
+									</SelectValue>
 								</SelectTrigger>
 								<SelectContent>
 									{students.map((s) => (

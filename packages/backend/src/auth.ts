@@ -5,7 +5,6 @@ import {
 import { EventDetailType, EventSource } from "@mcp-gcse/emails"
 import { issuer } from "@openauthjs/openauth"
 import { createClient } from "@openauthjs/openauth/client"
-import { GithubProvider } from "@openauthjs/openauth/provider/github"
 import { GoogleProvider } from "@openauthjs/openauth/provider/google"
 import { DynamoStorage } from "@openauthjs/openauth/storage/dynamo"
 import { Hono } from "hono"
@@ -78,11 +77,6 @@ const app = issuer({
 	// Remove after setting custom domain
 	allow: async () => true,
 	providers: {
-		github: GithubProvider({
-			clientID: Resource.GithubClientId.value,
-			clientSecret: Resource.GithubClientSecret.value,
-			scopes: ["email", "profile"],
-		}),
 		google: GoogleProvider({
 			clientID: Resource.GoogleClientId.value,
 			clientSecret: Resource.GoogleClientSecret.value,
@@ -93,107 +87,56 @@ const app = issuer({
 		}),
 	},
 	success: async (ctx, value) => {
-		console.log(value)
-		if (value.provider === "github") {
-			const gh_user = await fetchGithubUser(value.tokenset.access)
+		const googleUser = await fetchGoogleUser(value.tokenset.access)
 
-			console.log("gh_user", gh_user)
+		let user = await db.user.findFirst({
+			where: {
+				email: googleUser.email,
+			},
+		})
 
-			// First check if user exists
-			let user = await db.user.findFirst({
-				where: {
-					github_id: gh_user.id,
-				},
-			})
-
-			// If user doesn't exist, create new one
-			if (!user) {
-				user = await db.user.create({
-					data: {
-						role: "teacher",
-						avatar_url: gh_user.avatar_url,
-						github_id: gh_user.id,
-						name: gh_user.login,
-						email: gh_user.email,
-					},
-				})
-				// Welcome email is fired off the bus — best-effort, never blocks
-				// signup. EmailSubscriber's DLQ owns retry/observability.
-				if (user.email) {
-					await emitEvent({
-						source: EventSource.users,
-						detailType: EventDetailType.userSignedUp,
-						detail: {
-							userId: user.id,
-							email: user.email,
-							signupMethod: "github",
-						},
-					})
-				}
-			}
-
-			// Run on every login (not just signup): both helpers are idempotent.
-			// Self-heals any signup whose user.create succeeded but a side effect
-			// failed (Neon blip, etc.) — without this hoist the user would be
-			// permanently stuck at zero balance because the next login skips the
-			// `if (!user)` block. Also retroactively attaches resources shared with
-			// the user's email after their account already existed.
-			await attachPendingResourceGrantsForSignup(user)
-			await seedTrialGrant(user.id)
-
-			return ctx.subject("user", {
-				userId: user.id,
-				email: user.email,
-			})
-		}
-
-		if (value.provider === "google") {
-			const googleUser = await fetchGoogleUser(value.tokenset.access)
-
-			let user = await db.user.findFirst({
-				where: {
+		if (!user) {
+			user = await db.user.create({
+				data: {
+					role: "teacher",
+					avatar_url: googleUser.avatar_url,
+					name: googleUser.login,
 					email: googleUser.email,
 				},
 			})
-
-			if (!user) {
-				user = await db.user.create({
-					data: {
-						role: "teacher",
-						avatar_url: googleUser.avatar_url,
-						name: googleUser.login,
-						email: googleUser.email,
+			// Welcome email is fired off the bus — best-effort, never blocks
+			// signup. EmailSubscriber's DLQ owns retry/observability.
+			if (user.email) {
+				await emitEvent({
+					source: EventSource.users,
+					detailType: EventDetailType.userSignedUp,
+					detail: {
+						userId: user.id,
+						email: user.email,
+						signupMethod: "google",
 					},
 				})
-				if (user.email) {
-					await emitEvent({
-						source: EventSource.users,
-						detailType: EventDetailType.userSignedUp,
-						detail: {
-							userId: user.id,
-							email: user.email,
-							signupMethod: "google",
-						},
-					})
-				}
-			} else if (user.avatar_url !== googleUser.avatar_url) {
-				user = await db.user.update({
-					where: { id: user.id },
-					data: { avatar_url: googleUser.avatar_url },
-				})
 			}
-
-			// Run on every login (not just signup): see GitHub branch above.
-			await attachPendingResourceGrantsForSignup(user)
-			await seedTrialGrant(user.id)
-
-			return ctx.subject("user", {
-				userId: user.id,
-				email: user.email,
+		} else if (user.avatar_url !== googleUser.avatar_url) {
+			user = await db.user.update({
+				where: { id: user.id },
+				data: { avatar_url: googleUser.avatar_url },
 			})
 		}
 
-		throw new Error("Invalid provider")
+		// Run on every login (not just signup): both helpers are idempotent.
+		// Self-heals any signup whose user.create succeeded but a side effect
+		// failed (Neon blip, etc.) — without this hoist the user would be
+		// permanently stuck at zero balance because the next login skips the
+		// `if (!user)` block. Also retroactively attaches resources shared
+		// with the user's email after their account already existed.
+		await attachPendingResourceGrantsForSignup(user)
+		await seedTrialGrant(user.id)
+
+		return ctx.subject("user", {
+			userId: user.id,
+			email: user.email,
+		})
 	},
 })
 
@@ -276,7 +219,7 @@ app.post("/introspect", async (c) => {
 				return c.json({
 					active: true,
 					client_id: client_id,
-					scope: "openid profile email", // Based on your GitHub provider scopes
+					scope: "openid profile email",
 					sub: tokenInfo.subject.properties?.userId,
 					email: tokenInfo.subject.properties?.email,
 					exp: tokenInfo.tokens?.expiresIn,
@@ -331,31 +274,6 @@ interface UserProfile {
 	email: string | null
 	login: string
 	avatar_url: string
-}
-
-async function fetchGithubUser(accessToken: string): Promise<UserProfile> {
-	const response = await fetch("https://api.github.com/user", {
-		headers: {
-			Authorization: `token ${accessToken}`,
-		},
-	})
-
-	if (!response.ok) {
-		throw new Error("Failed to fetch GitHub profile")
-	}
-
-	const json = await response.json()
-
-	const profileData = z
-		.object({
-			id: z.coerce.string(),
-			email: z.string().nullable(),
-			login: z.string(),
-			avatar_url: z.string(),
-		})
-		.parse(json)
-
-	return profileData
 }
 
 async function fetchGoogleUser(accessToken: string): Promise<UserProfile> {

@@ -1,5 +1,5 @@
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import type { Metadata } from "next"
+import { DesignSystemTabs } from "./_components/design-system-tabs"
 import { SystemTab } from "./_components/system-tab"
 import { TokensTab } from "./_components/tokens-tab"
 import { loadTokens } from "./_lib/load-tokens"
@@ -45,24 +45,10 @@ export default async function DesignSystemPage() {
 				</div>
 			</header>
 
-			<Tabs defaultValue="system" className="w-full">
-				<TabsList variant="line" className="mb-10 h-10">
-					<TabsTrigger value="system" className="px-4">
-						Design System
-					</TabsTrigger>
-					<TabsTrigger value="tokens" className="px-4">
-						Tokens
-					</TabsTrigger>
-				</TabsList>
-
-				<TabsContent value="system">
-					<SystemTab tokens={tokens} />
-				</TabsContent>
-
-				<TabsContent value="tokens">
-					<TokensTab tokens={tokens} />
-				</TabsContent>
-			</Tabs>
+			<DesignSystemTabs
+				systemTab={<SystemTab tokens={tokens} />}
+				tokensTab={<TokensTab tokens={tokens} />}
+			/>
 
 			<footer className="border-t border-border-subtle pt-7 mt-16 flex items-center justify-between">
 				<div>

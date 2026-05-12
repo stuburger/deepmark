@@ -1,0 +1,125 @@
+name: Deploy to Preview
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+# One in-flight deploy per PR; new pushes queue rather than cancel so we
+# never leave a half-deployed stage behind.
+concurrency:
+  group: pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
+
+jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.2.12
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Generate Prisma client
+        env:
+          DATABASE_URL: "postgresql://placeholder:placeholder@localhost:5432/placeholder"
+        run: bun db:generate
+
+      - name: Typecheck
+        env:
+          DATABASE_URL: "postgresql://placeholder:placeholder@localhost:5432/placeholder"
+        run: bun typecheck
+
+      - name: Lint (Biome + tokens)
+        run: bun check
+
+  generate-stage-name:
+    runs-on: ubuntu-latest
+    outputs:
+      stage: ${{ steps.stage.outputs.stage }}
+    steps:
+      - uses: rlespinasse/github-slug-action@v5
+        with:
+          # Stage feeds into subdomains. CloudFront cert names are bounded
+          # and the slug becomes part of pr-<n>-<slug>.dev.getdeepmark.com.
+          slug-maxlength: 36
+
+      - name: Generate stage name
+        id: stage
+        run: echo "stage=pr-${{ github.event.pull_request.number }}-${{ env.GITHUB_HEAD_REF_SLUG }}" >> $GITHUB_OUTPUT
+
+  deploy:
+    needs: [typecheck, generate-stage-name]
+    uses: ./.github/workflows/deploy-stage.yml
+    permissions:
+      id-token: write
+      contents: read
+    with:
+      stage: ${{ needs.generate-stage-name.outputs.stage }}
+    secrets:
+      AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+      NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+      NEON_ORG_ID: ${{ secrets.NEON_ORG_ID }}
+      NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
+      STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY_TEST }}
+
+  update-pr-comment:
+    needs: [generate-stage-name, deploy]
+    runs-on: ubuntu-latest
+    if: always() && needs.deploy.result != 'cancelled'
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Find existing comment
+        uses: peter-evans/find-comment@v3
+        id: find-comment
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          comment-author: "github-actions[bot]"
+          body-includes: Preview Deployment
+
+      - name: Set deployment status
+        id: deploy-status
+        run: |
+          if [ "${{ needs.deploy.result }}" == "success" ]; then
+            echo "emoji=✅" >> $GITHUB_OUTPUT
+            echo "status=Ready" >> $GITHUB_OUTPUT
+          else
+            echo "emoji=❌" >> $GITHUB_OUTPUT
+            echo "status=Failed" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Update Pull Request with Preview URL
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          comment-id: ${{ steps.find-comment.outputs.comment-id }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          issue-number: ${{ github.event.pull_request.number }}
+          body: |
+            ## ${{ steps.deploy-status.outputs.emoji }} Preview Deployment ${{ steps.deploy-status.outputs.status }}
+
+            | Service | URL |
+            |---------|-----|
+            | 🌐 **Web App** | ${{ needs.deploy.outputs.web_url }} |
+            | 🤖 **Interactions Lambda** | ${{ needs.deploy.outputs.interactions_url }} |
+
+            **Stage:** `${{ needs.generate-stage-name.outputs.stage }}`
+            **Domain:** `${{ needs.generate-stage-name.outputs.stage }}.dev.getdeepmark.com`
+
+            [View workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+          edit-mode: replace

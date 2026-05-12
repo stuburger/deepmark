@@ -1,0 +1,93 @@
+name: Deploy Stage
+
+on:
+  workflow_call:
+    inputs:
+      stage:
+        description: "The SST stage to deploy to"
+        required: true
+        type: string
+    secrets:
+      AWS_ACCOUNT_ID:
+        required: true
+      NEON_API_KEY:
+        required: true
+      NEON_ORG_ID:
+        required: true
+      NEON_PROJECT_ID:
+        required: true
+      # Stripe provider key. Production must be sk_live_*, all other stages
+      # must be sk_test_* — sst.config.ts hard-fails synth otherwise.
+      STRIPE_SECRET_KEY:
+        required: true
+    outputs:
+      web_url:
+        description: "The deployed web app URL"
+        value: ${{ jobs.sst-deploy.outputs.web_url }}
+      interactions_url:
+        description: "The deployed interactions Lambda URL"
+        value: ${{ jobs.sst-deploy.outputs.interactions_url }}
+
+jobs:
+  sst-deploy:
+    name: Deploy to Stage "${{ inputs.stage }}"
+    runs-on: ubuntu-latest
+    outputs:
+      web_url: ${{ steps.get-urls.outputs.web_url }}
+      interactions_url: ${{ steps.get-urls.outputs.interactions_url }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.2.12
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-actions
+          role-duration-seconds: 3600
+          aws-region: eu-west-2
+
+      # GitHub runners ship a newer Pulumi than SST's bundled SDK supports
+      # (the -root flag for pulumi-language-nodejs was removed upstream).
+      # Removing the system plugin forces SST to use its bundled compatible
+      # version. See: https://github.com/pulumi/pulumi/pull/21065
+      - name: Fix Pulumi version conflict
+        run: sudo rm -f /usr/local/bin/pulumi-language-nodejs
+
+      - name: Generate Prisma client
+        env:
+          DATABASE_URL: "postgresql://placeholder:placeholder@localhost:5432/placeholder"
+        run: bun db:generate
+
+      - name: Deploy to ${{ inputs.stage }}
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_ORG_ID: ${{ secrets.NEON_ORG_ID }}
+          NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
+          StripeSecretKey: ${{ secrets.STRIPE_SECRET_KEY }}
+        run: bunx sst deploy --stage=${{ inputs.stage }}
+
+      - name: Extract deployment URLs
+        id: get-urls
+        run: |
+          # sst outputs are written to .sst/outputs.json after deploy
+          if [ -f .sst/outputs.json ]; then
+            WEB_URL=$(jq -r '.web // empty' .sst/outputs.json)
+            INTERACTIONS_URL=$(jq -r '.interactions // empty' .sst/outputs.json)
+            echo "web_url=$WEB_URL" >> $GITHUB_OUTPUT
+            echo "interactions_url=$INTERACTIONS_URL" >> $GITHUB_OUTPUT
+          fi

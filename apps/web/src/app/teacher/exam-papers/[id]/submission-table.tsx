@@ -497,8 +497,7 @@ export function SubmissionTable({
 															onClick={() =>
 																setAssigningJob({
 																	jobId: sub.id,
-																	detectedNumber:
-																		sub.detected_student_number,
+																	detectedNumber: sub.detected_student_number,
 																	currentStudentId: sub.student_id,
 																})
 															}

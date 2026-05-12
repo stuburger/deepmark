@@ -30,4 +30,6 @@ export const queryKeys = {
 	activeBatch: (paperId: string) => ["activeBatch", paperId] as const,
 	// ─── Auth / current user ───────────────────────────────────────────────────
 	currentUser: () => ["currentUser"] as const,
+	// ─── Collab service (non-prod scale-to-zero control) ───────────────────────
+	collabStatus: () => ["collabStatus"] as const,
 }

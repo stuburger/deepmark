@@ -18,6 +18,7 @@ export {
 	type EventDetailTypeValue,
 	type ProcessingBatchKind,
 	type PpuPurchasedDetail,
+	type ResourceSharedDetail,
 	type SubscriptionUpgradedDetail,
 	type TopupPurchasedDetail,
 	type UserSignedUpDetail,
@@ -45,9 +46,15 @@ export {
 	type WelcomeToUnlimitedEmailProps,
 } from "./welcome-to-unlimited"
 export {
+	ResourceSharedEmail,
+	buildResourceSharedCopy,
+	type ResourceSharedEmailProps,
+} from "./resource-shared"
+export {
 	type RenderedEmail,
 	renderMarkingCompleteEmail,
 	renderPpuThankYouEmail,
+	renderResourceSharedEmail,
 	renderTopupThankYouEmail,
 	renderWelcomeEmail,
 	renderWelcomeToProEmail,

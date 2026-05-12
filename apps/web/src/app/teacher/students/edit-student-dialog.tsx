@@ -1,6 +1,9 @@
 "use client"
 
-import { StudentForm, type StudentFormValues } from "@/components/students/student-form"
+import {
+	StudentForm,
+	type StudentFormValues,
+} from "@/components/students/student-form"
 import {
 	Dialog,
 	DialogContent,
@@ -61,8 +64,8 @@ export function EditStudentDialog({ student, onClose }: Props) {
 				<DialogHeader>
 					<DialogTitle>Edit student</DialogTitle>
 					<DialogDescription>
-						Changes to the name will cascade to every script already linked
-						to this student.
+						Changes to the name will cascade to every script already linked to
+						this student.
 					</DialogDescription>
 				</DialogHeader>
 

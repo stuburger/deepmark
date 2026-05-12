@@ -2,6 +2,7 @@ import {
 	type RenderedEmail,
 	renderMarkingCompleteEmail,
 	renderPpuThankYouEmail,
+	renderResourceSharedEmail,
 	renderTopupThankYouEmail,
 	renderWelcomeEmail,
 	renderWelcomeToProEmail,
@@ -10,6 +11,7 @@ import {
 import {
 	markingCompleteFixtures,
 	ppuThankYouFixtures,
+	resourceSharedFixtures,
 	topupThankYouFixtures,
 	welcomeFixtures,
 	welcomeToProFixtures,
@@ -37,6 +39,11 @@ export const metadata: Metadata = {
  */
 export default async function EmailPreviewsPage() {
 	const sections = await Promise.all([
+		renderSection(
+			"Resource shared",
+			resourceSharedFixtures,
+			renderResourceSharedEmail,
+		),
 		renderSection("Welcome", welcomeFixtures, renderWelcomeEmail),
 		renderSection(
 			"Welcome to Pro (with discount + variants)",

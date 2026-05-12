@@ -1,6 +1,11 @@
 "use client"
 
 import {
+	EMPTY_STUDENT,
+	StudentForm,
+	type StudentFormValues,
+} from "@/components/students/student-form"
+import {
 	Dialog,
 	DialogContent,
 	DialogDescription,
@@ -13,11 +18,6 @@ import { getNextStudentNumber } from "@/lib/students/queries"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useEffect } from "react"
 import { toast } from "sonner"
-import {
-	EMPTY_STUDENT,
-	StudentForm,
-	type StudentFormValues,
-} from "@/components/students/student-form"
 
 type Props = {
 	open: boolean

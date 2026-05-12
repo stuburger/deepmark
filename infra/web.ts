@@ -1,8 +1,9 @@
 import { stripeWebhookSecret } from "./api"
 import { auth, authUrl } from "./auth"
 import { stripeConfig, stripePublishableKey, stripeSecretKey } from "./billing"
-import { collabServer } from "./collab"
+import { collabServer, collabServiceRef } from "./collab"
 import {
+	_PRODUCTION_,
 	domain,
 	anthropicApiKey,
 	collabServiceSecret,
@@ -69,7 +70,32 @@ export const web = new sst.aws.Nextjs("Web", {
 		// Class PDF export sync-invokes this Lambda; SST grants
 		// `lambda:InvokeFunction` and exposes `Resource.PdfRenderer.name`.
 		pdfRendererFn,
+		// Non-prod only: address + creds for the on-demand collab service
+		// scale-up control. Production has no link → server actions early-return.
+		...(collabServiceRef ? [collabServiceRef] : []),
 	],
+	// Non-prod stages get ECS perms scoped to the dev collab service so the
+	// scale-up server action (and status query) can call DescribeServices /
+	// UpdateService / TagResource. Production has no Service to manage.
+	permissions: _PRODUCTION_
+		? undefined
+		: [
+				{
+					actions: [
+						"ecs:DescribeServices",
+						"ecs:UpdateService",
+						"ecs:TagResource",
+						"ecs:UntagResource",
+						"ecs:ListTagsForResource",
+					],
+					// Wildcard on the service ARN — we don't know the exact cluster
+					// name at synth time on PR stages (it's read from SSM), and ECS
+					// service ARNs always live under our account in this region.
+					resources: [
+						$interpolate`arn:aws:ecs:eu-west-2:${aws.getCallerIdentityOutput().accountId}:service/*/*`,
+					],
+				},
+			],
 	dev: {
 		url: "http://localhost:3000",
 	},

@@ -1,5 +1,6 @@
 import type { MarkingCompleteEmailProps } from "./marking-complete"
 import type { PpuThankYouEmailProps } from "./ppu-thank-you"
+import type { ResourceSharedEmailProps } from "./resource-shared"
 import type { TopupThankYouEmailProps } from "./topup-thank-you"
 import type { WelcomeEmailProps } from "./welcome"
 import type { WelcomeToProEmailProps } from "./welcome-to-pro"
@@ -100,6 +101,55 @@ export const topupThankYouFixtures: Record<string, TopupThankYouEmailProps> = {
 		dashboardUrl: `${WEB_URL}/teacher`,
 	},
 }
+
+export const resourceSharedFixtures: Record<string, ResourceSharedEmailProps> =
+	{
+		examPaperViewer: {
+			recipientFirstName: "Alex",
+			sharedByName: "Sarah Patel",
+			sharedByEmail: "sarah.patel@school.com",
+			resourceType: "exam_paper",
+			resourceTitle: "AQA GCSE Business — Paper 1, June 2024",
+			role: "viewer",
+			resourceUrl: `${WEB_URL}/teacher/exam-papers/abc123`,
+		},
+		examPaperEditor: {
+			recipientFirstName: "Alex",
+			sharedByName: "Sarah Patel",
+			sharedByEmail: "sarah.patel@school.com",
+			resourceType: "exam_paper",
+			resourceTitle: "AQA GCSE Business — Paper 1, June 2024",
+			role: "editor",
+			resourceUrl: `${WEB_URL}/teacher/exam-papers/abc123`,
+		},
+		examPaperOwner: {
+			recipientFirstName: null,
+			sharedByName: "Sarah Patel",
+			sharedByEmail: "sarah.patel@school.com",
+			resourceType: "exam_paper",
+			resourceTitle: "AQA GCSE Business — Paper 1, June 2024",
+			role: "owner",
+			resourceUrl: `${WEB_URL}/teacher/exam-papers/abc123`,
+		},
+		submissionViewer: {
+			recipientFirstName: "Alex",
+			sharedByName: null,
+			sharedByEmail: "sarah.patel@school.com",
+			resourceType: "student_submission",
+			resourceTitle: "Zack Müller — AQA GCSE Business Paper 1",
+			role: "viewer",
+			resourceUrl: `${WEB_URL}/teacher/exam-papers/abc123/submissions/sub456`,
+		},
+		submissionEditor: {
+			recipientFirstName: "Alex",
+			sharedByName: "Sarah Patel",
+			sharedByEmail: "sarah.patel@school.com",
+			resourceType: "student_submission",
+			resourceTitle: "Zack Müller — AQA GCSE Business Paper 1",
+			role: "editor",
+			resourceUrl: `${WEB_URL}/teacher/exam-papers/abc123/submissions/sub456`,
+		},
+	}
 
 export const markingCompleteFixtures: Record<
 	string,

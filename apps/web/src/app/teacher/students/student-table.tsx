@@ -40,10 +40,7 @@ export function StudentTable({ initialStudents }: Props) {
 			<div className="flex min-h-[60vh] items-center justify-center">
 				<div className="flex max-w-sm flex-col items-center text-center">
 					<div className="mb-4 flex size-14 items-center justify-center rounded-md bg-muted">
-						<Users
-							className="size-6 text-muted-foreground"
-							strokeWidth={1.5}
-						/>
+						<Users className="size-6 text-muted-foreground" strokeWidth={1.5} />
 					</div>
 					<h2 className="text-lg font-semibold text-foreground">
 						No students yet
@@ -117,10 +114,7 @@ export function StudentTable({ initialStudents }: Props) {
 					</TableBody>
 				</Table>
 			</div>
-			<EditStudentDialog
-				student={editing}
-				onClose={() => setEditing(null)}
-			/>
+			<EditStudentDialog student={editing} onClose={() => setEditing(null)} />
 		</>
 	)
 }

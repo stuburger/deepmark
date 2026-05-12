@@ -6,6 +6,7 @@ import { EventDetailType, EventSource } from "@mcp-gcse/emails"
 import { issuer } from "@openauthjs/openauth"
 import { createClient } from "@openauthjs/openauth/client"
 import { GoogleProvider } from "@openauthjs/openauth/provider/google"
+import { MicrosoftProvider } from "@openauthjs/openauth/provider/microsoft"
 import { DynamoStorage } from "@openauthjs/openauth/storage/dynamo"
 import { Hono } from "hono"
 import { handle } from "hono/aws-lambda"
@@ -85,13 +86,29 @@ const app = issuer({
 				prompt: "select_account",
 			},
 		}),
+		// `common` lets teachers sign in with either school/work Microsoft 365
+		// accounts or personal Outlook/Hotmail/Live accounts. `User.Read` is the
+		// minimum Graph scope needed to call /me for the profile.
+		microsoft: MicrosoftProvider({
+			tenant: "common",
+			clientID: Resource.MicrosoftClientId.value,
+			clientSecret: Resource.MicrosoftClientSecret.value,
+			scopes: ["openid", "profile", "email", "User.Read"],
+			query: {
+				prompt: "select_account",
+			},
+		}),
 	},
 	success: async (ctx, value) => {
-		const googleUser = await fetchGoogleUser(value.tokenset.access)
+		const profile =
+			value.provider === "microsoft"
+				? await fetchMicrosoftUser(value.tokenset.access)
+				: await fetchGoogleUser(value.tokenset.access)
+		const signupMethod = value.provider === "microsoft" ? "microsoft" : "google"
 
 		let user = await db.user.findFirst({
 			where: {
-				email: googleUser.email,
+				email: profile.email,
 			},
 		})
 
@@ -99,9 +116,9 @@ const app = issuer({
 			user = await db.user.create({
 				data: {
 					role: "teacher",
-					avatar_url: googleUser.avatar_url,
-					name: googleUser.login,
-					email: googleUser.email,
+					avatar_url: profile.avatar_url,
+					name: profile.login,
+					email: profile.email,
 				},
 			})
 			// Welcome email is fired off the bus — best-effort, never blocks
@@ -113,14 +130,14 @@ const app = issuer({
 					detail: {
 						userId: user.id,
 						email: user.email,
-						signupMethod: "google",
+						signupMethod,
 					},
 				})
 			}
-		} else if (user.avatar_url !== googleUser.avatar_url) {
+		} else if (profile.avatar_url && user.avatar_url !== profile.avatar_url) {
 			user = await db.user.update({
 				where: { id: user.id },
-				data: { avatar_url: googleUser.avatar_url },
+				data: { avatar_url: profile.avatar_url },
 			})
 		}
 
@@ -274,6 +291,38 @@ interface UserProfile {
 	email: string | null
 	login: string
 	avatar_url: string
+}
+
+async function fetchMicrosoftUser(accessToken: string): Promise<UserProfile> {
+	const response = await fetch("https://graph.microsoft.com/v1.0/me", {
+		headers: {
+			Authorization: `Bearer ${accessToken}`,
+		},
+	})
+
+	if (!response.ok) {
+		throw new Error("Failed to fetch Microsoft profile")
+	}
+
+	const json = await response.json()
+	const profileData = z
+		.object({
+			id: z.string(),
+			// `mail` is null for some personal accounts; fall back to UPN.
+			mail: z.string().nullable().optional(),
+			userPrincipalName: z.string(),
+			displayName: z.string().nullable().optional(),
+		})
+		.parse(json)
+
+	return {
+		id: profileData.id,
+		email: (profileData.mail ?? profileData.userPrincipalName).toLowerCase(),
+		login: profileData.displayName ?? profileData.userPrincipalName,
+		// Microsoft Graph's photo endpoint returns binary and requires auth, so
+		// there is no stable URL to store. Leave avatar empty for Microsoft users.
+		avatar_url: "",
+	}
 }
 
 async function fetchGoogleUser(accessToken: string): Promise<UserProfile> {

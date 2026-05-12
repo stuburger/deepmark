@@ -6,12 +6,14 @@ import {
 	resourcesAction,
 } from "@/lib/authz"
 import { db } from "@/lib/db"
+import { emitEvent } from "@/lib/events/emit"
 import {
 	type ResourceGrant,
 	ResourceGrantPrincipalType,
 	ResourceGrantResourceType,
 	type ResourceGrantRole,
 } from "@mcp-gcse/db"
+import { EventDetailType, EventSource } from "@mcp-gcse/emails"
 import { removingOrDowngradingFinalOwner } from "@mcp-gcse/shared"
 import { z } from "zod"
 
@@ -143,6 +145,13 @@ export const shareResourceWithEmails = resourcesAction({
 				select: { id: true },
 			})
 			grantIds.push(grant.id)
+
+			// Fire-and-forget — a transient EventBridge blip must not break the share action.
+			void emitEvent({
+				source: EventSource.sharing,
+				detailType: EventDetailType.resourceShared,
+				detail: { grantId: grant.id, sharedByUserId: ctx.user.id },
+			})
 		}
 
 		return { grantIds }

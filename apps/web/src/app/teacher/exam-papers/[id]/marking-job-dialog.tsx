@@ -3,6 +3,7 @@
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { SubmissionView } from "../../mark/papers/[examPaperId]/submissions/[jobId]/submission-view"
 import { SubmissionViewSkeleton } from "../../mark/papers/[examPaperId]/submissions/[jobId]/submission-view-skeleton"
+import { CollabServiceBanner } from "./collab-service-banner"
 import { useMarkingJobData } from "./hooks/use-marking-job-data"
 
 export function MarkingJobDialog({
@@ -27,6 +28,7 @@ export function MarkingJobDialog({
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent size="fullscreen" showCloseButton={false}>
 				<DialogTitle className="sr-only">Submission</DialogTitle>
+				<CollabServiceBanner />
 				{ready ? (
 					<SubmissionView
 						examPaperId={examPaperId}

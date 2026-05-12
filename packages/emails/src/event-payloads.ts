@@ -13,7 +13,7 @@ import type { ActiveDiscount } from "./discount"
 export type UserSignedUpDetail = {
 	userId: string
 	email: string
-	signupMethod: "google"
+	signupMethod: "google" | "microsoft"
 }
 
 export type SubscriptionUpgradedDetail = {
@@ -49,6 +49,13 @@ export type BatchCompletedDetail = {
 	failedCount: number
 }
 
+export type ResourceSharedDetail = {
+	/** The newly-created ResourceGrant id. Subscriber fetches type/id/role/recipient from it. */
+	grantId: string
+	/** User.id of the teacher who initiated the share. */
+	sharedByUserId: string
+}
+
 /**
  * Source/detail-type strings used on EventBridge. Importing the constants
  * (rather than free-typing) gives compile-time matching between emit sites
@@ -58,6 +65,7 @@ export const EventSource = {
 	users: "deepmark.users",
 	billing: "deepmark.billing",
 	marking: "deepmark.marking",
+	sharing: "deepmark.sharing",
 } as const
 
 export const EventDetailType = {
@@ -66,6 +74,7 @@ export const EventDetailType = {
 	ppuPurchased: "ppu.purchased",
 	topupPurchased: "topup.purchased",
 	batchCompleted: "batch.completed",
+	resourceShared: "resource.shared",
 } as const
 
 export type EventDetailTypeValue =

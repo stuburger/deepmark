@@ -48,7 +48,12 @@ bus.subscribe(
 	},
 	{
 		pattern: {
-			source: ["deepmark.users", "deepmark.billing", "deepmark.marking"],
+			source: [
+				"deepmark.users",
+				"deepmark.billing",
+				"deepmark.marking",
+				"deepmark.sharing",
+			],
 		},
 		retries: 2,
 		transform: {

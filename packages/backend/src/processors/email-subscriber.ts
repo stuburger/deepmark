@@ -5,11 +5,13 @@ import {
 	type EventDetailTypeValue,
 	type PpuPurchasedDetail,
 	type RenderedEmail,
+	type ResourceSharedDetail,
 	type SubscriptionUpgradedDetail,
 	type TopupPurchasedDetail,
 	type UserSignedUpDetail,
 	renderMarkingCompleteEmail,
 	renderPpuThankYouEmail,
+	renderResourceSharedEmail,
 	renderTopupThankYouEmail,
 	renderWelcomeEmail,
 	renderWelcomeToProEmail,
@@ -76,6 +78,8 @@ async function dispatch(
 			return dispatchTopupPurchased(event.detail as TopupPurchasedDetail)
 		case EventDetailType.batchCompleted:
 			return dispatchBatchCompleted(event.detail as BatchCompletedDetail)
+		case EventDetailType.resourceShared:
+			return dispatchResourceShared(event.detail as ResourceSharedDetail)
 		default:
 			logger.warn(TAG, "Unrecognised detail-type; ignoring", {
 				detailType: event["detail-type"],
@@ -193,6 +197,96 @@ async function dispatchBatchCompleted(
 		logoUrl: LOGO_URL,
 	})
 	return { to: batch.triggerer.email, email }
+}
+
+async function dispatchResourceShared(
+	detail: ResourceSharedDetail,
+): Promise<Dispatched> {
+	const grant = await db.resourceGrant.findUnique({
+		where: { id: detail.grantId, revoked_at: null },
+		select: {
+			resource_type: true,
+			resource_id: true,
+			principal_email: true,
+			principal_user_id: true,
+			role: true,
+		},
+	})
+	if (!grant) return null
+
+	const recipientEmail = grant.principal_email
+	if (!recipientEmail) return null
+
+	const [sharer, recipient, resourceInfo] = await Promise.all([
+		db.user.findUnique({
+			where: { id: detail.sharedByUserId },
+			select: { name: true, email: true },
+		}),
+		grant.principal_user_id
+			? db.user.findUnique({
+					where: { id: grant.principal_user_id },
+					select: { name: true },
+				})
+			: null,
+		resolveResourceInfo(grant.resource_type, grant.resource_id),
+	])
+
+	if (!sharer?.email) return null
+	// Don't notify if sharing with yourself
+	if (sharer.email === recipientEmail) return null
+
+	const email = await renderResourceSharedEmail({
+		recipientFirstName: recipient ? firstNameFrom(recipient.name) : null,
+		sharedByName: sharer.name,
+		sharedByEmail: sharer.email,
+		resourceType: grant.resource_type,
+		resourceTitle: resourceInfo.title,
+		role: grant.role,
+		resourceUrl: resourceInfo.url,
+		logoUrl: LOGO_URL,
+	})
+	return { to: recipientEmail, email }
+}
+
+type ResourceInfo = { title: string; url: string }
+
+async function resolveResourceInfo(
+	resourceType: string,
+	resourceId: string,
+): Promise<ResourceInfo> {
+	if (resourceType === "exam_paper") {
+		const paper = await db.examPaper.findUnique({
+			where: { id: resourceId },
+			select: { title: true },
+		})
+		return {
+			title: paper?.title ?? "an exam paper",
+			url: `${WEB_URL}/teacher/exam-papers/${resourceId}`,
+		}
+	}
+	if (resourceType === "student_submission") {
+		const submission = await db.studentSubmission.findUnique({
+			where: { id: resourceId },
+			select: {
+				student_name: true,
+				exam_paper_id: true,
+				exam_paper: { select: { title: true } },
+			},
+		})
+		if (!submission) {
+			return {
+				title: "a student submission",
+				url: `${WEB_URL}/teacher/exam-papers`,
+			}
+		}
+		const studentLabel = submission.student_name ?? "Unknown student"
+		const paperLabel = submission.exam_paper?.title ?? "Unknown paper"
+		return {
+			title: `${studentLabel} — ${paperLabel}`,
+			url: `${WEB_URL}/teacher/exam-papers/${submission.exam_paper_id}?tab=submissions`,
+		}
+	}
+	return { title: "a resource", url: `${WEB_URL}/teacher` }
 }
 
 function firstNameFrom(name: string | null): string | null {

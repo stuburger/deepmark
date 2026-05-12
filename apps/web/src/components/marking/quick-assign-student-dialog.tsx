@@ -26,10 +26,7 @@ import {
 } from "@/lib/marking/submissions/mutations"
 import { queryKeys } from "@/lib/query-keys"
 import { createStudent } from "@/lib/students/mutations"
-import {
-	getNextStudentNumber,
-	listStudents,
-} from "@/lib/students/queries"
+import { getNextStudentNumber, listStudents } from "@/lib/students/queries"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { Plus, UserPlus } from "lucide-react"
 import { useEffect, useState } from "react"
@@ -289,13 +286,9 @@ export function QuickAssignStudentDialog({
 								</Button>
 								<Button
 									type="button"
-									onClick={() =>
-										selectedId && linkMutation.mutate(selectedId)
-									}
+									onClick={() => selectedId && linkMutation.mutate(selectedId)}
 									disabled={
-										!selectedId ||
-										selectedId === currentStudentId ||
-										isPending
+										!selectedId || selectedId === currentStudentId || isPending
 									}
 								>
 									{linkMutation.isPending

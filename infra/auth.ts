@@ -3,6 +3,8 @@ import {
 	googleClientId,
 	googleClientSecret,
 	hostedZoneId,
+	microsoftClientId,
+	microsoftClientSecret,
 	subdomain,
 	webUrl,
 } from "./config"
@@ -45,6 +47,8 @@ export const auth = new sst.aws.Auth("Auth", {
 			authTable,
 			googleClientId,
 			googleClientSecret,
+			microsoftClientId,
+			microsoftClientSecret,
 			// `seedTrialGrant` reads `Resource.StripeConfig.trialPaperCap` on signup.
 			stripeConfig,
 			// `user.signed_up` emit on first user.create — handled by EmailSubscriber.

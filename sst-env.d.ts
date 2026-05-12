@@ -34,6 +34,10 @@ declare module "sst" {
       "type": "sst.aws.Queue"
       "url": string
     }
+    "BatchClassifyTestRunner": {
+      "name": string
+      "type": "sst.aws.Function"
+    }
     "CloudVisionApiKey": {
       "type": "sst.sst.Secret"
       "value": string
@@ -69,6 +73,14 @@ declare module "sst" {
       "type": "sst.sst.Secret"
       "value": string
     }
+    "GithubClientId": {
+      "type": "sst.sst.Secret"
+      "value": string
+    }
+    "GithubClientSecret": {
+      "type": "sst.sst.Secret"
+      "value": string
+    }
     "GoogleClientId": {
       "type": "sst.sst.Secret"
       "value": string
@@ -78,8 +90,7 @@ declare module "sst" {
       "value": string
     }
     "HocuspocusServer": {
-      "service": string
-      "type": "sst.aws.Service"
+      "type": "sst.sst.Linkable"
       "url": string
     }
     "Interactions": {
@@ -90,6 +101,14 @@ declare module "sst" {
     "MarkSchemePdfQueue": {
       "type": "sst.aws.Queue"
       "url": string
+    }
+    "MicrosoftClientId": {
+      "type": "sst.sst.Secret"
+      "value": string
+    }
+    "MicrosoftClientSecret": {
+      "type": "sst.sst.Secret"
+      "value": string
     }
     "NeonPostgres": {
       "databaseUrl": string

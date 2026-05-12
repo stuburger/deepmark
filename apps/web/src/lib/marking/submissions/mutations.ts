@@ -55,23 +55,21 @@ export const unlinkStudentFromJob = resourceAction({
 	role: "editor",
 	schema: z.object({ jobId: z.string() }),
 	id: ({ jobId }) => jobId,
-}).action(
-	async ({ parsedInput: { jobId }, ctx }): Promise<{ ok: true }> => {
-		const sub = await db.studentSubmission.findFirst({
-			where: { id: jobId },
-			select: { id: true },
-		})
-		if (!sub) throw new Error("Job not found")
+}).action(async ({ parsedInput: { jobId }, ctx }): Promise<{ ok: true }> => {
+	const sub = await db.studentSubmission.findFirst({
+		where: { id: jobId },
+		select: { id: true },
+	})
+	if (!sub) throw new Error("Job not found")
 
-		await db.studentSubmission.update({
-			where: { id: jobId },
-			data: { student_id: null, student_name: null },
-		})
+	await db.studentSubmission.update({
+		where: { id: jobId },
+		data: { student_id: null, student_name: null },
+	})
 
-		ctx.log.info("Student unlinked from job", { jobId })
-		return { ok: true }
-	},
-)
+	ctx.log.info("Student unlinked from job", { jobId })
+	return { ok: true }
+})
 
 export const confirmMarking = resourceAction({
 	type: "submission",

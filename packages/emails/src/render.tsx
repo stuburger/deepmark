@@ -7,6 +7,8 @@ import {
 import type { MarkingCompleteEmailProps } from "./marking-complete"
 import { PpuThankYouEmail } from "./ppu-thank-you"
 import type { PpuThankYouEmailProps } from "./ppu-thank-you"
+import { ResourceSharedEmail, buildResourceSharedCopy } from "./resource-shared"
+import type { ResourceSharedEmailProps } from "./resource-shared"
 import { TopupThankYouEmail } from "./topup-thank-you"
 import type { TopupThankYouEmailProps } from "./topup-thank-you"
 import { WelcomeEmail } from "./welcome"
@@ -77,4 +79,11 @@ export async function renderMarkingCompleteEmail(
 ): Promise<RenderedEmail> {
 	const { subject } = buildMarkingCompleteCopy(props)
 	return renderBoth(<MarkingCompleteEmail {...props} />, subject)
+}
+
+export async function renderResourceSharedEmail(
+	props: ResourceSharedEmailProps,
+): Promise<RenderedEmail> {
+	const { subject } = buildResourceSharedCopy(props)
+	return renderBoth(<ResourceSharedEmail {...props} />, subject)
 }

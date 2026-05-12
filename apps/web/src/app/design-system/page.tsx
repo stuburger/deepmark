@@ -1,4 +1,5 @@
 import type { Metadata } from "next"
+import { Suspense } from "react"
 import { DesignSystemTabs } from "./_components/design-system-tabs"
 import { SystemTab } from "./_components/system-tab"
 import { TokensTab } from "./_components/tokens-tab"
@@ -45,10 +46,12 @@ export default async function DesignSystemPage() {
 				</div>
 			</header>
 
-			<DesignSystemTabs
-				systemTab={<SystemTab tokens={tokens} />}
-				tokensTab={<TokensTab tokens={tokens} />}
-			/>
+			<Suspense>
+				<DesignSystemTabs
+					systemTab={<SystemTab tokens={tokens} />}
+					tokensTab={<TokensTab tokens={tokens} />}
+				/>
+			</Suspense>
 
 			<footer className="border-t border-border-subtle pt-7 mt-16 flex items-center justify-between">
 				<div>

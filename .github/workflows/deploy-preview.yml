@@ -18,6 +18,8 @@ permissions:
 jobs:
   typecheck:
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: "postgresql://placeholder:placeholder@localhost:5432/placeholder"
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -36,13 +38,9 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Generate Prisma client
-        env:
-          DATABASE_URL: "postgresql://placeholder:placeholder@localhost:5432/placeholder"
         run: bun db:generate
 
       - name: Typecheck
-        env:
-          DATABASE_URL: "postgresql://placeholder:placeholder@localhost:5432/placeholder"
         run: bun typecheck
 
       - name: Lint (Biome + tokens)

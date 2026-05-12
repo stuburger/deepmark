@@ -32,6 +32,12 @@ jobs:
   sst-deploy:
     name: Deploy to Stage "${{ inputs.stage }}"
     runs-on: ubuntu-latest
+    # Job-level env so prisma/turbo see DATABASE_URL on every step.
+    # Schema/migrations don't run in CI — this is the placeholder
+    # `prisma.config.ts` needs at evaluation time. Real DB URLs come
+    # from Neon at runtime, set on each Lambda via SST resource linking.
+    env:
+      DATABASE_URL: "postgresql://placeholder:placeholder@localhost:5432/placeholder"
     outputs:
       web_url: ${{ steps.get-urls.outputs.web_url }}
       interactions_url: ${{ steps.get-urls.outputs.interactions_url }}
@@ -69,8 +75,6 @@ jobs:
         run: sudo rm -f /usr/local/bin/pulumi-language-nodejs
 
       - name: Generate Prisma client
-        env:
-          DATABASE_URL: "postgresql://placeholder:placeholder@localhost:5432/placeholder"
         run: bun db:generate
 
       # SST's esbuild bundler resolves Lambda imports against each
@@ -79,8 +83,6 @@ jobs:
       # so the bundler hard-fails with "Could not resolve @mcp-gcse/db"
       # etc. Build them first.
       - name: Build workspace packages
-        env:
-          DATABASE_URL: "postgresql://placeholder:placeholder@localhost:5432/placeholder"
         run: bun run build
 
       - name: Deploy to ${{ inputs.stage }}

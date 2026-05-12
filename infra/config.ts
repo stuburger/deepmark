@@ -2,11 +2,12 @@
 export const _PRODUCTION_ = $app.stage === "production"
 export const _DEVELOPMENT_ = $app.stage === "development"
 
-// Permanent stages are production and development
-// PR preview stages are ephemeral (pr-123-feature-name)
-export const isPermanentStage = ["development", "production"].includes(
-	$app.stage,
-)
+// Temporary: only production is permanent until we want to pay for a
+// second VPC + ECS cluster + NAT for development. `development` is
+// treated like a PR/personal stage — no stage-local VPC, no collab
+// Service; the collab fallback URL points at the production stage's
+// public ALB. Add `"development"` back once the cost is acceptable.
+export const isPermanentStage = ["production"].includes($app.stage)
 
 // Single Route53 hosted zone for getdeepmark.com
 // TODO: Set this to the actual Route53 hosted zone ID after domain setup
@@ -66,6 +67,8 @@ export const openAiApiKey = new sst.Secret("OpenAiApiKey")
 // OAuth provider credentials used by the auth issuer.
 export const googleClientId = new sst.Secret("GoogleClientId")
 export const googleClientSecret = new sst.Secret("GoogleClientSecret")
+export const microsoftClientId = new sst.Secret("MicrosoftClientId")
+export const microsoftClientSecret = new sst.Secret("MicrosoftClientSecret")
 export const anthropicApiKey = new sst.Secret("AnthropicApiKey")
 
 /**

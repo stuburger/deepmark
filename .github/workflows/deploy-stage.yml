@@ -73,6 +73,16 @@ jobs:
           DATABASE_URL: "postgresql://placeholder:placeholder@localhost:5432/placeholder"
         run: bun db:generate
 
+      # SST's esbuild bundler resolves Lambda imports against each
+      # workspace package's `exports.import` (which points to `dist/`).
+      # After a fresh `bun install` those `dist/` dirs don't exist yet,
+      # so the bundler hard-fails with "Could not resolve @mcp-gcse/db"
+      # etc. Build them first.
+      - name: Build workspace packages
+        env:
+          DATABASE_URL: "postgresql://placeholder:placeholder@localhost:5432/placeholder"
+        run: bun run build
+
       - name: Deploy to ${{ inputs.stage }}
         env:
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}

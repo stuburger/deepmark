@@ -8,7 +8,7 @@
 			"outputs": ["dist/**"]
 		},
 		"typecheck": {
-			"dependsOn": ["@mcp-gcse/shared#build"],
+			"dependsOn": ["@mcp-gcse/shared#build", "@mcp-gcse/emails#build"],
 			"inputs": ["src/**/*.ts", "tsconfig.json", "package.json"],
 			"outputs": []
 		},

@@ -81,9 +81,11 @@ jobs:
       # workspace package's `exports.import` (which points to `dist/`).
       # After a fresh `bun install` those `dist/` dirs don't exist yet,
       # so the bundler hard-fails with "Could not resolve @mcp-gcse/db"
-      # etc. Build them first.
+      # etc. Build only the libraries — apps/web is built by sst.aws.Nextjs
+      # during `sst deploy` and trying to Next-build it standalone fails
+      # on SST Resource lookups.
       - name: Build workspace packages
-        run: bun run build
+        run: bunx turbo build --filter='./packages/*'
 
       - name: Deploy to ${{ inputs.stage }}
         env:

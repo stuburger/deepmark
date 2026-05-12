@@ -2,12 +2,20 @@
 export const _PRODUCTION_ = $app.stage === "production"
 export const _DEVELOPMENT_ = $app.stage === "development"
 
-// Temporary: only production is permanent until we want to pay for a
-// second VPC + ECS cluster + NAT for development. `development` is
-// treated like a PR/personal stage — no stage-local VPC, no collab
-// Service; the collab fallback URL points at the production stage's
-// public ALB. Add `"development"` back once the cost is acceptable.
-export const isPermanentStage = ["production"].includes($app.stage)
+// Permanent stages are production and development
+// PR preview stages are ephemeral (pr-123-feature-name)
+export const isPermanentStage = ["development", "production"].includes(
+	$app.stage,
+)
+
+/**
+ * Whether this stage gets its own VPC + ECS cluster + Hocuspocus Service.
+ * Production-only for now — dev points its collab URL at production's
+ * public ALB rather than paying for a parallel VPC + NAT (~$6/mo) and
+ * the collab Fargate task. Flip on for any stage that needs an isolated
+ * collab plane.
+ */
+export const hasStageVpc = _PRODUCTION_
 
 // Single Route53 hosted zone for getdeepmark.com
 // TODO: Set this to the actual Route53 hosted zone ID after domain setup

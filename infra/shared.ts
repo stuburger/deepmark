@@ -1,17 +1,16 @@
-import { isPermanentStage } from "./config"
+import { hasStageVpc } from "./config"
 
 /**
  * Shared VPC + ECS cluster for containerised services (Hocuspocus, future
  * workers).
  *
- * Permanent stages (production, development) create their own VPC + cluster
- * and deploy the collab Service into it.
+ * Production gets its own VPC + cluster and runs the collab Service in it.
  *
- * PR preview and personal stages do NOT create — or reference — VPC/cluster.
- * They connect to a permanent stage's already-deployed Hocuspocus via its
- * public ALB (see infra/collab.ts), so there's nothing stage-local to wire
- * up. Both exports are `undefined` for those stages; collab.ts guards the
- * references with `isPermanentStage`.
+ * Every other stage (development, PR previews, personal stages) does NOT
+ * create — or reference — VPC/cluster. They connect to production's
+ * already-deployed Hocuspocus via its public ALB (see infra/collab.ts),
+ * so there's nothing stage-local to wire up. Both exports are `undefined`
+ * for those stages; collab.ts guards the references with `hasStageVpc`.
  *
  * NAT: uses `nat: "ec2"` — fck-nat-style NAT instances on t4g.nano (~$3/mo
  * per AZ, ~$6/mo total for 2 AZs). Tasks run in private subnets which is the
@@ -19,11 +18,11 @@ import { isPermanentStage } from "./config"
  * overkill at this scale.
  */
 
-export const vpc = isPermanentStage
+export const vpc = hasStageVpc
 	? new sst.aws.Vpc("Vpc", { az: 2, nat: "ec2" })
 	: undefined
 
-export const cluster = isPermanentStage
-	? // biome-ignore lint/style/noNonNullAssertion: vpc is defined on permanent stages
+export const cluster = hasStageVpc
+	? // biome-ignore lint/style/noNonNullAssertion: vpc is defined when hasStageVpc is true
 		new sst.aws.Cluster("Cluster", { vpc: vpc! })
 	: undefined

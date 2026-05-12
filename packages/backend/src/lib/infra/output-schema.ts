@@ -13,6 +13,8 @@ import type { z } from "zod/v4"
 export function outputSchema<T>(
 	schema: z.ZodType<T>,
 ): ReturnType<typeof Output.object<T>> {
-	// @ts-expect-error TODO fix this when it's fixed upstream
+	// @ts-ignore — zod v4 / AI SDK type drift. Tolerant of either resolution:
+	// some lockfile snapshots produce a type error here, others don't. Using
+	// @ts-ignore (not @ts-expect-error) so a clean resolution doesn't fail CI.
 	return Output.object({ schema: schema })
 }

@@ -1,4 +1,5 @@
 import { db } from "@/db"
+import { llmTimeoutFromContext } from "@/lib/infra/lambda-envelope"
 import { logger } from "@/lib/infra/logger"
 import type { SqsEvent, SqsRecord } from "@/lib/infra/sqs-job-runner"
 import { appendJobEvent } from "@/lib/script-ingestion/job-events"
@@ -8,6 +9,7 @@ import {
 } from "@/lib/script-ingestion/source-file-processing"
 import type { StagedScriptData } from "@/lib/script-ingestion/types"
 import type { BatchStatus, StagedScriptStatus } from "@mcp-gcse/db"
+import type { LlmTimeoutMs } from "@mcp-gcse/shared"
 import type { Context } from "aws-lambda"
 import { z } from "zod/v4"
 
@@ -24,19 +26,16 @@ export async function handler(
 	context?: Context,
 ): Promise<{ batchItemFailures?: { itemIdentifier: string }[] }> {
 	const failures: { itemIdentifier: string }[] = []
-	// AWS passes a Context object with `getRemainingTimeInMillis` whenever
-	// this runs inside Lambda. Wrap it as a closure so downstream callees
-	// can be Lambda-runtime-agnostic and just see "ms remaining".
-	const getRemainingTimeMs = context
-		? () => context.getRemainingTimeInMillis()
-		: undefined
+	// Single thunk that re-evaluates the Lambda envelope per fallback
+	// attempt. Downstream callees stay Lambda-runtime-agnostic.
+	const timeoutMs = llmTimeoutFromContext(context)
 
 	for (const record of event.Records) {
 		const batchJobId = parseBatchJobId(record)
 		if (!batchJobId) continue
 
 		try {
-			await classifyBatch(batchJobId, { getRemainingTimeMs })
+			await classifyBatch(batchJobId, { timeoutMs })
 		} catch (err) {
 			const errMsg =
 				err instanceof Error
@@ -77,7 +76,7 @@ function parseBatchJobId(record: SqsRecord): string | null {
 
 async function classifyBatch(
 	batchJobId: string,
-	opts: { getRemainingTimeMs?: () => number } = {},
+	opts: { timeoutMs?: LlmTimeoutMs } = {},
 ): Promise<void> {
 	logger.info(TAG, "Starting batch classification", { batchJobId })
 
@@ -96,7 +95,7 @@ async function classifyBatch(
 	const allStagedScripts: StagedScriptData[] = []
 	for (const sourceKey of sourceKeys) {
 		const { scripts } = await processSourceFile(batchJobId, sourceKey, {
-			getRemainingTimeMs: opts.getRemainingTimeMs,
+			timeoutMs: opts.timeoutMs,
 		})
 		allStagedScripts.push(...scripts)
 	}

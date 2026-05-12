@@ -9,6 +9,7 @@ import {
 	createCancellationToken,
 } from "@/lib/infra/cancellation"
 import { embedQuestionText } from "@/lib/infra/google-generative-ai"
+import { llmTimeoutFromContext } from "@/lib/infra/lambda-envelope"
 import { callLlmWithFallback } from "@/lib/infra/llm-runtime"
 import { logger } from "@/lib/infra/logger"
 import { outputSchema } from "@/lib/infra/output-schema"
@@ -23,6 +24,7 @@ import {
 } from "@/lib/infra/sqs-job-runner"
 import type { ScanStatus } from "@mcp-gcse/db"
 import { generateText } from "ai"
+import type { Context } from "aws-lambda"
 import {
 	EXTRACT_METADATA_PROMPT,
 	EXTRACT_QUESTIONS_PROMPT,
@@ -40,8 +42,10 @@ const TAG = "question-paper-pdf"
 
 export async function handler(
 	event: SqsEvent,
+	context?: Context,
 ): Promise<{ batchItemFailures?: { itemIdentifier: string }[] }> {
 	const failures: { itemIdentifier: string }[] = []
+	const timeoutMs = llmTimeoutFromContext(context)
 
 	for (const record of event.Records) {
 		const messageId = record.messageId
@@ -144,6 +148,7 @@ export async function handler(
 						report.usage = result.usage
 						return result
 					},
+					{ timeoutMs },
 				),
 				callLlmWithFallback(
 					"question-paper-metadata",
@@ -165,6 +170,7 @@ export async function handler(
 						report.usage = result.usage
 						return result
 					},
+					{ timeoutMs },
 				),
 			])
 

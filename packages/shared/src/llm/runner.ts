@@ -30,6 +30,39 @@ import type { LlmModelEntry, LlmProvider } from "./types"
 export const DEFAULT_LLM_TIMEOUT_MS = 90_000
 
 /**
+ * Wall-clock budget for a single LLM attempt. A plain `number` freezes the
+ * budget for the lifetime of the call. A thunk is re-evaluated for every
+ * attempt in the fallback chain — use this when the budget changes over
+ * time (e.g. derived from a Lambda's remaining execution time, where
+ * attempt 2 needs to see a smaller window than attempt 1).
+ */
+export type LlmTimeoutMs = number | (() => number)
+
+/**
+ * Combine a hard call-site cap (a fail-fast canary for "this prompt should
+ * never legitimately run longer than X") with an optional caller-supplied
+ * budget (typically a Lambda envelope). Returns a value usable as `timeoutMs`.
+ *
+ * Semantics:
+ *   - `source` undefined → use `cap`.
+ *   - `source` is a number → return `min(cap, source)`.
+ *   - `source` is a thunk → return a thunk that resolves to `min(cap, source())`
+ *     per attempt, so fallback retries pick up a shrunken envelope correctly.
+ *
+ * Use this at call sites that have their own "stuck call" ceiling (e.g.
+ * multi-page attribution at 240 s) and also want to honour a tighter Lambda
+ * envelope. The two constraints meet at `min`.
+ */
+export function clampLlmTimeoutMs(
+	cap: number,
+	source: LlmTimeoutMs | undefined,
+): LlmTimeoutMs {
+	if (source === undefined) return cap
+	if (typeof source === "number") return Math.min(cap, source)
+	return () => Math.min(cap, source())
+}
+
+/**
  * Thrown when an LLM call exceeds its wall-clock budget. The fallback chain
  * treats this like any other error — it'll try the next model in the chain.
  * If every model in the chain times out, this surfaces to the caller.
@@ -212,11 +245,15 @@ export class LlmRunner {
 			report: LlmCallReport,
 			signal: AbortSignal,
 		) => Promise<T>,
-		opts?: { timeoutMs?: number },
+		opts?: { timeoutMs?: LlmTimeoutMs },
 	): Promise<T> {
 		const models = await this.resolveConfig(callSiteKey)
 		const report: LlmCallReport = {}
-		const timeoutMs = opts?.timeoutMs ?? DEFAULT_LLM_TIMEOUT_MS
+		const resolveTimeoutMs = (): number => {
+			const raw = opts?.timeoutMs
+			if (typeof raw === "function") return raw()
+			return raw ?? DEFAULT_LLM_TIMEOUT_MS
+		}
 
 		const result = await callWithFallback(
 			models,
@@ -224,7 +261,7 @@ export class LlmRunner {
 			(model, entry) =>
 				withTimeout(
 					(signal) => fn(model, entry, report, signal),
-					timeoutMs,
+					resolveTimeoutMs(),
 					callSiteKey,
 					this.deps.logger,
 				),

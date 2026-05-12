@@ -5,6 +5,7 @@ import {
 	parsePages,
 } from "@/lib/grading/question-seeds"
 import { createCancellationToken } from "@/lib/infra/cancellation"
+import { llmTimeoutFromContext } from "@/lib/infra/lambda-envelope"
 import { createLlmRunner } from "@/lib/infra/llm-runtime"
 import { logger } from "@/lib/infra/logger"
 import { getFileBase64 } from "@/lib/infra/s3"
@@ -25,13 +26,17 @@ import { saveVisionRaw } from "@/lib/scan-extraction/save-vision-raw"
 import { SQSClient, SendMessageCommand } from "@aws-sdk/client-sqs"
 import { type OcrStatus, type Subject, logOcrRunEvent } from "@mcp-gcse/db"
 import { redactName } from "@mcp-gcse/shared"
+import type { Context } from "aws-lambda"
 import { Resource } from "sst"
 
 const TAG = "student-paper-extract"
 
 const sqs = new SQSClient({})
 
-export async function handler(event: SqsEvent): Promise<void> {
+export async function handler(
+	event: SqsEvent,
+	context?: Context,
+): Promise<void> {
 	// Queue is configured with `batch: { size: 1 }`, so SQS delivers one
 	// record per invocation. Throwing is the correct way to fail — SQS sees
 	// it, redelivers up to maxReceiveCount, then routes to the DLQ.
@@ -43,6 +48,7 @@ export async function handler(event: SqsEvent): Promise<void> {
 
 	const cancellation = createCancellationToken(jobId)
 	const llm = createLlmRunner()
+	const timeoutMs = llmTimeoutFromContext(context)
 	try {
 		logger.info(TAG, "OCR job received", {
 			jobId,
@@ -129,7 +135,7 @@ export async function handler(event: SqsEvent): Promise<void> {
 					return comprehendPage(
 						pageEntry.data,
 						page.mime_type,
-						{ extractMetadata: i === 0 },
+						{ extractMetadata: i === 0, timeoutMs },
 						llm,
 					)
 				}),
@@ -277,6 +283,7 @@ export async function handler(event: SqsEvent): Promise<void> {
 			tokens: insertedTokens,
 			jobId,
 			llm,
+			timeoutMs,
 		})
 
 		const answersExtracted = reconstructedAnswers.filter((a) =>

@@ -5,6 +5,7 @@ import {
 	LlmRunSnapshotSchema,
 	LlmRunner,
 	LlmTimeoutError,
+	clampLlmTimeoutMs,
 } from "../../src/llm/runner"
 import type { LlmModelEntry } from "../../src/llm/types"
 
@@ -364,5 +365,62 @@ describe("LlmRunner", () => {
 			prompt_tokens: 500,
 			completion_tokens: 200,
 		})
+	})
+
+	// ── timeoutMs as a thunk (per-attempt re-evaluation) ─────────────────────
+
+	it("evaluates a timeoutMs thunk once per attempt", async () => {
+		const { runner } = createRunner({ grading: [GOOGLE_FLASH] })
+		const thunk = vi.fn(() => 1_000)
+
+		await runner.call("grading", async () => "ok", { timeoutMs: thunk })
+		expect(thunk).toHaveBeenCalledTimes(1)
+	})
+
+	it("re-evaluates the timeoutMs thunk for each fallback attempt", async () => {
+		// Simulates a Lambda envelope: attempt 1 sees a comfortable budget,
+		// attempt 2 sees a tighter budget because wall-clock has advanced.
+		const { runner } = createRunner({
+			grading: [GOOGLE_FLASH, OPENAI_GPT4O],
+		})
+		const thunk = vi
+			.fn<() => number>()
+			.mockReturnValueOnce(30)
+			.mockReturnValueOnce(2_000)
+
+		const result = await runner.call(
+			"grading",
+			async (model) => {
+				if (
+					(model as unknown as { modelId: string }).modelId.includes("google")
+				) {
+					// Primary hangs — the thunk's first call (30 ms) triggers
+					// the timeout and the fallback chain advances.
+					return new Promise<string>(() => {})
+				}
+				return "fallback"
+			},
+			{ timeoutMs: thunk },
+		)
+
+		expect(result).toBe("fallback")
+		expect(thunk).toHaveBeenCalledTimes(2)
+	})
+
+	it("clampLlmTimeoutMs takes the min of a hard cap and the caller budget", () => {
+		// number sources
+		expect(clampLlmTimeoutMs(200, undefined)).toBe(200)
+		expect(clampLlmTimeoutMs(200, 100)).toBe(100)
+		expect(clampLlmTimeoutMs(200, 500)).toBe(200)
+
+		// thunk source — clamp wraps the thunk so each evaluation re-clamps
+		let remaining = 500
+		const result = clampLlmTimeoutMs(200, () => remaining)
+		expect(typeof result).toBe("function")
+		expect((result as () => number)()).toBe(200)
+		remaining = 150
+		expect((result as () => number)()).toBe(150)
+		remaining = 5
+		expect((result as () => number)()).toBe(5)
 	})
 })

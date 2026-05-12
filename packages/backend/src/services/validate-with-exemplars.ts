@@ -1,6 +1,10 @@
 import { db } from "@/db"
 import { createLlmRunner } from "@/lib/infra/llm-runtime"
-import { Grader, buildQuestionWithMarkScheme } from "@mcp-gcse/shared"
+import {
+	Grader,
+	type LlmTimeoutMs,
+	buildQuestionWithMarkScheme,
+} from "@mcp-gcse/shared"
 
 export interface ExemplarValidationSummary {
 	markSchemeId: string
@@ -16,6 +20,7 @@ export interface ExemplarValidationSummary {
  */
 export async function validateWithExemplars(
 	markSchemeId: string,
+	opts: { timeoutMs?: LlmTimeoutMs } = {},
 ): Promise<ExemplarValidationSummary> {
 	const markScheme = await db.markScheme.findUniqueOrThrow({
 		where: { id: markSchemeId },
@@ -57,6 +62,7 @@ export async function validateWithExemplars(
 	const grader = new Grader(createLlmRunner(), {
 		systemPrompt:
 			"You are an expert GCSE examiner. Mark the student's answer against the provided mark scheme. Return valid JSON matching the schema. Be consistent and conservative.",
+		timeoutMs: opts.timeoutMs,
 	})
 
 	const q = markScheme.question

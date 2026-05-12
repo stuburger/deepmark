@@ -6,6 +6,8 @@ import { getFileBase64 } from "@/lib/infra/s3"
 import { logOcrRunEvent } from "@mcp-gcse/db"
 import {
 	type LlmRunner,
+	type LlmTimeoutMs,
+	clampLlmTimeoutMs,
 	computeBboxHull,
 	sortTokensSpatially,
 } from "@mcp-gcse/shared"
@@ -69,6 +71,8 @@ export type AttributeScriptArgs = {
 	 *  candidate shortlist — the model reasons about content itself. */
 	pageTranscripts?: Map<number, string>
 	llm?: LlmRunner
+	/** Per-attempt wall-clock budget forwarded to the runner. */
+	timeoutMs?: LlmTimeoutMs
 }
 
 class ScriptAttributionError extends Error {
@@ -209,6 +213,7 @@ export async function attributeScript({
 	tokens,
 	pageTranscripts,
 	llm,
+	timeoutMs,
 }: AttributeScriptArgs): Promise<{ answers: ReconstructedAnswer[] }> {
 	const emptyAnswers: ReconstructedAnswer[] = questions.map((q) => ({
 		question_id: q.question_id,
@@ -346,10 +351,11 @@ export async function attributeScript({
 					return result
 				},
 				// Multi-page attribution (28 pages observed) takes 30–180 s on
-				// healthy runs. 240 s gives ~30% headroom over the slowest
-				// healthy case while still fitting inside the 5-min Lambda
-				// timeout — a hung Gemini call fails fast, not at lambda kill.
-				{ llm, timeoutMs: 240_000 },
+				// healthy runs. 240 s is the stuck-call canary — fail fast on
+				// model loops. When a Lambda envelope is passed in, clamp to
+				// the tighter of the two so we still bail before the Lambda
+				// kill (otherwise the Gemini fetch is orphaned and billed).
+				{ llm, timeoutMs: clampLlmTimeoutMs(240_000, timeoutMs) },
 			)
 			output = rawOutput as ScriptAttributionOutput
 		} catch (err) {
@@ -388,12 +394,16 @@ export async function attributeScript({
 		)
 
 		if (droppedPages.length > 0) {
-			logger.warn(TAG, "Attribution returned spans on unknown pages — dropped", {
-				jobId,
-				attempt,
-				droppedPages,
-				validPages: [...orderedTokensByPage.keys()].sort((a, b) => a - b),
-			})
+			logger.warn(
+				TAG,
+				"Attribution returned spans on unknown pages — dropped",
+				{
+					jobId,
+					attempt,
+					droppedPages,
+					validPages: [...orderedTokensByPage.keys()].sort((a, b) => a - b),
+				},
+			)
 		}
 
 		if (errors.length === 0) {

@@ -22,6 +22,7 @@ export async function annotateOneQuestion(
 		markScheme,
 		llm,
 		jobId,
+		timeoutMs,
 	} = args
 
 	// Filter tokens for this question
@@ -84,6 +85,7 @@ export async function annotateOneQuestion(
 			report.usage = result.usage
 			return result.output
 		},
+		{ timeoutMs },
 	)
 
 	// Resolve token indices to spans and build pending records

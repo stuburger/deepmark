@@ -22,6 +22,7 @@ import {
 	type CancellationToken,
 	createCancellationToken,
 } from "@/lib/infra/cancellation"
+import { llmTimeoutFromContext } from "@/lib/infra/lambda-envelope"
 import { createLlmRunner } from "@/lib/infra/llm-runtime"
 import { logger } from "@/lib/infra/logger"
 import {
@@ -33,9 +34,11 @@ import { type GradingStatus, logGradingRunEvent } from "@mcp-gcse/db"
 import { EventDetailType, EventSource } from "@mcp-gcse/emails"
 import {
 	type LlmRunner,
+	type LlmTimeoutMs,
 	type MarkerOrchestrator,
 	insertExaminerSummary,
 } from "@mcp-gcse/shared"
+import type { Context } from "aws-lambda"
 
 const TAG = "student-paper-grade"
 
@@ -50,7 +53,10 @@ type SubmissionWithOcr = Awaited<
 
 // ─── Public handler ────────────────────────────────────────────────────────────
 
-export async function handler(event: SqsEvent): Promise<void> {
+export async function handler(
+	event: SqsEvent,
+	context?: Context,
+): Promise<void> {
 	// Queue is configured with `batch: { size: 1 }`, so SQS delivers one
 	// record per invocation. Throwing is the correct way to fail — SQS sees
 	// it, redelivers up to maxReceiveCount, then routes to the DLQ.
@@ -61,11 +67,19 @@ export async function handler(event: SqsEvent): Promise<void> {
 	if (!jobId) return
 
 	const cancellation = createCancellationToken(jobId)
+	const timeoutMs = llmTimeoutFromContext(context)
 	try {
 		const llm = createLlmRunner()
 		const annotationLlm = createLlmRunner()
-		const orchestrator = createMarkerOrchestrator(llm)
-		await gradeJob({ jobId, orchestrator, llm, annotationLlm, cancellation })
+		const orchestrator = createMarkerOrchestrator(llm, { timeoutMs })
+		await gradeJob({
+			jobId,
+			orchestrator,
+			llm,
+			annotationLlm,
+			cancellation,
+			timeoutMs,
+		})
 	} catch (err) {
 		await markJobFailed(jobId, TAG, "grading", err)
 		throw err
@@ -82,6 +96,7 @@ type GradeJobArgs = {
 	llm: LlmRunner
 	annotationLlm: LlmRunner
 	cancellation: CancellationToken
+	timeoutMs?: LlmTimeoutMs
 }
 
 async function gradeJob({
@@ -90,6 +105,7 @@ async function gradeJob({
 	llm,
 	annotationLlm,
 	cancellation,
+	timeoutMs,
 }: GradeJobArgs): Promise<void> {
 	logger.info(TAG, "Grading job received", { jobId })
 
@@ -191,6 +207,7 @@ async function gradeJob({
 				annotationLlm,
 				editor,
 				tokensByQuestion,
+				timeoutMs,
 			})
 			return {
 				gradingResults: out.results,
@@ -209,6 +226,7 @@ async function gradeJob({
 		examPaperTitle: examPaper.title,
 		subject: examPaper.subject,
 		runner: llm,
+		timeoutMs,
 	})
 
 	// Push the AI summary into the prosemirror doc as a leading paragraph so

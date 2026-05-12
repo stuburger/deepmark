@@ -1,6 +1,6 @@
 import { logger } from "@/lib/infra/logger"
 import { outputSchema } from "@/lib/infra/output-schema"
-import type { LlmRunner } from "@mcp-gcse/shared"
+import type { LlmRunner, LlmTimeoutMs } from "@mcp-gcse/shared"
 import { generateText } from "ai"
 import { z } from "zod/v4"
 import type { GradingResult } from "./grade-questions"
@@ -36,6 +36,8 @@ type GenerateExaminerSummaryArgs = {
 	examPaperTitle: string
 	subject: string
 	runner: LlmRunner
+	/** Per-attempt wall-clock budget forwarded to the runner. */
+	timeoutMs?: LlmTimeoutMs
 }
 
 export async function generateExaminerSummary({
@@ -43,6 +45,7 @@ export async function generateExaminerSummary({
 	examPaperTitle,
 	subject,
 	runner,
+	timeoutMs,
 }: GenerateExaminerSummaryArgs): Promise<string | null> {
 	if (gradingResults.length === 0) return null
 
@@ -84,6 +87,7 @@ Write a 3-line summary for this student.`
 				report.usage = result.usage
 				return result.output
 			},
+			{ timeoutMs },
 		)
 
 		return `${output.strength}\n${output.weakness}\n${output.improvement}`

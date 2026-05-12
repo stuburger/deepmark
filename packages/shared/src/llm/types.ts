@@ -241,6 +241,7 @@ export const LLM_CALL_SITE_DEFAULTS: Array<{
 		multiplier: "once",
 		models: [
 			{ provider: "google", model: "gemini-2.5-flash", temperature: 0.2 },
+			{ provider: "anthropic", model: "claude-sonnet-4-6", temperature: 0.2 },
 		],
 	},
 	{

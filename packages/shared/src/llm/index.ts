@@ -11,10 +11,12 @@ export {
 	LlmModelEntrySchema,
 	LlmRunSnapshotSchema,
 	LlmTimeoutError,
+	clampLlmTimeoutMs,
 	type EffectiveSummary,
 	type LlmCallReport,
 	type LlmRunSnapshot,
 	type LlmRunnerDeps,
+	type LlmTimeoutMs,
 } from "./runner"
 export {
 	CALL_MULTIPLIER_LABELS,

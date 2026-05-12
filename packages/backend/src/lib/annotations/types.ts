@@ -5,6 +5,7 @@ import type {
 	ChainPayload,
 	GcseMarkPoint,
 	LlmRunner,
+	LlmTimeoutMs,
 	NormalisedBox,
 	QuestionStimulusContext,
 } from "@mcp-gcse/shared"
@@ -68,4 +69,6 @@ export type AnnotateOneQuestionArgs = {
 	markScheme: MarkSchemeForAnnotation | null
 	llm: LlmRunner
 	jobId: string
+	/** Per-attempt wall-clock budget forwarded to the runner. */
+	timeoutMs?: LlmTimeoutMs
 }

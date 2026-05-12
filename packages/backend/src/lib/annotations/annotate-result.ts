@@ -3,6 +3,7 @@ import type { MarkScheme } from "@/lib/grading/question-list"
 import { logger } from "@/lib/infra/logger"
 import {
 	type LlmRunner,
+	type LlmTimeoutMs,
 	type QuestionStimulusContext,
 	parseMarkPointsFromPrisma,
 } from "@mcp-gcse/shared"
@@ -19,6 +20,8 @@ export type AnnotateOneResultArgs = {
 	annotationContext: AnnotationContext
 	annotationLlm: LlmRunner
 	jobId: string
+	/** Per-attempt wall-clock budget forwarded to the annotation LLM call. */
+	timeoutMs?: LlmTimeoutMs
 }
 
 /**
@@ -37,6 +40,7 @@ export async function annotateOneResult({
 	annotationContext,
 	annotationLlm,
 	jobId,
+	timeoutMs,
 }: AnnotateOneResultArgs): Promise<PendingAnnotation[]> {
 	const { allTokens, regionByQuestion, examBoard, levelDescriptors, subject } =
 		annotationContext
@@ -72,6 +76,7 @@ export async function annotateOneResult({
 				: null,
 			llm: annotationLlm,
 			jobId,
+			timeoutMs,
 		})
 	} catch (err) {
 		if (!isRecoverableAnnotationError(err)) throw err

@@ -1,6 +1,6 @@
 import { callLlmWithFallback } from "@/lib/infra/llm-runtime"
 import { outputSchema } from "@/lib/infra/output-schema"
-import type { LlmRunner } from "@mcp-gcse/shared"
+import type { LlmRunner, LlmTimeoutMs } from "@mcp-gcse/shared"
 import { generateText } from "ai"
 import { z } from "zod/v4"
 
@@ -16,6 +16,8 @@ export type ComprehendPageOptions = {
 	analysisFocus?: string
 	/** When true, also extract student name and detected subject. Use only for the first page. */
 	extractMetadata?: boolean
+	/** Per-attempt wall-clock budget forwarded to the runner. */
+	timeoutMs?: LlmTimeoutMs
 }
 
 const TranscriptSchema = z.object({
@@ -120,7 +122,7 @@ export async function comprehendPage(
 			report.usage = result.usage
 			return result
 		},
-		{ llm },
+		{ llm, timeoutMs: options.timeoutMs },
 	)
 
 	return {

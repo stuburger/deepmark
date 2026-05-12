@@ -15,6 +15,7 @@ import { logGradingRunEvent } from "@mcp-gcse/db"
 import { type QuestionGradeAttrs, setQuestionGrade } from "@mcp-gcse/shared"
 import {
 	type LlmRunner,
+	type LlmTimeoutMs,
 	type MarkerContext,
 	type MarkerOrchestrator,
 	type PageToken,
@@ -72,6 +73,8 @@ export type GradeAndAnnotateAllArgs = {
 	editor: HeadlessEditor
 	/** Per-question OCR tokens, preloaded once for the whole submission. */
 	tokensByQuestion: Map<string, PageToken[]>
+	/** Per-attempt wall-clock budget forwarded to grading + annotation LLM calls. */
+	timeoutMs?: LlmTimeoutMs
 }
 
 export type GradeAndAnnotateAllOutput = {
@@ -104,6 +107,7 @@ export async function gradeAndAnnotateAll(
 		annotationLlm,
 		editor,
 		tokensByQuestion,
+		timeoutMs,
 	} = args
 
 	// Pre-allocate slots to maintain question order during streaming updates.
@@ -167,6 +171,7 @@ export async function gradeAndAnnotateAll(
 				annotationContext,
 				annotationLlm,
 				jobId,
+				timeoutMs,
 			})
 			annotationsByQuestion.set(result.question_id, annotations)
 

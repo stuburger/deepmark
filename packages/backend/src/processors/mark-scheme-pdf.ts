@@ -3,6 +3,7 @@ import {
 	type CancellationToken,
 	createCancellationToken,
 } from "@/lib/infra/cancellation"
+import { llmTimeoutFromContext } from "@/lib/infra/lambda-envelope"
 import { callLlmWithFallback, createLlmRunner } from "@/lib/infra/llm-runtime"
 import { logger } from "@/lib/infra/logger"
 import { outputSchema } from "@/lib/infra/output-schema"
@@ -17,6 +18,7 @@ import {
 import type { ScanStatus } from "@mcp-gcse/db"
 import { Grader } from "@mcp-gcse/shared"
 import { generateText } from "ai"
+import type { Context } from "aws-lambda"
 import { linkJobQuestionsToExamPaper } from "./mark-scheme-pdf/linking"
 import { processExtractedQuestion } from "./mark-scheme-pdf/process-question"
 import {
@@ -45,8 +47,10 @@ type DetectedMetadata = {
 
 export async function handler(
 	event: SqsEvent,
+	context?: Context,
 ): Promise<{ batchItemFailures?: { itemIdentifier: string }[] }> {
 	const failures: { itemIdentifier: string }[] = []
+	const timeoutMs = llmTimeoutFromContext(context)
 
 	for (const record of event.Records) {
 		const messageId = record.messageId
@@ -153,6 +157,7 @@ export async function handler(
 						report.usage = result.usage
 						return result
 					},
+					{ timeoutMs },
 				),
 				job.auto_create_exam_paper
 					? callLlmWithFallback(
@@ -178,6 +183,7 @@ export async function handler(
 								report.usage = result.usage
 								return result
 							},
+							{ timeoutMs },
 						)
 					: Promise.resolve(null),
 			])
@@ -198,6 +204,7 @@ export async function handler(
 				grader = new Grader(createLlmRunner(), {
 					systemPrompt:
 						"You are an expert GCSE examiner. Mark the student's answer against the provided mark scheme. Return valid JSON matching the schema. Be consistent and conservative.",
+					timeoutMs,
 				})
 			}
 

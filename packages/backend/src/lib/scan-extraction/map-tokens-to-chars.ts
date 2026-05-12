@@ -1,6 +1,6 @@
 import { callLlmWithFallback } from "@/lib/infra/llm-runtime"
 import { outputSchema } from "@/lib/infra/output-schema"
-import type { LlmRunner } from "@mcp-gcse/shared"
+import type { LlmRunner, LlmTimeoutMs } from "@mcp-gcse/shared"
 import { generateText } from "ai"
 import {
 	type AnswerWord,
@@ -16,6 +16,8 @@ export type MapTokensToCharsArgs = {
 	/** Tokens in the same spatial reading order used to author `answerText`. */
 	tokens: MappingTokenInput[]
 	llm?: LlmRunner
+	/** Per-attempt wall-clock budget forwarded to the runner. */
+	timeoutMs?: LlmTimeoutMs
 }
 
 export type TokenCharMapping = {
@@ -51,6 +53,7 @@ export async function mapTokensToChars({
 	answerText,
 	tokens,
 	llm,
+	timeoutMs,
 }: MapTokensToCharsArgs): Promise<MapTokensToCharsResult> {
 	const words = splitAnswerWords(answerText)
 	if (tokens.length === 0) return { mappings: [], words }
@@ -75,7 +78,7 @@ export async function mapTokensToChars({
 			report.usage = result.usage
 			return result
 		},
-		{ llm },
+		{ llm, timeoutMs },
 	)
 
 	const mappings: TokenCharMapping[] = output.mappings.map((m) => {

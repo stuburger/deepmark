@@ -1,5 +1,5 @@
 import { Output, generateText } from "ai"
-import type { LlmRunner } from "../llm/runner"
+import type { LlmRunner, LlmTimeoutMs } from "../llm/runner"
 import { buildBatchPrompt } from "./prompts/batch"
 import { buildLoRPrompt } from "./prompts/lor"
 import { buildPointBasedPrompt } from "./prompts/point-based"
@@ -37,11 +37,13 @@ export class Grader {
 	private runner: LlmRunner
 	private callSiteKey: string
 	private systemPrompt: string
+	private timeoutMs: LlmTimeoutMs | undefined
 
 	constructor(runner: LlmRunner, options?: GraderOptions) {
 		this.runner = runner
 		this.callSiteKey = options?.callSiteKey ?? DEFAULT_CALL_SITE_KEY
 		this.systemPrompt = options?.systemPrompt ?? DEFAULT_SYSTEM_PROMPT
+		this.timeoutMs = options?.timeoutMs
 	}
 
 	/** Grade multiple questions in a single LLM call (point-based only). */
@@ -65,6 +67,7 @@ export class Grader {
 				report.usage = result.usage
 				return result.output
 			},
+			{ timeoutMs: this.timeoutMs },
 		)
 
 		const grades: QuestionGrade[] = output.questionGrades.map((aiGrade) => {
@@ -128,6 +131,7 @@ export class Grader {
 				report.usage = result.usage
 				return result.output
 			},
+			{ timeoutMs: this.timeoutMs },
 		)
 
 		const metrics = computeGradeMetrics(output, question)
@@ -176,6 +180,7 @@ export class Grader {
 				report.usage = result.usage
 				return result.output
 			},
+			{ timeoutMs: this.timeoutMs },
 		)
 
 		const maxPossibleScore = question.totalPoints

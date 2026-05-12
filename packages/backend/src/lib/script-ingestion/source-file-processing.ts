@@ -6,7 +6,7 @@ import { segmentPdfScripts } from "@/lib/script-ingestion/segment-script"
 import type { PageKey, StagedScriptData } from "@/lib/script-ingestion/types"
 import { guessMime } from "@/lib/script-ingestion/utils"
 import { ListObjectsV2Command } from "@aws-sdk/client-s3"
-import { redactName } from "@mcp-gcse/shared"
+import { type LlmTimeoutMs, redactName } from "@mcp-gcse/shared"
 import { Resource } from "sst"
 
 const TAG = "batch-classify"
@@ -40,7 +40,7 @@ export async function listSourceFiles(batchJobId: string): Promise<string[]> {
 export async function processSourceFile(
 	batchJobId: string,
 	sourceKey: string,
-	opts: { getRemainingTimeMs?: () => number } = {},
+	opts: { timeoutMs?: LlmTimeoutMs } = {},
 ): Promise<{ scripts: StagedScriptData[]; pageCount: number }> {
 	const mime = guessMime(sourceKey)
 
@@ -82,7 +82,7 @@ export async function processSourceFile(
 					total,
 				})
 			},
-			getRemainingTimeMs: opts.getRemainingTimeMs,
+			timeoutMs: opts.timeoutMs,
 		},
 	)
 

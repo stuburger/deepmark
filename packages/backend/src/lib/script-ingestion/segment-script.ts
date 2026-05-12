@@ -3,17 +3,17 @@ import { callLlmWithFallback } from "@/lib/infra/llm-runtime"
 import { logger } from "@/lib/infra/logger"
 import { outputSchema } from "@/lib/infra/output-schema"
 import {
+	type VisionToken,
+	runVisionOcr,
+} from "@/lib/scan-extraction/cloud-vision-ocr"
+import {
 	type RawSegmentedScript,
 	type SegmentedScript,
 	lengthsToRanges,
 	snapBlankStartPages,
 	validateScripts,
 } from "@/lib/script-ingestion/segmentation-transforms"
-import { DEFAULT_LLM_TIMEOUT_MS } from "@mcp-gcse/shared"
-import {
-	type VisionToken,
-	runVisionOcr,
-} from "@/lib/scan-extraction/cloud-vision-ocr"
+import type { LlmTimeoutMs } from "@mcp-gcse/shared"
 import { generateText } from "ai"
 import {
 	type PageTextBlock,
@@ -49,15 +49,12 @@ export type SegmentPdfScriptsOptions = {
 	 */
 	onVisionProgress?: (processed: number, total: number) => void
 	/**
-	 * Remaining-time-in-Lambda probe (`context.getRemainingTimeInMillis`).
-	 * When provided, the segmentation LLM call's wall-clock budget is set
-	 * to `remaining - 10s` (clamped to a 90s floor) so we bail before the
-	 * Lambda is killed mid-call — that would otherwise leave an in-flight
-	 * Gemini fetch un-cancelled and billed. When omitted (tests, web
-	 * server actions, anywhere outside an SQS Lambda), the runner uses
-	 * its default 90s budget.
+	 * Per-attempt wall-clock budget for the segmentation LLM call. Pass a
+	 * thunk derived from a `LambdaEnvelope` so we bail before the Lambda is
+	 * killed mid-call (which would orphan the Gemini fetch and burn money).
+	 * Omit outside Lambda (tests, web actions) — the runner default applies.
 	 */
-	getRemainingTimeMs?: () => number
+	timeoutMs?: LlmTimeoutMs
 	/**
 	 * Instrumentation hook: fired once per successful segmentation with
 	 * prompt size, blank/script counts, LLM token usage, and elapsed
@@ -75,8 +72,6 @@ export type SegmentPdfScriptsOptions = {
 		llmElapsedMs: number
 	}) => void
 }
-
-const SEGMENTATION_LAMBDA_HEADROOM_MS = 10_000
 
 const VISION_PROGRESS_STRIDE = 50
 
@@ -161,21 +156,6 @@ export async function segmentPdfScripts(
 		pages: pageTexts,
 	})
 
-	// Lambda-aware timeout: when invoked from an SQS handler the caller
-	// supplies `getRemainingTimeMs`, and we set the LLM wall-clock budget
-	// to (remaining − 10s) clamped to a 90s floor. Gives us as much room
-	// as the Lambda has, while still leaving headroom to capture a clean
-	// failure status and DLQ-route before the runtime kills us mid-call.
-	// Outside Lambda (tests, web server actions): undefined → runner default.
-	const remainingMs = options.getRemainingTimeMs?.()
-	const segmentationTimeoutMs =
-		remainingMs !== undefined
-			? Math.max(
-					DEFAULT_LLM_TIMEOUT_MS,
-					remainingMs - SEGMENTATION_LAMBDA_HEADROOM_MS,
-				)
-			: undefined
-
 	type AttemptResult = {
 		scripts: SegmentedScript[]
 		llmElapsedMs: number
@@ -201,8 +181,8 @@ export async function segmentPdfScripts(
 				usage = result.usage
 				return result
 			},
-			segmentationTimeoutMs !== undefined
-				? { timeoutMs: segmentationTimeoutMs }
+			options.timeoutMs !== undefined
+				? { timeoutMs: options.timeoutMs }
 				: undefined,
 		)
 

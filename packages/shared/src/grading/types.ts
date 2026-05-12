@@ -1,4 +1,5 @@
 import { z } from "zod/v4"
+import type { LlmTimeoutMs } from "../llm/runner"
 
 // ============================================
 // MARK SCHEME TYPES
@@ -177,4 +178,10 @@ export interface GraderOptions {
 	systemPrompt?: string
 	/** Call site key for config lookup. Defaults to "grading". */
 	callSiteKey?: string
+	/**
+	 * Per-attempt wall-clock budget forwarded to every runner.call().
+	 * Pass a thunk (e.g. derived from a Lambda envelope) so the fallback
+	 * chain sees a fresh budget on each retry.
+	 */
+	timeoutMs?: LlmTimeoutMs
 }

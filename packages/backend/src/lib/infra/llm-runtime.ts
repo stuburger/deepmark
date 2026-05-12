@@ -7,6 +7,7 @@ import {
 	type LlmModelEntry,
 	type LlmProvider,
 	LlmRunner,
+	type LlmTimeoutMs,
 	type ProviderClient,
 	createModelResolver,
 } from "@mcp-gcse/shared"
@@ -72,7 +73,9 @@ function getDefaultRunner(): LlmRunner {
  * The 4th `signal` argument to `fn` is an AbortSignal driven by the
  * per-attempt wall-clock timeout — forward it to `generateText({ ...,
  * abortSignal: signal })` so a hung LLM call is actually cancelled.
- * Pass `opts.timeoutMs` to override the default (90 s).
+ * Pass `opts.timeoutMs` to override the default (90 s). A thunk re-evaluates
+ * per fallback attempt — use it when the budget shrinks over time
+ * (Lambda envelope).
  *
  * Single options bag instead of separate trailing positionals: a previous
  * iteration had `(callSiteKey, fn, llm?, opts?)` and it was easy to pass
@@ -88,7 +91,7 @@ export async function callLlmWithFallback<T>(
 		report: LlmCallReport,
 		signal: AbortSignal,
 	) => Promise<T>,
-	opts?: { llm?: LlmRunner; timeoutMs?: number },
+	opts?: { llm?: LlmRunner; timeoutMs?: LlmTimeoutMs },
 ): Promise<T> {
 	const { llm, timeoutMs } = opts ?? {}
 	return (llm ?? getDefaultRunner()).call(callSiteKey, fn, { timeoutMs })

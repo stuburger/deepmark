@@ -3,6 +3,7 @@ import {
 	type CancellationToken,
 	createCancellationToken,
 } from "@/lib/infra/cancellation"
+import { llmTimeoutFromContext } from "@/lib/infra/lambda-envelope"
 import { callLlmWithFallback } from "@/lib/infra/llm-runtime"
 import { logger } from "@/lib/infra/logger"
 import { outputSchema } from "@/lib/infra/output-schema"
@@ -17,6 +18,7 @@ import {
 import { validateWithExemplars } from "@/services/validate-with-exemplars"
 import type { ScanStatus } from "@mcp-gcse/db"
 import { generateText } from "ai"
+import type { Context } from "aws-lambda"
 import { EXTRACT_EXEMPLARS_PROMPT } from "./exemplar-pdf/prompts"
 import { ExemplarSchema } from "./exemplar-pdf/schema"
 
@@ -24,8 +26,10 @@ const TAG = "exemplar-pdf"
 
 export async function handler(
 	event: SqsEvent,
+	context?: Context,
 ): Promise<{ batchItemFailures?: { itemIdentifier: string }[] }> {
 	const failures: { itemIdentifier: string }[] = []
+	const timeoutMs = llmTimeoutFromContext(context)
 
 	for (const record of event.Records) {
 		const messageId = record.messageId
@@ -120,6 +124,7 @@ export async function handler(
 					report.usage = result.usage
 					return result
 				},
+				{ timeoutMs },
 			)
 
 			logger.info(TAG, "LLM extraction complete", { jobId })
@@ -231,7 +236,9 @@ export async function handler(
 						jobId,
 						mark_scheme_id: markSchemeId,
 					})
-					const summary = await validateWithExemplars(markSchemeId)
+					const summary = await validateWithExemplars(markSchemeId, {
+						timeoutMs,
+					})
 					logger.info(TAG, "Exemplar validation complete", {
 						jobId,
 						mark_scheme_id: markSchemeId,

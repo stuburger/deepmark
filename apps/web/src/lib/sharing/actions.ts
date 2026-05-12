@@ -146,8 +146,10 @@ export const shareResourceWithEmails = resourcesAction({
 			})
 			grantIds.push(grant.id)
 
-			// Fire-and-forget — a transient EventBridge blip must not break the share action.
-			void emitEvent({
+			// Must await: in Lambda, unawaited promises get cut off when the action
+			// returns. emitEvent catches its own errors and returns false, so the
+			// caller never throws — a transient EventBridge blip is already absorbed.
+			await emitEvent({
 				source: EventSource.sharing,
 				detailType: EventDetailType.resourceShared,
 				detail: { grantId: grant.id, sharedByUserId: ctx.user.id },

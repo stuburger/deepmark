@@ -181,35 +181,26 @@ if (collabService && !_PRODUCTION_) {
 }
 
 /**
- * Resolves to `{ clusterArn, serviceName }` for the dev collab service:
- *   - On the permanent non-prod stage that owns the service, read locally.
- *   - On PR/personal stages, read the SSM param the dev stage published.
- *   - On production, this is `undefined` — production has no UI to scale
- *     and no need to call ECS APIs.
+ * Resolves to `{ clusterArn, serviceName }` for a stage's collab Service —
+ * used by the web app + scale-down cron to call ECS UpdateService.
  *
- * If a PR stage deploys before dev has ever been deployed, the SSM lookup
- * will fail at synth and the deploy errors out. Deploy dev first.
+ * Currently defined ONLY when a stage owns its own collabService (i.e.
+ * `hasStageVpc && !_PRODUCTION_`, which is no stage today). Production
+ * doesn't expose scale-up (always-on); stages without their own Service
+ * have nothing local to scale and don't reach into another stage's plane.
+ *
+ * The SSM-based cross-stage lookup that used to live here was tied to a
+ * design where development published its (cluster, service) tuple for PR
+ * stages to scale. With dev no longer owning a Service, no one publishes
+ * — so consumers get `undefined` and skip the scale-up flow gracefully.
+ * Both `crons.ts` and `web.ts` already guard on truthiness.
  */
-export const collabServiceRef =
-	_PRODUCTION_ || $dev
-		? undefined
-		: collabService
-			? new sst.Linkable("CollabServiceRef", {
-					properties: {
-						// biome-ignore lint/style/noNonNullAssertion: permanent stage path
-						clusterArn: cluster!.nodes.cluster.arn,
-						serviceName: collabService.nodes.service.name,
-					},
-				})
-			: (() => {
-					const param = aws.ssm.getParameterOutput({
-						name: COLLAB_SERVICE_REF_PARAM,
-					})
-					const parts = param.value.apply((v) => v.split("|"))
-					return new sst.Linkable("CollabServiceRef", {
-						properties: {
-							clusterArn: parts.apply((p) => p[0]),
-							serviceName: parts.apply((p) => p[1]),
-						},
-					})
-				})()
+export const collabServiceRef = collabService
+	? new sst.Linkable("CollabServiceRef", {
+			properties: {
+				// biome-ignore lint/style/noNonNullAssertion: collabService implies cluster
+				clusterArn: cluster!.nodes.cluster.arn,
+				serviceName: collabService.nodes.service.name,
+			},
+		})
+	: undefined

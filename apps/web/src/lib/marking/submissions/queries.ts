@@ -564,6 +564,7 @@ export type SubmissionVersion = {
 	status: string
 	total_awarded: number
 	total_max: number
+	is_bookmarked: boolean
 }
 
 /**
@@ -579,6 +580,7 @@ export const getSubmissionVersions = resourceAction({
 }).action(
 	async ({
 		parsedInput: { jobId },
+		ctx,
 	}): Promise<{ versions: SubmissionVersion[] }> => {
 		const current = await db.studentSubmission.findFirst({
 			where: { id: jobId },
@@ -623,6 +625,15 @@ export const getSubmissionVersions = resourceAction({
 			}),
 		])
 
+		const bookmarks = await db.studentSubmissionBookmark.findMany({
+			where: {
+				user_id: ctx.user.id,
+				submission_id: { in: siblings.map((s) => s.id) },
+			},
+			select: { submission_id: true },
+		})
+		const bookmarkedSet = new Set(bookmarks.map((b) => b.submission_id))
+
 		const totalMax = sumPaperPoints(paperSections)
 
 		return {
@@ -651,6 +662,7 @@ export const getSubmissionVersions = resourceAction({
 					),
 					total_awarded: totalAwarded,
 					total_max: totalMax,
+					is_bookmarked: bookmarkedSet.has(s.id),
 				}
 			}),
 		}

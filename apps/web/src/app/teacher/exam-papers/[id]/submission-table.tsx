@@ -22,6 +22,19 @@ import {
 	TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { formatDate } from "@/lib/format/date"
+import {
+	PHASE_LABEL,
+	isInFlightPhase,
+	phaseStatusKind,
+	scoreChipKind,
+	submissionPhase,
+} from "@/lib/marking/listing/phase"
+import {
+	NAME_COLLATOR,
+	PHASE_RANK,
+	compareNullable,
+	pctFor,
+} from "@/lib/marking/listing/sort"
 import { toggleBookmark } from "@/lib/marking/submissions/mutations"
 import type { SubmissionHistoryItem } from "@/lib/marking/types"
 import { queryKeys } from "@/lib/query-keys"
@@ -46,13 +59,6 @@ import {
 import { parseAsStringLiteral, useQueryState } from "nuqs"
 import { Fragment, useMemo, useState } from "react"
 import { toast } from "sonner"
-import {
-	PHASE_LABEL,
-	isInFlightPhase,
-	phaseStatusKind,
-	scoreChipKind,
-	submissionPhase,
-} from "./submission-grid-config"
 import { SubmissionVersionRows } from "./submission-version-rows"
 
 const SORT_KEYS = [
@@ -80,39 +86,12 @@ const DEFAULT_DIR: Record<SortKey, SortDir> = {
 	date: "desc",
 }
 
-// Phase ordering for status sort. Working states first, terminal states last.
-const PHASE_RANK: Record<ReturnType<typeof submissionPhase>, number> = {
-	extraction: 0,
-	grading: 1,
-	done: 2,
-	error: 3,
-}
-
-const NAME_COLLATOR = new Intl.Collator("en-GB", { sensitivity: "base" })
-
-function pctFor(sub: SubmissionHistoryItem): number | null {
-	if (sub.status !== "ocr_complete" || sub.total_max <= 0) return null
-	return (sub.total_awarded / sub.total_max) * 100
-}
-
 // Convert grade label to a numeric rank for sorting. "9" → 9, "U" → 0, null →
 // sentinel handled at compare-time so unmarked rows always end up last.
 function gradeRank(grade: string | null): number | null {
 	if (grade === null) return null
 	if (grade === "U") return 0
 	return Number(grade)
-}
-
-// Compare with nulls last regardless of sort direction.
-function compareNullable(
-	a: number | null,
-	b: number | null,
-	order: 1 | -1,
-): number {
-	if (a === null && b === null) return 0
-	if (a === null) return 1
-	if (b === null) return -1
-	return order * (a - b)
 }
 
 export function SubmissionTable({

@@ -5,15 +5,13 @@ import {
 	CardHeader,
 	CardTitle,
 } from "@/components/ui/card"
-import { listMySubmissions } from "@/lib/marking/listing/queries"
+import { listBookmarkedSubmissions } from "@/lib/marking/listing/queries"
 import { Bookmark } from "lucide-react"
-import { BookmarksList } from "./bookmarks-list"
+import { BookmarksView } from "./bookmarks-view"
 
 export default async function BookmarksPage() {
-	const result = await listMySubmissions()
-	const bookmarked = (result?.data?.submissions ?? []).filter(
-		(s) => s.is_bookmarked,
-	)
+	const result = await listBookmarkedSubmissions()
+	const submissions = result?.data?.submissions ?? []
 
 	return (
 		<div className="space-y-6 pt-6">
@@ -24,7 +22,7 @@ export default async function BookmarksPage() {
 				</p>
 			</div>
 
-			{bookmarked.length === 0 ? (
+			{submissions.length === 0 ? (
 				<Card>
 					<CardContent className="flex flex-col items-center space-y-4 py-16 text-center">
 						<div className="rounded-full bg-muted p-4">
@@ -45,15 +43,15 @@ export default async function BookmarksPage() {
 						<CardTitle>
 							Bookmarks
 							<span className="ml-2 text-base font-normal text-muted-foreground">
-								({bookmarked.length})
+								({submissions.length})
 							</span>
 						</CardTitle>
 						<CardDescription>
 							Filter by status to narrow down what you&apos;re looking for.
 						</CardDescription>
 					</CardHeader>
-					<CardContent className="space-y-4">
-						<BookmarksList submissions={bookmarked} />
+					<CardContent>
+						<BookmarksView initialSubmissions={submissions} />
 					</CardContent>
 				</Card>
 			)}

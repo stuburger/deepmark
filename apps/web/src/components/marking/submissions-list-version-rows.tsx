@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button"
 import { SoftChip } from "@/components/ui/soft-chip"
 import { StatusDot } from "@/components/ui/status-dot"
 import { TableCell, TableRow } from "@/components/ui/table"
-import { formatDate } from "@/lib/format/date"
+import { formatDateTime } from "@/lib/format/date"
 import {
 	PHASE_LABEL,
 	isInFlightPhase,
@@ -16,27 +16,21 @@ import { toggleBookmark } from "@/lib/marking/submissions/mutations"
 import { getSubmissionVersions } from "@/lib/marking/submissions/queries"
 import { queryKeys } from "@/lib/query-keys"
 import { cn } from "@/lib/utils"
-import {
-	type BoundaryMode,
-	type GradeBoundary,
-	computeGrade,
-} from "@mcp-gcse/shared"
-import { useMutation, useQueryClient } from "@tanstack/react-query"
-import { useQuery } from "@tanstack/react-query"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { Bookmark } from "lucide-react"
 import { toast } from "sonner"
 
-const COLUMN_COUNT = 8
+// Cross-paper context: matches the 7-column SubmissionsListTable layout
+// (bookmark · student · exam paper · status · score · date · actions).
+// Differs from the paper-detail version rows (which has 8 cols incl. grade
+// and a leading checkbox).
+const COLUMN_COUNT = 7
 
-export function SubmissionVersionRows({
+export function SubmissionsListVersionRows({
 	submissionId,
-	gradeBoundaries,
-	gradeBoundaryMode,
 	onView,
 }: {
 	submissionId: string
-	gradeBoundaries: GradeBoundary[] | null
-	gradeBoundaryMode: BoundaryMode | null
 	onView: (id: string) => void
 }) {
 	const queryClient = useQueryClient()
@@ -48,6 +42,7 @@ export function SubmissionVersionRows({
 		},
 		staleTime: 30_000,
 	})
+
 	const bookmarkMutation = useMutation({
 		mutationFn: async (vars: { jobId: string; bookmarked: boolean }) => {
 			const r = await toggleBookmark(vars)
@@ -74,9 +69,8 @@ export function SubmissionVersionRows({
 	if (isLoading) {
 		return (
 			<TableRow className="bg-muted/30">
-				<TableCell />
-				<TableCell colSpan={COLUMN_COUNT - 1} className="py-2">
-					<span className="text-xs text-muted-foreground italic">
+				<TableCell colSpan={COLUMN_COUNT} className="py-2">
+					<span className="text-xs italic text-muted-foreground">
 						Loading prior versions…
 					</span>
 				</TableCell>
@@ -101,20 +95,11 @@ export function SubmissionVersionRows({
 					isMarked && v.total_max > 0
 						? Math.round((v.total_awarded / v.total_max) * 100)
 						: null
-				const grade = isMarked
-					? computeGrade(
-							v.total_awarded,
-							v.total_max,
-							gradeBoundaries,
-							gradeBoundaryMode ?? "percent",
-						)
-					: null
 				return (
 					<TableRow
 						key={v.id}
-						className="bg-muted/30 hover:bg-muted/40 border-l-2 border-l-border-quiet"
+						className="border-l-2 border-l-border-quiet bg-muted/30 hover:bg-muted/40"
 					>
-						<TableCell />
 						<TableCell>
 							<Button
 								type="button"
@@ -145,16 +130,17 @@ export function SubmissionVersionRows({
 								/>
 							</Button>
 						</TableCell>
-						<TableCell className="text-xs text-muted-foreground pl-8">
-							<span className="inline-flex items-center gap-2 tabular-nums font-mono">
+						<TableCell className="pl-8 text-xs text-muted-foreground">
+							<span className="inline-flex items-center gap-2 font-mono tabular-nums">
 								v{versionNumber}
 								{v.supersede_reason && (
-									<span className="text-muted-foreground/70 not-italic font-sans">
+									<span className="font-sans not-italic text-muted-foreground/70">
 										· {v.supersede_reason}
 									</span>
 								)}
 							</span>
 						</TableCell>
+						<TableCell />
 						<TableCell>
 							<span className="inline-flex items-center gap-2 text-xs text-muted-foreground">
 								<StatusDot
@@ -167,28 +153,23 @@ export function SubmissionVersionRows({
 						<TableCell>
 							{pct !== null ? (
 								<SoftChip kind={scoreChipKind(pct)}>
-									<span className="tabular-nums font-mono">
+									<span className="font-mono tabular-nums">
 										{v.total_awarded}/{v.total_max}
 									</span>
-									<span className="ml-1.5 tabular-nums font-mono opacity-70">
+									<span className="ml-1.5 font-mono tabular-nums opacity-70">
 										{pct}%
 									</span>
 								</SoftChip>
 							) : (
 								<SoftChip kind="neutral">
-									<span className="tabular-nums font-mono">
+									<span className="font-mono tabular-nums">
 										?/{v.total_max}
 									</span>
 								</SoftChip>
 							)}
 						</TableCell>
-						<TableCell>
-							<span className="tabular-nums font-mono text-sm text-muted-foreground">
-								{grade ?? <span className="text-muted-foreground">—</span>}
-							</span>
-						</TableCell>
-						<TableCell className="text-xs text-muted-foreground tabular-nums">
-							{formatDate(v.created_at)}
+						<TableCell className="whitespace-nowrap font-mono text-xs tabular-nums text-muted-foreground">
+							{formatDateTime(v.created_at)}
 						</TableCell>
 						<TableCell>
 							<div className="flex items-center justify-end gap-2">

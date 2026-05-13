@@ -1,9 +1,9 @@
+import { TERMINAL_STATUSES } from "@/lib/marking/listing/phase"
 import { listSubmissionsForPaper } from "@/lib/marking/listing/queries"
 import type { SubmissionHistoryItem } from "@/lib/marking/types"
 import { queryKeys } from "@/lib/query-keys"
 import { useQuery } from "@tanstack/react-query"
 import { useMemo } from "react"
-import { TERMINAL_STATUSES } from "../submission-grid-config"
 
 const POLL_INTERVAL_MS = 60_000
 

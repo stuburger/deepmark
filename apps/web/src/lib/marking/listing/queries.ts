@@ -101,42 +101,115 @@ function mapSubmissionToListItem(
 	}
 }
 
+type ListItemWithVersions = SubmissionHistoryItem & { version_count: number }
+
+async function fetchVersionCounts(
+	stagedScriptIds: string[],
+): Promise<Map<string, number>> {
+	if (stagedScriptIds.length === 0) return new Map()
+	const rows = await db.studentSubmission.groupBy({
+		by: ["staged_script_id"],
+		where: { staged_script_id: { in: stagedScriptIds } },
+		_count: true,
+	})
+	return new Map(rows.map((r) => [r.staged_script_id, r._count]))
+}
+
 export const listMySubmissions = scopedAction({
 	scope: "submission",
 	role: "viewer",
-}).action(
-	async ({ ctx }): Promise<{ submissions: SubmissionHistoryItem[] }> => {
-		const subs = await db.studentSubmission.findMany({
-			where: { superseded_at: null, ...ctx.accessWhere },
-			orderBy: { created_at: "desc" },
-			include: listingInclude,
-		})
+}).action(async ({ ctx }): Promise<{ submissions: ListItemWithVersions[] }> => {
+	const subs = await db.studentSubmission.findMany({
+		where: { superseded_at: null, ...ctx.accessWhere },
+		orderBy: { created_at: "desc" },
+		include: listingInclude,
+	})
 
-		const paperIds = [...new Set(subs.map((s) => s.exam_paper_id))]
-		const submissionIds = subs.map((s) => s.id)
-		const [paperTotals, bookmarks] = await Promise.all([
-			fetchPaperTotals(paperIds),
-			db.studentSubmissionBookmark.findMany({
-				where: {
-					user_id: ctx.user.id,
-					submission_id: { in: submissionIds },
-				},
-				select: { submission_id: true },
-			}),
-		])
-		const bookmarkedSet = new Set(bookmarks.map((b) => b.submission_id))
+	const paperIds = [...new Set(subs.map((s) => s.exam_paper_id))]
+	const submissionIds = subs.map((s) => s.id)
+	const stagedScriptIds = subs.map((s) => s.staged_script_id)
+	const [paperTotals, bookmarks, versionCounts] = await Promise.all([
+		fetchPaperTotals(paperIds),
+		db.studentSubmissionBookmark.findMany({
+			where: {
+				user_id: ctx.user.id,
+				submission_id: { in: submissionIds },
+			},
+			select: { submission_id: true },
+		}),
+		fetchVersionCounts(stagedScriptIds),
+	])
+	const bookmarkedSet = new Set(bookmarks.map((b) => b.submission_id))
 
-		return {
-			submissions: subs.map((sub) =>
-				mapSubmissionToListItem(
-					sub,
-					paperTotals.get(sub.exam_paper_id) ?? 0,
-					bookmarkedSet.has(sub.id),
-				),
+	return {
+		submissions: subs.map((sub) => ({
+			...mapSubmissionToListItem(
+				sub,
+				paperTotals.get(sub.exam_paper_id) ?? 0,
+				bookmarkedSet.has(sub.id),
 			),
-		}
-	},
-)
+			version_count: versionCounts.get(sub.staged_script_id) ?? 1,
+		})),
+	}
+})
+
+/**
+ * Submissions whose staged_script has *any* bookmarked version (not just the
+ * current one). Bookmarking v1 and then regrading creates v2 — without this
+ * staged_script-aware filter, the bookmark would silently vanish from the
+ * bookmarks list because v1 is superseded. `is_bookmarked` on the returned
+ * row reflects the *current* version's bookmark state; expanded version rows
+ * carry their own per-version bookmark flag.
+ */
+export const listBookmarkedSubmissions = scopedAction({
+	scope: "submission",
+	role: "viewer",
+}).action(async ({ ctx }): Promise<{ submissions: ListItemWithVersions[] }> => {
+	const userBookmarks = await db.studentSubmissionBookmark.findMany({
+		where: { user_id: ctx.user.id },
+		select: { submission: { select: { staged_script_id: true } } },
+	})
+	const stagedScriptIds = [
+		...new Set(userBookmarks.map((b) => b.submission.staged_script_id)),
+	]
+	if (stagedScriptIds.length === 0) return { submissions: [] }
+
+	const subs = await db.studentSubmission.findMany({
+		where: {
+			staged_script_id: { in: stagedScriptIds },
+			superseded_at: null,
+			...ctx.accessWhere,
+		},
+		orderBy: { created_at: "desc" },
+		include: listingInclude,
+	})
+
+	const paperIds = [...new Set(subs.map((s) => s.exam_paper_id))]
+	const submissionIds = subs.map((s) => s.id)
+	const [paperTotals, currentBookmarks, versionCounts] = await Promise.all([
+		fetchPaperTotals(paperIds),
+		db.studentSubmissionBookmark.findMany({
+			where: {
+				user_id: ctx.user.id,
+				submission_id: { in: submissionIds },
+			},
+			select: { submission_id: true },
+		}),
+		fetchVersionCounts(stagedScriptIds),
+	])
+	const bookmarkedSet = new Set(currentBookmarks.map((b) => b.submission_id))
+
+	return {
+		submissions: subs.map((sub) => ({
+			...mapSubmissionToListItem(
+				sub,
+				paperTotals.get(sub.exam_paper_id) ?? 0,
+				bookmarkedSet.has(sub.id),
+			),
+			version_count: versionCounts.get(sub.staged_script_id) ?? 1,
+		})),
+	}
+})
 
 export const listSubmissionsForPaper = resourceAction({
 	type: "examPaper",

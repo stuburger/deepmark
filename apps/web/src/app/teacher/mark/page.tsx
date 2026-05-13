@@ -1,95 +1,9 @@
-import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button-variants"
-import {
-	Card,
-	CardContent,
-	CardDescription,
-	CardHeader,
-	CardTitle,
-} from "@/components/ui/card"
-import {
-	Table,
-	TableBody,
-	TableCell,
-	TableHead,
-	TableHeader,
-	TableRow,
-} from "@/components/ui/table"
-import { formatDateTime } from "@/lib/format/date"
-import {
-	scoreBadgeVariant,
-	statusBadgeVariant,
-	submissionHref,
-} from "@/lib/marking/listing/format"
+import { Card, CardContent } from "@/components/ui/card"
 import { listMySubmissions } from "@/lib/marking/listing/queries"
-import type { SubmissionHistoryItem } from "@/lib/marking/types"
 import { PlusCircle } from "lucide-react"
 import Link from "next/link"
-import { StudentLinkCell } from "./student-link-cell"
-
-function SubmissionRow({ sub }: { sub: SubmissionHistoryItem }) {
-	const href = submissionHref(sub)
-	const scorePercent =
-		sub.total_max > 0
-			? Math.round((sub.total_awarded / sub.total_max) * 100)
-			: null
-
-	return (
-		<TableRow className="cursor-pointer hover:bg-muted/50">
-			<TableCell>
-				<StudentLinkCell
-					jobId={sub.id}
-					studentId={sub.student_id}
-					studentName={sub.student_name}
-					detectedStudentNumber={sub.detected_student_number}
-					href={href}
-				/>
-			</TableCell>
-			<TableCell className="max-w-xs">
-				{sub.exam_paper_id ? (
-					<Link
-						href={`/teacher/exam-papers/${sub.exam_paper_id}`}
-						className="text-sm hover:underline underline-offset-4 truncate block"
-					>
-						{sub.exam_paper_title ?? "Unknown paper"}
-					</Link>
-				) : (
-					<span className="text-muted-foreground text-sm">
-						{sub.exam_paper_title ?? "—"}
-					</span>
-				)}
-			</TableCell>
-			<TableCell>
-				{sub.status === "ocr_complete" && sub.total_max > 0 ? (
-					<Badge
-						variant={scoreBadgeVariant(sub.total_awarded, sub.total_max)}
-						className="tabular-nums"
-					>
-						{sub.total_awarded}/{sub.total_max}
-						{scorePercent !== null && (
-							<span className="ml-1 opacity-75">({scorePercent}%)</span>
-						)}
-					</Badge>
-				) : (
-					<Badge variant={statusBadgeVariant(sub.status)}>
-						{sub.status === "ocr_complete" ? "No results" : sub.status}
-					</Badge>
-				)}
-			</TableCell>
-			<TableCell className="text-muted-foreground text-sm whitespace-nowrap">
-				{formatDateTime(sub.created_at)}
-			</TableCell>
-			<TableCell>
-				<Link
-					href={href}
-					className="text-sm text-primary underline underline-offset-4 hover:no-underline"
-				>
-					{sub.status === "ocr_complete" ? "View" : "Details"}
-				</Link>
-			</TableCell>
-		</TableRow>
-	)
-}
+import { MarkList } from "./mark-list"
 
 export default async function MarkPage() {
 	const result = await listMySubmissions()
@@ -100,30 +14,34 @@ export default async function MarkPage() {
 		<div className="space-y-6 pt-6">
 			<div className="flex items-center justify-between">
 				<div>
-					<h1 className="text-2xl font-semibold">Mark a paper</h1>
-					<p className="text-sm text-muted-foreground mt-1">
-						Upload a student&apos;s answer sheet and get it marked instantly
-						against the official mark scheme.
+					<h1 className="text-2xl font-semibold">
+						Marking history
+						<span className="ml-2 text-base font-normal text-muted-foreground">
+							({completed.length} completed)
+						</span>
+					</h1>
+					<p className="mt-1 text-sm text-muted-foreground">
+						All student papers you&apos;ve uploaded and marked.
 					</p>
 				</div>
 				<Link
 					href="/teacher/exam-papers"
 					className={buttonVariants({ size: "lg" })}
 				>
-					<PlusCircle className="h-4 w-4 mr-2" />
+					<PlusCircle className="mr-2 h-4 w-4" />
 					Browse exam papers
 				</Link>
 			</div>
 
 			{submissions.length === 0 ? (
 				<Card>
-					<CardContent className="py-16 flex flex-col items-center text-center space-y-4">
+					<CardContent className="flex flex-col items-center space-y-4 py-16 text-center">
 						<div className="rounded-full bg-muted p-4">
 							<PlusCircle className="h-8 w-8 text-muted-foreground" />
 						</div>
 						<div>
-							<h2 className="font-semibold text-lg">No papers marked yet</h2>
-							<p className="text-sm text-muted-foreground mt-1 max-w-sm">
+							<h2 className="text-lg font-semibold">No papers marked yet</h2>
+							<p className="mt-1 max-w-sm text-sm text-muted-foreground">
 								Select an exam paper and upload a student&apos;s answer sheet.
 								Results appear in under a minute.
 							</p>
@@ -132,41 +50,15 @@ export default async function MarkPage() {
 							href="/teacher/exam-papers"
 							className={buttonVariants({ size: "lg" })}
 						>
-							<PlusCircle className="h-4 w-4 mr-2" />
+							<PlusCircle className="mr-2 h-4 w-4" />
 							Browse exam papers
 						</Link>
 					</CardContent>
 				</Card>
 			) : (
 				<Card>
-					<CardHeader>
-						<CardTitle>
-							Marking history
-							<span className="ml-2 text-base font-normal text-muted-foreground">
-								({completed.length} completed)
-							</span>
-						</CardTitle>
-						<CardDescription>
-							All student papers you have uploaded and marked.
-						</CardDescription>
-					</CardHeader>
-					<CardContent>
-						<Table>
-							<TableHeader>
-								<TableRow>
-									<TableHead>Student</TableHead>
-									<TableHead>Exam paper</TableHead>
-									<TableHead>Score</TableHead>
-									<TableHead>Submitted</TableHead>
-									<TableHead />
-								</TableRow>
-							</TableHeader>
-							<TableBody>
-								{submissions.map((sub) => (
-									<SubmissionRow key={sub.id} sub={sub} />
-								))}
-							</TableBody>
-						</Table>
+					<CardContent className="pt-6">
+						<MarkList initialSubmissions={submissions} />
 					</CardContent>
 				</Card>
 			)}

@@ -12,6 +12,7 @@ import {
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { deleteExamPaper } from "@/lib/exam-paper/paper/mutations"
 import type { ExamPaperListItem } from "@/lib/exam-paper/types"
+import { formatDate } from "@/lib/format/date"
 import { SUBJECT_LABELS, type Subject, subjectColour } from "@/lib/subjects"
 import { useMutation } from "@tanstack/react-query"
 import { Clock, Layers, Trash2 } from "lucide-react"
@@ -19,14 +20,6 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useState } from "react"
 import { toast } from "sonner"
-
-function formatDate(date: Date) {
-	return new Intl.DateTimeFormat("en-GB", {
-		day: "2-digit",
-		month: "short",
-		year: "numeric",
-	}).format(new Date(date))
-}
 
 export function ExamPaperCard({ paper }: { paper: ExamPaperListItem }) {
 	const router = useRouter()

@@ -15,54 +15,17 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table"
+import { formatDateTime } from "@/lib/format/date"
+import {
+	scoreBadgeVariant,
+	statusBadgeVariant,
+	submissionHref,
+} from "@/lib/marking/listing/format"
 import { listMySubmissions } from "@/lib/marking/listing/queries"
 import type { SubmissionHistoryItem } from "@/lib/marking/types"
 import { PlusCircle } from "lucide-react"
 import Link from "next/link"
 import { StudentLinkCell } from "./student-link-cell"
-
-function formatDate(date: Date) {
-	return new Intl.DateTimeFormat("en-GB", {
-		day: "2-digit",
-		month: "short",
-		year: "numeric",
-		hour: "2-digit",
-		minute: "2-digit",
-	}).format(new Date(date))
-}
-
-function scoreBadgeVariant(
-	awarded: number,
-	max: number,
-): "default" | "secondary" | "destructive" | "outline" {
-	if (max === 0) return "outline"
-	const pct = (awarded / max) * 100
-	if (pct >= 70) return "default"
-	if (pct >= 40) return "secondary"
-	return "destructive"
-}
-
-function statusBadgeVariant(
-	status: string,
-): "default" | "secondary" | "destructive" | "outline" {
-	switch (status) {
-		case "ocr_complete":
-			return "secondary"
-		case "processing":
-			return "default"
-		case "failed":
-			return "destructive"
-		default:
-			return "outline"
-	}
-}
-
-function submissionHref(sub: SubmissionHistoryItem): string {
-	// Standalone submission view — only requires submission-level access, so
-	// users who were shared a single submission (not the parent paper) can
-	// open it without hitting the paper-level access gate.
-	return `/teacher/submissions/${sub.id}`
-}
 
 function SubmissionRow({ sub }: { sub: SubmissionHistoryItem }) {
 	const href = submissionHref(sub)
@@ -114,7 +77,7 @@ function SubmissionRow({ sub }: { sub: SubmissionHistoryItem }) {
 				)}
 			</TableCell>
 			<TableCell className="text-muted-foreground text-sm whitespace-nowrap">
-				{formatDate(sub.created_at)}
+				{formatDateTime(sub.created_at)}
 			</TableCell>
 			<TableCell>
 				<Link

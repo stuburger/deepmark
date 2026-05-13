@@ -1,17 +1,6 @@
 "use client"
 
-import {
-	BarChart3,
-	ClipboardList,
-	Clock,
-	FileText,
-	LayoutDashboard,
-	LogOut,
-	Menu,
-	Search,
-	User,
-	Users,
-} from "lucide-react"
+import { LogOut, Menu, Search, Shield, User } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 
@@ -24,43 +13,16 @@ import {
 import { logoutFormAction } from "@/lib/actions"
 import { cn } from "@/lib/utils"
 
+import { TEACHER_RAIL_ITEMS } from "./teacher-nav-config"
 import { useTeacherNav } from "./teacher-nav-context"
 
 type IconRailProps = {
 	initials: string
 	avatarUrl: string | null
+	isAdmin: boolean
 }
 
-const NAV_ICONS = [
-	{ href: "/teacher", label: "Dashboard", Icon: LayoutDashboard, exact: true },
-	{ href: "/teacher/mark", label: "Recent marking", Icon: Clock, exact: false },
-	{
-		href: "/teacher/exam-papers",
-		label: "Exam papers",
-		Icon: ClipboardList,
-		exact: false,
-	},
-	{
-		href: "/teacher/students",
-		label: "Students",
-		Icon: Users,
-		exact: false,
-	},
-	{
-		href: "/teacher/analytics",
-		label: "Analytics",
-		Icon: BarChart3,
-		exact: false,
-	},
-	{
-		href: "/teacher/reports",
-		label: "Reports",
-		Icon: FileText,
-		exact: false,
-	},
-] as const
-
-export function IconRail({ initials, avatarUrl }: IconRailProps) {
+export function IconRail({ initials, avatarUrl, isAdmin }: IconRailProps) {
 	const pathname = usePathname()
 	const { open, setOpen, setPaletteOpen } = useTeacherNav()
 
@@ -91,7 +53,7 @@ export function IconRail({ initials, avatarUrl }: IconRailProps) {
 					<Search className="size-[18px]" strokeWidth={1.2} />
 				</button>
 
-				{NAV_ICONS.map(({ href, label, Icon, exact }) => {
+				{TEACHER_RAIL_ITEMS.map(({ href, label, shortLabel, Icon, exact }) => {
 					const isActive = exact
 						? pathname === href
 						: pathname === href || pathname.startsWith(`${href}/`)
@@ -99,7 +61,7 @@ export function IconRail({ initials, avatarUrl }: IconRailProps) {
 						<Link
 							key={href}
 							href={href}
-							aria-label={label}
+							aria-label={shortLabel ?? label}
 							className={cn(
 								"flex size-10 items-center justify-center rounded-md transition-colors",
 								isActive
@@ -135,6 +97,12 @@ export function IconRail({ initials, avatarUrl }: IconRailProps) {
 						<User />
 						Profile
 					</DropdownMenuItem>
+					{isAdmin && (
+						<DropdownMenuItem render={<Link href="/admin/overview" />}>
+							<Shield />
+							Admin space
+						</DropdownMenuItem>
+					)}
 					<DropdownMenuItem
 						variant="destructive"
 						onClick={() => logoutFormAction()}

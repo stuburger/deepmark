@@ -1,14 +1,7 @@
+import { formatDateLong } from "@/lib/format/date"
 import { computeGrade } from "@mcp-gcse/shared"
 import type { StudentPaperResultPayload } from "../../types"
 import type { ClassExportMeta } from "../types"
-
-function formatDate(d: Date): string {
-	return new Intl.DateTimeFormat("en-GB", {
-		day: "2-digit",
-		month: "long",
-		year: "numeric",
-	}).format(new Date(d))
-}
 
 function averagePercent(students: StudentPaperResultPayload[]): number {
 	const scored = students.filter((s) => s.total_max > 0)
@@ -48,7 +41,7 @@ export function Cover({
 			<div className="meta-line">
 				{meta.className ? <span>Class: {meta.className}</span> : null}
 				{meta.teacherName ? <span>Teacher: {meta.teacherName}</span> : null}
-				<span>Generated {formatDate(meta.generatedAt)}</span>
+				<span>Generated {formatDateLong(meta.generatedAt)}</span>
 			</div>
 
 			<div className="meta-line">

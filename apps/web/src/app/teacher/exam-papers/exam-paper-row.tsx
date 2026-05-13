@@ -6,6 +6,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { TableCell, TableRow } from "@/components/ui/table"
 import { deleteExamPaper } from "@/lib/exam-paper/paper/mutations"
 import type { ExamPaperListItem } from "@/lib/exam-paper/types"
+import { formatDate } from "@/lib/format/date"
 import { useMutation } from "@tanstack/react-query"
 import { Trash2 } from "lucide-react"
 import Link from "next/link"
@@ -34,14 +35,6 @@ function subjectVariant(subject: string): BadgeVariant {
 
 function capitalize(s: string) {
 	return s.charAt(0).toUpperCase() + s.slice(1)
-}
-
-function formatDate(date: Date) {
-	return new Intl.DateTimeFormat("en-GB", {
-		day: "2-digit",
-		month: "short",
-		year: "numeric",
-	}).format(new Date(date))
 }
 
 function truncate(s: string, max = 40) {

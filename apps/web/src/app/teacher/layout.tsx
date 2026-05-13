@@ -59,7 +59,7 @@ export default async function TeacherLayout({
 	const [user, entitlement] = await Promise.all([
 		db.user.findUnique({
 			where: { id: session.userId },
-			select: { name: true, email: true, avatar_url: true },
+			select: { name: true, email: true, avatar_url: true, role: true },
 		}),
 		getEntitlement(session.userId),
 	])
@@ -67,6 +67,7 @@ export default async function TeacherLayout({
 	const displayName = deriveDisplayName(user?.name ?? null, user?.email ?? null)
 	const initials = deriveInitials(displayName)
 	const avatarUrl = user?.avatar_url ?? null
+	const isAdmin = user?.role === "admin"
 	const role = "Teacher"
 	const planChip = derivePlanChip(entitlement)
 	// Show the "Upgrade to Pro" CTA only to users without an active paid sub
@@ -88,7 +89,11 @@ export default async function TeacherLayout({
 				    row 1 hosts only TrialBanner (app bar is hidden). */}
 				<div className="grid h-screen grid-cols-[1fr] grid-rows-[auto_1fr] overflow-hidden md:grid-cols-[80px_1fr]">
 					<div className="hidden md:block md:row-span-2 md:col-start-1">
-						<IconRail initials={initials} avatarUrl={avatarUrl} />
+						<IconRail
+							initials={initials}
+							avatarUrl={avatarUrl}
+							isAdmin={isAdmin}
+						/>
 					</div>
 
 					<header className="col-start-1 row-start-1 md:col-start-2">
@@ -111,6 +116,7 @@ export default async function TeacherLayout({
 					avatarUrl={avatarUrl}
 					planChip={planChip}
 					showUpgradeCard={showUpgradeCard}
+					isAdmin={isAdmin}
 				/>
 				<CommandPalette />
 				<PushRegistration />

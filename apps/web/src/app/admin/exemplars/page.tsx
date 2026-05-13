@@ -19,6 +19,7 @@ import {
 	type ExemplarValidationStats,
 	listExemplarAnswers,
 } from "@/lib/admin/queries"
+import { formatDate } from "@/lib/format/date"
 
 type BadgeVariant = "default" | "secondary" | "destructive" | "outline"
 
@@ -45,14 +46,6 @@ function capitalize(s: string) {
 
 function truncate(s: string, max = 50) {
 	return s.length > max ? `${s.slice(0, max)}…` : s
-}
-
-function formatDate(date: Date) {
-	return new Intl.DateTimeFormat("en-GB", {
-		day: "2-digit",
-		month: "short",
-		year: "numeric",
-	}).format(new Date(date))
 }
 
 function levelVariant(level: number): BadgeVariant {

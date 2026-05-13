@@ -14,6 +14,7 @@ import {
 	Coins,
 	GraduationCap,
 	LayoutDashboard,
+	LogOut,
 	Mail,
 	Palette,
 	Settings,
@@ -55,6 +56,16 @@ export function AdminSidebarNav() {
 								/>
 							</SidebarMenuItem>
 						))}
+						<SidebarMenuItem>
+							<SidebarMenuButton
+								render={
+									<Link href="/teacher">
+										<LogOut />
+										<span>Exit admin</span>
+									</Link>
+								}
+							/>
+						</SidebarMenuItem>
 					</SidebarMenu>
 				</SidebarGroupContent>
 			</SidebarGroup>

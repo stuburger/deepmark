@@ -1,24 +1,17 @@
 "use client"
 
-import {
-	BarChart3,
-	Bookmark,
-	ClipboardList,
-	Clock,
-	FileText,
-	HelpCircle,
-	LayoutDashboard,
-	LogOut,
-	Search,
-	Settings,
-	Users,
-	X,
-} from "lucide-react"
+import { Bookmark, LogOut, Search, Shield, X } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import type { ComponentType, SVGProps } from "react"
+import { Fragment } from "react"
 
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import {
 	Sheet,
 	SheetContent,
@@ -32,6 +25,11 @@ import { queryKeys } from "@/lib/query-keys"
 import { cn } from "@/lib/utils"
 import { useQuery } from "@tanstack/react-query"
 
+import {
+	TEACHER_NAV_FOOTER_ITEMS,
+	TEACHER_NAV_SECTIONS,
+	type TeacherNavItem,
+} from "./teacher-nav-config"
 import { useTeacherNav } from "./teacher-nav-context"
 
 export type PlanChip = {
@@ -41,39 +39,6 @@ export type PlanChip = {
 	linkable: boolean
 }
 
-type NavItem = {
-	href: string
-	label: string
-	Icon: ComponentType<SVGProps<SVGSVGElement>>
-	exact?: boolean
-}
-
-const PRIMARY_ITEMS: NavItem[] = [
-	{ href: "/teacher", label: "Dashboard", Icon: LayoutDashboard, exact: true },
-]
-
-const RECENT_ITEMS: NavItem[] = [
-	{ href: "/teacher/mark", label: "Recent marking", Icon: Clock },
-]
-
-const ALL_ITEMS: NavItem[] = [
-	{ href: "/teacher/exam-papers", label: "All papers", Icon: ClipboardList },
-	{ href: "/teacher/students", label: "All students", Icon: Users },
-]
-
-const INSIGHT_ITEMS: NavItem[] = [
-	{ href: "/teacher/analytics", label: "Analytics", Icon: BarChart3 },
-	{ href: "/teacher/reports", label: "Reports", Icon: FileText },
-]
-
-const TOOL_ITEMS: NavItem[] = [
-	{ href: "/teacher/help", label: "Help", Icon: HelpCircle },
-]
-
-const FOOTER_ITEMS: NavItem[] = [
-	{ href: "/teacher/settings", label: "Settings", Icon: Settings },
-]
-
 type TeacherNavSheetProps = {
 	displayName: string
 	role: string
@@ -81,6 +46,7 @@ type TeacherNavSheetProps = {
 	avatarUrl: string | null
 	planChip: PlanChip
 	showUpgradeCard: boolean
+	isAdmin: boolean
 }
 
 export function TeacherNavSheet({
@@ -90,6 +56,7 @@ export function TeacherNavSheet({
 	avatarUrl,
 	planChip,
 	showUpgradeCard,
+	isAdmin,
 }: TeacherNavSheetProps) {
 	const { open, setOpen, setPaletteOpen } = useTeacherNav()
 
@@ -153,16 +120,18 @@ export function TeacherNavSheet({
 							⌘K
 						</kbd>
 					</button>
-					<NavSection items={PRIMARY_ITEMS} onNavigate={() => setOpen(false)} />
-					<NavSection items={RECENT_ITEMS} onNavigate={() => setOpen(false)} />
-					<BookmarkedSection onNavigate={() => setOpen(false)} />
-					<NavSection items={ALL_ITEMS} onNavigate={() => setOpen(false)} />
-
-					<NavLabel>Insight</NavLabel>
-					<NavSection items={INSIGHT_ITEMS} onNavigate={() => setOpen(false)} />
-
-					<NavLabel>Tools</NavLabel>
-					<NavSection items={TOOL_ITEMS} onNavigate={() => setOpen(false)} />
+					{TEACHER_NAV_SECTIONS.map((section) => (
+						<Fragment key={section.id}>
+							{section.label && <NavLabel>{section.label}</NavLabel>}
+							<NavSection
+								items={section.items}
+								onNavigate={() => setOpen(false)}
+							/>
+							{section.id === "recent" && (
+								<BookmarkedSection onNavigate={() => setOpen(false)} />
+							)}
+						</Fragment>
+					))}
 				</div>
 
 				<div className="flex flex-col gap-3 border-t border-border-quiet px-4 py-4">
@@ -170,7 +139,7 @@ export function TeacherNavSheet({
 						<UpgradeCard onNavigate={() => setOpen(false)} />
 					) : null}
 					<NavSection
-						items={FOOTER_ITEMS}
+						items={TEACHER_NAV_FOOTER_ITEMS}
 						onNavigate={() => setOpen(false)}
 						compact
 					/>
@@ -191,6 +160,7 @@ export function TeacherNavSheet({
 						initials={initials}
 						avatarUrl={avatarUrl}
 						planChip={planChip}
+						isAdmin={isAdmin}
 						onNavigate={() => setOpen(false)}
 					/>
 				</div>
@@ -205,7 +175,7 @@ function NavSection({
 	compact = false,
 	children,
 }: {
-	items: NavItem[]
+	items: TeacherNavItem[]
 	onNavigate: () => void
 	compact?: boolean
 	children?: React.ReactNode
@@ -328,6 +298,7 @@ function UserProfile({
 	initials,
 	avatarUrl,
 	planChip,
+	isAdmin,
 	onNavigate,
 }: {
 	displayName: string
@@ -335,23 +306,46 @@ function UserProfile({
 	initials: string
 	avatarUrl: string | null
 	planChip: PlanChip
+	isAdmin: boolean
 	onNavigate: () => void
 }) {
+	const avatar = (
+		<div className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-sm bg-primary font-mono text-[12px] font-semibold text-paper-white">
+			{avatarUrl ? (
+				// biome-ignore lint/performance/noImgElement: Google avatar host isn't in next/image remotePatterns.
+				<img
+					src={avatarUrl}
+					alt=""
+					referrerPolicy="no-referrer"
+					className="size-full object-cover"
+				/>
+			) : (
+				initials
+			)}
+		</div>
+	)
 	return (
 		<div className="flex items-center gap-2.5 py-2">
-			<div className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-sm bg-primary font-mono text-[12px] font-semibold text-paper-white">
-				{avatarUrl ? (
-					// biome-ignore lint/performance/noImgElement: Google avatar host isn't in next/image remotePatterns.
-					<img
-						src={avatarUrl}
-						alt=""
-						referrerPolicy="no-referrer"
-						className="size-full object-cover"
-					/>
-				) : (
-					initials
-				)}
-			</div>
+			{isAdmin ? (
+				<DropdownMenu>
+					<DropdownMenuTrigger
+						aria-label="Account menu"
+						className="rounded-sm transition-opacity hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+					>
+						{avatar}
+					</DropdownMenuTrigger>
+					<DropdownMenuContent side="top" align="start" sideOffset={8}>
+						<DropdownMenuItem
+							render={<Link href="/admin/overview" onClick={onNavigate} />}
+						>
+							<Shield />
+							Admin space
+						</DropdownMenuItem>
+					</DropdownMenuContent>
+				</DropdownMenu>
+			) : (
+				avatar
+			)}
 			<div className="min-w-0 flex-1">
 				<div className="flex items-center gap-1.5">
 					<span className="truncate text-[13px] font-medium text-foreground">

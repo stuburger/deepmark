@@ -21,6 +21,7 @@ import {
 	TooltipProvider,
 	TooltipTrigger,
 } from "@/components/ui/tooltip"
+import { formatDate } from "@/lib/format/date"
 import { toggleBookmark } from "@/lib/marking/submissions/mutations"
 import type { SubmissionHistoryItem } from "@/lib/marking/types"
 import { queryKeys } from "@/lib/query-keys"
@@ -47,7 +48,6 @@ import { Fragment, useMemo, useState } from "react"
 import { toast } from "sonner"
 import {
 	PHASE_LABEL,
-	formatDate,
 	isInFlightPhase,
 	phaseStatusKind,
 	scoreChipKind,

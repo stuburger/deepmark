@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button"
 import { SoftChip } from "@/components/ui/soft-chip"
 import { StatusDot } from "@/components/ui/status-dot"
 import { TableCell, TableRow } from "@/components/ui/table"
+import { formatDate } from "@/lib/format/date"
 import { getSubmissionVersions } from "@/lib/marking/submissions/queries"
 import { queryKeys } from "@/lib/query-keys"
 import { cn } from "@/lib/utils"
@@ -15,7 +16,6 @@ import {
 import { useQuery } from "@tanstack/react-query"
 import {
 	PHASE_LABEL,
-	formatDate,
 	isInFlightPhase,
 	phaseStatusKind,
 	scoreChipKind,

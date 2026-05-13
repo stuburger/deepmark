@@ -8,6 +8,7 @@ import {
 	DialogTitle,
 	DialogTrigger,
 } from "@/components/ui/dialog"
+import { formatDate } from "@/lib/format/date"
 import {
 	type PdfDocument,
 	getPdfDocumentsForPaper,
@@ -23,15 +24,6 @@ const DOC_TYPE_LABELS: Record<string, string> = {
 
 function docTypeLabel(type: string) {
 	return DOC_TYPE_LABELS[type] ?? type
-}
-
-function formatDate(date: Date | null) {
-	if (!date) return null
-	return new Intl.DateTimeFormat("en-GB", {
-		day: "2-digit",
-		month: "short",
-		year: "numeric",
-	}).format(new Date(date))
 }
 
 // ── Single PDF viewer dialog ──────────────────────────────────────────────────

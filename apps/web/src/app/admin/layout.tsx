@@ -7,7 +7,6 @@ import {
 	SidebarHeader,
 	SidebarInset,
 	SidebarProvider,
-	SidebarSeparator,
 } from "@/components/ui/sidebar"
 import { logoutFormAction } from "@/lib/actions"
 import { auth } from "@/lib/auth"
@@ -40,13 +39,6 @@ export default async function AdminLayout({
 				</SidebarHeader>
 				<AdminSidebarNav />
 				<SidebarFooter>
-					<SidebarSeparator />
-					<Link
-						href="/teacher/mark"
-						className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-					>
-						Switch to teacher
-					</Link>
 					<form action={logoutFormAction}>
 						<Button
 							type="submit"

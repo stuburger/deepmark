@@ -7,14 +7,6 @@ export const TERMINAL_STATUSES = new Set([
 	"cancelled",
 ])
 
-export function formatDate(date: Date) {
-	return new Intl.DateTimeFormat("en-GB", {
-		day: "2-digit",
-		month: "short",
-		year: "numeric",
-	}).format(new Date(date))
-}
-
 /**
  * Pick a SoftChip kind for a marked submission's percentage. Used by the
  * score cell once the submission reaches `ocr_complete` and a real score

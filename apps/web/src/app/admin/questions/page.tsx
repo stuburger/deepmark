@@ -15,6 +15,7 @@ import {
 	TableRow,
 } from "@/components/ui/table"
 import { type QuestionListItem, listQuestions } from "@/lib/admin/queries"
+import { formatDate } from "@/lib/format/date"
 
 type BadgeVariant = "default" | "secondary" | "destructive" | "outline"
 
@@ -84,14 +85,6 @@ function capitalize(s: string) {
 
 function truncate(s: string, max = 80) {
 	return s.length > max ? `${s.slice(0, max)}…` : s
-}
-
-function formatDate(date: Date) {
-	return new Intl.DateTimeFormat("en-GB", {
-		day: "2-digit",
-		month: "short",
-		year: "numeric",
-	}).format(new Date(date))
 }
 
 function QuestionRow({ q }: { q: QuestionListItem }) {

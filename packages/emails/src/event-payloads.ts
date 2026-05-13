@@ -56,6 +56,21 @@ export type ResourceSharedDetail = {
 	sharedByUserId: string
 }
 
+export type PaymentFailedDetail = {
+	userId: string
+	/** Stripe invoice id — used in the subscriber for de-dupe / debugging. */
+	stripeInvoiceId: string
+	/** Stripe's plan label as we already store it on User (e.g. "pro_monthly"). */
+	plan: "pro_monthly" | "unlimited_monthly"
+	/** Amount due in minor units (pence/cents). */
+	amountDue: number
+	currency: string
+	/** Which retry attempt this is — Stripe attempts 4 times by default. */
+	attemptCount: number
+	/** ISO string for the next automatic retry, or null if Stripe has exhausted retries. */
+	nextAttemptAt: string | null
+}
+
 /**
  * Source/detail-type strings used on EventBridge. Importing the constants
  * (rather than free-typing) gives compile-time matching between emit sites
@@ -75,6 +90,7 @@ export const EventDetailType = {
 	topupPurchased: "topup.purchased",
 	batchCompleted: "batch.completed",
 	resourceShared: "resource.shared",
+	paymentFailed: "payment.failed",
 } as const
 
 export type EventDetailTypeValue =

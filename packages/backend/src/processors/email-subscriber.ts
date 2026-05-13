@@ -3,6 +3,7 @@ import {
 	type BatchCompletedDetail,
 	EventDetailType,
 	type EventDetailTypeValue,
+	type PaymentFailedDetail,
 	type PpuPurchasedDetail,
 	type RenderedEmail,
 	type ResourceSharedDetail,
@@ -10,6 +11,7 @@ import {
 	type TopupPurchasedDetail,
 	type UserSignedUpDetail,
 	renderMarkingCompleteEmail,
+	renderPaymentFailedEmail,
 	renderPpuThankYouEmail,
 	renderResourceSharedEmail,
 	renderTopupThankYouEmail,
@@ -80,6 +82,8 @@ async function dispatch(
 			return dispatchBatchCompleted(event.detail as BatchCompletedDetail)
 		case EventDetailType.resourceShared:
 			return dispatchResourceShared(event.detail as ResourceSharedDetail)
+		case EventDetailType.paymentFailed:
+			return dispatchPaymentFailed(event.detail as PaymentFailedDetail)
 		default:
 			logger.warn(TAG, "Unrecognised detail-type; ignoring", {
 				detailType: event["detail-type"],
@@ -246,6 +250,36 @@ async function dispatchResourceShared(
 		logoUrl: LOGO_URL,
 	})
 	return { to: recipientEmail, email }
+}
+
+async function dispatchPaymentFailed(
+	detail: PaymentFailedDetail,
+): Promise<Dispatched> {
+	const user = await db.user.findUnique({
+		where: { id: detail.userId },
+		select: { email: true, name: true },
+	})
+	if (!user?.email) return null
+
+	const email = await renderPaymentFailedEmail({
+		firstName: firstNameFrom(user.name),
+		planLabel: planDisplayLabel(detail.plan),
+		amountLabel: formatMoney(detail.amountDue, detail.currency),
+		attemptCount: detail.attemptCount,
+		nextAttemptAt: detail.nextAttemptAt ? new Date(detail.nextAttemptAt) : null,
+		billingUrl: `${WEB_URL}/teacher/settings/billing`,
+		logoUrl: LOGO_URL,
+	})
+	return { to: user.email, email }
+}
+
+function planDisplayLabel(plan: PaymentFailedDetail["plan"]): string {
+	switch (plan) {
+		case "pro_monthly":
+			return "DeepMark Pro"
+		case "unlimited_monthly":
+			return "DeepMark Unlimited"
+	}
 }
 
 type ResourceInfo = { title: string; url: string }

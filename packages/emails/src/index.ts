@@ -16,6 +16,7 @@ export {
 	EventSource,
 	type BatchCompletedDetail,
 	type EventDetailTypeValue,
+	type PaymentFailedDetail,
 	type ProcessingBatchKind,
 	type PpuPurchasedDetail,
 	type ResourceSharedDetail,
@@ -28,6 +29,11 @@ export {
 	buildMarkingCompleteCopy,
 	type MarkingCompleteEmailProps,
 } from "./marking-complete"
+export {
+	PaymentFailedEmail,
+	buildPaymentFailedCopy,
+	type PaymentFailedEmailProps,
+} from "./payment-failed"
 export {
 	PpuThankYouEmail,
 	type PpuThankYouEmailProps,
@@ -53,6 +59,7 @@ export {
 export {
 	type RenderedEmail,
 	renderMarkingCompleteEmail,
+	renderPaymentFailedEmail,
 	renderPpuThankYouEmail,
 	renderResourceSharedEmail,
 	renderTopupThankYouEmail,

@@ -150,15 +150,29 @@ export async function clearSubscriptionFromUser(
 }
 
 /**
- * Handle invoice.payment_failed — mirror the past_due status onto User.
- * Stripe also fires subscription.updated for status changes, so this is
- * mostly defensive (payment_failed tends to arrive before the status update).
+ * Handle invoice.payment_failed — mirror the past_due status onto User and
+ * fire a dunning email so the teacher knows before they hit a paywall.
+ *
+ * Stripe attempts 4 times by default and re-fires this webhook on each
+ * attempt, so the recipient will get up to 4 emails over ~3 weeks. That's
+ * the desired behaviour — by attempt 4, Stripe is about to cancel and they
+ * need to act. (If Stripe's own dunning emails are enabled in the
+ * dashboard, disable them to avoid double-sending.)
+ *
+ * Stripe also fires subscription.updated for status changes, so the status
+ * mirror here is mostly defensive (payment_failed tends to arrive before
+ * the status update).
  */
 export async function applyInvoiceFailed(
 	invoice: Stripe.Invoice,
 ): Promise<void> {
 	const customerId = extractCustomerId(invoice.customer)
 	if (!customerId) return
+
+	const user = await db.user.findUnique({
+		where: { stripe_customer_id: customerId },
+		select: { id: true, plan: true },
+	})
 
 	await db.user.updateMany({
 		where: { stripe_customer_id: customerId },
@@ -167,6 +181,47 @@ export async function applyInvoiceFailed(
 	log.info(TAG, "Applied failed invoice", {
 		customerId,
 		invoiceId: invoice.id,
+	})
+
+	if (!user) {
+		log.warn(TAG, "invoice.payment_failed for unknown customer", {
+			customerId,
+			invoiceId: invoice.id,
+		})
+		return
+	}
+
+	if (user.plan !== Plan.pro_monthly && user.plan !== Plan.unlimited_monthly) {
+		// No paying plan attached to the user record — nothing to dun about.
+		// Status mirror still happened above; the email isn't meaningful here.
+		log.info(TAG, "invoice.payment_failed without resolvable plan; no email", {
+			userId: user.id,
+			plan: user.plan,
+		})
+		return
+	}
+
+	if (!invoice.id) {
+		log.warn(TAG, "invoice.payment_failed has no invoice id; skipping email", {
+			userId: user.id,
+		})
+		return
+	}
+
+	await emitEvent({
+		source: EventSource.billing,
+		detailType: EventDetailType.paymentFailed,
+		detail: {
+			userId: user.id,
+			stripeInvoiceId: invoice.id,
+			plan: user.plan,
+			amountDue: invoice.amount_due,
+			currency: (invoice.currency ?? "gbp").toLowerCase(),
+			attemptCount: invoice.attempt_count ?? 1,
+			nextAttemptAt: invoice.next_payment_attempt
+				? new Date(invoice.next_payment_attempt * 1000).toISOString()
+				: null,
+		},
 	})
 }
 

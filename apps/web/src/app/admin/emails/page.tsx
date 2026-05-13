@@ -1,6 +1,7 @@
 import {
 	type RenderedEmail,
 	renderMarkingCompleteEmail,
+	renderPaymentFailedEmail,
 	renderPpuThankYouEmail,
 	renderResourceSharedEmail,
 	renderTopupThankYouEmail,
@@ -10,6 +11,7 @@ import {
 } from "@mcp-gcse/emails"
 import {
 	markingCompleteFixtures,
+	paymentFailedFixtures,
 	ppuThankYouFixtures,
 	resourceSharedFixtures,
 	topupThankYouFixtures,
@@ -54,6 +56,11 @@ export default async function EmailPreviewsPage() {
 			"Welcome to Unlimited",
 			welcomeToUnlimitedFixtures,
 			renderWelcomeToUnlimitedEmail,
+		),
+		renderSection(
+			"Payment failed (dunning)",
+			paymentFailedFixtures,
+			renderPaymentFailedEmail,
 		),
 		renderSection("PPU thank-you", ppuThankYouFixtures, renderPpuThankYouEmail),
 		renderSection(

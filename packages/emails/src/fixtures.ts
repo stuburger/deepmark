@@ -1,4 +1,5 @@
 import type { MarkingCompleteEmailProps } from "./marking-complete"
+import type { PaymentFailedEmailProps } from "./payment-failed"
 import type { PpuThankYouEmailProps } from "./ppu-thank-you"
 import type { ResourceSharedEmailProps } from "./resource-shared"
 import type { TopupThankYouEmailProps } from "./topup-thank-you"
@@ -150,6 +151,41 @@ export const resourceSharedFixtures: Record<string, ResourceSharedEmailProps> =
 			resourceUrl: `${WEB_URL}/teacher/exam-papers/abc123/submissions/sub456`,
 		},
 	}
+
+export const paymentFailedFixtures: Record<string, PaymentFailedEmailProps> = {
+	firstAttemptPro: {
+		firstName: "Sarah",
+		planLabel: "DeepMark Pro",
+		amountLabel: "£24.00",
+		attemptCount: 1,
+		nextAttemptAt: new Date("2026-05-16T09:00:00Z"),
+		billingUrl: `${WEB_URL}/teacher/settings/billing`,
+	},
+	secondAttemptUnlimited: {
+		firstName: "Alex",
+		planLabel: "DeepMark Unlimited",
+		amountLabel: "£49.00",
+		attemptCount: 2,
+		nextAttemptAt: new Date("2026-05-20T09:00:00Z"),
+		billingUrl: `${WEB_URL}/teacher/settings/billing`,
+	},
+	finalAttempt: {
+		firstName: "Sarah",
+		planLabel: "DeepMark Pro",
+		amountLabel: "£24.00",
+		attemptCount: 4,
+		nextAttemptAt: null,
+		billingUrl: `${WEB_URL}/teacher/settings/billing`,
+	},
+	noFirstName: {
+		firstName: null,
+		planLabel: "DeepMark Pro",
+		amountLabel: "£24.00",
+		attemptCount: 1,
+		nextAttemptAt: new Date("2026-05-16T09:00:00Z"),
+		billingUrl: `${WEB_URL}/teacher/settings/billing`,
+	},
+}
 
 export const markingCompleteFixtures: Record<
 	string,

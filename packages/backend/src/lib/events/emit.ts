@@ -7,6 +7,7 @@ import type {
 	BatchCompletedDetail,
 	EventDetailType,
 	EventSource,
+	PaymentFailedDetail,
 	PpuPurchasedDetail,
 	SubscriptionUpgradedDetail,
 	TopupPurchasedDetail,
@@ -43,6 +44,11 @@ export type DomainEvent =
 			source: typeof EventSource.billing
 			detailType: typeof EventDetailType.topupPurchased
 			detail: TopupPurchasedDetail
+	  }
+	| {
+			source: typeof EventSource.billing
+			detailType: typeof EventDetailType.paymentFailed
+			detail: PaymentFailedDetail
 	  }
 	| {
 			source: typeof EventSource.marking

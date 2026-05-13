@@ -5,6 +5,8 @@ import {
 	buildMarkingCompleteCopy,
 } from "./marking-complete"
 import type { MarkingCompleteEmailProps } from "./marking-complete"
+import { PaymentFailedEmail, buildPaymentFailedCopy } from "./payment-failed"
+import type { PaymentFailedEmailProps } from "./payment-failed"
 import { PpuThankYouEmail } from "./ppu-thank-you"
 import type { PpuThankYouEmailProps } from "./ppu-thank-you"
 import { ResourceSharedEmail, buildResourceSharedCopy } from "./resource-shared"
@@ -86,4 +88,11 @@ export async function renderResourceSharedEmail(
 ): Promise<RenderedEmail> {
 	const { subject } = buildResourceSharedCopy(props)
 	return renderBoth(<ResourceSharedEmail {...props} />, subject)
+}
+
+export async function renderPaymentFailedEmail(
+	props: PaymentFailedEmailProps,
+): Promise<RenderedEmail> {
+	const { subject } = buildPaymentFailedCopy(props)
+	return renderBoth(<PaymentFailedEmail {...props} />, subject)
 }

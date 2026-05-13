@@ -193,6 +193,19 @@ export const LLM_CALL_SITE_DEFAULTS: Array<{
 		],
 	},
 	{
+		key: "paper-setup-classifier",
+		display_name: "Paper Setup File Classifier",
+		description:
+			"Fast 3-label classifier for the Paper Setup wizard drop zone — routes each dropped PDF to question_paper / mark_scheme / scripts_bundle.",
+		input_type: "pdf",
+		phase: "setup",
+		step: 1,
+		multiplier: "once",
+		models: [
+			{ provider: "google", model: "gemini-2.5-flash", temperature: 0.0 },
+		],
+	},
+	{
 		key: "question-paper-metadata",
 		display_name: "Question Paper Metadata",
 		description: "Detects exam paper metadata from question paper cover page.",
@@ -238,6 +251,20 @@ export const LLM_CALL_SITE_DEFAULTS: Array<{
 		input_type: "pdf",
 		phase: "setup",
 		step: 3,
+		multiplier: "once",
+		models: [
+			{ provider: "google", model: "gemini-2.5-flash", temperature: 0.2 },
+			{ provider: "anthropic", model: "claude-sonnet-4-6", temperature: 0.2 },
+		],
+	},
+	{
+		key: "paper-bundle-extraction",
+		display_name: "Paper Bundle Extraction",
+		description:
+			"Single-call extraction of question paper + mark scheme as one bundle, used by the Paper Setup wizard when both PDFs are uploaded together. Emits paper metadata + sections + questions + per-question mark schemes for atomic persistence.",
+		input_type: "pdf",
+		phase: "setup",
+		step: 2,
 		multiplier: "once",
 		models: [
 			{ provider: "google", model: "gemini-2.5-flash", temperature: 0.2 },

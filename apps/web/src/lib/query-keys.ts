@@ -17,6 +17,8 @@ export const queryKeys = {
 	teacherOverrides: (submissionId: string) =>
 		["teacherOverrides", submissionId] as const,
 	ingestionJob: (jobId: string) => ["ingestionJob", jobId] as const,
+	paperSetupSession: (sessionId: string) =>
+		["paperSetupSession", sessionId] as const,
 	catalogExamPapers: () => ["catalogExamPapers"] as const,
 	llmCallSites: () => ["llmCallSites"] as const,
 	submissionFeedback: (submissionId: string) =>

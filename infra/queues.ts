@@ -36,6 +36,21 @@ export const questionPaperQueue = new sst.aws.Queue("QuestionPaperQueue", {
 	transform: prelaunchRetention,
 })
 
+// Bundle processor: a single Gemini call extracts QP + MS together when both
+// PDFs are uploaded in one go from the Paper Setup wizard. This is the ONLY
+// correct path when both files are present at create-time — running the single
+// QP and MS processors in parallel would race (MS auto-creates Questions).
+// Dedicated DLQ + bounded retry to satisfy the pre-launch ops rule.
+const paperBundleDlq = new sst.aws.Queue("PaperBundleDLQ", {
+	visibilityTimeout: "1 minute",
+})
+
+export const paperBundleQueue = new sst.aws.Queue("PaperBundleQueue", {
+	visibilityTimeout: "10 minutes",
+	dlq: { queue: paperBundleDlq.arn, retry: 2 },
+	transform: prelaunchRetention,
+})
+
 // Dedicated DLQ per queue — each handler already knows its phase, no state inference needed.
 // Retention left at SQS default (4 days) so failed messages stick around long enough to inspect.
 const studentPaperOcrDlq = new sst.aws.Queue("StudentPaperOcrDLQ", {
@@ -252,6 +267,26 @@ questionPaperQueue.subscribe({
 		openAiApiKey,
 		anthropicApiKey,
 		scansBucket,
+	],
+	timeout: "8 minutes",
+	memory: "1 GB",
+})
+
+// Bundle queue subscriber. Triggered explicitly by the wizard's
+// createPaperFromStaged server action with { sessionId }. The handler reads
+// the session's staged_files for both PDFs, calls Gemini once with both
+// PDFs, and on success creates the ExamPaper + Question/MarkScheme rows
+// atomically. If the session also includes a scripts PDF, the handler
+// hands off to BatchClassifyQueue after promotion.
+paperBundleQueue.subscribe({
+	handler: "packages/backend/src/processors/paper-bundle.handler",
+	link: [
+		neonPostgres,
+		geminiApiKey,
+		openAiApiKey,
+		anthropicApiKey,
+		scansBucket,
+		batchClassifyQueue,
 	],
 	timeout: "8 minutes",
 	memory: "1 GB",

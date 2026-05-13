@@ -236,6 +236,7 @@ model User {
 
   students             Student[]              @relation("TeacherStudents")
   pdf_ingestion_jobs   PdfIngestionJob[]      @relation("PdfIngestionJobUploader")
+  paper_setup_sessions PaperSetupSession[]    @relation("PaperSetupSessionCreator")
   student_submissions  StudentSubmission[]    @relation("SubmissionUploader")
   batch_ingest_jobs    BatchIngestJob[]       @relation("BatchIngestJobUploader")
   triggered_processing_batches ProcessingBatch[] @relation("ProcessingBatchTriggerer")
@@ -459,6 +460,7 @@ model ExamPaper {
   student_submissions  StudentSubmission[] @relation("SubmissionExamPaper")
   batch_ingest_jobs    BatchIngestJob[]
   processing_batches   ProcessingBatch[]   @relation("ProcessingBatchExamPaper")
+  setup_session        PaperSetupSession?  @relation("PaperSetupSessionExamPaper")
 
   @@map("exam_papers")
 }
@@ -609,6 +611,63 @@ model PdfIngestionJob {
   created_questions Question[]       @relation("QuestionSource")
 
   @@map("pdf_ingestion_jobs")
+}
+
+enum PaperSetupStatus {
+  extracting
+  failed
+  completed
+}
+
+enum PaperSetupFileKind {
+  question_paper
+  mark_scheme
+  scripts_bundle
+}
+
+/// One row per "drop your files here → click Go" attempt from the Paper Setup
+/// wizard. Owns the staged S3 references + processor state while metadata is
+/// being extracted. On success, the bundle processor creates an ExamPaper with
+/// all required fields populated AND the matching PdfIngestionJob rows (also
+/// fully populated), then writes back `exam_paper_id` here to mark the session
+/// promoted. On failure the row carries the error message — the teacher can
+/// retry or delete it without ever creating a half-formed paper or job.
+model PaperSetupSession {
+  id            String           @id @default(cuid())
+  created_by_id String
+  created_at    DateTime         @default(now())
+  updated_at    DateTime         @updatedAt
+  status        PaperSetupStatus @default(extracting)
+  error         String?
+  /// Set when the bundle processor promotes the session into an ExamPaper.
+  /// Null until then.
+  exam_paper_id String?          @unique
+
+  created_by    User                    @relation("PaperSetupSessionCreator", fields: [created_by_id], references: [id])
+  exam_paper    ExamPaper?              @relation("PaperSetupSessionExamPaper", fields: [exam_paper_id], references: [id])
+  staged_files  PaperSetupStagedFile[]
+
+  @@index([created_by_id])
+  @@map("paper_setup_sessions")
+}
+
+/// One row per file dropped into the wizard. Lives only until the session is
+/// promoted (deleted with the session). Carries the durable S3 key + the
+/// teacher's classified document type so the bundle processor can find both
+/// PDFs without consulting any other model.
+model PaperSetupStagedFile {
+  id          String              @id @default(cuid())
+  session_id  String
+  s3_bucket   String
+  s3_key      String
+  filename    String
+  kind        PaperSetupFileKind
+  created_at  DateTime            @default(now())
+
+  session     PaperSetupSession   @relation(fields: [session_id], references: [id], onDelete: Cascade)
+
+  @@index([session_id])
+  @@map("paper_setup_staged_files")
 }
 
 model StudentPaperAnswerRegion {

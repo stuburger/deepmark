@@ -1,0 +1,280 @@
+"use server"
+
+import { authenticatedAction } from "@/lib/authz"
+import { db } from "@/lib/db"
+import { callLlmWithFallback } from "@/lib/llm-runtime"
+import {
+	CopyObjectCommand,
+	GetObjectCommand,
+	S3Client,
+} from "@aws-sdk/client-s3"
+import { SQSClient, SendMessageCommand } from "@aws-sdk/client-sqs"
+import { Output, generateText } from "ai"
+import { Resource } from "sst"
+import { z } from "zod"
+import type { ClassifiedStagedFile } from "./types"
+
+const s3 = new S3Client({})
+const sqs = new SQSClient({})
+const bucketName = Resource.ScansBucket.name
+
+const METADATA_TEMP_PREFIX = "pdfs/metadata-temp"
+
+const ClassificationSchema = z.object({
+	label: z
+		.enum(["question_paper", "mark_scheme", "scripts_bundle", "unrecognised"])
+		.describe(
+			"question_paper = the document a student sits in the exam (printed questions + answer space, no mark allocations or rubric). mark_scheme = the examiner reference document (mark allocations, level descriptors, AOs, indicative content). scripts_bundle = scanned student attempts (handwriting visible, possibly multiple students stacked). unrecognised = does not fit any category.",
+		),
+	confidence: z
+		.enum(["low", "medium", "high"])
+		.describe("Self-assessed confidence in the label."),
+})
+
+const classifyInput = z.object({
+	files: z
+		.array(
+			z.object({
+				tempUploadId: z
+					.string()
+					.refine(
+						(v) => v.startsWith(METADATA_TEMP_PREFIX),
+						"Invalid staging key",
+					),
+			}),
+		)
+		.min(1)
+		.max(10),
+})
+
+/**
+ * Classifies one-to-many staged PDFs (uploaded via the existing temp
+ * presigned-PUT flow) into question_paper / mark_scheme / scripts_bundle.
+ * Runs all files in parallel. Each failing classification surfaces as
+ * `label: "unrecognised"` plus an `error` so the UI can prompt the teacher
+ * to drag-assign it.
+ */
+export const classifyStagedFiles = authenticatedAction
+	.inputSchema(classifyInput)
+	.action(
+		async ({
+			parsedInput: { files },
+			ctx,
+		}): Promise<{ classifications: ClassifiedStagedFile[] }> => {
+			ctx.log.info("classifyStagedFiles called", { count: files.length })
+
+			const classifications = await Promise.all(
+				files.map(async (f): Promise<ClassifiedStagedFile> => {
+					try {
+						const pdfBase64 = await fetchTempPdf(f.tempUploadId)
+						const { output } = await callLlmWithFallback(
+							"paper-setup-classifier",
+							async (model, entry, report) => {
+								const r = await generateText({
+									model,
+									temperature: entry.temperature,
+									messages: [
+										{
+											role: "user",
+											content: [
+												{
+													type: "file",
+													data: pdfBase64,
+													mediaType: "application/pdf",
+												},
+												{
+													type: "text",
+													text: "Classify this PDF into one of: question_paper, mark_scheme, scripts_bundle, unrecognised. Read only the first page or two — speed matters. Look for the signal that decides it: question_paper has printed questions with answer space and no mark allocations; mark_scheme has mark allocations / level descriptors / AOs / indicative content; scripts_bundle has visible student handwriting; unrecognised means it doesn't fit any category.",
+												},
+											],
+										},
+									],
+									output: Output.object({ schema: ClassificationSchema }),
+								})
+								report.usage = r.usage
+								return r
+							},
+						)
+						return {
+							tempUploadId: f.tempUploadId,
+							label: output.label,
+							error: null,
+						}
+					} catch (err) {
+						const message = err instanceof Error ? err.message : String(err)
+						ctx.log.warn("classifyStagedFiles file failed", {
+							tempUploadId: f.tempUploadId,
+							error: message,
+						})
+						return {
+							tempUploadId: f.tempUploadId,
+							label: "unrecognised",
+							error: message,
+						}
+					}
+				}),
+			)
+			return { classifications }
+		},
+	)
+
+const createInput = z.object({
+	files: z
+		.array(
+			z.object({
+				tempUploadId: z
+					.string()
+					.refine(
+						(v) => v.startsWith(METADATA_TEMP_PREFIX),
+						"Invalid staging key",
+					),
+				label: z.enum(["question_paper", "mark_scheme", "scripts_bundle"]),
+				filename: z.string().trim().min(1).max(255),
+			}),
+		)
+		.min(1)
+		.max(5),
+})
+
+/**
+ * Upload-and-go: creates a PaperSetupSession + PaperSetupStagedFile rows,
+ * copies each staged file into its durable S3 location, and dispatches the
+ * bundle processor. Returns the new session id so the client can redirect
+ * to /teacher/sessions/[id].
+ *
+ * The ExamPaper does NOT exist until the bundle processor finishes
+ * extracting — the session and its staged_files are the only things that
+ * exist in the "metadata pending" state. The processor creates ExamPaper
+ * (and the matching PdfIngestionJob rows) atomically at promotion time.
+ *
+ * v1 requires both a question paper AND a mark scheme. A scripts PDF is
+ * accepted alongside; segmentation hookup lands in a follow-up.
+ */
+export const createPaperFromStaged = authenticatedAction
+	.inputSchema(createInput)
+	.action(
+		async ({
+			parsedInput: { files },
+			ctx,
+		}): Promise<{ sessionId: string }> => {
+			const qp = files.filter((f) => f.label === "question_paper")
+			const ms = files.filter((f) => f.label === "mark_scheme")
+			const scripts = files.filter((f) => f.label === "scripts_bundle")
+
+			if (qp.length === 0) throw new Error("A question paper is required.")
+			if (qp.length > 1) throw new Error("Only one question paper allowed.")
+			if (ms.length === 0)
+				throw new Error(
+					"A mark scheme is required. Upload one alongside the question paper.",
+				)
+			if (ms.length > 1) throw new Error("Only one mark scheme allowed.")
+			if (scripts.length > 1)
+				throw new Error("Only one scripts PDF allowed for v1.")
+
+			const qpFile = qp[0]
+			const msFile = ms[0]
+
+			ctx.log.info("createPaperFromStaged called", {
+				slots: { qp: true, ms: true, scripts: scripts.length },
+			})
+
+			// 1. Reserve durable S3 keys deterministically off the session id.
+			//    No PdfIngestionJob exists at this point — those are created
+			//    by the bundle processor only after extraction succeeds.
+			const session = await db.paperSetupSession.create({
+				data: {
+					created_by_id: ctx.user.id,
+					status: "extracting",
+				},
+			})
+
+			const qpDestKey = sessionFileKey(session.id, "question-paper.pdf")
+			const msDestKey = sessionFileKey(session.id, "mark-scheme.pdf")
+			const scriptsFile = scripts[0]
+			const scriptsDestKey = scriptsFile
+				? sessionFileKey(session.id, "scripts.pdf")
+				: null
+
+			await db.paperSetupStagedFile.createMany({
+				data: [
+					{
+						session_id: session.id,
+						s3_bucket: bucketName,
+						s3_key: qpDestKey,
+						filename: qpFile.filename,
+						kind: "question_paper",
+					},
+					{
+						session_id: session.id,
+						s3_bucket: bucketName,
+						s3_key: msDestKey,
+						filename: msFile.filename,
+						kind: "mark_scheme",
+					},
+					...(scriptsFile && scriptsDestKey
+						? [
+								{
+									session_id: session.id,
+									s3_bucket: bucketName,
+									s3_key: scriptsDestKey,
+									filename: scriptsFile.filename,
+									kind: "scripts_bundle" as const,
+								},
+							]
+						: []),
+				],
+			})
+
+			// 2. Copy temp → durable. The `pdfs/paper-setup/` prefix has NO S3
+			//    event notifications wired up to it, so the existing QP / MS
+			//    triggers can never fire on these objects. Bundle owns the work
+			//    end-to-end and reads from these keys directly.
+			await Promise.all([
+				copyTempToDurable(qpFile.tempUploadId, qpDestKey),
+				copyTempToDurable(msFile.tempUploadId, msDestKey),
+				...(scriptsFile && scriptsDestKey
+					? [copyTempToDurable(scriptsFile.tempUploadId, scriptsDestKey)]
+					: []),
+			])
+
+			await sqs.send(
+				new SendMessageCommand({
+					QueueUrl: Resource.PaperBundleQueue.url,
+					MessageBody: JSON.stringify({ sessionId: session.id }),
+				}),
+			)
+			ctx.log.info("PaperBundleQueue dispatched", { sessionId: session.id })
+
+			return { sessionId: session.id }
+		},
+	)
+
+// ── helpers ─────────────────────────────────────────────────────────────────
+
+const SESSION_PREFIX = "pdfs/paper-setup"
+
+function sessionFileKey(sessionId: string, filename: string): string {
+	return `${SESSION_PREFIX}/${sessionId}/${filename}`
+}
+
+async function fetchTempPdf(s3Key: string): Promise<string> {
+	const cmd = new GetObjectCommand({ Bucket: bucketName, Key: s3Key })
+	const response = await s3.send(cmd)
+	const body = await response.Body?.transformToByteArray()
+	if (!body?.length) throw new Error("Empty staged PDF")
+	return Buffer.from(body).toString("base64")
+}
+
+async function copyTempToDurable(
+	tempKey: string,
+	destKey: string,
+): Promise<void> {
+	await s3.send(
+		new CopyObjectCommand({
+			Bucket: bucketName,
+			CopySource: `${bucketName}/${tempKey}`,
+			Key: destKey,
+			ContentType: "application/pdf",
+		}),
+	)
+}

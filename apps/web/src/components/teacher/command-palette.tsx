@@ -13,7 +13,7 @@ import { getBookmarkedSubmissions } from "@/lib/marking/submissions/queries"
 import { queryKeys } from "@/lib/query-keys"
 import { searchEverything } from "@/lib/search/queries"
 import { useQuery } from "@tanstack/react-query"
-import { Bookmark, FileText, User } from "lucide-react"
+import { Bookmark, FileText, Plus, User } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 
@@ -91,11 +91,19 @@ export function CommandPalette() {
 					onValueChange={setQ}
 				/>
 				<CommandList>
-					{!isQuery && bookmarks.length === 0 && (
-						<div className="px-3 py-6 text-center text-xs text-muted-foreground">
-							Start typing to search papers and submissions.
-						</div>
-					)}
+					<CommandGroup heading="Actions">
+						<CommandItem
+							value="new-paper"
+							onSelect={() => go("/teacher/papers/new")}
+						>
+							<Plus className="size-4 text-primary" />
+							<span>New paper</span>
+							<span className="ml-auto text-xs text-muted-foreground">
+								Upload QP + mark scheme
+							</span>
+						</CommandItem>
+					</CommandGroup>
+
 					{isQuery && !hasResults && <CommandEmpty>No results.</CommandEmpty>}
 
 					{!isQuery && bookmarks.length > 0 && (

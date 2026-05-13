@@ -63,6 +63,22 @@ const TOP_UP_PAPERS = 15
 export const stripeSecretKey = new sst.Secret("StripeSecretKey")
 export const stripePublishableKey = new sst.Secret("StripePublishableKey")
 
+/**
+ * Restricted Stripe API key handed to PostHog's Stripe data-warehouse source
+ * (Data pipelines → Sources → Stripe). Not consumed by our application code —
+ * tracked as an SST secret so the value lives in the same per-stage store as
+ * the other Stripe credentials rather than in someone's password manager.
+ *
+ * Required Stripe permissions (per PostHog docs):
+ *   Core / Billing / Connect — Read
+ *   Webhooks — Write   (so PostHog can auto-create the real-time sync webhook)
+ *
+ * Set with: `sst secret set StripeRestrictedKey rk_… --stage=<stage>`.
+ * Paste the value into the PostHog Stripe source config; do not link this
+ * into any Lambda.
+ */
+export const stripeRestrictedKey = new sst.Secret("StripeRestrictedKey")
+
 // ─── Product ─────────────────────────────────────────────────────────────────
 const proProduct = new stripe.Product("ProProduct", {
 	name: "DeepMark Pro",

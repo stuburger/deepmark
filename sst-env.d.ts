@@ -73,14 +73,6 @@ declare module "sst" {
       "type": "sst.sst.Secret"
       "value": string
     }
-    "GithubClientId": {
-      "type": "sst.sst.Secret"
-      "value": string
-    }
-    "GithubClientSecret": {
-      "type": "sst.sst.Secret"
-      "value": string
-    }
     "GoogleClientId": {
       "type": "sst.sst.Secret"
       "value": string
@@ -121,6 +113,10 @@ declare module "sst" {
     "PdfRenderer": {
       "name": string
       "type": "sst.aws.Function"
+    }
+    "PosthogPublicKey": {
+      "type": "sst.sst.Secret"
+      "value": string
     }
     "PushSubscriberDLQ": {
       "type": "sst.aws.Queue"
@@ -219,6 +215,10 @@ declare module "sst" {
       "type": "sst.sst.Secret"
       "value": string
     }
+    "StripeRestrictedKey": {
+      "type": "sst.sst.Secret"
+      "value": string
+    }
     "StripeSecretKey": {
       "type": "sst.sst.Secret"
       "value": string
@@ -250,9 +250,6 @@ declare module "sst" {
     "VapidPublicKey": {
       "type": "sst.sst.Secret"
       "value": string
-    }
-    "Vpc": {
-      "type": "sst.aws.Vpc"
     }
     "Web": {
       "type": "sst.aws.Nextjs"

@@ -105,3 +105,15 @@ export const vapidPrivateKey = new sst.Secret(
 	"VapidPrivateKey",
 	"5UFLD1r3EJ8yyPi3SKLU7fX8KCcNUbUMvbxIvK5rmtY",
 )
+
+/**
+ * PostHog project public key (the `phc_…` one — safe to expose to the browser).
+ * Exposed via `NEXT_PUBLIC_POSTHOG_KEY` in `web.ts` so the client SDK can pick
+ * it up at build time. Set per stage with:
+ *   sst secret set PosthogPublicKey phc_xxx --stage=production
+ *   sst secret set PosthogPublicKey phc_xxx --stage=development
+ *
+ * EU project — events are proxied to `eu.i.posthog.com` via the Router
+ * `/ingest/*` routes in `router.ts`.
+ */
+export const posthogPublicKey = new sst.Secret("PosthogPublicKey")

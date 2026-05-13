@@ -13,6 +13,8 @@ const nextConfig: NextConfig = {
 	// uses ESM/CJS conditional exports that esbuild gets wrong when bundling for
 	// Lambda. Keep both packages out of the server bundle.
 	serverExternalPackages: ["@react-pdf/renderer", "pdf-lib"],
+	// PostHog uses trailing slashes on its decide/flag endpoints.
+	skipTrailingSlashRedirect: true,
 }
 
 const withMDX = createMDX({

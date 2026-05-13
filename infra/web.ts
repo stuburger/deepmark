@@ -3,13 +3,14 @@ import { auth, authUrl } from "./auth"
 import { stripeConfig, stripePublishableKey, stripeSecretKey } from "./billing"
 import { collabServer, collabServiceRef } from "./collab"
 import {
-	_PRODUCTION_,
 	domain,
+	_PRODUCTION_,
 	anthropicApiKey,
 	collabServiceSecret,
 	collabUrl,
 	geminiApiKey,
 	openAiApiKey,
+	posthogPublicKey,
 	vapidPrivateKey,
 	vapidPublicKey,
 	webUrl,
@@ -109,5 +110,12 @@ export const web = new sst.aws.Nextjs("Web", {
 		NEXT_PUBLIC_COLLAB_URL: collabUrl,
 		NEXT_PUBLIC_STAGE: $app.stage,
 		STAGE: $app.stage,
+		// PostHog: key is exposed to the browser at build time. The host is
+		// our first-party `/ingest` path — the Router (router.ts) reverse-
+		// proxies it to eu.i.posthog.com so requests bypass ad-blockers.
+		// On non-permanent stages the proxy doesn't exist, so the provider
+		// reads NEXT_PUBLIC_STAGE and no-ops.
+		NEXT_PUBLIC_POSTHOG_KEY: posthogPublicKey.value,
+		NEXT_PUBLIC_POSTHOG_HOST: "/ingest",
 	},
 })

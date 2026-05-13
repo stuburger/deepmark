@@ -6,6 +6,7 @@ import { ThemeProvider } from "next-themes"
 import { NuqsAdapter } from "nuqs/adapters/next/app"
 import { useState } from "react"
 
+import { PostHogProvider } from "@/components/posthog-provider"
 import { Toaster } from "@/components/ui/sonner"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { getQueryClient } from "@/lib/query-client"
@@ -35,7 +36,7 @@ export function Providers({ children }: ProvidersProps) {
 					disableTransitionOnChange
 				>
 					<TooltipProvider>
-						{children}
+						<PostHogProvider>{children}</PostHogProvider>
 						<Toaster richColors />
 					</TooltipProvider>
 				</ThemeProvider>

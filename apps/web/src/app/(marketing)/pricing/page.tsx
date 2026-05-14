@@ -130,7 +130,7 @@ export default async function PricingPage() {
 						Bespoke pricing for departmental and MAT-level rollouts is in
 						development.{" "}
 						<a
-							href="mailto:hello@getdeepmark.com?subject=Schools%20%26%20departments"
+							href="mailto:support@getdeepmark.com?subject=Schools%20%26%20departments"
 							className="underline underline-offset-4 hover:text-foreground"
 						>
 							Get in touch

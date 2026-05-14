@@ -14,7 +14,7 @@ let vapidConfigured = false
 function configureVapid(): void {
 	if (vapidConfigured) return
 	webPush.setVapidDetails(
-		"mailto:hello@getdeepmark.com",
+		"mailto:support@getdeepmark.com",
 		Resource.VapidPublicKey.value,
 		Resource.VapidPrivateKey.value,
 	)

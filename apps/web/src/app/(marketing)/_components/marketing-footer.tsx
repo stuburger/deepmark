@@ -29,8 +29,8 @@ export function MarketingFooter() {
 					heading="Contact"
 					links={[
 						{
-							label: "hello@getdeepmark.com",
-							href: "mailto:hello@getdeepmark.com",
+							label: "support@getdeepmark.com",
+							href: "mailto:support@getdeepmark.com",
 						},
 					]}
 				/>

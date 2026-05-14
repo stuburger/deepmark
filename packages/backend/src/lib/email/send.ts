@@ -38,7 +38,7 @@ export async function sendEmail({ to, rendered }: SendArgs): Promise<void> {
 
 	const request: SendEmailRequest = {
 		FromEmailAddress: fromAddress,
-		ReplyToAddresses: ["hello@getdeepmark.com"],
+		ReplyToAddresses: ["support@getdeepmark.com"],
 		Destination: { ToAddresses: [to] },
 		Content: {
 			Simple: {

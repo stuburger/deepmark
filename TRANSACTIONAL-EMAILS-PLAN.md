@@ -72,7 +72,7 @@ For now, only batch completion produces a push; the subscriber stays narrow.
 
 - **SES** because it's SST-native, cheap, and matches the fwdcheck pattern for DNS/DKIM. Route 53 hosted zone confirmed.
 - **react-email** for templates so we can mirror `apps/web/src/app/design-system` tokens by inlining CSS. JSX templates means a snapshot test per template is trivial.
-- Sender domain: `mail.getdeepmark.com` (suggested — confirm at implementation). From: `DeepMark <hello@mail.getdeepmark.com>`. Reply-to: `hello@getdeepmark.com`.
+- Sender domain: `mail.getdeepmark.com` (suggested — confirm at implementation). From: `DeepMark <hello@mail.getdeepmark.com>`. Reply-to: `support@getdeepmark.com`.
 
 The octopus logo (`apps/web/public/octopus-logo.png`) renders in the masthead of every email. We host it on the public website (no CID attachments) so it loads consistently across clients.
 

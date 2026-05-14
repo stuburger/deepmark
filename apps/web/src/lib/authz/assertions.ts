@@ -64,9 +64,29 @@ export async function assertBatchAccess(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
 	const batch = await db.batchIngestJob.findUnique({
 		where: { id: batchId },
-		select: { exam_paper_id: true },
+		select: { exam_paper_id: true, paper_setup_session_id: true },
 	})
 	if (!batch) return { ok: false, error: "Batch not found" }
+	// A batch can exist without an exam paper during the wizard's parallel
+	// dispatch window (bundle still running) or indefinitely in the future
+	// email-a-stack workflow. Fall back to the session-creator grant in that
+	// window so the teacher who owns the session can still read it; otherwise
+	// deny — there's no resource to gate access against.
+	if (!batch.exam_paper_id) {
+		if (!batch.paper_setup_session_id) {
+			return { ok: false, error: "Batch is not linked to an exam paper." }
+		}
+		const session = await db.paperSetupSession.findUnique({
+			where: { id: batch.paper_setup_session_id },
+			select: { created_by_id: true },
+		})
+		if (!session) {
+			return { ok: false, error: "Batch is not linked to an exam paper." }
+		}
+		return session.created_by_id === user.id
+			? { ok: true }
+			: { ok: false, error: "You do not have access to this batch." }
+	}
 	return assertExamPaperAccess(user, batch.exam_paper_id, minimum)
 }
 

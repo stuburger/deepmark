@@ -14,12 +14,14 @@ export type SegmentedScript = {
 	startPage: number
 	endPage: number
 	studentName: string | null
+	confidence: number
 }
 
 /** Shape of one script as emitted by the LLM, before ranges are derived. */
 export type RawSegmentedScript = {
 	pageCount: number
 	studentName: string | null
+	confidence: number
 }
 
 export type ValidationResult = { ok: true } | { ok: false; error: string }
@@ -56,6 +58,7 @@ export function snapBlankStartPages(
 			startPage: start,
 			endPage: nextStart - 1,
 			studentName: curr.studentName,
+			confidence: curr.confidence,
 		})
 	}
 	return result
@@ -69,7 +72,12 @@ export function lengthsToRanges(
 		const start = cursor
 		const end = cursor + s.pageCount - 1
 		cursor = end + 1
-		return { startPage: start, endPage: end, studentName: s.studentName }
+		return {
+			startPage: start,
+			endPage: end,
+			studentName: s.studentName,
+			confidence: s.confidence,
+		}
 	})
 }
 

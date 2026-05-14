@@ -16,6 +16,7 @@ import { Upload } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useRef, useState } from "react"
 import { toast } from "sonner"
+import { AcquiredLabel } from "./acquired-label"
 import { StagedFilesList, type StagedFileRow } from "./staged-files-list"
 
 type CommittableFile = StagedFileRow & {
@@ -181,7 +182,10 @@ export function NewPaperUploadClient() {
 					<Upload className="h-7 w-7 text-primary" />
 				</div>
 				<p className="text-sm font-medium text-foreground">
-					Drop in your question paper, mark scheme, and scripts
+					Drop in your{" "}
+					<AcquiredLabel acquired={qpCount > 0}>question paper</AcquiredLabel>,{" "}
+					<AcquiredLabel acquired={msCount > 0}>mark scheme</AcquiredLabel>, and{" "}
+					<AcquiredLabel acquired={scriptsCount > 0}>scripts</AcquiredLabel>
 				</p>
 				<p className="text-xs text-muted-foreground mt-1">
 					or click to browse · PDFs only

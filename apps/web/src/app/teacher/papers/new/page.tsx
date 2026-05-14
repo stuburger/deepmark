@@ -1,13 +1,19 @@
+import { PaperSetupStepper } from "@/components/paper-setup/stepper"
 import Link from "next/link"
 import { NewPaperUploadClient } from "./new-paper-upload-client"
 
 export default function NewPaperPage() {
 	return (
 		<div className="mx-auto w-full max-w-3xl space-y-6 py-8">
+			<PaperSetupStepper
+				current="upload"
+				hasScripts={true}
+				extractDone={false}
+				extractFailed={false}
+				segmentationDone={false}
+				segmentationFailed={false}
+			/>
 			<div className="space-y-2">
-				<p className="text-xs uppercase tracking-wide text-ink-tertiary">
-					Step 1 · Upload
-				</p>
 				<h1 className="text-2xl font-semibold text-foreground">
 					Drop in your paper
 				</h1>

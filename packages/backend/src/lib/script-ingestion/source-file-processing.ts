@@ -118,7 +118,7 @@ export async function processSourceFile(
 			return {
 				page_keys: pageKeys,
 				proposed_name: redactName(script.studentName),
-				confidence: 1.0,
+				confidence: script.confidence,
 			}
 		})
 		.filter((s): s is StagedScriptData => s !== null)

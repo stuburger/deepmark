@@ -146,7 +146,14 @@ export async function segmentPdfScripts(
 			totalPages,
 		})
 		return {
-			scripts: [{ startPage: 0, endPage: totalPages - 1, studentName: null }],
+			scripts: [
+				{
+					startPage: 0,
+					endPage: totalPages - 1,
+					studentName: null,
+					confidence: 0,
+				},
+			],
 		}
 	}
 
@@ -194,6 +201,7 @@ export async function segmentPdfScripts(
 						typeof s.studentName === "string" && s.studentName.trim()
 							? s.studentName.trim()
 							: null,
+					confidence: s.confidence,
 				}),
 			),
 		)
@@ -226,7 +234,14 @@ export async function segmentPdfScripts(
 				{ totalPages, reason: validation.error },
 			)
 			return {
-				scripts: [{ startPage: 0, endPage: totalPages - 1, studentName: null }],
+				scripts: [
+					{
+						startPage: 0,
+						endPage: totalPages - 1,
+						studentName: null,
+						confidence: 0,
+					},
+				],
 			}
 		}
 	}

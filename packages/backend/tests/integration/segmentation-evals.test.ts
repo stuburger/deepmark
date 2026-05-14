@@ -132,6 +132,84 @@ describe.each(AVAILABLE_FIXTURES)("pdf segmentation evals — $name", (fixture) 
 		expect(hits).toBeGreaterThanOrEqual(fixture.thresholds.minStartPageHits)
 	})
 
+	it("LLM-reported confidence is in [0,1] and >0.5 for boundary-matched scripts (calibration floor)", () => {
+		// Coarse regression signal: the model is meant to anchor scoring on
+		// the prompt's high/medium/low cues. If it starts returning 0.2 for
+		// segments we know are clean, something has gone wrong in the prompt
+		// or the schema and we want to find out via the eval, not via teacher
+		// reports.
+		//
+		// Per the workflow rule in CLAUDE.md ("tighten thresholds when the
+		// model improves; never loosen"): the >0.5 floor is the entry-level
+		// signal. Once the calibration histogram lands we ratchet upward by
+		// per-fixture floor.
+		// Collect first so the disk artifact always lands — assertions fire at
+		// the end. A failed run still captures the distribution for the
+		// calibration loop ("which script went low?").
+		const expectedStarts = new Set(fixture.scripts.map((s) => s.startPage))
+		const report: string[] = []
+		const perScript: Array<{
+			startPage: number
+			endPage: number
+			studentName: string | null
+			confidence: number
+			matchesExpectedStart: boolean
+		}> = []
+		const matchedBelowFloor: Array<{ startPage: number; confidence: number }> =
+			[]
+		for (const s of segmented) {
+			const matched = expectedStarts.has(s.startPage)
+			perScript.push({
+				startPage: s.startPage,
+				endPage: s.endPage,
+				studentName: s.studentName,
+				confidence: s.confidence,
+				matchesExpectedStart: matched,
+			})
+			report.push(
+				`  [${matched ? "✓" : "?"}] p${s.startPage}-${s.endPage} conf=${s.confidence.toFixed(2)} name="${s.studentName ?? "(none)"}"`,
+			)
+			if (matched && s.confidence <= 0.5) {
+				matchedBelowFloor.push({
+					startPage: s.startPage,
+					confidence: s.confidence,
+				})
+			}
+		}
+		const avg =
+			segmented.reduce((sum, s) => sum + s.confidence, 0) / segmented.length
+		fs.writeFileSync(
+			`/tmp/segmentation-confidence-${fixture.name}.json`,
+			JSON.stringify(
+				{
+					fixture: fixture.name,
+					avg,
+					totalScripts: segmented.length,
+					hasGroundTruth: fixture.scripts.length > 0,
+					scripts: perScript,
+				},
+				null,
+				2,
+			),
+		)
+		console.log(
+			`\n[${fixture.name}] confidence distribution (avg=${avg.toFixed(2)}):\n${report.join("\n")}\n`,
+		)
+
+		// Coarse regression: every score in [0,1] and matched scripts > 0.5.
+		// Per CLAUDE.md "tighten thresholds when the model improves; never
+		// loosen" — if the model regresses below the floor we want the eval
+		// to fail loudly, not absorb the regression.
+		for (const s of segmented) {
+			expect(s.confidence).toBeGreaterThanOrEqual(0)
+			expect(s.confidence).toBeLessThanOrEqual(1)
+		}
+		expect(
+			matchedBelowFloor,
+			`Ground-truth-matched scripts dipped below the 0.5 floor — the prompt is mis-anchoring or the model is hedging on this fixture: ${JSON.stringify(matchedBelowFloor)}`,
+		).toEqual([])
+	})
+
 	it(`at least ${fixture.thresholds.minNameHits}/${fixture.scripts.length} expected students are found by name (soft quality gate)`, () => {
 		// Match by startPage first, then fall back to range overlap — this lets
 		// the test survive small boundary drifts without penalising name

@@ -113,17 +113,17 @@ export function PaperTrayPanel({
 											<X className="h-3.5 w-3.5" />
 										</button>
 
-										{/* Name overlay — slides up from bottom on hover */}
+										{/* Name footer — always visible so the stacked tray is
+										    legible without forcing hover-per-card to identify
+										    each student. */}
 										<div className="absolute inset-x-0 bottom-0 z-20 pointer-events-none">
-											<div className="opacity-0 translate-y-2 group-hover/card:opacity-100 group-hover/card:translate-y-0 transition-all duration-200">
-												<div className="mx-2 mb-2 rounded-lg bg-background/95 backdrop-blur border px-3 py-2 shadow-md">
-													<p className="text-xs font-semibold truncate leading-tight">
-														{name}
-													</p>
-													<p className="text-[10px] text-muted-foreground mt-0.5">
-														{pageCount} {pageCount === 1 ? "page" : "pages"}
-													</p>
-												</div>
+											<div className="mx-2 mb-2 rounded-lg bg-background/95 backdrop-blur border px-3 py-2 shadow-md">
+												<p className="text-xs font-semibold truncate leading-tight">
+													{name}
+												</p>
+												<p className="text-[10px] text-muted-foreground mt-0.5">
+													{pageCount} {pageCount === 1 ? "page" : "pages"}
+												</p>
 											</div>
 										</div>
 									</motion.div>

@@ -139,16 +139,22 @@ const createInput = z.object({
 /**
  * Upload-and-go: creates a PaperSetupSession + PaperSetupStagedFile rows,
  * copies each staged file into its durable S3 location, and dispatches the
- * bundle processor. Returns the new session id so the client can redirect
- * to /teacher/sessions/[id].
+ * bundle processor — and, in parallel, dispatches the batch classifier if
+ * a scripts PDF is also dropped. Returns the new session id so the client
+ * can redirect to /teacher/sessions/[id].
  *
- * The ExamPaper does NOT exist until the bundle processor finishes
- * extracting — the session and its staged_files are the only things that
- * exist in the "metadata pending" state. The processor creates ExamPaper
- * (and the matching PdfIngestionJob rows) atomically at promotion time.
+ * Pipelines are independent:
+ *   - Bundle handler reads from `pdfs/paper-setup/{sessionId}/*.pdf`, creates
+ *     ExamPaper, writes `session.exam_paper_id`. If a BatchIngestJob is
+ *     already running for this session it stitches `batch.exam_paper_id`.
+ *   - Batch handler reads from `batches/{batchJobId}/source/`, produces
+ *     staged_scripts. When the batch was dispatched as part of a wizard
+ *     session, it auto-confirms staged_scripts and flips `status='committed'`.
  *
- * v1 requires both a question paper AND a mark scheme. A scripts PDF is
- * accepted alongside; segmentation hookup lands in a follow-up.
+ * State is derived in queries — there is no `session.status` column.
+ *
+ * v1.1 requires both a question paper AND a mark scheme. The scripts PDF
+ * is optional; when present, segmentation runs in parallel with extraction.
  */
 export const createPaperFromStaged = authenticatedAction
 	.inputSchema(createInput)
@@ -173,27 +179,38 @@ export const createPaperFromStaged = authenticatedAction
 
 			const qpFile = qp[0]
 			const msFile = ms[0]
+			const scriptsFile = scripts[0]
 
 			ctx.log.info("createPaperFromStaged called", {
 				slots: { qp: true, ms: true, scripts: scripts.length },
 			})
 
-			// 1. Reserve durable S3 keys deterministically off the session id.
-			//    No PdfIngestionJob exists at this point — those are created
-			//    by the bundle processor only after extraction succeeds.
 			const session = await db.paperSetupSession.create({
-				data: {
-					created_by_id: ctx.user.id,
-					status: "extracting",
-				},
+				data: { created_by_id: ctx.user.id },
 			})
+
+			// Dispatch the batch up-front so we have its id before we copy the
+			// scripts PDF (which lands directly in the batch's source prefix —
+			// the batch handler reads from `batches/{id}/source/` via
+			// listSourceFiles). The batch starts with exam_paper_id=null; the
+			// bundle handler stitches it when the paper is created.
+			const batch = scriptsFile
+				? await db.batchIngestJob.create({
+						data: {
+							uploaded_by: ctx.user.id,
+							paper_setup_session_id: session.id,
+							exam_paper_id: null,
+							status: "uploading",
+						},
+					})
+				: null
 
 			const qpDestKey = sessionFileKey(session.id, "question-paper.pdf")
 			const msDestKey = sessionFileKey(session.id, "mark-scheme.pdf")
-			const scriptsFile = scripts[0]
-			const scriptsDestKey = scriptsFile
-				? sessionFileKey(session.id, "scripts.pdf")
-				: null
+			const scriptsDestKey =
+				scriptsFile && batch
+					? batchSourceKey(batch.id, scriptsFile.filename)
+					: null
 
 			await db.paperSetupStagedFile.createMany({
 				data: [
@@ -225,10 +242,9 @@ export const createPaperFromStaged = authenticatedAction
 				],
 			})
 
-			// 2. Copy temp → durable. The `pdfs/paper-setup/` prefix has NO S3
-			//    event notifications wired up to it, so the existing QP / MS
-			//    triggers can never fire on these objects. Bundle owns the work
-			//    end-to-end and reads from these keys directly.
+			// Copy temp → durable. QP + MS live under pdfs/paper-setup/ (no S3
+			// event triggers there). Scripts land directly in the batch source
+			// prefix — single copy, single source of truth.
 			await Promise.all([
 				copyTempToDurable(qpFile.tempUploadId, qpDestKey),
 				copyTempToDurable(msFile.tempUploadId, msDestKey),
@@ -237,13 +253,30 @@ export const createPaperFromStaged = authenticatedAction
 					: []),
 			])
 
-			await sqs.send(
-				new SendMessageCommand({
-					QueueUrl: Resource.PaperBundleQueue.url,
-					MessageBody: JSON.stringify({ sessionId: session.id }),
-				}),
-			)
-			ctx.log.info("PaperBundleQueue dispatched", { sessionId: session.id })
+			await Promise.all([
+				sqs.send(
+					new SendMessageCommand({
+						QueueUrl: Resource.PaperBundleQueue.url,
+						MessageBody: JSON.stringify({ sessionId: session.id }),
+					}),
+				),
+				...(batch
+					? [
+							sqs.send(
+								new SendMessageCommand({
+									QueueUrl: Resource.BatchClassifyQueue.url,
+									MessageBody: JSON.stringify({
+										batch_ingest_job_id: batch.id,
+									}),
+								}),
+							),
+						]
+					: []),
+			])
+			ctx.log.info("Queues dispatched", {
+				sessionId: session.id,
+				batchId: batch?.id ?? null,
+			})
 
 			return { sessionId: session.id }
 		},
@@ -255,6 +288,10 @@ const SESSION_PREFIX = "pdfs/paper-setup"
 
 function sessionFileKey(sessionId: string, filename: string): string {
 	return `${SESSION_PREFIX}/${sessionId}/${filename}`
+}
+
+function batchSourceKey(batchId: string, filename: string): string {
+	return `batches/${batchId}/source/${filename}`
 }
 
 async function fetchTempPdf(s3Key: string): Promise<string> {

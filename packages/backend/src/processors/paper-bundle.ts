@@ -5,13 +5,7 @@ import { logger } from "@/lib/infra/logger"
 import { outputSchema } from "@/lib/infra/output-schema"
 import { getPdfBase64 } from "@/lib/infra/processor-s3"
 import type { SqsEvent, SqsRecord } from "@/lib/infra/sqs-job-runner"
-import {
-	CopyObjectCommand,
-	S3Client,
-} from "@aws-sdk/client-s3"
-import { SQSClient, SendMessageCommand } from "@aws-sdk/client-sqs"
 import { generateText } from "ai"
-import { Resource } from "sst"
 import type { Context } from "aws-lambda"
 import { promoteSessionToExamPaper } from "./paper-bundle/persist"
 import { PAPER_BUNDLE_PROMPT } from "./paper-bundle/prompts"
@@ -22,8 +16,6 @@ import {
 import { validateBundle } from "./paper-bundle/validate"
 
 const TAG = "paper-bundle"
-const s3 = new S3Client({})
-const sqs = new SQSClient({})
 
 // Combined QP + MS PDFs above this size strongly imply the wrong files —
 // Gemini will either OOM the Lambda or time out. Fail fast rather than burn
@@ -53,7 +45,7 @@ export async function handler(
 				},
 			})
 
-			if (session.status === "completed" && session.exam_paper_id) {
+			if (session.exam_paper_id) {
 				logger.info(TAG, "Session already promoted — skipping", {
 					sessionId,
 					examPaperId: session.exam_paper_id,
@@ -154,37 +146,10 @@ export async function handler(
 				examPaperId: promotion.examPaperId,
 				questionCount: promotion.questionCount,
 			})
-
-			// If the teacher dropped a scripts PDF alongside QP + MS, kick off
-			// the existing batch-classify flow now that the ExamPaper exists.
-			// Same shape as the shell-driven upload — create BatchIngestJob,
-			// copy the staged PDF into batches/{batchJobId}/source/, dispatch.
-			const scriptsFile = session.staged_files.find(
-				(f) => f.kind === "scripts_bundle",
-			)
-			if (scriptsFile) {
-				try {
-					await dispatchScriptsBatch({
-						examPaperId: promotion.examPaperId,
-						uploadedBy: session.created_by_id,
-						sourceBucket: scriptsFile.s3_bucket,
-						sourceKey: scriptsFile.s3_key,
-						filename: scriptsFile.filename,
-					})
-					logger.info(TAG, "Scripts batch dispatched", {
-						sessionId,
-						examPaperId: promotion.examPaperId,
-					})
-				} catch (err) {
-					// Don't fail the session — the paper itself is fine. Surface in
-					// logs; the teacher can re-upload via the shell page.
-					logger.error(TAG, "Scripts batch dispatch failed", {
-						sessionId,
-						examPaperId: promotion.examPaperId,
-						error: err instanceof Error ? err.message : String(err),
-					})
-				}
-			}
+			// The scripts batch (if any) is dispatched in parallel from
+			// createPaperFromStaged with paper_setup_session_id set and
+			// exam_paper_id null. promoteSessionToExamPaper stitches the FK.
+			// Nothing else for this handler to do.
 		} catch (err) {
 			logger.error(TAG, "Handler threw", { error: String(err) })
 			const message = err instanceof Error ? err.message : String(err)
@@ -204,7 +169,7 @@ async function failSession(sessionId: string, error: string): Promise<void> {
 	try {
 		await db.paperSetupSession.update({
 			where: { id: sessionId },
-			data: { status: "failed", error },
+			data: { error },
 		})
 	} catch {
 		// swallow — never mask the original error path
@@ -221,44 +186,4 @@ async function failSessionFromRecord(
 	} catch {
 		// ignore
 	}
-}
-
-/**
- * Creates a BatchIngestJob, copies the staged scripts PDF into the
- * batch's source prefix, and sends a message to BatchClassifyQueue.
- * Mirrors the existing shell-driven flow (createBatchIngestJob +
- * addFileToBatch + triggerClassification) without the per-step
- * presigned-URL round trip.
- */
-async function dispatchScriptsBatch(opts: {
-	examPaperId: string
-	uploadedBy: string
-	sourceBucket: string
-	sourceKey: string
-	filename: string
-}): Promise<void> {
-	const batch = await db.batchIngestJob.create({
-		data: {
-			exam_paper_id: opts.examPaperId,
-			uploaded_by: opts.uploadedBy,
-			status: "classifying",
-		},
-	})
-
-	const destKey = `batches/${batch.id}/source/${opts.filename}`
-	await s3.send(
-		new CopyObjectCommand({
-			Bucket: opts.sourceBucket,
-			CopySource: `${opts.sourceBucket}/${opts.sourceKey}`,
-			Key: destKey,
-			ContentType: "application/pdf",
-		}),
-	)
-
-	await sqs.send(
-		new SendMessageCommand({
-			QueueUrl: Resource.BatchClassifyQueue.url,
-			MessageBody: JSON.stringify({ batch_ingest_job_id: batch.id }),
-		}),
-	)
 }

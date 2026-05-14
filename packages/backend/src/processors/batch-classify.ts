@@ -80,10 +80,23 @@ async function classifyBatch(
 ): Promise<void> {
 	logger.info(TAG, "Starting batch classification", { batchJobId })
 
-	await db.batchIngestJob.update({
+	const batch = await db.batchIngestJob.update({
 		where: { id: batchJobId },
 		data: { status: "classifying" as BatchStatus },
+		select: { paper_setup_session_id: true },
 	})
+	// Wizard-dispatched batches (carry a paper_setup_session_id) auto-confirm
+	// every staged script so the teacher doesn't have to tick boxes — they
+	// just review and click Start marking. Shell-dispatched batches keep the
+	// legacy review flow with staged scripts landing as 'excluded'.
+	//
+	// CRITICAL: both paths leave the BATCH at `status='staging'` at the end.
+	// `committed` is reserved for "the commit click happened, submissions
+	// exist." Leaving the wizard batch at `staging` is what lets the shell's
+	// batch-staging-panel pick it up if the teacher closes the wizard mid-flow
+	// — otherwise the batch becomes invisible to the active-batch query and
+	// the confirmed staged_scripts are orphaned.
+	const isWizardPath = batch.paper_setup_session_id !== null
 	await appendJobEvent(batchJobId, { kind: "started" })
 
 	const sourceKeys = await listSourceFiles(batchJobId)
@@ -100,13 +113,17 @@ async function classifyBatch(
 		allStagedScripts.push(...scripts)
 	}
 
+	const stagedScriptStatus: StagedScriptStatus = isWizardPath
+		? "confirmed"
+		: "excluded"
+
 	await db.stagedScript.createMany({
 		data: allStagedScripts.map((s) => ({
 			batch_job_id: batchJobId,
 			page_keys: s.page_keys,
 			proposed_name: s.proposed_name,
 			confidence: s.confidence,
-			status: "excluded" as StagedScriptStatus,
+			status: stagedScriptStatus,
 		})),
 	})
 
@@ -122,5 +139,6 @@ async function classifyBatch(
 	logger.info(TAG, "Batch classification complete", {
 		batchJobId,
 		scriptCount: allStagedScripts.length,
+		isWizardPath,
 	})
 }

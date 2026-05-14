@@ -31,7 +31,10 @@ export type SessionWithFiles = PaperSetupSession & {
  *   3. Create Question + MarkScheme rows for every extracted question.
  *   4. Create one PdfIngestionJob per staged file, fully populated and
  *      already marked `ocr_complete` — the bundle already processed them.
- *   5. Mark the session `completed` with exam_paper_id set.
+ *   5. Write `exam_paper_id` onto the session. State is derived — the
+ *      presence of this id IS what "bundle done" means.
+ *   6. If a BatchIngestJob was dispatched in parallel for this session
+ *      (carrying paper_setup_session_id), link it to the new paper now.
  *
  * Either everything in this function commits or nothing does — the ExamPaper
  * is never created in a half-formed state. The staged files (and their S3
@@ -40,9 +43,8 @@ export type SessionWithFiles = PaperSetupSession & {
  *
  * NOTE: linkJobQuestionsToExamPaperSections uses the global `db` instance and
  * runs OUTSIDE the transaction — small window where the ExamPaper exists but
- * its ExamSection rows don't. The /setup view doesn't navigate to
- * /exam-papers/[id] until status flips to `completed` (which we set AFTER
- * sectioning lands), so the gap is invisible to the wizard.
+ * its ExamSection rows don't. The session view doesn't enable "Start marking"
+ * until BOTH bundle and segmentation are done; the gap is invisible.
  */
 export async function promoteSessionToExamPaper(
 	bundle: PaperBundle,
@@ -157,10 +159,18 @@ export async function promoteSessionToExamPaper(
 	await db.paperSetupSession.update({
 		where: { id: session.id },
 		data: {
-			status: "completed",
 			exam_paper_id: paperId,
 			error: null,
 		},
+	})
+
+	// If the batch was dispatched in parallel from createPaperFromStaged, it
+	// will already have paper_setup_session_id pointing at us and a null
+	// exam_paper_id. Stitch the FK now that the paper exists. updateMany so
+	// the no-batch case (teacher dropped no scripts) is a 0-row no-op.
+	await db.batchIngestJob.updateMany({
+		where: { paper_setup_session_id: session.id, exam_paper_id: null },
+		data: { exam_paper_id: paperId },
 	})
 
 	return { examPaperId: paperId, questionCount }

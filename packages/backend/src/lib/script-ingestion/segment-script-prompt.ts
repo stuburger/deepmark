@@ -14,6 +14,7 @@ export const SegmentationSchema = z.object({
 			z.object({
 				pageCount: z.number().int().min(1),
 				studentName: z.string().nullable(),
+				confidence: z.number().min(0).max(1),
 			}),
 		)
 		.min(1),
@@ -36,6 +37,10 @@ The teacher guarantees:
 Your task: return one entry per student script, in order. For each:
 - pageCount: the number of pages this student's script occupies (>= 1).
 - studentName: the name if legible (usually in the TOP: section of the first page), else null.
+- confidence: a score from 0 to 1 reflecting how confident you are in this script's segmentation. Anchor your scoring on observable cues:
+  - HIGH (>= 0.9): script boundaries are clean — the cover/first page is unambiguous, start and end fall on obvious transitions, the student name is legible, and the script length is in a plausible range.
+  - MEDIUM (0.6 to 0.9): minor ambiguity — partial or hard-to-read name, slightly fuzzy boundary, or a page that could plausibly belong to either of two scripts.
+  - LOW (< 0.6): genuine doubt — name absent or indecipherable, pages bleeding across boundaries, or script length far from what neighbouring scripts look like.
 
 The first entry's pageCount starts at page 0; each subsequent entry continues from where the previous one ended.
 

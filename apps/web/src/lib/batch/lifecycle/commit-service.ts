@@ -58,6 +58,16 @@ export async function commitBatchService(
 	})
 
 	if (!batch) return { ok: false, error: "Batch job not found" }
+	// A batch can exist without an exam paper while the bundle handler is
+	// still running in parallel (wizard path) or indefinitely in the future
+	// email-a-stack workflow. Committing requires the paper to be linked.
+	const examPaper = batch.exam_paper
+	if (!examPaper) {
+		return {
+			ok: false,
+			error: "Batch is not yet linked to an exam paper — wait for extraction to finish.",
+		}
+	}
 
 	// Exclude scripts already submitted in a previous commit. Walked via the
 	// staged_script join now that StudentSubmission no longer carries a direct
@@ -106,7 +116,7 @@ export async function commitBatchService(
 		// off three jobs, they get three confirmations.
 		const processingBatch = await tx.processingBatch.create({
 			data: {
-				exam_paper_id: batch.exam_paper.id,
+				exam_paper_id: examPaper.id,
 				triggered_by: uploadedBy,
 				kind: "initial",
 				total_jobs: confirmedScripts.length,
@@ -134,10 +144,10 @@ export async function commitBatchService(
 						s3_key: pageKeys[0]?.s3_key ?? "",
 						s3_bucket: bucketName,
 						uploaded_by: uploadedBy,
-						exam_paper_id: batch.exam_paper.id,
-						exam_board: batch.exam_paper.exam_board ?? "Unknown",
-						subject: batch.exam_paper.subject,
-						year: batch.exam_paper.year,
+						exam_paper_id: examPaper.id,
+						exam_board: examPaper.exam_board ?? "Unknown",
+						subject: examPaper.subject,
+						year: examPaper.year,
 						pages: pagesJson as never,
 						student_name: studentName,
 						processing_batch_id: processingBatch.id,

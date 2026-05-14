@@ -59,6 +59,11 @@ export function useBatchIngestion(
 		 * (top-up + see-plans) instead of the generic upgrade toast.
 		 */
 		onCapBite?: (message: string) => void
+		/**
+		 * Fired after a successful commit. The wizard uses this to navigate
+		 * away from /sessions/[id] to the shell once marking is dispatched.
+		 */
+		onCommitSuccess?: () => void
 	} = {},
 ) {
 	const queryClient = useQueryClient()
@@ -104,6 +109,9 @@ export function useBatchIngestion(
 			const r = await commitBatch({ batchJobId: currentBatchId })
 			if (r?.serverError) throw new Error(r.serverError)
 			return r?.data
+		},
+		onSuccess: () => {
+			options.onCommitSuccess?.()
 		},
 		onError: (err) => {
 			const parsed = parseInsufficientBalanceError(err)

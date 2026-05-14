@@ -1,9 +1,12 @@
-export const PAPER_BUNDLE_PROMPT = `You are an exam paper ingestion engine. You will receive TWO PDFs:
+export const PAPER_BUNDLE_PROMPT = `You are an exam paper ingestion engine. You will receive TWO OR THREE PDFs:
 
   1. QUESTION PAPER — the document a student sits in the exam.
   2. MARK SCHEME — the matching examiner reference for that paper.
+  3. (optional) INSERT / RESOURCE BOOKLET — source material the question paper references (extracts, sources, items, figures, data sheets). Pearson Edexcel labels this "Reading Text Insert"; AQA labels it "Insert" or "Source Booklet". When present, the source prose lives here, NOT inside the question paper.
 
 Your job: extract a single combined structure that fully describes the paper AND links each question to its mark scheme in one shot. The downstream system creates Question + MarkScheme rows directly from your output — there is no second pass and no matching step. Pair them correctly the first time.
+
+When an INSERT is supplied, its content is the source-of-truth for section.stimuli content. Copy the full prose / table / data verbatim into section.stimuli[].content; do NOT inline it inside question_text.
 
 # Output structure
 

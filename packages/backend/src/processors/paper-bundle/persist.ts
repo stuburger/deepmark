@@ -89,13 +89,15 @@ export async function promoteSessionToExamPaper(
 			const now = new Date()
 			const jobIds: Record<string, string> = {}
 			for (const sf of session.staged_files) {
+				if (sf.kind === "scripts_bundle") continue
 				const documentType =
 					sf.kind === "question_paper"
 						? "question_paper"
 						: sf.kind === "mark_scheme"
 							? "mark_scheme"
-							: "exemplar" // scripts_bundle is not a PdfIngestionJob doc type
-				if (sf.kind === "scripts_bundle") continue
+							: sf.kind === "stimulus_pack"
+								? "stimulus_pack"
+								: "exemplar"
 				const job = await tx.pdfIngestionJob.create({
 					data: {
 						document_type: documentType,

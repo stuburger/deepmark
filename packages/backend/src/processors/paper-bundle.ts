@@ -17,10 +17,12 @@ import { validateBundle } from "./paper-bundle/validate"
 
 const TAG = "paper-bundle"
 
-// Combined QP + MS PDFs above this size strongly imply the wrong files —
-// Gemini will either OOM the Lambda or time out. Fail fast rather than burn
-// money on a doomed retry loop.
-const MAX_COMBINED_PDF_BYTES = 30 * 1024 * 1024
+// Combined QP + MS (+ optional stimulus pack) PDFs above this size strongly
+// imply the wrong files — Gemini will either OOM the Lambda or time out. Fail
+// fast rather than burn money on a doomed retry loop. Stimulus packs add up
+// to ~5 MB; the headroom over the original 30 MB QP+MS cap covers that with
+// margin.
+const MAX_COMBINED_PDF_BYTES = 40 * 1024 * 1024
 
 export async function handler(
 	event: SqsEvent,
@@ -57,6 +59,9 @@ export async function handler(
 				(f) => f.kind === "question_paper",
 			)
 			const msFile = session.staged_files.find((f) => f.kind === "mark_scheme")
+			const stimFile = session.staged_files.find(
+				(f) => f.kind === "stimulus_pack",
+			)
 			if (!qpFile || !msFile) {
 				await failSession(
 					sessionId,
@@ -69,16 +74,21 @@ export async function handler(
 				sessionId,
 				qpKey: qpFile.s3_key,
 				msKey: msFile.s3_key,
+				stimulusKey: stimFile?.s3_key ?? null,
 			})
 
-			const [qpBase64, msBase64] = await Promise.all([
+			const [qpBase64, msBase64, stimBase64] = await Promise.all([
 				getPdfBase64(qpFile.s3_bucket, qpFile.s3_key),
 				getPdfBase64(msFile.s3_bucket, msFile.s3_key),
+				stimFile
+					? getPdfBase64(stimFile.s3_bucket, stimFile.s3_key)
+					: Promise.resolve<string | null>(null),
 			])
 
 			const combinedBytes =
 				Buffer.byteLength(qpBase64, "base64") +
-				Buffer.byteLength(msBase64, "base64")
+				Buffer.byteLength(msBase64, "base64") +
+				(stimBase64 ? Buffer.byteLength(stimBase64, "base64") : 0)
 			if (combinedBytes > MAX_COMBINED_PDF_BYTES) {
 				const error = `Combined PDF size ${combinedBytes} bytes exceeds limit ${MAX_COMBINED_PDF_BYTES}`
 				logger.warn(TAG, error, { sessionId })
@@ -89,32 +99,32 @@ export async function handler(
 			logger.info(TAG, "Calling LLM for combined extraction", {
 				sessionId,
 				timeoutMs,
+				hasStimulus: stimBase64 !== null,
 			})
 
 			const result = await callLlmWithFallback(
 				"paper-bundle-extraction",
 				async (model, entry, report) => {
+					const content: Array<
+						| { type: "file"; data: string; mediaType: "application/pdf" }
+						| { type: "text"; text: string }
+					> = [
+						{ type: "file", data: qpBase64, mediaType: "application/pdf" },
+						{ type: "file", data: msBase64, mediaType: "application/pdf" },
+					]
+					if (stimBase64) {
+						content.push({
+							type: "file",
+							data: stimBase64,
+							mediaType: "application/pdf",
+						})
+					}
+					content.push({ type: "text", text: PAPER_BUNDLE_PROMPT })
+
 					const r = await generateText({
 						model,
 						temperature: entry.temperature,
-						messages: [
-							{
-								role: "user",
-								content: [
-									{
-										type: "file",
-										data: qpBase64,
-										mediaType: "application/pdf",
-									},
-									{
-										type: "file",
-										data: msBase64,
-										mediaType: "application/pdf",
-									},
-									{ type: "text", text: PAPER_BUNDLE_PROMPT },
-								],
-							},
-						],
+						messages: [{ role: "user", content }],
 						output: outputSchema(PaperBundleSchema),
 					})
 					report.usage = r.usage

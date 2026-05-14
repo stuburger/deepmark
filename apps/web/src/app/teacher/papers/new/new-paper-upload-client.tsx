@@ -141,6 +141,7 @@ export function NewPaperUploadClient() {
 
 	const qpCount = files.filter((f) => f.label === "question_paper").length
 	const msCount = files.filter((f) => f.label === "mark_scheme").length
+	const stimCount = files.filter((f) => f.label === "stimulus_pack").length
 	const scriptsCount = files.filter((f) => f.label === "scripts_bundle").length
 	const anyBusy = files.some(
 		(f) => f.status === "uploading" || f.status === "classifying",
@@ -150,6 +151,7 @@ export function NewPaperUploadClient() {
 		if (qpCount !== 1) return "Drop in one question paper."
 		if (msCount !== 1)
 			return "Drop in one mark scheme alongside the question paper."
+		if (stimCount > 1) return "Only one stimulus pack allowed."
 		if (scriptsCount > 1) return "Only one scripts PDF allowed."
 		return null
 	})()
@@ -184,7 +186,12 @@ export function NewPaperUploadClient() {
 				<p className="text-sm font-medium text-foreground">
 					Drop in your{" "}
 					<AcquiredLabel acquired={qpCount > 0}>question paper</AcquiredLabel>,{" "}
-					<AcquiredLabel acquired={msCount > 0}>mark scheme</AcquiredLabel>, and{" "}
+					<AcquiredLabel acquired={msCount > 0}>mark scheme</AcquiredLabel>,{" "}
+					<AcquiredLabel acquired={stimCount > 0}>stimulus pack</AcquiredLabel>
+					{stimCount === 0 && (
+						<span className="text-muted-foreground"> (if any)</span>
+					)}
+					, and{" "}
 					<AcquiredLabel acquired={scriptsCount > 0}>scripts</AcquiredLabel>
 				</p>
 				<p className="text-xs text-muted-foreground mt-1">

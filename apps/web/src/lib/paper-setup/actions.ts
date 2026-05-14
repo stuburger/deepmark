@@ -22,9 +22,15 @@ const METADATA_TEMP_PREFIX = "pdfs/metadata-temp"
 
 const ClassificationSchema = z.object({
 	label: z
-		.enum(["question_paper", "mark_scheme", "scripts_bundle", "unrecognised"])
+		.enum([
+			"question_paper",
+			"mark_scheme",
+			"stimulus_pack",
+			"scripts_bundle",
+			"unrecognised",
+		])
 		.describe(
-			"question_paper = the document a student sits in the exam (printed questions + answer space, no mark allocations or rubric). mark_scheme = the examiner reference document (mark allocations, level descriptors, AOs, indicative content). scripts_bundle = scanned student attempts (handwriting visible, possibly multiple students stacked). unrecognised = does not fit any category.",
+			"question_paper = the document a student sits in the exam (printed questions + answer space, no mark allocations or rubric). mark_scheme = the examiner reference document (mark allocations, level descriptors, AOs, indicative content). stimulus_pack = an insert / resource booklet that contains source material referenced by the question paper (literary extracts, sources, items, figures, data tables) — has prose / sources but NO printed questions and NO answer space; Pearson labels it 'Insert Booklet' / 'Reading Text Insert', AQA labels it 'Insert' or 'Source Booklet', and the cover usually says 'Do not return this Booklet with the question paper'. scripts_bundle = scanned student attempts (handwriting visible, possibly multiple students stacked). unrecognised = does not fit any category.",
 		),
 	confidence: z
 		.enum(["low", "medium", "high"])
@@ -84,7 +90,7 @@ export const classifyStagedFiles = authenticatedAction
 												},
 												{
 													type: "text",
-													text: "Classify this PDF into one of: question_paper, mark_scheme, scripts_bundle, unrecognised. Read only the first page or two — speed matters. Look for the signal that decides it: question_paper has printed questions with answer space and no mark allocations; mark_scheme has mark allocations / level descriptors / AOs / indicative content; scripts_bundle has visible student handwriting; unrecognised means it doesn't fit any category.",
+													text: "Classify this PDF into one of: question_paper, mark_scheme, stimulus_pack, scripts_bundle, unrecognised. Read only the first page or two — speed matters. Look for the signal that decides it: question_paper has printed questions with answer space and no mark allocations; mark_scheme has mark allocations / level descriptors / AOs / indicative content; stimulus_pack is an insert / resource booklet (Pearson 'Reading Text Insert', AQA 'Insert' or 'Source Booklet') with source prose / extracts / items / figures referenced by the QP and NO printed questions and NO answer space — the cover usually carries text like 'Insert Booklet' or 'Do not return this Booklet with the question paper'; scripts_bundle has visible student handwriting; unrecognised means it doesn't fit any category.",
 												},
 											],
 										},
@@ -128,7 +134,12 @@ const createInput = z.object({
 						(v) => v.startsWith(METADATA_TEMP_PREFIX),
 						"Invalid staging key",
 					),
-				label: z.enum(["question_paper", "mark_scheme", "scripts_bundle"]),
+				label: z.enum([
+					"question_paper",
+					"mark_scheme",
+					"stimulus_pack",
+					"scripts_bundle",
+				]),
 				filename: z.string().trim().min(1).max(255),
 			}),
 		)
@@ -165,6 +176,7 @@ export const createPaperFromStaged = authenticatedAction
 		}): Promise<{ sessionId: string }> => {
 			const qp = files.filter((f) => f.label === "question_paper")
 			const ms = files.filter((f) => f.label === "mark_scheme")
+			const stim = files.filter((f) => f.label === "stimulus_pack")
 			const scripts = files.filter((f) => f.label === "scripts_bundle")
 
 			if (qp.length === 0) throw new Error("A question paper is required.")
@@ -174,15 +186,22 @@ export const createPaperFromStaged = authenticatedAction
 					"A mark scheme is required. Upload one alongside the question paper.",
 				)
 			if (ms.length > 1) throw new Error("Only one mark scheme allowed.")
+			if (stim.length > 1) throw new Error("Only one stimulus pack allowed.")
 			if (scripts.length > 1)
 				throw new Error("Only one scripts PDF allowed for v1.")
 
 			const qpFile = qp[0]
 			const msFile = ms[0]
+			const stimFile = stim[0]
 			const scriptsFile = scripts[0]
 
 			ctx.log.info("createPaperFromStaged called", {
-				slots: { qp: true, ms: true, scripts: scripts.length },
+				slots: {
+					qp: true,
+					ms: true,
+					stimulus: stim.length,
+					scripts: scripts.length,
+				},
 			})
 
 			const session = await db.paperSetupSession.create({
@@ -207,6 +226,9 @@ export const createPaperFromStaged = authenticatedAction
 
 			const qpDestKey = sessionFileKey(session.id, "question-paper.pdf")
 			const msDestKey = sessionFileKey(session.id, "mark-scheme.pdf")
+			const stimDestKey = stimFile
+				? sessionFileKey(session.id, "stimulus-pack.pdf")
+				: null
 			const scriptsDestKey =
 				scriptsFile && batch
 					? batchSourceKey(batch.id, scriptsFile.filename)
@@ -228,6 +250,17 @@ export const createPaperFromStaged = authenticatedAction
 						filename: msFile.filename,
 						kind: "mark_scheme",
 					},
+					...(stimFile && stimDestKey
+						? [
+								{
+									session_id: session.id,
+									s3_bucket: bucketName,
+									s3_key: stimDestKey,
+									filename: stimFile.filename,
+									kind: "stimulus_pack" as const,
+								},
+							]
+						: []),
 					...(scriptsFile && scriptsDestKey
 						? [
 								{
@@ -242,12 +275,16 @@ export const createPaperFromStaged = authenticatedAction
 				],
 			})
 
-			// Copy temp → durable. QP + MS live under pdfs/paper-setup/ (no S3
-			// event triggers there). Scripts land directly in the batch source
-			// prefix — single copy, single source of truth.
+			// Copy temp → durable. QP + MS (+ optional stimulus) live under
+			// pdfs/paper-setup/ (no S3 event triggers there). Scripts land
+			// directly in the batch source prefix — single copy, single source
+			// of truth.
 			await Promise.all([
 				copyTempToDurable(qpFile.tempUploadId, qpDestKey),
 				copyTempToDurable(msFile.tempUploadId, msDestKey),
+				...(stimFile && stimDestKey
+					? [copyTempToDurable(stimFile.tempUploadId, stimDestKey)]
+					: []),
 				...(scriptsFile && scriptsDestKey
 					? [copyTempToDurable(scriptsFile.tempUploadId, scriptsDestKey)]
 					: []),

@@ -121,6 +121,7 @@ enum PdfDocumentType {
   mark_scheme
   exemplar
   question_paper
+  stimulus_pack
 }
 
 enum QuestionOrigin {
@@ -628,6 +629,7 @@ model PdfIngestionJob {
 enum PaperSetupFileKind {
   question_paper
   mark_scheme
+  stimulus_pack
   scripts_bundle
 }
 

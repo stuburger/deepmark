@@ -7,6 +7,7 @@ import { Loader2, X } from "lucide-react"
 const LABEL_TEXT: Record<StagedFileLabel, string> = {
 	question_paper: "Question paper",
 	mark_scheme: "Mark scheme",
+	stimulus_pack: "Stimulus pack",
 	scripts_bundle: "Student scripts",
 	unrecognised: "Unrecognised",
 }
@@ -64,6 +65,7 @@ export function StagedFilesList({
 						>
 							<option value="question_paper">Question paper</option>
 							<option value="mark_scheme">Mark scheme</option>
+							<option value="stimulus_pack">Stimulus pack</option>
 							<option value="scripts_bundle">Student scripts</option>
 							<option value="unrecognised" disabled>
 								Unrecognised

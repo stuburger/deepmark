@@ -146,6 +146,26 @@ const StimulusBlockSchema = z.object({
 		),
 })
 
+const SectionChoiceSchema = z
+	.object({
+		kind: z
+			.enum(["all", "any_n_of"])
+			.describe(
+				"all = every question in this section must be answered. any_n_of = the student chooses n questions from the alternatives in this section (e.g. 'Answer ONE of the following').",
+			),
+		n: z
+			.number()
+			.int()
+			.min(1)
+			.nullable()
+			.describe(
+				"Required when kind = any_n_of: number of alternatives the student must answer (1 for 'Answer ONE'). Null when kind = all.",
+			),
+	})
+	.describe(
+		"Describes how the section's questions combine into the section total. Default to {kind:'all', n:null} unless the section header explicitly instructs the student to choose.",
+	)
+
 const SectionBlockSchema = z.object({
 	title: z
 		.string()
@@ -155,6 +175,7 @@ const SectionBlockSchema = z.object({
 	description: z.string().nullable().optional(),
 	total_marks: z.number().int(),
 	printed_total_marks: z.number().int().nullable(),
+	choice: SectionChoiceSchema.optional().default({ kind: "all", n: null }),
 	stimuli: z.array(StimulusBlockSchema).optional().default([]),
 	questions: z.array(QuestionBlockSchema),
 })

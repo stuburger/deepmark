@@ -10,7 +10,7 @@ Your job: extract a single combined structure that fully describes the paper AND
 Return EXACTLY one object matching the provided schema:
 
 - metadata: title, subject, exam_board, total_marks, printed_total_marks, duration_minutes, year, paper_number, tier.
-- sections[]: each with title (as printed), printed_total_marks (literal value from the paper), stimuli (case studies / items / sources), and questions[].
+- sections[]: each with title (as printed), printed_total_marks (literal value from the paper), choice (whether the student must answer all questions or pick from alternatives), stimuli (case studies / items / sources), and questions[].
 - For each question: question_text, question_type, total_marks, printed_marks, question_number, stimulus_labels, options (MCQ only), and mark_scheme.
 
 # Marking method rules (mark_scheme.marking_method)
@@ -31,6 +31,24 @@ Return EXACTLY one object matching the provided schema:
 - Emit each case study / item / source ONCE under the section.stimuli array.
 - Reference them from questions via stimulus_labels (e.g. ["Item A"]).
 - Never inline stimulus prose inside question_text.
+
+# Section choice (section.choice)
+
+Most sections require every printed question to be answered — emit \`{"kind":"all","n":null}\` in that case.
+
+When a section's heading or description explicitly instructs the student to choose, model the choice STRUCTURALLY:
+- "Answer ONE question" / "Answer ONE of the following" → \`{"kind":"any_n_of","n":1}\`
+- "Choose N of the following" / "Answer N from M" → \`{"kind":"any_n_of","n":N}\`
+
+Rules when kind = any_n_of:
+- Extract EVERY alternative question into section.questions. Choice describes how to total, not whether to extract.
+- The section's printed_total_marks represents the total a student can earn after choosing — i.e. n × per-alternative marks, NOT the sum of all alternatives.
+- Each alternative is a peer (Q5, Q6, etc.) — do not nest them under a parent question.
+
+Do NOT use any_n_of for:
+- Multi-part questions where the student must do all parts (e.g. 1(a) + 1(b)).
+- Optional extension/bonus marks within a single question.
+- Mark scheme guidance text like "give credit for either answer" — that's an acceptable-answer rule, not a choice rule.
 
 # Output discipline
 

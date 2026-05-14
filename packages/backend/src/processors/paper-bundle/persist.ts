@@ -137,6 +137,10 @@ export async function promoteSessionToExamPaper(
 					title: section.title,
 					description: section.description ?? null,
 					total_marks: section.total_marks,
+					choice: {
+						kind: section.choice.kind,
+						n: section.choice.kind === "any_n_of" ? section.choice.n : null,
+					},
 					stimuli: section.stimuli?.map((s) => ({
 						label: s.label,
 						content: s.content,

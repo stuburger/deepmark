@@ -136,6 +136,11 @@ enum MarkingMethod {
   level_of_response
 }
 
+enum SectionChoiceKind {
+  all
+  any_n_of
+}
+
 enum MarkSchemeStatus {
   linked
   auto_linked
@@ -466,16 +471,23 @@ model ExamPaper {
 }
 
 model ExamSection {
-  id            String   @id @default(cuid())
+  id            String            @id @default(cuid())
   exam_paper_id String
   title         String
   description   String?
   total_marks   Int
   instructions  String?
   order         Int
+  /// "all" = every question must be answered. "any_n_of" = student chooses
+  /// `choice_n` questions from this section's alternatives (e.g. "Answer ONE
+  /// of the following"). Used by total reconciliation + grading aggregation.
+  choice_kind   SectionChoiceKind @default(all)
+  /// Required when choice_kind = any_n_of: how many alternatives the student
+  /// must answer. Null when choice_kind = all.
+  choice_n      Int?
   created_by_id String
-  created_at    DateTime @default(now())
-  updated_at    DateTime @updatedAt
+  created_at    DateTime          @default(now())
+  updated_at    DateTime          @updatedAt
 
   created_by             User                  @relation(fields: [created_by_id], references: [id])
   exam_paper             ExamPaper             @relation(fields: [exam_paper_id], references: [id])

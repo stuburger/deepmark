@@ -9,17 +9,17 @@ import {
 	PaperBundleSchema,
 } from "../../src/processors/paper-bundle/schema"
 import { validateBundle } from "../../src/processors/paper-bundle/validate"
-import {
-	AQA_BUSINESS_Y10_3_3_VOL2_FIXTURE,
-	fixturePath,
-} from "./fixtures/paper-bundle/aqa-business-y10-3-3-vol2/fixture"
+import { AQA_BUSINESS_Y10_3_3_VOL2_FIXTURE } from "./fixtures/paper-bundle/aqa-business-y10-3-3-vol2/fixture"
+import { EDEXCEL_ENGLISH_LANG_P1_MAY_2025_FIXTURE } from "./fixtures/paper-bundle/edexcel-english-lang-p1-may-2025/fixture"
+import { fixturePath, type PaperBundleFixture } from "./fixtures/paper-bundle/types"
 
 /**
  * Paper-bundle eval suite.
  *
  * Real Gemini, real PDFs, real prompt + schema imported from the processor. No
  * mocks. Proves the core wizard bet — that a single LLM call can ingest QP +
- * MS together and emit a fully linked structure ready for atomic persistence.
+ * MS (+ optional stimulus pack) together and emit a fully linked structure
+ * ready for atomic persistence.
  *
  * Whenever you touch:
  *   - packages/backend/src/processors/paper-bundle.ts
@@ -32,52 +32,81 @@ import {
  *   - Tighten thresholds when the model improves; never loosen.
  *   - No mocking.
  *
- * Cost: ~$0.05 per fixture per run (Gemini Flash + two PDFs).
+ * Cost: ~$0.05 per fixture per run (Gemini Flash + 2-3 PDFs).
  */
 
 const BUNDLE_TIMEOUT_MS = 4 * 60_000
 
-const FIXTURES = [AQA_BUSINESS_Y10_3_3_VOL2_FIXTURE]
+const FIXTURES: PaperBundleFixture[] = [
+	AQA_BUSINESS_Y10_3_3_VOL2_FIXTURE,
+	EDEXCEL_ENGLISH_LANG_P1_MAY_2025_FIXTURE,
+]
 
 for (const fixture of FIXTURES) {
+	const qpPath = fixturePath(fixture, fixture.qpFilename)
+	const msPath = fixturePath(fixture, fixture.msFilename)
+	const stimulusPath = fixture.stimulusFilename
+		? fixturePath(fixture, fixture.stimulusFilename)
+		: null
+
+	// A fixture sometimes lives in the tree before its files arrive (e.g. the
+	// English fixture is committed but the clean QP is missing until Stuart
+	// drops it in). Skip rather than red-fail in that window.
+	const filesReady =
+		fs.existsSync(qpPath) &&
+		fs.existsSync(msPath) &&
+		(stimulusPath === null || fs.existsSync(stimulusPath))
+
 	describe(`paper bundle extraction — ${fixture.name}`, () => {
 		let bundle: PaperBundle
 
-		it(
+		const maybeIt = filesReady ? it : it.skip
+
+		maybeIt(
 			"extracts a bundle that validates and matches expected metadata shape",
 			async () => {
-				const qpBase64 = fs
-					.readFileSync(fixturePath(fixture, fixture.qpFilename))
-					.toString("base64")
-				const msBase64 = fs
-					.readFileSync(fixturePath(fixture, fixture.msFilename))
-					.toString("base64")
+				const qpBase64 = fs.readFileSync(qpPath).toString("base64")
+				const msBase64 = fs.readFileSync(msPath).toString("base64")
+				const stimulusBase64 = stimulusPath
+					? fs.readFileSync(stimulusPath).toString("base64")
+					: null
 
 				const { output } = await callLlmWithFallback(
 					"paper-bundle-extraction",
 					async (model, entry, report, signal) => {
+						const content: Array<
+							| {
+									type: "file"
+									data: string
+									mediaType: "application/pdf"
+							  }
+							| { type: "text"; text: string }
+						> = [
+							{
+								type: "file",
+								data: qpBase64,
+								mediaType: "application/pdf",
+							},
+							{
+								type: "file",
+								data: msBase64,
+								mediaType: "application/pdf",
+							},
+						]
+						if (stimulusBase64) {
+							content.push({
+								type: "file",
+								data: stimulusBase64,
+								mediaType: "application/pdf",
+							})
+						}
+						content.push({ type: "text", text: PAPER_BUNDLE_PROMPT })
+
 						const r = await generateText({
 							model,
 							abortSignal: signal,
 							temperature: entry.temperature,
-							messages: [
-								{
-									role: "user",
-									content: [
-										{
-											type: "file",
-											data: qpBase64,
-											mediaType: "application/pdf",
-										},
-										{
-											type: "file",
-											data: msBase64,
-											mediaType: "application/pdf",
-										},
-										{ type: "text", text: PAPER_BUNDLE_PROMPT },
-									],
-								},
-							],
+							messages: [{ role: "user", content }],
 							output: outputSchema(PaperBundleSchema),
 						})
 						report.usage = r.usage
@@ -90,7 +119,10 @@ for (const fixture of FIXTURES) {
 
 				// ── Top-level validation (the persister's own gate) ─────────
 				const validation = validateBundle(bundle)
-				expect(validation.ok, `validateBundle: ${"error" in validation ? validation.error : ""}`).toBe(true)
+				expect(
+					validation.ok,
+					`validateBundle: ${"error" in validation ? validation.error : ""}`,
+				).toBe(true)
 
 				// ── Metadata sanity ─────────────────────────────────────────
 				expect(bundle.metadata.title).toBeTruthy()
@@ -118,7 +150,10 @@ for (const fixture of FIXTURES) {
 				// ── Every question carries a non-empty mark scheme ──────────
 				for (const section of bundle.sections) {
 					for (const q of section.questions) {
-						expect(q.mark_scheme, `Q${q.question_number ?? "?"} missing mark_scheme`).toBeTruthy()
+						expect(
+							q.mark_scheme,
+							`Q${q.question_number ?? "?"} missing mark_scheme`,
+						).toBeTruthy()
 						const method = q.mark_scheme.marking_method
 						if (method === "point_based") {
 							expect(
@@ -138,24 +173,112 @@ for (const fixture of FIXTURES) {
 						}
 					}
 				}
+
+				// ── Section choice (either/or modelling) ────────────────────
+				if (fixture.expected.sectionChoices) {
+					for (const expected of fixture.expected.sectionChoices) {
+						const needle = expected.titleContains.toLowerCase()
+						const matched = bundle.sections.find((s) =>
+							s.title.toLowerCase().includes(needle),
+						)
+						expect(
+							matched,
+							`no section title contains "${expected.titleContains}"`,
+						).toBeTruthy()
+						if (!matched) continue
+						const choice = matched.choice ?? { kind: "all", n: null }
+						expect(
+							choice.kind,
+							`section "${matched.title}" expected choice.kind=${expected.kind}, got ${choice.kind}`,
+						).toBe(expected.kind)
+						if (expected.kind === "any_n_of") {
+							expect(
+								choice.n,
+								`section "${matched.title}" expected choice.n=${expected.n}, got ${choice.n}`,
+							).toBe(expected.n)
+						}
+					}
+				}
+
+				// ── Paper total reconciles choice-aware ─────────────────────
+				if (fixture.expected.expectedPrintedTotal !== undefined) {
+					const sumChoiceAware = bundle.sections.reduce((acc, s) => {
+						const choice = s.choice ?? { kind: "all", n: null }
+						if (choice.kind === "any_n_of" && choice.n !== null) {
+							const max = s.questions.reduce(
+								(m, q) => Math.max(m, q.printed_marks ?? q.total_marks),
+								0,
+							)
+							return acc + choice.n * max
+						}
+						return (
+							acc +
+							s.questions.reduce(
+								(qacc, q) => qacc + (q.printed_marks ?? q.total_marks),
+								0,
+							)
+						)
+					}, 0)
+					expect(
+						sumChoiceAware,
+						`choice-aware section sum (${sumChoiceAware}) must reconcile to paper printed total (${fixture.expected.expectedPrintedTotal})`,
+					).toBe(fixture.expected.expectedPrintedTotal)
+				}
+
+				// ── Stimulus extraction (only when fixture supplies one) ────
+				if (fixture.expected.stimulus) {
+					const allStimuli = bundle.sections.flatMap((s) => s.stimuli ?? [])
+					expect(
+						allStimuli.length,
+						"expected at least one stimulus extracted from the insert pack",
+					).toBeGreaterThanOrEqual(fixture.expected.stimulus.minTotal)
+
+					const allContent = allStimuli.map((s) => s.content).join("\n\n")
+					for (const needle of fixture.expected.stimulus.contentContains) {
+						expect(
+							allContent,
+							`stimulus content missing required substring "${needle}"`,
+						).toContain(needle)
+					}
+
+					// Round-trip: at least one question's stimulus_labels resolves
+					// against a section-level stimulus label. This catches the
+					// failure mode where stimulus content lands on the section but
+					// nothing on the question side points at it.
+					const labels = new Set(allStimuli.map((s) => s.label))
+					const refs = bundle.sections.flatMap((s) =>
+						s.questions.flatMap((q) => q.stimulus_labels ?? []),
+					)
+					const matched = refs.filter((r) => labels.has(r))
+					expect(
+						matched.length,
+						"no question referenced a section-level stimulus via stimulus_labels",
+					).toBeGreaterThanOrEqual(1)
+				}
 			},
 			BUNDLE_TIMEOUT_MS + 30_000,
 		)
 
-		it("printed paper total matches sum of section totals when both are populated", () => {
-			if (!bundle) return
-			const printedPaperTotal = bundle.metadata.printed_total_marks
-			if (printedPaperTotal == null) return
-			const sectionPrintedSum = bundle.sections.reduce(
-				(acc, s) => acc + (s.printed_total_marks ?? 0),
-				0,
-			)
-			if (sectionPrintedSum === 0) return
-			expect(sectionPrintedSum).toBe(printedPaperTotal)
-		})
+		;(filesReady ? it : it.skip)(
+			"printed paper total matches sum of section totals when both are populated",
+			() => {
+				if (!bundle) return
+				const printedPaperTotal = bundle.metadata.printed_total_marks
+				if (printedPaperTotal == null) return
+				// Only run when EVERY section has its own printed total — a partial
+				// set produces a false-positive mismatch. Some real papers print
+				// only the paper-level total and skip section totals; that's a
+				// "no signal" case, not a failure.
+				const everySection = bundle.sections.every(
+					(s) => s.printed_total_marks != null,
+				)
+				if (!everySection) return
+				const sectionPrintedSum = bundle.sections.reduce(
+					(acc, s) => acc + (s.printed_total_marks ?? 0),
+					0,
+				)
+				expect(sectionPrintedSum).toBe(printedPaperTotal)
+			},
+		)
 	})
 }
-
-// TODO: add a second fixture from production once Stuart supplies the English
-// paper S3 keys. Bundle MS partner already exists at tmp/english-lit-mark-
-// scheme-cmobrht6s.pdf — needs the paired question paper.

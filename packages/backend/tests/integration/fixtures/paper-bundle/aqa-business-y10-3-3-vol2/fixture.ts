@@ -1,4 +1,7 @@
-import * as path from "node:path"
+import type { PaperBundleFixture } from "../types"
+
+export { fixturePath } from "../types"
+export type { PaperBundleFixture } from "../types"
 
 /**
  * AQA GCSE Business — Year 10 Unit Assessment 3.3 (Vol 2) + matching mark scheme.
@@ -22,21 +25,9 @@ export const AQA_BUSINESS_Y10_3_3_VOL2_FIXTURE = {
 	msFilename: "mark-scheme.pdf",
 	expected: {
 		titleContains: ["business"],
-		subject: "business" as const,
+		subject: "business",
 		examBoardContains: "AQA",
-		// The paper is a single-section structure — at minimum, the bundle must
-		// always emit one section.
 		minSections: 1,
-		// Lower bound for question count; tightened upward when actuals stabilise.
 		minQuestions: 8,
 	},
-} as const
-
-export type PaperBundleFixture = typeof AQA_BUSINESS_Y10_3_3_VOL2_FIXTURE
-
-export function fixturePath(
-	fixture: PaperBundleFixture,
-	filename: string,
-): string {
-	return path.join(fixture.dir, filename)
-}
+} as const satisfies PaperBundleFixture

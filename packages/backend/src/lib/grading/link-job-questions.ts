@@ -1,4 +1,5 @@
 import { db } from "@/db"
+import type { SectionChoiceKind } from "@mcp-gcse/db"
 
 /**
  * Links all questions created by a job to the given exam paper's first section.
@@ -91,6 +92,16 @@ export type LinkSectionInput = {
 	 * (e.g. "Mark for Section A / 25") to win even if rounding drifts.
 	 */
 	total_marks?: number
+	/**
+	 * Whether every question in the section must be answered ("all") or the
+	 * student chooses some ("any_n_of"). Persisted on ExamSection so total
+	 * reconciliation, grading aggregation and the UI all know whether to sum
+	 * or treat questions as alternatives.
+	 */
+	choice?: {
+		kind: SectionChoiceKind
+		n: number | null
+	}
 }
 
 /**
@@ -173,6 +184,10 @@ export async function linkJobQuestionsToExamPaperSections(
 		)
 		const sectionTotal = input.total_marks ?? sumPoints
 
+		const choiceKind: SectionChoiceKind = input.choice?.kind ?? "all"
+		const choiceN =
+			choiceKind === "any_n_of" ? (input.choice?.n ?? null) : null
+
 		let section = existingByTitle.get(input.title)
 		if (!section) {
 			maxSectionOrder++
@@ -183,8 +198,21 @@ export async function linkJobQuestionsToExamPaperSections(
 					description: input.description ?? null,
 					total_marks: sectionTotal,
 					order: maxSectionOrder,
+					choice_kind: choiceKind,
+					choice_n: choiceN,
 					created_by_id: uploadedBy,
 				},
+			})
+			existingByTitle.set(section.title, section)
+		} else if (
+			section.choice_kind !== choiceKind ||
+			section.choice_n !== choiceN
+		) {
+			// Re-ingest of the same paper updated the section's choice rule. The
+			// LLM is the source of truth here — overwrite.
+			section = await db.examSection.update({
+				where: { id: section.id },
+				data: { choice_kind: choiceKind, choice_n: choiceN },
 			})
 			existingByTitle.set(section.title, section)
 		}

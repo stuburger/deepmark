@@ -1,0 +1,32 @@
+{
+	"name": "@mcp-gcse/remotion",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"studio": "remotion studio src/index.ts",
+		"render": "remotion render src/index.ts Reveal out/reveal.mp4",
+		"render:still": "remotion still src/index.ts Reveal out/still.png",
+		"snapshot": "bun scripts/snapshot-fixture.ts",
+		"typecheck": "tsc --noEmit"
+	},
+	"dependencies": {
+		"@remotion/bundler": "4.0.405",
+		"@remotion/cli": "4.0.405",
+		"@remotion/renderer": "4.0.405",
+		"@remotion/zod-types": "4.0.405",
+		"react": "^19.1.0",
+		"react-dom": "^19.1.0",
+		"remotion": "4.0.405",
+		"zod": "^4.3.5"
+	},
+	"devDependencies": {
+		"@aws-sdk/client-s3": "^3.1009.0",
+		"@types/node": "^24.0.3",
+		"@types/react": "^19.1.0",
+		"@types/react-dom": "^19.1.0",
+		"pg": "^8.13.1",
+		"@types/pg": "^8.11.10",
+		"typescript": "~5.8.3"
+	}
+}

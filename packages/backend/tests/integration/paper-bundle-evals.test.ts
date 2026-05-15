@@ -161,10 +161,31 @@ for (const fixture of FIXTURES) {
 								`Q${q.question_number ?? "?"} point_based has no mark_points`,
 							).toBeGreaterThanOrEqual(1)
 						} else if (method === "level_of_response") {
+							const lor = q.mark_scheme.lor_extraction
 							expect(
-								(q.mark_scheme.levels ?? []).length,
-								`Q${q.question_number ?? "?"} level_of_response has no levels`,
-							).toBeGreaterThanOrEqual(1)
+								lor,
+								`Q${q.question_number ?? "?"} level_of_response missing lor_extraction`,
+							).toBeTruthy()
+							if (lor) {
+								expect(
+									lor.ao_dimensions.length,
+									`Q${q.question_number ?? "?"} lor_extraction has no ao_dimensions`,
+								).toBeGreaterThanOrEqual(1)
+								for (const dim of lor.ao_dimensions) {
+									expect(
+										dim.levels.length,
+										`Q${q.question_number ?? "?"} dimension "${dim.ao_code}" has no levels`,
+									).toBeGreaterThanOrEqual(1)
+								}
+								const dimensionsTotal = lor.ao_dimensions.reduce(
+									(sum, d) => sum + d.marks,
+									0,
+								)
+								expect(
+									dimensionsTotal,
+									`Q${q.question_number ?? "?"} ao_dimensions sum ${dimensionsTotal} should equal question total_marks ${q.total_marks}`,
+								).toBe(q.total_marks)
+							}
 						} else if (method === "deterministic") {
 							expect(
 								q.mark_scheme.correct_option,
@@ -223,6 +244,45 @@ for (const fixture of FIXTURES) {
 						sumChoiceAware,
 						`choice-aware section sum (${sumChoiceAware}) must reconcile to paper printed total (${fixture.expected.expectedPrintedTotal})`,
 					).toBe(fixture.expected.expectedPrintedTotal)
+				}
+
+				// ── Multi-skill LoR (parallel AO grids summed) ──────────────
+				if (fixture.expected.lorMultiSkill) {
+					for (const expected of fixture.expected.lorMultiSkill) {
+						const question = bundle.sections
+							.flatMap((s) => s.questions)
+							.find((q) => q.question_number === expected.questionNumber)
+						expect(
+							question,
+							`expected question ${expected.questionNumber} to be present`,
+						).toBeTruthy()
+						if (!question) continue
+						expect(
+							question.mark_scheme.marking_method,
+							`Q${expected.questionNumber} should be level_of_response`,
+						).toBe("level_of_response")
+						const lor = question.mark_scheme.lor_extraction
+						expect(
+							lor,
+							`Q${expected.questionNumber} missing lor_extraction`,
+						).toBeTruthy()
+						if (!lor) continue
+						expect(
+							lor.ao_dimensions.length,
+							`Q${expected.questionNumber} expected ${expected.aoDimensions.length} dimensions, got ${lor.ao_dimensions.length}`,
+						).toBe(expected.aoDimensions.length)
+						for (const [idx, expectedDim] of expected.aoDimensions.entries()) {
+							const actual = lor.ao_dimensions[idx]
+							expect(
+								actual?.ao_code,
+								`Q${expected.questionNumber} dim[${idx}] expected ao_code ${expectedDim.ao_code}, got ${actual?.ao_code}`,
+							).toBe(expectedDim.ao_code)
+							expect(
+								actual?.marks,
+								`Q${expected.questionNumber} dim[${idx}] expected marks ${expectedDim.marks}, got ${actual?.marks}`,
+							).toBe(expectedDim.marks)
+						}
+					}
 				}
 
 				// ── Stimulus extraction (only when fixture supplies one) ────

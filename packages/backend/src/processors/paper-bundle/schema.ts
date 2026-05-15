@@ -10,6 +10,70 @@ export type PaperBundleJobPayload = z.infer<typeof PaperBundleJobPayloadSchema>
 
 // ── Gemini structured-output schema ──────────────────────────────────────────
 
+// Extraction-time intermediate for level_of_response questions. Captures the
+// per-AO grids structurally so the persister can deterministically render
+// canonical markdown into `content`. Never stored — the markdown is the
+// canonical form, the intermediate is ephemeral. Same input always produces
+// the same markdown; new subject quirks land in `extras` and are appended
+// verbatim by the renderer without a schema change.
+const LoRExtractionSchema = z.object({
+	indicative_content: z
+		.string()
+		.describe(
+			"Multi-paragraph markdown summary of the expected response: what a strong answer looks like, key ideas, exemplar phrases. Verbatim from the MS where printed.",
+		),
+	ao_dimensions: z
+		.array(
+			z.object({
+				ao_code: z
+					.string()
+					.describe(
+						"Assessment Objective code as printed (e.g. 'AO5', 'AO6'). Use 'Overall' when the MS uses a single grid with no AO breakdown.",
+					),
+				marks: z.number().int().describe("Maximum marks for this dimension."),
+				description: z
+					.string()
+					.describe(
+						"Short label printed alongside the AO (e.g. 'Content / structure / register'). Empty string if none printed.",
+					),
+				levels: z
+					.array(
+						z.object({
+							level: z.number().int().describe("Level number (1, 2, 3, ...)."),
+							mark_range: z
+								.array(z.number().int())
+								.describe(
+									"Two-element [min, max] inclusive mark range for this level.",
+								),
+							descriptor_bullets: z
+								.array(z.string())
+								.describe(
+									"Each printed descriptor bullet for this level, verbatim, one per array entry.",
+								),
+						}),
+					)
+					.describe(
+						"Levels for this dimension, in order from lowest to highest.",
+					),
+			}),
+		)
+		.describe(
+			"One entry per assessment dimension. Single-skill LoR = length 1. Multi-skill (parallel grids summed, e.g. Edexcel English Lang AO5+AO6) = length 2+.",
+		),
+	marker_notes: z
+		.string()
+		.nullable()
+		.describe(
+			"Caps, exceptions, level-boundary guidance, command-word hints printed alongside the grids. Null if none.",
+		),
+	extras: z
+		.string()
+		.nullable()
+		.describe(
+			"Catch-all for any board-specific marker guidance that doesn't fit the above (shared-grid headers, paper-wide notes referenced by this question, etc.). Verbatim markdown. Null if none.",
+		),
+})
+
 const MarkSchemeBlockSchema = z.object({
 	marking_method: z
 		.enum(["deterministic", "point_based", "level_of_response"])
@@ -41,7 +105,9 @@ const MarkSchemeBlockSchema = z.object({
 		.string()
 		.nullable()
 		.optional()
-		.describe("Single option label (e.g. 'B') for deterministic MCQ; null otherwise."),
+		.describe(
+			"Single option label (e.g. 'B') for deterministic MCQ; null otherwise.",
+		),
 	ao_allocations: z
 		.array(
 			z.object({
@@ -52,20 +118,13 @@ const MarkSchemeBlockSchema = z.object({
 		.nullable()
 		.optional()
 		.describe(
-			"AO codes + mark counts EXACTLY as printed (e.g. AO1=2, AO2=1). Never invent.",
+			"Canonical dimensionality field. For level_of_response: ALWAYS populate when AO weights are printed (single grid: one entry; parallel grids: one entry per dimension, e.g. Edexcel English Lang Sec B = [{AO5, 24}, {AO6, 16}]). For point_based / deterministic: optional. Never invent.",
 		),
-	levels: z
-		.array(
-			z.object({
-				level: z.number().int(),
-				mark_range: z.array(z.number().int()),
-				descriptor: z.string(),
-				ao_requirements: z.array(z.string()).nullable().optional(),
-			}),
-		)
-		.nullable()
+	lor_extraction: LoRExtractionSchema.nullable()
 		.optional()
-		.describe("Required for level_of_response. Null/empty for other methods."),
+		.describe(
+			"REQUIRED for level_of_response questions. Structured intermediate the persister deterministically renders into mark_scheme.content. Null for point_based / deterministic.",
+		),
 	caps: z
 		.array(
 			z.object({
@@ -82,7 +141,7 @@ const MarkSchemeBlockSchema = z.object({
 		.nullable()
 		.optional()
 		.describe(
-			"For level_of_response: the complete mark scheme rendered as markdown (level descriptors, indicative content, exemplar answers, marker notes, caps, command word). Null for other methods.",
+			"DEPRECATED for level_of_response: leave null. The persister renders content from lor_extraction. For point_based / deterministic: optional free-form markdown that supplements mark_points / correct_option.",
 		),
 })
 
@@ -97,7 +156,10 @@ const QuestionBlockSchema = z.object({
 		.describe(
 			"multiple_choice when the question presents lettered options; written otherwise.",
 		),
-	total_marks: z.number().int().describe("Total marks available for this question."),
+	total_marks: z
+		.number()
+		.int()
+		.describe("Total marks available for this question."),
 	printed_marks: z
 		.number()
 		.int()
@@ -108,7 +170,9 @@ const QuestionBlockSchema = z.object({
 	question_number: z
 		.string()
 		.nullable()
-		.describe("Question number as printed (e.g. '1', '1a', '2.iii'). Null if not numbered."),
+		.describe(
+			"Question number as printed (e.g. '1', '1a', '2.iii'). Null if not numbered.",
+		),
 	stimulus_labels: z
 		.array(z.string())
 		.optional()
@@ -134,11 +198,10 @@ const QuestionBlockSchema = z.object({
 const StimulusBlockSchema = z.object({
 	label: z
 		.string()
-		.describe("Stimulus label EXACTLY as printed — 'Item A', 'Source B', 'Figure 1', etc."),
-	content_type: z
-		.enum(["text", "table"])
-		.optional()
-		.default("text"),
+		.describe(
+			"Stimulus label EXACTLY as printed — 'Item A', 'Source B', 'Figure 1', etc.",
+		),
+	content_type: z.enum(["text", "table"]).optional().default("text"),
 	content: z
 		.string()
 		.describe(
@@ -220,3 +283,6 @@ export const PaperBundleSchema = z.object({
 export type PaperBundle = z.infer<typeof PaperBundleSchema>
 export type PaperBundleQuestion = z.infer<typeof QuestionBlockSchema>
 export type PaperBundleMarkScheme = z.infer<typeof MarkSchemeBlockSchema>
+export type PaperBundleLoRExtraction = z.infer<typeof LoRExtractionSchema>
+
+export { LoRExtractionSchema }

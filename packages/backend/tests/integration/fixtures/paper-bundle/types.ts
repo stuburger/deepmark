@@ -41,6 +41,13 @@ export type PaperBundleFixture = {
 		// Whether the paper's printed_total_marks should reconcile against the
 		// section totals, with any_n_of sections counted as n × max-alternative.
 		expectedPrintedTotal?: number
+		// Per-question LoR multi-skill expectations. Each entry asserts that the
+		// given question_number is a level_of_response question and its
+		// lor_extraction.ao_dimensions matches the expected codes + marks.
+		lorMultiSkill?: Array<{
+			questionNumber: string
+			aoDimensions: Array<{ ao_code: string; marks: number }>
+		}>
 	}
 }
 

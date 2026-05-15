@@ -354,6 +354,11 @@ model MarkScheme {
   // Rich markdown content — indicative content, exemplar answers, marker notes, level descriptors.
   // Primary source of question-specific marking guidance for LoR; optional for point_based/deterministic.
   content               String           @default("")
+  // Canonical dimensionality for LoR marking — array of { ao_code, marks } as
+  // printed on the mark scheme. Length 0 = no printed AO breakdown; length 1 =
+  // single-skill LoR; length 2+ = multi-skill LoR (parallel grids summed).
+  // The marker iterates this; same code path for all three cases.
+  ao_allocations        Json?
   link_status           MarkSchemeStatus @default(linked)
   refined_at            DateTime?
   refinement_iterations Int              @default(0)

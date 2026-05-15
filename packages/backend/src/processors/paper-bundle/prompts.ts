@@ -20,7 +20,44 @@ Return EXACTLY one object matching the provided schema:
 
 - "deterministic" — MCQ. Set correct_option to the single correct letter; mark_points = [].
 - "point_based" — short/medium-answer written. Each entry in mark_points is worth EXACTLY 1 mark. A 3-mark question must produce three mark_points entries, never one entry worth 3.
-- "level_of_response" — AQA-style banded marking with level descriptors. Populate levels[], caps[], and content (full markdown of the scheme). mark_points = [].
+- "level_of_response" — banded marking with level descriptors. Populate lor_extraction (see below) and ao_allocations. Leave content null — the persister renders it deterministically from lor_extraction. mark_points = [].
+
+# Level-of-response extraction (mark_scheme.lor_extraction)
+
+REQUIRED for every level_of_response question. The persister renders this into canonical markdown — your job is faithful structural capture, not formatting.
+
+## Resolving the level grid
+
+Mark schemes do not always print the level descriptors next to the question. Common patterns:
+
+1. Inline — the level table sits directly under the question. Standard.
+2. Shared grid at end of section — the question carries a pointer like "Refer to the writing assessment grids at the end of this section when marking Question 5 and Question 6." The actual descriptors are printed elsewhere in the MS, often at the end of the section or document. **Find the referenced grid and use it.** Both Q5 and Q6 produce the same lor_extraction.ao_dimensions in this case.
+3. Parallel multi-skill grids — the MS prints two (or more) separate grids that are SUMMED for the final mark (e.g. Edexcel English Lang Sec B: AO5 grid worth 24 marks + AO6 grid worth 16 marks → 40 total). Each parallel grid is its own entry in ao_dimensions.
+
+## ao_dimensions
+
+- Single grid, single AO printed (e.g. AQA English Lit AO2 essay): one entry. ao_code = "AO2", marks = total.
+- Single grid, no AO breakdown printed (e.g. some Combined Science 6-markers): one entry. ao_code = "Overall", marks = total, description = "" if none printed.
+- Combined grid with multiple AO columns (e.g. AQA-style grid showing AO5/AO6 in one table): one entry PER AO. Split the bullets per AO column.
+- Parallel grids printed separately (e.g. Pearson English Lang Sec B): one entry per grid, IN PRINTED ORDER.
+
+For each dimension, fill levels[] in order from lowest (Level 1) to highest. mark_range is the inclusive [min, max] band as printed (e.g. Level 3 = [9, 12] for a 24-mark grid). descriptor_bullets contains each printed bullet for that level, verbatim.
+
+## indicative_content
+
+Multi-paragraph markdown describing what a strong response covers — themes, ideas, exemplar phrases, expected references. Copy from the MS where printed (often labelled "Indicative content", "Possible content", or "Exemplar response"). If nothing of this kind is printed, set to "" (empty string) — do not invent.
+
+## marker_notes
+
+Caps, exceptions, level-boundary advice, command-word notes printed alongside the grids. Null if none.
+
+## extras
+
+Catch-all for board-specific marker guidance that doesn't fit anywhere else (shared-grid section headers, paper-wide caveats referenced by this question, generic AO descriptors printed for the whole paper). Markdown, verbatim. Null if none.
+
+## ao_allocations for level_of_response
+
+ao_allocations reflects what's PRINTED on the mark scheme. When the MS prints AO weights (e.g. "AO5 — 24 marks, AO6 — 16 marks") emit them as ao_allocations entries that mirror lor_extraction.ao_dimensions. When NO AO breakdown is printed (e.g. Combined Science 6-marker with a single overall grid) leave ao_allocations as null/empty — even though lor_extraction.ao_dimensions still has one "Overall" entry for rendering. ao_allocations is "what the printed page says"; ao_dimensions is "how to render the grid."
 
 # Pairing rules
 
@@ -52,6 +89,15 @@ Do NOT use any_n_of for:
 - Multi-part questions where the student must do all parts (e.g. 1(a) + 1(b)).
 - Optional extension/bonus marks within a single question.
 - Mark scheme guidance text like "give credit for either answer" — that's an acceptable-answer rule, not a choice rule.
+
+# Subject classification — English papers
+
+GCSE English splits into two distinct subjects. Classify by what the paper ASKS the student to do, not by what they READ.
+
+- "english" (English Language): unseen-text comprehension + the student's own writing. The reading section uses unseen sources (fiction or non-fiction extracts) the student has never met before; the writing section asks for creative, transactional, or descriptive writing in the student's own voice. Pearson Edexcel paper code 1EN0; AQA paper code 8700. Section B writing tasks ("Write a story...", "Write a description...", "Write an article...") are diagnostic.
+- "english_literature": essays about NAMED set texts the student has studied (Shakespeare play, named poet/novelist, GCSE anthology poems). Questions reference characters, themes, and quotations from the studied text. Pearson Edexcel paper code 1ET0; AQA paper code 8702.
+
+The presence of a fiction extract or imaginative writing task does NOT make a paper english_literature. If the source is unseen prose and writing tasks ask for student-authored creative writing, the subject is english. Use the paper code on the cover when visible — 1EN0 / 8700 = english; 1ET0 / 8702 = english_literature.
 
 # Output discipline
 

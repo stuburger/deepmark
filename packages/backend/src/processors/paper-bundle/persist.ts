@@ -7,11 +7,13 @@ import { normalizeQuestionNumber } from "@/lib/grading/normalize-question-number
 import {
 	type PaperSetupSession,
 	type PaperSetupStagedFile,
+	Prisma,
 	ResourceGrantPrincipalType,
 	ResourceGrantResourceType,
 	ResourceGrantRole,
 	type ScanStatus,
 } from "@mcp-gcse/db"
+import { renderLoRMarkScheme } from "./render-mark-scheme"
 import type {
 	PaperBundle,
 	PaperBundleMarkScheme,
@@ -238,7 +240,16 @@ async function createMarkScheme(
 			? [ms.correct_option.trim()]
 			: []
 
-	const aoDescription = formatAoAllocations(ms.ao_allocations ?? [])
+	const aoAllocations = ms.ao_allocations ?? []
+	const aoDescription = formatAoAllocations(aoAllocations)
+
+	// LoR: render canonical markdown from the structured intermediate (validator
+	// has already guaranteed it's present). Other methods: keep whatever optional
+	// markdown the LLM emitted, or empty string.
+	const content =
+		ms.marking_method === "level_of_response" && ms.lor_extraction
+			? renderLoRMarkScheme(ms.lor_extraction)
+			: (ms.content ?? "")
 
 	const created = await tx.markScheme.create({
 		data: {
@@ -250,7 +261,9 @@ async function createMarkScheme(
 			mark_points: markPoints,
 			correct_option_labels: correctOptionLabels,
 			marking_method: ms.marking_method,
-			content: ms.content ?? "",
+			content,
+			ao_allocations:
+				aoAllocations.length > 0 ? aoAllocations : Prisma.JsonNull,
 			link_status: "linked",
 			tags: [],
 		},

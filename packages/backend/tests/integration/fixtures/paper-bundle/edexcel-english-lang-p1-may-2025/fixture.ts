@@ -59,5 +59,27 @@ export const EDEXCEL_ENGLISH_LANG_P1_MAY_2025_FIXTURE = {
 		// reconciles to 24 (A) + 40 (B choice) = 64. Catches the regression
 		// where bundle naively sums both Section B alternatives → 104.
 		expectedPrintedTotal: 64,
+		// Section B's Q5 and Q6 are multi-skill LoR: parallel AO5 (24 marks)
+		// + AO6 (16 marks) grids that sum to 40 per question. Shared writing
+		// assessment grids are printed at the end of the MS, referenced by
+		// both questions — extractor must resolve the reference and produce
+		// the same lor_extraction shape on each. This is the failure mode
+		// the entire marking-accuracy redesign exists to fix.
+		lorMultiSkill: [
+			{
+				questionNumber: "5",
+				aoDimensions: [
+					{ ao_code: "AO5", marks: 24 },
+					{ ao_code: "AO6", marks: 16 },
+				],
+			},
+			{
+				questionNumber: "6",
+				aoDimensions: [
+					{ ao_code: "AO5", marks: 24 },
+					{ ao_code: "AO6", marks: 16 },
+				],
+			},
+		],
 	},
 } as const satisfies PaperBundleFixture

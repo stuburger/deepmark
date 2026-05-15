@@ -77,6 +77,8 @@ const submissionDetailInclude = {
 				orderBy: { order: "asc" as const },
 				select: {
 					order: true,
+					choice_kind: true,
+					choice_n: true,
 					exam_section_questions: {
 						orderBy: { order: "asc" as const },
 						select: {
@@ -618,6 +620,8 @@ export const getSubmissionVersions = resourceAction({
 			db.examSection.findMany({
 				where: { exam_paper_id: current.exam_paper_id },
 				select: {
+					choice_kind: true,
+					choice_n: true,
 					exam_section_questions: {
 						select: { question: { select: { points: true } } },
 					},

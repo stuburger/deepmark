@@ -33,6 +33,8 @@ async function fetchPaperTotals(
 		where: { exam_paper_id: { in: paperIds } },
 		select: {
 			exam_paper_id: true,
+			choice_kind: true,
+			choice_n: true,
 			exam_section_questions: {
 				select: { question: { select: { points: true } } },
 			},

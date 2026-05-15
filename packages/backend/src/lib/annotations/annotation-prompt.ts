@@ -1,4 +1,5 @@
 import type {
+	AoAwardEntry,
 	GradingResult,
 	MarkPointResultEntry,
 } from "@/lib/grading/grade-questions"
@@ -109,6 +110,32 @@ function markPointResultsSection(results: MarkPointResultEntry[]): string {
 	return `<MarkPointResults>\n${formatMarkPointResults(results)}\n</MarkPointResults>`
 }
 
+/**
+ * For LoR-marked questions, this is the canonical annotation source. Each
+ * descriptor evaluation carries either a verbatim quote (met) or a gap
+ * description (not met) — these become the explicit anchor points the
+ * annotator places marks on. Previous behaviour was "read the WWW/EBI
+ * summary and guess where to anchor"; this section turns annotation into
+ * a deterministic mapping from evaluations → annotations.
+ */
+function aoAwardsSection(awards: AoAwardEntry[] | undefined): string {
+	if (!awards || awards.length === 0) return ""
+	const blocks = awards.map((a, idx) => {
+		const header = `### Award ${idx + 1} — ${a.ao_code} (Level ${a.level_awarded}, ${a.awarded_marks}/${a.max_marks} marks)`
+		const evals = a.descriptor_evaluations
+			.map((e, j) => {
+				const tag = e.met ? "MET ✓" : "NOT MET ✗"
+				return `  ${idx + 1}.${j + 1} ${tag} — "${e.descriptor}"\n      ${e.met ? "Evidence" : "Gap"}: ${e.evidence}`
+			})
+			.join("\n")
+		const whyNot = a.why_not_next_level
+			? `\nWhy not next Level: ${a.why_not_next_level}`
+			: ""
+		return `${header}\n${evals}${whyNot}`
+	})
+	return `<AoAwards>\nDescriptor evaluations the marker recorded for this response. These are the CANONICAL anchor points for annotation — every met evaluation should produce a positive annotation anchored on its evidence quote, and every not-met evaluation should produce a negative annotation explaining the gap.\n\n${blocks.join("\n\n")}\n</AoAwards>`
+}
+
 function wwwEbiSection(r: GradingResult): string {
 	if (!r.what_went_well?.length && !r.even_better_if?.length) return ""
 	return `<GradingSummary>
@@ -177,9 +204,8 @@ function questionTypeGuidance(maxScore: number): string {
 // ─── Static rule sections ────────────────────────────────────────────────────
 
 const ANNOTATION_STRATEGY = `ANNOTATION STRATEGY:
-- Use the mark scheme, mark point results, and LoR summary (if present) to decide what to annotate
-- For each AWARDED mark point: find the specific text that earned it, place a tick or appropriate mark, and optionally tag the relevant AO skill using the ao_category field
-- For each DENIED mark point: identify what is missing or weak, and annotate with a cross/circle and a brief comment in the comment field explaining what was needed
+- When <AoAwards> is present (LoR marking): the descriptor evaluations are the CANONICAL anchor source. Produce roughly one annotation per evaluation. For each MET evaluation: locate the evidence quote in the OCR tokens above (it is verbatim from the student answer) and anchor a positive signal annotation (tick / underline / double_underline) with reason derived from the descriptor. For each NOT MET evaluation: anchor a negative signal annotation (cross / circle) at the most relevant location — the end of the paragraph where the gap occurs, or the closest related claim — with the gap description in the comment field. Set ao_category to the award's AO code and ao_quality based on met (strong/valid) vs not-met (incorrect/partial).
+- When <MarkPointResults> is present (point-based marking): for each AWARDED point find the specific text that earned it and place a tick or appropriate mark, optionally tagging the AO. For each DENIED point: identify what is missing or weak and annotate with a cross/circle and a brief comment in the comment field explaining what was needed.
 - Use your examiner judgement to classify AO skills from the content and context — do not rely on keyword matching
 - The AO labels (e.g. AO1, AO2) and their meanings come from the level descriptors and mark scheme. Use the exact labels and definitions from those descriptors. Do not assume which AOs exist or what they mean.
 - Chain annotations should highlight genuine reasoning structures where the student builds an argument, not just words like "because"
@@ -238,7 +264,27 @@ Each annotation is self-contained — signal annotations include their own reaso
 
 // ─── Density section (dynamic — depends on maxScore) ─────────────────────────
 
-function densitySection(maxScore: number): string {
+function densitySection(
+	maxScore: number,
+	aoAwards: AoAwardEntry[] | undefined,
+): string {
+	// For LoR with descriptor evaluations, annotation density is derived from
+	// the evaluation count (one annotation per met/not-met decision). This is
+	// deterministic and gives the teacher one anchored mark per discrete
+	// decision the marker recorded — much better than the heuristic score-
+	// based budget which encouraged the LLM to invent or skip annotations.
+	if (aoAwards && aoAwards.length > 0) {
+		const evalCount = aoAwards.reduce(
+			(sum, a) => sum + a.descriptor_evaluations.length,
+			0,
+		)
+		const commentCap = Math.max(2, Math.ceil(evalCount / 2))
+		return `DENSITY:
+- Target ~${evalCount} signal annotations — one per descriptor evaluation in <AoAwards> above.
+- Maximum ${commentCap} annotations with comment field set (reserve comments for NOT MET descriptors that need a tip).
+- Annotations should be in 1:1 correspondence with evaluations: every met evaluation → one positive annotation on its evidence quote; every not-met evaluation → one negative annotation at the relevant location.
+- Avoid inventing annotations that don't tie back to a descriptor evaluation.`
+	}
 	const d = densityTarget(maxScore)
 	return `DENSITY:
 - Target ${d.min}-${d.max} signal annotations total for this ${maxScore}-mark question
@@ -290,6 +336,7 @@ export function buildAnnotationPrompt(args: AnnotationPromptArgs): string {
 		markSchemeSection(markScheme),
 		gradingResultSection(r, maxScore),
 		markPointResultsSection(r.mark_points_results),
+		aoAwardsSection(r.ao_awards),
 		wwwEbiSection(r),
 		levelDescriptorsSection(levelDescriptors),
 		studentAnswerSection(r.student_answer),
@@ -306,7 +353,7 @@ export function buildAnnotationPrompt(args: AnnotationPromptArgs): string {
 		MARK_TYPES,
 		REASON_FIELD,
 		POINT_BASED_GUIDANCE,
-		densitySection(maxScore),
+		densitySection(maxScore, r.ao_awards),
 		anchoringSection(tokens.length),
 		GLOBAL_RULES,
 	]

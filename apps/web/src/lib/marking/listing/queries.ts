@@ -2,22 +2,19 @@
 
 import { resourceAction, scopedAction } from "@/lib/authz"
 import { db } from "@/lib/db"
-import type { GradingStatus, OcrStatus, SectionChoiceKind } from "@mcp-gcse/db"
-import { resolveSectionResults } from "@mcp-gcse/shared"
+import type { GradingStatus, OcrStatus } from "@mcp-gcse/db"
 import { z } from "zod"
+import {
+	type ChoiceAwareSection,
+	partitionResultsByChoice,
+} from "../choice-aware-results"
 import { sumSectionPoints } from "../paper-totals"
 import { deriveScanStatus } from "../status"
 import type { GradingResult, SubmissionHistoryItem } from "../types"
 
-type ListingSection = {
-	choice_kind: SectionChoiceKind
-	choice_n: number | null
-	question_ids: string[]
-}
-
 type ListingPaper = {
 	total: number
-	sections: ListingSection[]
+	sections: ChoiceAwareSection[]
 }
 
 const listingInclude = {
@@ -101,39 +98,18 @@ function mapSubmissionToListItem(
 		sub.teacher_overrides.map((o) => [o.question_id, o.score_override]),
 	)
 
-	// Choice-aware awarded sum: for any_n_of sections, only the top-n
-	// alternatives count. Override-or-original applied before ranking so a
-	// teacher's manual score participates in the rank.
-	const resultByQuestion = new Map(results.map((r) => [r.question_id, r]))
-	const includedIds = new Set<string>()
-	const sectionedQuestions = new Set<string>()
-	for (const section of paper?.sections ?? []) {
-		const sectionResults = section.question_ids
-			.map((qid) => resultByQuestion.get(qid))
-			.filter((r): r is GradingResult => r !== undefined)
-		for (const qid of section.question_ids) sectionedQuestions.add(qid)
-		if (sectionResults.length === 0) continue
-		const annotated = sectionResults.map((r) => {
-			const override = overrideByQuestion.get(r.question_id)
-			return {
-				...r,
-				awarded_score: override ?? r.awarded_score,
-				has_answer: r.student_answer.trim().length > 0,
-			}
-		})
-		const { included } = resolveSectionResults(section, annotated)
-		for (const r of included) includedIds.add(r.question_id)
-	}
-
-	const totalAwarded = results.reduce((s, r) => {
-		// Sectionless results (rare — survived a paper edit, no section link)
-		// fall back to naive sum so we don't silently drop marks.
-		if (sectionedQuestions.has(r.question_id) && !includedIds.has(r.question_id)) {
-			return s
-		}
+	// Pre-bake overrides into awarded_score so the partition's ranking sees
+	// the teacher's override (a 25-mark override should beat the LLM's
+	// 10-mark result) and the sum reflects it.
+	const overriddenResults = results.map((r) => {
 		const override = overrideByQuestion.get(r.question_id)
-		return s + (override ?? r.awarded_score)
-	}, 0)
+		return override !== undefined ? { ...r, awarded_score: override } : r
+	})
+
+	const { totalAwarded } = partitionResultsByChoice({
+		sections: paper?.sections ?? [],
+		results: overriddenResults,
+	})
 
 	return {
 		id: sub.id,

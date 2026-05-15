@@ -14,7 +14,7 @@ import {
 	sortTokensSpatially,
 } from "@mcp-gcse/shared"
 import { z } from "zod"
-import { resolveSectionResults } from "@mcp-gcse/shared"
+import { partitionResultsByChoice } from "../choice-aware-results"
 import { sumPaperPoints } from "../paper-totals"
 import { ANNOTATION_BOOKKEEPING_SELECT } from "../selects"
 import { deriveAnnotationStatus, deriveScanStatus } from "../status"
@@ -244,11 +244,13 @@ function toJobPayload(
 	const overrideByQuestion = new Map(
 		sub.teacher_overrides.map((o) => [o.question_id, o.score_override]),
 	)
-	const gradingResults = withRegions.map((r) => {
+	const preTaggedResults = withRegions.map((r) => {
 		const mcq = mcqLookup.get(r.question_id)
 		const stimuli = stimuliLookup.get(r.question_id)
 		const override = overrideByQuestion.get(r.question_id)
-		const next = { ...r, included_in_total: true as boolean }
+		const next = { ...r }
+		// Pre-bake override into awarded_score so it participates in choice
+		// ranking and is what partitionResultsByChoice sums.
 		if (override !== undefined) next.awarded_score = override
 		if (mcq) {
 			next.multiple_choice_options = mcq.options
@@ -258,30 +260,17 @@ function toJobPayload(
 		return next
 	})
 
-	// Choice-aware filter: for any_n_of sections, flag excluded alternatives
-	// (the unanswered Q5 when the student chose Q6) so totals + UI can omit
-	// them. Single source of truth lives in @mcp-gcse/shared/section-choice.
-	const resultById = new Map(gradingResults.map((r) => [r.question_id, r]))
-	for (const section of sub.exam_paper?.sections ?? []) {
-		const sectionResults = section.exam_section_questions
-			.map((esq) => resultById.get(esq.question.id))
-			.filter((r): r is (typeof gradingResults)[number] => r !== undefined)
-		if (sectionResults.length === 0) continue
-		const annotated = sectionResults.map((r) => ({
-			...r,
-			has_answer: r.student_answer.trim().length > 0,
-		}))
-		const { included } = resolveSectionResults(section, annotated)
-		const includedIds = new Set(included.map((r) => r.question_id))
-		for (const r of sectionResults) {
-			r.included_in_total = includedIds.has(r.question_id)
-		}
-	}
+	const partition = partitionResultsByChoice({
+		sections: (sub.exam_paper?.sections ?? []).map((section) => ({
+			choice_kind: section.choice_kind,
+			choice_n: section.choice_n,
+			question_ids: section.exam_section_questions.map((esq) => esq.question.id),
+		})),
+		results: preTaggedResults,
+	})
 
-	const totalAwarded = gradingResults.reduce(
-		(s, r) => (r.included_in_total ? s + r.awarded_score : s),
-		0,
-	)
+	const gradingResults = partition.results
+	const totalAwarded = partition.totalAwarded
 	const totalMax = sumPaperPoints(sub.exam_paper?.sections ?? [])
 	const rawExtracted = latestOcr?.extracted_answers_raw as RawExtracted | null
 	const extractedAnswers = rawExtracted?.answers ?? null

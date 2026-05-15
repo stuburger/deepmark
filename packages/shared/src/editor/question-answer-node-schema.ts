@@ -49,6 +49,12 @@ export const QuestionAnswerNodeSchema = Node.create({
 			whyNotNextLevel: { default: null },
 			/** LoR: human-readable label for any cap that was applied. */
 			capApplied: { default: null },
+			/**
+			 * LoR: per-AO awards with descriptor evaluations. Length 1 for
+			 * single-skill marking, 2+ for multi-skill (parallel AO grids
+			 * summed). Empty array for non-LoR questions / older docs.
+			 */
+			aoAwards: { default: [] },
 			/** Owning mark scheme id (FK back to MarkScheme for joins). */
 			markSchemeId: { default: null },
 			/**

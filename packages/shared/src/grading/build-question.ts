@@ -1,5 +1,5 @@
 import { parseMarkPointsFromPrisma } from "./grader-prisma"
-import type { QuestionWithMarkScheme } from "./types"
+import type { AoAllocation, QuestionWithMarkScheme } from "./types"
 
 // ============================================
 // BUILD QUESTION WITH MARK SCHEME
@@ -19,6 +19,13 @@ export interface BuildQuestionInput {
 		markingMethod?: string | null
 		correctOptionLabels?: string[]
 		content?: string | null
+		/**
+		 * AO weight allocations as stored on `MarkScheme.ao_allocations`
+		 * (Json column). Parsed into typed AoAllocation[] here. Empty/missing
+		 * = no printed AO breakdown — the marker treats this as a single
+		 * virtual "Overall" dimension.
+		 */
+		aoAllocations?: unknown
 	}
 	/** Stimuli in display order. Omit when the question has no attached content. */
 	stimuli?: Array<{
@@ -49,6 +56,32 @@ export function parseMultipleChoiceOptions(
 			optionText: String(item.option_text),
 		}))
 	return opts.length > 0 ? opts : undefined
+}
+
+/**
+ * Parse the raw `MarkScheme.ao_allocations` Json column into typed
+ * AoAllocation[]. Returns undefined if the column is null, empty, or not a
+ * valid array of {ao_code: string, marks: int} entries. The marker then
+ * defaults to a single virtual dimension covering the full mark total.
+ */
+export function parseAoAllocations(json: unknown): AoAllocation[] | undefined {
+	if (!Array.isArray(json)) return undefined
+	const allocations: AoAllocation[] = []
+	for (const item of json) {
+		if (
+			item === null ||
+			typeof item !== "object" ||
+			!("ao_code" in item) ||
+			!("marks" in item)
+		)
+			continue
+		const aoCode = String((item as Record<string, unknown>).ao_code)
+		const marks = Number((item as Record<string, unknown>).marks)
+		if (!Number.isInteger(marks) || marks < 0) continue
+		if (aoCode.length === 0) continue
+		allocations.push({ aoCode, marks })
+	}
+	return allocations.length > 0 ? allocations : undefined
 }
 
 function normalizeMarkingMethod(
@@ -86,6 +119,7 @@ export function buildQuestionWithMarkScheme(
 		availableOptions: parseMultipleChoiceOptions(input.multipleChoiceOptions),
 		markingMethod: normalizeMarkingMethod(markScheme.markingMethod),
 		content: markScheme.content ?? null,
+		aoAllocations: parseAoAllocations(markScheme.aoAllocations),
 		stimuli:
 			input.stimuli && input.stimuli.length > 0
 				? input.stimuli.map((s) => ({

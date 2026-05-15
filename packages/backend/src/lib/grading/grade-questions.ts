@@ -20,6 +20,7 @@ import {
 	type MarkerOrchestrator,
 	type PageToken,
 	type QuestionWithMarkScheme,
+	parseAoAllocations,
 	parseMarkPointsFromPrisma,
 } from "@mcp-gcse/shared"
 
@@ -31,6 +32,19 @@ export type MarkPointResultEntry = {
 	reasoning: string
 	expectedCriteria?: string
 	studentCovered?: string
+}
+
+export type AoAwardEntry = {
+	ao_code: string
+	level_awarded: number
+	awarded_marks: number
+	max_marks: number
+	descriptor_evaluations: Array<{
+		descriptor: string
+		met: boolean
+		evidence: string
+	}>
+	why_not_next_level: string
 }
 
 export type GradingResult = {
@@ -47,6 +61,7 @@ export type GradingResult = {
 	level_awarded?: number
 	why_not_next_level?: string
 	cap_applied?: string
+	ao_awards?: AoAwardEntry[]
 	what_went_well?: string[]
 	even_better_if?: string[]
 	mark_points_results: MarkPointResultEntry[]
@@ -312,6 +327,16 @@ async function gradeOneQuestion({
 			level_awarded: isLoR ? grade.levelAwarded : undefined,
 			why_not_next_level: isLoR ? grade.whyNotNextLevel : undefined,
 			cap_applied: isLoR ? grade.capApplied : undefined,
+			ao_awards: isLoR
+				? grade.aoAwards.map((a) => ({
+						ao_code: a.aoCode,
+						level_awarded: a.levelAwarded,
+						awarded_marks: a.awardedMarks,
+						max_marks: a.maxMarks,
+						descriptor_evaluations: a.descriptorEvaluations,
+						why_not_next_level: a.whyNotNextLevel,
+					}))
+				: undefined,
 			what_went_well: grade.whatWentWell,
 			even_better_if: grade.whatDidntGoWell,
 			mark_points_results: grade.markPointsResults as MarkPointResultEntry[],
@@ -363,6 +388,7 @@ function gradingResultToAttrs(r: GradingResult): QuestionGradeAttrs {
 		levelAwarded: r.level_awarded ?? null,
 		whyNotNextLevel: r.why_not_next_level ?? null,
 		capApplied: r.cap_applied ?? null,
+		aoAwards: r.ao_awards ?? [],
 		markSchemeId: r.mark_scheme_id,
 	}
 }
@@ -415,6 +441,7 @@ function buildQuestionWithScheme(
 				| "point_based"
 				| "level_of_response") ?? undefined,
 		content: ms.content,
+		aoAllocations: parseAoAllocations(ms.ao_allocations),
 		stimuli,
 	}
 }

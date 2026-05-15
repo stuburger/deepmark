@@ -115,7 +115,8 @@ function compareGradedAlternatives(
 	b: GradedAlternativeLike,
 ): number {
 	if (a.has_answer !== b.has_answer) return a.has_answer ? -1 : 1
-	if (a.awarded_score !== b.awarded_score) return b.awarded_score - a.awarded_score
+	if (a.awarded_score !== b.awarded_score)
+		return b.awarded_score - a.awarded_score
 	return b.max_score - a.max_score
 }
 

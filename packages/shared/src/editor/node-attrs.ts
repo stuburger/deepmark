@@ -36,6 +36,21 @@ const markPointResultSchema = z.object({
 	studentCovered: z.string().optional(),
 })
 
+const descriptorEvaluationSchema = z.object({
+	descriptor: z.string(),
+	met: z.boolean(),
+	evidence: z.string(),
+})
+
+const aoAwardSchema = z.object({
+	ao_code: z.string(),
+	level_awarded: z.number(),
+	awarded_marks: z.number(),
+	max_marks: z.number(),
+	descriptor_evaluations: z.array(descriptorEvaluationSchema).default([]),
+	why_not_next_level: z.string().default(""),
+})
+
 export const teacherOverrideAttrsSchema = z.object({
 	score: z.number().nullable(),
 	reason: z.string().nullable(),
@@ -58,6 +73,12 @@ export const questionGradeAttrsSchema = z.object({
 	levelAwarded: nullableNumber(),
 	whyNotNextLevel: nullableString(),
 	capApplied: nullableString(),
+	/**
+	 * Per-AO awards from the LoR marker. Length 1 for single-skill (common
+	 * case), 2+ for multi-skill parallel grids. Empty array for non-LoR
+	 * questions and for older docs that predated the field.
+	 */
+	aoAwards: z.array(aoAwardSchema).default([]),
 	markSchemeId: nullableString(),
 })
 
@@ -99,6 +120,7 @@ export const mcqRowSchema = z.object({
 	levelAwarded: nullableNumber(),
 	whyNotNextLevel: nullableString(),
 	capApplied: nullableString(),
+	aoAwards: z.array(aoAwardSchema).default([]),
 	markSchemeId: nullableString(),
 	teacherOverride: teacherOverrideAttrsSchema.nullable().default(null),
 	teacherFeedbackOverride: nullableString(),

@@ -63,6 +63,7 @@ type McqTableRow = {
 	levelAwarded: number | null
 	whyNotNextLevel: string | null
 	capApplied: string | null
+	aoAwards: GradingResult["ao_awards"]
 	markSchemeId: string | null
 }
 
@@ -81,6 +82,7 @@ type QuestionAnswerAttrs = {
 	levelAwarded: number | null
 	whyNotNextLevel: string | null
 	capApplied: string | null
+	aoAwards: GradingResult["ao_awards"]
 	markSchemeId: string | null
 }
 
@@ -104,6 +106,7 @@ function mcqRowToGradingResult(row: McqTableRow): GradingResult {
 		mark_scheme_id: row.markSchemeId,
 		why_not_next_level: row.whyNotNextLevel,
 		cap_applied: row.capApplied,
+		ao_awards: row.aoAwards,
 	}
 }
 
@@ -128,6 +131,7 @@ function questionAnswerToGradingResult(
 		mark_scheme_id: attrs.markSchemeId,
 		why_not_next_level: attrs.whyNotNextLevel,
 		cap_applied: attrs.capApplied,
+		ao_awards: attrs.aoAwards,
 	}
 }
 

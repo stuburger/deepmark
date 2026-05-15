@@ -24,6 +24,10 @@ const DEFAULT_SYSTEM_PROMPT =
 
 const DEFAULT_CALL_SITE_KEY = "grading"
 
+function clamp(value: number, min: number, max: number): number {
+	return Math.max(min, Math.min(max, value))
+}
+
 /**
  * Thin LLM wrapper for grading student answers.
  * Prompt construction is delegated to pure functions in prompts/.
@@ -184,7 +188,20 @@ export class Grader {
 		)
 
 		const maxPossibleScore = question.totalPoints
-		const totalScore = Math.min(output.totalScore, maxPossibleScore)
+
+		// Reconcile aoAwards: clamp each to its band; recompute total from the
+		// per-award sum. The LLM's claimed totalScore is the headline number,
+		// but aoAwards is the canonical data — if the LLM's arithmetic is off,
+		// trust the per-award sum.
+		const aoAwards = output.aoAwards.map((a) => ({
+			...a,
+			awardedMarks: clamp(a.awardedMarks, 0, a.maxMarks),
+		}))
+		const sumFromAwards = aoAwards.reduce((s, a) => s + a.awardedMarks, 0)
+		const totalScore = Math.min(
+			Math.max(0, sumFromAwards || output.totalScore),
+			maxPossibleScore,
+		)
 		const scorePercentage =
 			maxPossibleScore > 0
 				? Math.round((totalScore / maxPossibleScore) * 100)
@@ -192,6 +209,7 @@ export class Grader {
 
 		return {
 			...output,
+			aoAwards,
 			questionId: question.id,
 			totalScore,
 			maxPossibleScore,

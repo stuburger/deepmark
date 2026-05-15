@@ -180,8 +180,7 @@ export async function linkJobQuestionsToExamPaperSections(
 
 	for (const input of sections) {
 		const choiceKind: SectionChoiceKind = input.choice?.kind ?? "all"
-		const choiceN =
-			choiceKind === "any_n_of" ? (input.choice?.n ?? null) : null
+		const choiceN = choiceKind === "any_n_of" ? (input.choice?.n ?? null) : null
 
 		// Default the section total via the choice-aware ceiling so that
 		// any_n_of sections persist `n × max(question.points)` (e.g. English

@@ -115,6 +115,7 @@ export function dispatchExtractedDocOps(
 			levelAwarded: null,
 			whyNotNextLevel: null,
 			capApplied: null,
+			aoAwards: [],
 			markSchemeId: null,
 			teacherOverride: null,
 			teacherFeedbackOverride: null,

@@ -34,6 +34,18 @@ export interface QuestionStimulusContext {
 	contentType?: "text" | "table" | "image"
 }
 
+/**
+ * AO weight allocation as printed on the mark scheme. Canonical
+ * dimensionality field for LoR marking — the marker iterates this. Empty
+ * array = no printed AO breakdown (treat as single virtual "Overall"
+ * dimension). Length 1 = single-skill LoR. Length 2+ = multi-skill (parallel
+ * grids summed, e.g. Edexcel English Lang Sec B AO5+AO6).
+ */
+export interface AoAllocation {
+	aoCode: string
+	marks: number
+}
+
 /** A question with its mark scheme, adapted for GCSE (written | multiple_choice). */
 export interface QuestionWithMarkScheme {
 	id: string
@@ -56,6 +68,12 @@ export interface QuestionWithMarkScheme {
 	 * case study.
 	 */
 	stimuli?: QuestionStimulusContext[]
+	/**
+	 * AO weight breakdown printed on the mark scheme. Drives the LoR marker's
+	 * iteration: one award per allocation. Empty/omitted = single virtual
+	 * "Overall" dimension covering totalPoints (the AQA single-grid case).
+	 */
+	aoAllocations?: AoAllocation[]
 }
 
 /** Response parsed from student submission. */
@@ -125,12 +143,62 @@ export type PointBasedQuestionGrade = QuestionGradeBase & {
 	markingMethod: "point_based"
 }
 
+/**
+ * A discrete descriptor evaluation — one decision per descriptor bullet at
+ * the awarded Level and the next Level. The combination of {met, evidence}
+ * is what makes LoR marking repeatable: a marker that can't fudge a discrete
+ * decision can't drift across runs.
+ */
+export type DescriptorEvaluation = {
+	/** Verbatim descriptor bullet text from the mark scheme. */
+	descriptor: string
+	/** Did the response demonstrate this descriptor? */
+	met: boolean
+	/**
+	 * Verbatim quote (when met) or short gap description (when not met) from
+	 * the student response. Empty allowed only when the descriptor is
+	 * structurally inapplicable.
+	 */
+	evidence: string
+}
+
+/**
+ * One Assessment Objective award. For single-skill LoR, `aoAwards.length === 1`
+ * with aoCode = "Overall" (or the printed AO code if one is printed). For
+ * multi-skill LoR (parallel grids), one entry per dimension; aggregate score
+ * = sum of awardedMarks across awards.
+ */
+export type AoAward = {
+	aoCode: string
+	levelAwarded: number
+	awardedMarks: number
+	maxMarks: number
+	/**
+	 * Discrete evaluations at the awarded Level and the next Level. The
+	 * awarded Level descriptors should be mostly met; the next-Level
+	 * descriptors should be mostly not-met (with evidence either way).
+	 */
+	descriptorEvaluations: DescriptorEvaluation[]
+	whyNotNextLevel: string
+}
+
 /** Level-of-Response grading result — LoR-specific fields are required. */
 export type LoRQuestionGrade = QuestionGradeBase & {
 	markingMethod: "level_of_response"
+	/**
+	 * Headline Level (mirrors aoAwards[0].levelAwarded for single-skill;
+	 * for multi-skill represents the primary AO's Level — UI consumers should
+	 * prefer aoAwards[] for per-dimension display).
+	 */
 	levelAwarded: number
 	whyNotNextLevel: string
 	capApplied: string
+	/**
+	 * One award per dimension iterated from the question's aoAllocations
+	 * (or a single virtual "Overall" entry when no AO breakdown is printed).
+	 * `totalScore` MUST equal sum of `awardedMarks` across awards.
+	 */
+	aoAwards: AoAward[]
 }
 
 /**

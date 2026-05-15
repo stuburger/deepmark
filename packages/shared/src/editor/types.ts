@@ -34,6 +34,27 @@ export type MarkPointResult = {
 	studentCovered: string
 }
 
+/**
+ * Per-AO award as persisted on the doc + GradingRun JSONB. Mirrors the
+ * marker's `AoAward` (in `grading/types`) but in snake_case to match the
+ * rest of the projected GradingResult. For single-skill marking (the common
+ * case), `ao_awards.length === 1`; for multi-skill (parallel grids summed),
+ * one entry per dimension. `awarded_score` (top-level) = sum of
+ * `ao_awards[*].awarded_marks`.
+ */
+export type AoAwardRow = {
+	ao_code: string
+	level_awarded: number
+	awarded_marks: number
+	max_marks: number
+	descriptor_evaluations: Array<{
+		descriptor: string
+		met: boolean
+		evidence: string
+	}>
+	why_not_next_level: string
+}
+
 export type AnswerRegion = {
 	page: number
 	box: [number, number, number, number]
@@ -78,6 +99,10 @@ export type GradingResult = {
 	why_not_next_level?: string | null
 	/// Cap descriptor surfaced from level_of_response grading.
 	cap_applied?: string | null
+	/// Per-AO awards from the LoR marker. Length 1 for single-skill;
+	/// length 2+ for multi-skill (parallel grids summed). Canonical
+	/// per-dimension data; `awarded_score` mirrors the aggregate sum.
+	ao_awards?: AoAwardRow[]
 	/// Derived at query time in apps/web/src/lib/marking/* via
 	/// resolveSectionResults: false when this result is an excluded
 	/// alternative in an any_n_of section (e.g. the unanswered Q5 when the

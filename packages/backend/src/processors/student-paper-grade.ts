@@ -10,6 +10,10 @@ import {
 import { loadTokensByQuestion } from "@/lib/collab/load-tokens"
 import { emitEvent } from "@/lib/events/emit"
 import { claimGradingRun } from "@/lib/grading/claim-grading-run"
+import {
+	type ComputeTotalsAnomaly,
+	computeTotals as computePaperTotals,
+} from "@/lib/grading/compute-totals"
 import { generateExaminerSummary } from "@/lib/grading/examiner-summary"
 import { loadExamPaperForGrading } from "@/lib/grading/grade-queries"
 import {
@@ -17,10 +21,6 @@ import {
 	gradeAndAnnotateAll,
 } from "@/lib/grading/grade-questions"
 import { createMarkerOrchestrator } from "@/lib/grading/grader-config"
-import {
-	type ComputeTotalsAnomaly,
-	computeTotals as computePaperTotals,
-} from "@/lib/grading/compute-totals"
 import {
 	type ExamPaperWithSections,
 	loadQuestionList,

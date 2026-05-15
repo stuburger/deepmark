@@ -17,7 +17,10 @@ import {
 	gradeAndAnnotateAll,
 } from "@/lib/grading/grade-questions"
 import { createMarkerOrchestrator } from "@/lib/grading/grader-config"
-import { loadQuestionList } from "@/lib/grading/question-list"
+import {
+	type ExamPaperWithSections,
+	loadQuestionList,
+} from "@/lib/grading/question-list"
 import {
 	type CancellationToken,
 	createCancellationToken,
@@ -37,6 +40,8 @@ import {
 	type LlmTimeoutMs,
 	type MarkerOrchestrator,
 	insertExaminerSummary,
+	resolveSectionResults,
+	sectionExpectedMax,
 } from "@mcp-gcse/shared"
 import type { Context } from "aws-lambda"
 
@@ -247,6 +252,8 @@ async function gradeJob({
 		annotationsByQuestion,
 		jobId,
 		examinerSummary,
+		examPaper,
+		answerMap,
 	})
 
 	// Write LLM snapshots — informational, not critical
@@ -371,10 +378,17 @@ type CompleteGradingJobArgs = {
 	annotationsByQuestion: Map<string, PendingAnnotation[]>
 	jobId: string
 	examinerSummary: string | null
+	examPaper: ExamPaperWithSections
+	answerMap: Map<string, string>
 }
 
 async function completeGradingJob(args: CompleteGradingJobArgs): Promise<void> {
-	const totals = computeTotals(args.gradingResults)
+	const totals = computeTotals(
+		args.gradingResults,
+		args.examPaper,
+		args.answerMap,
+		args.jobId,
+	)
 
 	logger.info(TAG, "Grading job complete", {
 		jobId: args.jobId,
@@ -402,14 +416,114 @@ async function completeGradingJob(args: CompleteGradingJobArgs): Promise<void> {
 	await notifyBatchIfComplete(args.sub.processing_batch_id)
 }
 
-function computeTotals(gradingResults: GradingResult[]): {
-	totalAwarded: number
-	totalMax: number
-} {
-	return {
-		totalAwarded: gradingResults.reduce((s, r) => s + r.awarded_score, 0),
-		totalMax: gradingResults.reduce((s, r) => s + r.max_score, 0),
+/**
+ * Choice-aware paper-level totals.
+ *
+ * For each section in the exam paper:
+ *   - Group its grading results, tag each with `has_answer` derived from the
+ *     OCR answer map (a stub result for an empty answer has has_answer=false
+ *     and ranks below any real attempt).
+ *   - Apply `resolveSectionResults` to pick the questions that count toward
+ *     the awarded score (for `kind=all` that's everything; for
+ *     `kind=any_n_of(n)` it's the top-n ranked by has_answer + awarded +
+ *     max).
+ *   - Use `sectionExpectedMax` for the section's contribution to the paper
+ *     denominator so a student who answered 0/N still preserves the right
+ *     "/ X" total.
+ *
+ * Anomaly logging: if the persisted `section.total_marks` disagrees with
+ * the choice-aware ceiling, emit a warn. The common signal is "extractor
+ * shipped choice_kind=all but the printed total implies the section is
+ * really any_n_of" — a teacher reviewing the paper will want to fix the
+ * choice rule before grading more submissions.
+ *
+ * Orphan results (rare — a graded question_id with no section link) fall
+ * back to naive sum so we never silently drop a mark, but the count is
+ * logged loudly.
+ */
+function computeTotals(
+	gradingResults: GradingResult[],
+	examPaper: ExamPaperWithSections,
+	answerMap: Map<string, string>,
+	jobId: string,
+): { totalAwarded: number; totalMax: number } {
+	// question_id → section index in examPaper.sections
+	const sectionIndexByQuestion = new Map<string, number>()
+	examPaper.sections.forEach((section, sectionIdx) => {
+		for (const esq of section.exam_section_questions) {
+			sectionIndexByQuestion.set(esq.question.id, sectionIdx)
+		}
+	})
+
+	// Group results by section.
+	const resultsBySection = new Map<number, GradingResult[]>()
+	const orphans: GradingResult[] = []
+	for (const r of gradingResults) {
+		const idx = sectionIndexByQuestion.get(r.question_id)
+		if (idx === undefined) {
+			orphans.push(r)
+			continue
+		}
+		const bucket = resultsBySection.get(idx) ?? []
+		bucket.push(r)
+		resultsBySection.set(idx, bucket)
 	}
+
+	let totalAwarded = 0
+	let totalMax = 0
+
+	examPaper.sections.forEach((section, sectionIdx) => {
+		const sectionResults = resultsBySection.get(sectionIdx) ?? []
+		const annotated = sectionResults.map((r) => ({
+			...r,
+			has_answer: (answerMap.get(r.question_id) ?? "").trim().length > 0,
+		}))
+		const { included } = resolveSectionResults(section, annotated)
+		const sectionAwarded = included.reduce((s, r) => s + r.awarded_score, 0)
+
+		const points = section.exam_section_questions.map(
+			(esq) => esq.question.points ?? 0,
+		)
+		const sectionMax = sectionExpectedMax(section, points)
+
+		totalAwarded += sectionAwarded
+		totalMax += sectionMax
+
+		// Anomaly: persisted section.total_marks doesn't match the
+		// choice-aware ceiling. Typical cause: the bundle extractor set
+		// choice_kind=all but the printed total implies any_n_of (e.g.
+		// Pearson English Lang P1 Sec B printed "40 marks" with two
+		// 40-mark alternatives — choice=all yields total_marks=80 from
+		// the linker default).
+		if (section.total_marks !== sectionMax) {
+			logger.warn(TAG, "Section total drift — possible missed any_n_of", {
+				jobId,
+				section_id: section.id,
+				section_title: section.title,
+				persisted_total: section.total_marks,
+				choice_aware_max: sectionMax,
+				choice_kind: section.choice_kind,
+				choice_n: section.choice_n,
+				question_count: section.exam_section_questions.length,
+			})
+		}
+	})
+
+	if (orphans.length > 0) {
+		const orphansAwarded = orphans.reduce((s, r) => s + r.awarded_score, 0)
+		const orphansMax = orphans.reduce((s, r) => s + r.max_score, 0)
+		logger.warn(TAG, "Grading results not linked to any section", {
+			jobId,
+			orphan_count: orphans.length,
+			orphans_awarded: orphansAwarded,
+			orphans_max: orphansMax,
+			sample_question_ids: orphans.slice(0, 5).map((r) => r.question_id),
+		})
+		totalAwarded += orphansAwarded
+		totalMax += orphansMax
+	}
+
+	return { totalAwarded, totalMax }
 }
 
 async function updateStudentNameIfExtracted(

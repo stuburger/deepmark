@@ -71,6 +71,8 @@ export const exportSubmissionsForPaper = resourceAction({
 					orderBy: { order: "asc" },
 					select: {
 						exam_paper_id: true,
+						choice_kind: true,
+						choice_n: true,
 						exam_section_questions: {
 							orderBy: { order: "asc" },
 							select: {

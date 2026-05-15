@@ -2,11 +2,23 @@
 
 import { resourceAction, scopedAction } from "@/lib/authz"
 import { db } from "@/lib/db"
-import type { GradingStatus, OcrStatus } from "@mcp-gcse/db"
+import type { GradingStatus, OcrStatus, SectionChoiceKind } from "@mcp-gcse/db"
+import { resolveSectionResults } from "@mcp-gcse/shared"
 import { z } from "zod"
 import { sumSectionPoints } from "../paper-totals"
 import { deriveScanStatus } from "../status"
 import type { GradingResult, SubmissionHistoryItem } from "../types"
+
+type ListingSection = {
+	choice_kind: SectionChoiceKind
+	choice_n: number | null
+	question_ids: string[]
+}
+
+type ListingPaper = {
+	total: number
+	sections: ListingSection[]
+}
 
 const listingInclude = {
 	exam_paper: { select: { id: true, title: true } },
@@ -25,29 +37,35 @@ const listingInclude = {
 	},
 } as const
 
-async function fetchPaperTotals(
+async function fetchPapersForListing(
 	paperIds: string[],
-): Promise<Map<string, number>> {
+): Promise<Map<string, ListingPaper>> {
 	if (paperIds.length === 0) return new Map()
 	const sections = await db.examSection.findMany({
 		where: { exam_paper_id: { in: paperIds } },
+		orderBy: { order: "asc" },
 		select: {
 			exam_paper_id: true,
 			choice_kind: true,
 			choice_n: true,
 			exam_section_questions: {
-				select: { question: { select: { points: true } } },
+				select: { question: { select: { id: true, points: true } } },
 			},
 		},
 	})
-	const totals = new Map<string, number>()
+	const out = new Map<string, ListingPaper>()
 	for (const section of sections) {
-		totals.set(
-			section.exam_paper_id,
-			(totals.get(section.exam_paper_id) ?? 0) + sumSectionPoints(section),
-		)
+		const paperId = section.exam_paper_id
+		const existing = out.get(paperId) ?? { total: 0, sections: [] }
+		existing.total += sumSectionPoints(section)
+		existing.sections.push({
+			choice_kind: section.choice_kind,
+			choice_n: section.choice_n,
+			question_ids: section.exam_section_questions.map((esq) => esq.question.id),
+		})
+		out.set(paperId, existing)
 	}
-	return totals
+	return out
 }
 
 function mapSubmissionToListItem(
@@ -68,7 +86,7 @@ function mapSubmissionToListItem(
 		ocr_runs: Array<{ status: OcrStatus }>
 		teacher_overrides: Array<{ question_id: string; score_override: number }>
 	},
-	paperTotal: number,
+	paper: ListingPaper | null,
 	isBookmarked: boolean,
 ): SubmissionHistoryItem {
 	const latestGrading = sub.grading_runs[0]
@@ -83,6 +101,40 @@ function mapSubmissionToListItem(
 		sub.teacher_overrides.map((o) => [o.question_id, o.score_override]),
 	)
 
+	// Choice-aware awarded sum: for any_n_of sections, only the top-n
+	// alternatives count. Override-or-original applied before ranking so a
+	// teacher's manual score participates in the rank.
+	const resultByQuestion = new Map(results.map((r) => [r.question_id, r]))
+	const includedIds = new Set<string>()
+	const sectionedQuestions = new Set<string>()
+	for (const section of paper?.sections ?? []) {
+		const sectionResults = section.question_ids
+			.map((qid) => resultByQuestion.get(qid))
+			.filter((r): r is GradingResult => r !== undefined)
+		for (const qid of section.question_ids) sectionedQuestions.add(qid)
+		if (sectionResults.length === 0) continue
+		const annotated = sectionResults.map((r) => {
+			const override = overrideByQuestion.get(r.question_id)
+			return {
+				...r,
+				awarded_score: override ?? r.awarded_score,
+				has_answer: r.student_answer.trim().length > 0,
+			}
+		})
+		const { included } = resolveSectionResults(section, annotated)
+		for (const r of included) includedIds.add(r.question_id)
+	}
+
+	const totalAwarded = results.reduce((s, r) => {
+		// Sectionless results (rare — survived a paper edit, no section link)
+		// fall back to naive sum so we don't silently drop marks.
+		if (sectionedQuestions.has(r.question_id) && !includedIds.has(r.question_id)) {
+			return s
+		}
+		const override = overrideByQuestion.get(r.question_id)
+		return s + (override ?? r.awarded_score)
+	}, 0)
+
 	return {
 		id: sub.id,
 		student_name: sub.student_name,
@@ -91,11 +143,8 @@ function mapSubmissionToListItem(
 		exam_paper_id: sub.exam_paper_id,
 		exam_paper_title: sub.exam_paper?.title ?? null,
 		detected_subject: sub.detected_subject,
-		total_awarded: results.reduce((s, r) => {
-			const override = overrideByQuestion.get(r.question_id)
-			return s + (override ?? r.awarded_score)
-		}, 0),
-		total_max: paperTotal,
+		total_awarded: totalAwarded,
+		total_max: paper?.total ?? 0,
 		status,
 		created_at: sub.created_at,
 		is_confirmed: sub.confirmed_at !== null,
@@ -131,7 +180,7 @@ export const listMySubmissions = scopedAction({
 	const submissionIds = subs.map((s) => s.id)
 	const stagedScriptIds = subs.map((s) => s.staged_script_id)
 	const [paperTotals, bookmarks, versionCounts] = await Promise.all([
-		fetchPaperTotals(paperIds),
+		fetchPapersForListing(paperIds),
 		db.studentSubmissionBookmark.findMany({
 			where: {
 				user_id: ctx.user.id,
@@ -147,7 +196,7 @@ export const listMySubmissions = scopedAction({
 		submissions: subs.map((sub) => ({
 			...mapSubmissionToListItem(
 				sub,
-				paperTotals.get(sub.exam_paper_id) ?? 0,
+				paperTotals.get(sub.exam_paper_id) ?? null,
 				bookmarkedSet.has(sub.id),
 			),
 			version_count: versionCounts.get(sub.staged_script_id) ?? 1,
@@ -189,7 +238,7 @@ export const listBookmarkedSubmissions = scopedAction({
 	const paperIds = [...new Set(subs.map((s) => s.exam_paper_id))]
 	const submissionIds = subs.map((s) => s.id)
 	const [paperTotals, currentBookmarks, versionCounts] = await Promise.all([
-		fetchPaperTotals(paperIds),
+		fetchPapersForListing(paperIds),
 		db.studentSubmissionBookmark.findMany({
 			where: {
 				user_id: ctx.user.id,
@@ -205,7 +254,7 @@ export const listBookmarkedSubmissions = scopedAction({
 		submissions: subs.map((sub) => ({
 			...mapSubmissionToListItem(
 				sub,
-				paperTotals.get(sub.exam_paper_id) ?? 0,
+				paperTotals.get(sub.exam_paper_id) ?? null,
 				bookmarkedSet.has(sub.id),
 			),
 			version_count: versionCounts.get(sub.staged_script_id) ?? 1,
@@ -238,7 +287,7 @@ export const listSubmissionsForPaper = resourceAction({
 				orderBy: { created_at: "desc" },
 				include: listingInclude,
 			}),
-			fetchPaperTotals([examPaperId]),
+			fetchPapersForListing([examPaperId]),
 			db.studentSubmission.groupBy({
 				by: ["staged_script_id"],
 				where: { exam_paper_id: examPaperId },
@@ -255,14 +304,14 @@ export const listSubmissionsForPaper = resourceAction({
 		})
 		const bookmarkedSet = new Set(bookmarks.map((b) => b.submission_id))
 
-		const paperTotal = paperTotals.get(examPaperId) ?? 0
+		const paperShape = paperTotals.get(examPaperId) ?? null
 		const countByKey = new Map(
 			versionCounts.map((v) => [v.staged_script_id, v._count]),
 		)
 
 		return {
 			submissions: subs.map((sub) => ({
-				...mapSubmissionToListItem(sub, paperTotal, bookmarkedSet.has(sub.id)),
+				...mapSubmissionToListItem(sub, paperShape, bookmarkedSet.has(sub.id)),
 				version_count: countByKey.get(sub.staged_script_id) ?? 1,
 			})),
 		}

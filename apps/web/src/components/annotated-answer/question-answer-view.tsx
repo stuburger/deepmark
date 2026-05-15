@@ -93,9 +93,25 @@ export function QuestionAnswerView({
 					contentEditable={false}
 				>
 					<div className="space-y-0.5 flex-1 min-w-0">
-						<span className="font-mono text-xs font-bold tracking-widest uppercase text-zinc-400 dark:text-zinc-500">
-							Q{qNum}
-						</span>
+						<div className="flex items-center gap-2">
+							<span className="font-mono text-xs font-bold tracking-widest uppercase text-zinc-400 dark:text-zinc-500">
+								Q{qNum}
+							</span>
+							{/* Choice-aware "Not chosen" pill — surfaces an excluded
+							    alternative in an any_n_of section (e.g. Pearson English
+							    Lang P1 Sec B: the student answered Q6, so Q5 is shown
+							    here for completeness but doesn't count toward the
+							    paper total). Derived in apps/web/src/lib/marking/
+							    submissions/queries.ts via resolveSectionResults. */}
+							{result?.included_in_total === false && (
+								<span
+									className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground"
+									title="This alternative wasn't the one the student chose — doesn't count toward the paper total."
+								>
+									Not chosen
+								</span>
+							)}
+						</div>
 						{qText && (
 							<p className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 leading-snug">
 								{qText}

@@ -14,6 +14,7 @@ import {
 	sortTokensSpatially,
 } from "@mcp-gcse/shared"
 import { z } from "zod"
+import { resolveSectionResults } from "@mcp-gcse/shared"
 import { sumPaperPoints } from "../paper-totals"
 import { ANNOTATION_BOOKKEEPING_SELECT } from "../selects"
 import { deriveAnnotationStatus, deriveScanStatus } from "../status"
@@ -247,7 +248,7 @@ function toJobPayload(
 		const mcq = mcqLookup.get(r.question_id)
 		const stimuli = stimuliLookup.get(r.question_id)
 		const override = overrideByQuestion.get(r.question_id)
-		const next = { ...r }
+		const next = { ...r, included_in_total: true as boolean }
 		if (override !== undefined) next.awarded_score = override
 		if (mcq) {
 			next.multiple_choice_options = mcq.options
@@ -256,7 +257,31 @@ function toJobPayload(
 		if (stimuli) next.stimuli = stimuli
 		return next
 	})
-	const totalAwarded = gradingResults.reduce((s, r) => s + r.awarded_score, 0)
+
+	// Choice-aware filter: for any_n_of sections, flag excluded alternatives
+	// (the unanswered Q5 when the student chose Q6) so totals + UI can omit
+	// them. Single source of truth lives in @mcp-gcse/shared/section-choice.
+	const resultById = new Map(gradingResults.map((r) => [r.question_id, r]))
+	for (const section of sub.exam_paper?.sections ?? []) {
+		const sectionResults = section.exam_section_questions
+			.map((esq) => resultById.get(esq.question.id))
+			.filter((r): r is (typeof gradingResults)[number] => r !== undefined)
+		if (sectionResults.length === 0) continue
+		const annotated = sectionResults.map((r) => ({
+			...r,
+			has_answer: r.student_answer.trim().length > 0,
+		}))
+		const { included } = resolveSectionResults(section, annotated)
+		const includedIds = new Set(included.map((r) => r.question_id))
+		for (const r of sectionResults) {
+			r.included_in_total = includedIds.has(r.question_id)
+		}
+	}
+
+	const totalAwarded = gradingResults.reduce(
+		(s, r) => (r.included_in_total ? s + r.awarded_score : s),
+		0,
+	)
 	const totalMax = sumPaperPoints(sub.exam_paper?.sections ?? [])
 	const rawExtracted = latestOcr?.extracted_answers_raw as RawExtracted | null
 	const extractedAnswers = rawExtracted?.answers ?? null

@@ -78,6 +78,13 @@ export type GradingResult = {
 	why_not_next_level?: string | null
 	/// Cap descriptor surfaced from level_of_response grading.
 	cap_applied?: string | null
+	/// Derived at query time in apps/web/src/lib/marking/* via
+	/// resolveSectionResults: false when this result is an excluded
+	/// alternative in an any_n_of section (e.g. the unanswered Q5 when the
+	/// student chose Q6). Not persisted, not projected from the doc — the
+	/// backend grading lambda and the Yjs projection both ignore this
+	/// field. See packages/shared/src/section-choice.ts for the policy.
+	included_in_total?: boolean
 }
 
 export type ExtractedAnswer = {

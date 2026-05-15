@@ -1,5 +1,6 @@
 import { db } from "@/db"
 import type { SectionChoiceKind } from "@mcp-gcse/db"
+import { sectionExpectedMax } from "@mcp-gcse/shared"
 
 /**
  * Links all questions created by a job to the given exam paper's first section.
@@ -178,15 +179,21 @@ export async function linkJobQuestionsToExamPaperSections(
 	)
 
 	for (const input of sections) {
-		const sumPoints = input.questions.reduce(
-			(acc, q) => acc + (questionPoints.get(q.question_id) ?? 0),
-			0,
-		)
-		const sectionTotal = input.total_marks ?? sumPoints
-
 		const choiceKind: SectionChoiceKind = input.choice?.kind ?? "all"
 		const choiceN =
 			choiceKind === "any_n_of" ? (input.choice?.n ?? null) : null
+
+		// Default the section total via the choice-aware ceiling so that
+		// any_n_of sections persist `n × max(question.points)` (e.g. English
+		// Lang P1 Sec B: 1 × 40 = 40) rather than naive Σ (80). Explicit
+		// input.total_marks (the bundle's printed section total) still wins
+		// when supplied — that's the literal value off the paper.
+		const points = input.questions.map(
+			(q) => questionPoints.get(q.question_id) ?? 0,
+		)
+		const sectionTotal =
+			input.total_marks ??
+			sectionExpectedMax({ choice_kind: choiceKind, choice_n: choiceN }, points)
 
 		let section = existingByTitle.get(input.title)
 		if (!section) {

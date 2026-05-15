@@ -39,6 +39,71 @@ When real users exist, the founder will delete this section. Until then, suggest
 
 ---
 
+## Marking accuracy is sacred
+
+Accuracy and repeatability of marking + extraction are DeepMark's differentiator. Everything else — UI polish, infra elegance, schema neatness — is downstream of those two properties. If a change improves elegance but risks degrading marker accuracy, the change is wrong.
+
+### Mark schemes are skills
+
+A mark scheme is the codified form of a teacher's marking skill — the specific knowledge of "how to mark this question." The bundle extractor is the **skill compiler**: it transforms a printed Pearson/AQA MS into a form the marker can execute. The marker is the general-purpose **skill executor** — subject-agnostic, dispatched per `marking_method`.
+
+This framing has three consequences:
+
+- **Extraction quality IS skill quality.** A bundle that loses level descriptors, merges parallel AO grids, or drops marker notes produces a corrupted skill instance. The marker will execute it faithfully and grade wrong.
+- **Repeatability of extraction matters as much as repeatability of marking.** If the same MS compiles to different `content` each time, we have a non-deterministic skill — same student answer, different grade.
+- **The bundle eval is a skill-compilation test.** Not "did we get the right fields"; "did we faithfully reproduce the teacher's skill in a form the marker can execute."
+
+### Structure vs. text — the schema discipline
+
+The LLM is the marker. The DB is a staging ground for what gets concatenated into the marker's prompt. Structure your data accordingly:
+
+- **Structure ONLY what you'll programmatically operate on.** Mark counts (sum, percent), AO codes (group, aggregate), marking method (dispatch), section choice (resolve) — these earn typed columns and Zod fields.
+- **Use rich markdown for everything else.** Level descriptors, indicative content, marker guidance, shared grids, exemplar answers — these are read by the LLM and rendered to humans. Keep them in `content` (per-question canonical markdown) so the LLM gets the most information-dense input and we don't churn the schema every time a board uses a slightly different layout.
+- **Markdown absorbs subject variability.** When we onboard a new subject and its MS has a quirk we didn't anticipate (shared grids, dual-AO bands, embedded exemplars, board-specific notation), that quirk lives in markdown — not in a schema migration.
+
+If you find yourself adding a structured field to model something the marker reads verbatim, ask: "Will a query, an aggregation, a UI rendering, or a prompt branch ever consume this structurally?" If no — leave it in markdown.
+
+### Structured extraction, deterministic rendering
+
+For LoR especially, `content` should be canonical and stable across extractions. The pattern:
+
+1. Extraction-time Zod intermediate captures structure (ao_dimensions, levels, indicative content, marker notes, `extras` catch-all).
+2. A pure TS renderer transforms the intermediate into canonical markdown.
+3. The markdown is what's persisted to `MarkScheme.content`; the intermediate is never stored.
+
+Same MS → same intermediate → same markdown. Repeatability is earned at the renderer, not at the LLM. New subject quirks land in the catch-all `extras` field and the renderer appends them; no schema migration.
+
+### Holistic judgements are not allowed
+
+The marker must NEVER produce a Level award or mark from a holistic read of the response. Every Level + mark must be the OUTPUT of discrete, auditable decisions — one per mark point (`point_based`) or one per level descriptor (`level_of_response`).
+
+- **point_based**: every `mark_point` gets a met/not-met + reasoning. (Already implemented — `mark_points_results`.)
+- **level_of_response**: every descriptor at the candidate Level and the next Level gets a met/not-met + `evidence` (verbatim quote or close paraphrase from the student response).
+
+The mark is **derived** from these decisions, not emitted alongside them. WWW / EBI / feedback are **derived** from the met/not-met pattern, not generated independently. This is what makes marking repeatable within ±1 mark per dimension across runs and auditable by a teacher in seconds.
+
+### Marker prompt branching
+
+When a marking_method handles multiple parameterisations (e.g. LoR with one AO vs. multiple AOs), keep the prompt ONE prompt that iterates a canonical structural field (e.g. `ao_allocations`). Do NOT branch prompts by parameter shape. Branching multiplies eval surface area and risks silent regressions on the majority path when the minority path is tuned.
+
+### Eval discipline
+
+Marker accuracy is asserted by evals that hit real LLMs against human-validated ground truth. Schema validation is not a substitute. A loose schema with strong evals is healthier than a tight schema with no evals.
+
+Before shipping any change to a marker prompt, marking method, or extraction prompt:
+
+1. Run the relevant evals — extraction + grading.
+2. Hand-check a sample of grading outputs against a teacher's intuition. Numbers matching is necessary but not sufficient — reasoning quality is part of accuracy.
+3. Repeatability check: re-run the same input. The grade should be within ±1 mark or ±1 Level per dimension across runs; extraction should produce byte-identical canonical markdown.
+
+Tighten eval thresholds upward over time. Never loosen.
+
+### Schema migrations under no-grandfathering
+
+Pre-launch we can break schema freely. But that's also when the discipline above MOST matters — every typed field we add now is one the marker will depend on later, and dropping later is more expensive than not adding now. Add structure on demand when a real consumer needs it, not speculatively.
+
+---
+
 ## Monorepo Structure
 
 ```

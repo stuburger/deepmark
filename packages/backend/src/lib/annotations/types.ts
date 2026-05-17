@@ -56,6 +56,8 @@ export type TokenRow = {
 	text_corrected: string | null
 	bbox: unknown
 	question_id: string | null
+	answer_char_start: number | null
+	answer_char_end: number | null
 }
 
 export type AnnotateOneQuestionArgs = {

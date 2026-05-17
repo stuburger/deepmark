@@ -10,8 +10,14 @@ const BboxSchema = z.tuple([z.number(), z.number(), z.number(), z.number()])
  * spatially (page → para → line → word). Tokens without a question
  * assignment are dropped.
  *
- * `answer_char_start` / `answer_char_end` are always returned as null on
- * the Lambda side: alignment is recomputed on demand from raw tokens.
+ * Returns the precomputed `answer_char_start` / `answer_char_end` from
+ * the DB — populated at extraction time by the `mapTokensToChars` step.
+ * Consumers feed these directly into `tokenAlignmentFromOffsets`
+ * (zero-cost reshape) instead of re-running an in-memory aligner.
+ *
+ * Tokens still bearing null offsets are page artifacts the extract LLM
+ * didn't map to any answer word — they keep null and are skipped by
+ * downstream alignment consumers. NO FUZZY FALLBACK.
  */
 export async function loadTokensByQuestion(
 	submissionId: string,
@@ -35,6 +41,8 @@ export async function loadTokensByQuestion(
 			bbox: true,
 			confidence: true,
 			question_id: true,
+			answer_char_start: true,
+			answer_char_end: true,
 		},
 	})
 
@@ -53,11 +61,8 @@ export async function loadTokensByQuestion(
 			bbox: BboxSchema.parse(t.bbox),
 			confidence: t.confidence,
 			question_id: t.question_id,
-			// alignTokensToAnswer recomputes char ranges from text + tokens on
-			// the Lambda side, so the precomputed offsets read by web's
-			// alignmentFromPrecomputed are intentionally omitted here.
-			answer_char_start: null,
-			answer_char_end: null,
+			answer_char_start: t.answer_char_start,
+			answer_char_end: t.answer_char_end,
 		})
 		tokensByQuestion.set(t.question_id, list)
 	}

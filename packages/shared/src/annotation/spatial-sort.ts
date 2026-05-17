@@ -13,15 +13,12 @@
  *
  * Bbox format: [yMin, xMin, yMax, xMax] normalised 0–1000.
  *
- * This function is used in two places and MUST produce the same ordering
- * at both call sites:
- *  - attribution (backend) — the LLM prompt and `answer_text` are authored
- *    in this order.
- *  - alignment (web) — `alignTokensToAnswer` walks tokens in this order to
- *    match them against `answer_text`.
- *
- * Any divergence causes the greedy alignment to miss matches, which then
- * fall through to Pass 2 positional fill and produce off-by-N bbox anchors.
+ * This function is used by the attribution backend: the LLM prompt and
+ * `answer_text` are authored in this order, and the per-question
+ * `mapTokensToChars` step then emits `tokenId → char_start/end` mappings
+ * against the same ordering. Downstream consumers read those persisted
+ * offsets directly via `tokenAlignmentFromOffsets` — no in-memory
+ * matching, no positional fill, no fuzzy alignment. See CLAUDE.md.
  */
 
 /**

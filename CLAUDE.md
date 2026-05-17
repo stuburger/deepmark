@@ -73,6 +73,17 @@ For LoR especially, `content` should be canonical and stable across extractions.
 
 Same MS → same intermediate → same markdown. Repeatability is earned at the renderer, not at the LLM. New subject quirks land in the catch-all `extras` field and the renderer appends them; no schema migration.
 
+### No fuzzy text matching, anywhere
+
+**No Levenshtein. No normalised edit distance. No "if it's a close enough string match, count it." No in-memory text-to-text alignment of any kind.** If two pieces of text need to be related (OCR tokens ↔ cleaned answer text, descriptor evidence ↔ student writing, anything else), the LLM that produces one of the texts is the one that emits the mapping — at source, exactly, persisted on the row.
+
+Concretely:
+- OCR token → char position in cleaned `answer_text` is produced by the extract Lambda's `mapTokensToChars` LLM call and persisted on `student_paper_page_tokens.answer_char_start/end`. Downstream consumers reshape via `tokenAlignmentFromOffsets` (pure lookup, zero matching).
+- Annotation anchor → token is the annotation LLM's job, given clean text + token aliases — no string matching by the dispatcher.
+- A token whose offsets are null is a page artifact the extract LLM decided doesn't belong to any answer word. Skip it. Do not "fall back" to fuzzy matching to recover it.
+
+The rule exists because fuzzy text matching ALWAYS produces silent miscalibration: spelling drift between OCR and clean text causes Levenshtein to either accept wrong matches (annotation lands on the wrong word) or reject right ones (annotation disappears). Both bugs look fine in code review and surface as unexplainable UI weirdness in production. The architecturally correct answer is to never need the bridge — the LLM that owns the canonical text owns the mapping.
+
 ### Holistic judgements are not allowed
 
 The marker must NEVER produce a Level award or mark from a holistic read of the response. Every Level + mark must be the OUTPUT of discrete, auditable decisions — one per mark point (`point_based`) or one per level descriptor (`level_of_response`).

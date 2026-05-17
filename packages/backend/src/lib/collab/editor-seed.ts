@@ -4,11 +4,11 @@ import {
 	type McqRow,
 	type OcrTokenSpec,
 	type PageToken,
-	alignTokensToAnswer,
 	applyOcrTokenMarks,
 	insertMcqTableBlock,
 	insertQuestionBlock,
 	setAnswerText,
+	tokenAlignmentFromOffsets,
 } from "@mcp-gcse/shared"
 import type { EditorView } from "@tiptap/pm/view"
 import { HeadlessEditor } from "./headless-editor"
@@ -45,7 +45,7 @@ export type PerQuestionAnswer = {
 /**
  * Dispatch the *complete* OCR result for a submission in a single editor
  * transact. Inserts every question block, sets answer text where present,
- * and overlays `ocrToken` marks computed via the same `alignTokensToAnswer`
+ * and overlays `ocrToken` marks computed via the persisted token offsets
  * the web client uses.
  *
  * This is the only editor write the OCR Lambda makes. ySyncPlugin coalesces
@@ -139,7 +139,7 @@ export function dispatchExtractedDocOps(
 		setAnswerText(view, q.questionId, answer.text)
 
 		if (answer.tokens.length === 0) continue
-		const alignment = alignTokensToAnswer(answer.text, answer.tokens)
+		const alignment = tokenAlignmentFromOffsets(answer.tokens)
 		const tokenSpecs: OcrTokenSpec[] = []
 		for (const t of answer.tokens) {
 			const offset = alignment.tokenMap[t.id]

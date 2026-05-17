@@ -28,7 +28,9 @@ type DocJson = {
 }
 
 function readJson(doc: Y.Doc): DocJson {
-	return yXmlFragmentToProsemirrorJSON(doc.getXmlFragment(DOC_FRAGMENT_NAME)) as DocJson
+	return yXmlFragmentToProsemirrorJSON(
+		doc.getXmlFragment(DOC_FRAGMENT_NAME),
+	) as DocJson
 }
 
 const editors: Array<{ cleanup: () => void }> = []
@@ -143,8 +145,17 @@ describe("dispatchExtractedDocOps", () => {
 							line_index: 0,
 							word_index: 0,
 							text_raw: "hello",
+							text_corrected: null,
 							bbox: [0, 0, 100, 100],
 							confidence: 1,
+							question_id: "q1",
+							// Precomputed offsets (produced upstream by mapTokensToChars
+							// at extraction time and persisted on
+							// student_paper_page_tokens.answer_char_start/end). The
+							// dispatcher reads these directly via
+							// tokenAlignmentFromOffsets — no in-memory matching.
+							answer_char_start: 0,
+							answer_char_end: 5,
 						},
 						{
 							id: "tok-2",
@@ -153,8 +164,12 @@ describe("dispatchExtractedDocOps", () => {
 							line_index: 0,
 							word_index: 1,
 							text_raw: "world",
+							text_corrected: null,
 							bbox: [100, 0, 200, 100],
 							confidence: 1,
+							question_id: "q1",
+							answer_char_start: 6,
+							answer_char_end: 11,
 						},
 					],
 				},

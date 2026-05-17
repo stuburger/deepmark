@@ -54,6 +54,8 @@ export async function loadAnnotationContext(
 			text_corrected: true,
 			bbox: true,
 			question_id: true,
+			answer_char_start: true,
+			answer_char_end: true,
 		},
 	})
 

@@ -81,11 +81,12 @@ function shapePages(
  * sorted within each page into spatial reading order (top→bottom, left→right).
  *
  * Reading order matters: `answer_text` was authored by the attribution LLM
- * in this same spatial order. Downstream alignment (`alignTokensToAnswer`)
- * walks tokens sequentially against `answer_text`, so any divergence between
- * the two orderings produces off-by-N bbox anchors on extended answers.
+ * in this same spatial order, and the per-question `mapTokensToChars` step
+ * relies on the same ordering when emitting `tokenId → char_start/end`
+ * mappings. Downstream consumers reshape those persisted offsets via
+ * `tokenAlignmentFromOffsets` (pure lookup; no in-memory matching).
  * Vision's native `(para_index, line_index, word_index)` ordering breaks on
- * fragmented handwriting and is not safe to rely on for alignment.
+ * fragmented handwriting and is not safe to rely on for the spatial walk.
  */
 export const getJobPageTokens = resourceAction({
 	type: "submission",

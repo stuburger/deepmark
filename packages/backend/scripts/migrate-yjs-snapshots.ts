@@ -44,11 +44,11 @@ import {
 	type AnnotationMarkSpec,
 	type AnnotationSignal,
 	type QuestionGradeAttrs,
-	alignTokensToAnswer,
 	applyAnnotationMark,
 	buildSubmissionDocumentName,
 	isMarkSignal,
 	setQuestionGrade,
+	tokenAlignmentFromOffsets,
 } from "@mcp-gcse/shared"
 import { Resource } from "sst"
 import * as Y from "yjs"
@@ -77,7 +77,9 @@ function parseFlags(argv: string[]): Flags {
 			const next = argv[++i]
 			limit = Number(next)
 			if (Number.isNaN(limit)) {
-				throw new Error(`--limit requires a number, got ${JSON.stringify(next)}`)
+				throw new Error(
+					`--limit requires a number, got ${JSON.stringify(next)}`,
+				)
 			}
 		} else if (a === "--submission-id") {
 			submissionId = argv[++i]
@@ -94,7 +96,9 @@ function parseFlags(argv: string[]): Flags {
 		}
 	}
 	if (submissionId && examPaperId) {
-		throw new Error("--submission-id and --exam-paper-id are mutually exclusive")
+		throw new Error(
+			"--submission-id and --exam-paper-id are mutually exclusive",
+		)
 	}
 	return { limit, submissionId, examPaperId, includeSuperseded, dryRun, force }
 }
@@ -244,9 +248,9 @@ async function loadExtractedAnswers(
 		select: { extracted_answers_raw: true },
 	})
 	for (const run of ocrRuns) {
-		const raw = run.extracted_answers_raw as
-			| { answers?: ExtractedAnswer[] }
-			| null
+		const raw = run.extracted_answers_raw as {
+			answers?: ExtractedAnswer[]
+		} | null
 		const answers = raw?.answers
 		if (answers && answers.length > 0) return answers
 	}
@@ -462,7 +466,7 @@ async function buildSnapshot(
 				const tokens = tokensByQuestion.get(q.questionId) ?? []
 				if (text.length === 0 || tokens.length === 0) continue
 
-				const alignment = alignTokensToAnswer(text, tokens)
+				const alignment = tokenAlignmentFromOffsets(tokens)
 				for (const row of rows) {
 					const spec = annotationRowToSpec(row, alignment.tokenMap)
 					if (!spec) continue
@@ -538,7 +542,7 @@ async function main(): Promise<void> {
 			failed++
 			console.error(
 				`[migrate] FAIL ${sub.id}:`,
-				err instanceof Error ? err.stack ?? err.message : err,
+				err instanceof Error ? (err.stack ?? err.message) : err,
 			)
 		}
 	}

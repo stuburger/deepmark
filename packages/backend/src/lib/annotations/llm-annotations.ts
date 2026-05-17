@@ -1,6 +1,6 @@
 import { logger } from "@/lib/infra/logger"
 import { outputSchema } from "@/lib/infra/output-schema"
-import { alignTokensToAnswer } from "@mcp-gcse/shared"
+import { tokenAlignmentFromOffsets } from "@mcp-gcse/shared"
 import { generateText } from "ai"
 import { buildAnnotationPrompt } from "./annotation-prompt"
 import { AnnotationPlanSchema } from "./annotation-schema"
@@ -41,14 +41,11 @@ export async function annotateOneQuestion(
 	}
 
 	// Build the labelled clean-words view the LLM uses for anchoring. Each
-	// word in `student_answer` is paired with its underlying OCR token via the
-	// alignment map. Crossed-out drafts are excluded from the labelled list
-	// entirely — the LLM literally cannot pick them.
-	//
-	// The same `tokens` array is the one PageToken[] shape (with bbox etc.);
-	// we just need the id+bbox+page on each. The alignment function expects
-	// the shared PageToken shape, which `allTokens` already conforms to via
-	// the data loader.
+	// word in `student_answer` is paired with its underlying OCR token via
+	// the persisted alignment (answer_char_start/end on the token rows,
+	// produced at extraction time by mapTokensToChars — no in-memory
+	// matching here). Crossed-out drafts are excluded from the labelled
+	// list entirely so the LLM literally cannot pick them.
 	const pageTokens = questionTokens.map((t) => ({
 		id: t.id,
 		page_order: t.page_order,
@@ -60,13 +57,10 @@ export async function annotateOneQuestion(
 		bbox: t.bbox as [number, number, number, number],
 		confidence: 0,
 		question_id: t.question_id,
-		answer_char_start: null,
-		answer_char_end: null,
+		answer_char_start: t.answer_char_start,
+		answer_char_end: t.answer_char_end,
 	}))
-	const alignment = alignTokensToAnswer(
-		gradingResult.student_answer,
-		pageTokens,
-	)
+	const alignment = tokenAlignmentFromOffsets(pageTokens)
 	const { labeled, aliasToTokenId } = labelCleanWords(
 		gradingResult.student_answer,
 		pageTokens,

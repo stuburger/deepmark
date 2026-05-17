@@ -197,7 +197,7 @@ function questionTypeGuidance(maxScore: number): string {
 	if (maxScore > 2) return ""
 	return `QUESTION TYPE: This is a short-answer recall question (${maxScore} marks).
 - Keep annotations minimal — just tick valid points
-- Do not add chain annotations or detailed AO analysis for basic recall
+- Skip detailed AO analysis for basic recall
 - 1-2 simple tick marks is sufficient`
 }
 
@@ -206,23 +206,16 @@ function questionTypeGuidance(maxScore: number): string {
 const ANNOTATION_STRATEGY = `ANNOTATION STRATEGY:
 - When <AoAwards> is present (LoR marking): the descriptor evaluations are the CANONICAL anchor source. Produce roughly one annotation per evaluation. For each MET evaluation: locate the evidence quote in the OCR tokens above (it is verbatim from the student answer) and anchor a positive signal annotation (tick / underline / double_underline) with reason derived from the descriptor. For each NOT MET evaluation: anchor a negative signal annotation (cross / circle) at the most relevant location — the end of the paragraph where the gap occurs, or the closest related claim — with the gap description in the comment field. Set ao_category to the award's AO code and ao_quality based on met (strong/valid) vs not-met (incorrect/partial).
 - When <MarkPointResults> is present (point-based marking): for each AWARDED point find the specific text that earned it and place a tick or appropriate mark, optionally tagging the AO. For each DENIED point: identify what is missing or weak and annotate with a cross/circle and a brief comment in the comment field explaining what was needed.
-- Use your examiner judgement to classify AO skills from the content and context — do not rely on keyword matching
+- Use your examiner judgement to classify AO skills from the content and context — do not rely on keyword matching.
 - The AO labels (e.g. AO1, AO2) and their meanings come from the level descriptors and mark scheme. Use the exact labels and definitions from those descriptors. Do not assume which AOs exist or what they mean.
-- Chain annotations should highlight genuine reasoning structures where the student builds an argument, not just words like "because"
-- If the mark scheme or level descriptors describe what good analysis looks like, use that to assess quality — not a checklist of trigger words`
+- If the mark scheme or level descriptors describe what good analysis looks like, use that to assess quality — not a checklist of trigger words.`
 
-const ANNOTATION_TYPES = `ANNOTATION TYPES:
-There are two types of annotation. Each annotation is a SELF-CONTAINED record.
-
-1. SIGNAL ANNOTATION: a physical mark ON the script with optional AO tag and comment.
-   - MUST have: signal (tick/cross/underline/double_underline/box/circle), reason
-   - OPTIONAL: label, ao_category + ao_quality, comment
-   - When ao_category is set, also set ao_quality ("strong"/"partial"/"incorrect"/"valid")
-   - When comment is set, use format: "[diagnosis] → [specific issue]", max 8-14 words
-
-2. CHAIN: a highlighted connective phrase showing reasoning flow.
-   - MUST have: chain_type (reasoning/evaluation/judgement), trigger_phrase
-   - Standalone — no signal, no AO data`
+const ANNOTATION_TYPES = `ANNOTATION SHAPE:
+Each annotation is a SELF-CONTAINED physical mark on the script.
+- MUST have: signal (tick/cross/underline/double_underline/box/circle), reason
+- OPTIONAL: label, ao_category + ao_quality, comment
+- When ao_category is set, also set ao_quality ("strong"/"partial"/"incorrect"/"valid").
+- When comment is set, use format: "[diagnosis] → [specific issue]", max 8-14 words.`
 
 const MARK_TYPES = `MARK TYPES:
 - tick (✓): correct/valid point → sentiment="positive"
@@ -259,7 +252,7 @@ const GLOBAL_RULES = `GLOBAL RULES:
 const INSTRUCTIONS = `<Instructions>
 Analyse the student answer against the mark scheme and mark point results. Place annotations that show this answer has been carefully read and evaluated. Output valid JSON matching the schema.
 Return annotations ordered by reading position (ascending token index).
-Each annotation is self-contained — signal annotations include their own reason, optional AO tag, and optional comment. No parent linking.
+Each annotation is self-contained — it includes its own signal, reason, optional AO tag, and optional comment. No parent linking.
 </Instructions>`
 
 // ─── Density section (dynamic — depends on maxScore) ─────────────────────────

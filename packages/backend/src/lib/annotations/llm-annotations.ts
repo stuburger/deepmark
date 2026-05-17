@@ -111,6 +111,18 @@ export async function annotateOneQuestion(
 		}
 
 		const overlay = buildOverlay(item)
+		if (!overlay) {
+			// LLM returned an item missing signal or reason. Schema enforces
+			// both as required, so this is belt-and-suspenders — log + drop
+			// instead of persisting an empty placeholder (the Q4 bug).
+			logger.info(TAG, "Annotation item missing signal or reason — skipping", {
+				jobId,
+				question_id: gradingResult.question_id,
+				has_signal: Boolean(item.signal),
+				has_reason: Boolean(item.reason),
+			})
+			continue
+		}
 
 		pending.push({
 			questionId: gradingResult.question_id,

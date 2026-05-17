@@ -49,16 +49,21 @@ function aoAward(
 }
 
 describe("buildAnnotationPrompt — LoR descriptor evaluations", () => {
-	const promptArgs = () => ({
-		gradingResult: baseResult(),
-		questionText: baseResult().question_text,
-		maxScore: 6,
-		tokens: tokens(baseResult().student_answer),
-		examBoard: "AQA",
-		subject: "business",
-		markScheme: null,
-		levelDescriptors: null,
-	})
+	const promptArgs = () => {
+		const words = tokens(baseResult().student_answer)
+		const labeledWords = words.map((w, i) => `[t${i + 1}]${w.text}`).join(" ")
+		return {
+			gradingResult: baseResult(),
+			questionText: baseResult().question_text,
+			maxScore: 6,
+			labeledWords,
+			labeledWordCount: words.length,
+			examBoard: "AQA",
+			subject: "business",
+			markScheme: null,
+			levelDescriptors: null,
+		}
+	}
 
 	it("renders the AoAwards block when ao_awards are present", () => {
 		const args = promptArgs()

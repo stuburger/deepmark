@@ -1,10 +1,12 @@
 import { logger } from "@/lib/infra/logger"
 import { outputSchema } from "@/lib/infra/output-schema"
+import { alignTokensToAnswer } from "@mcp-gcse/shared"
 import { generateText } from "ai"
 import { buildAnnotationPrompt } from "./annotation-prompt"
 import { AnnotationPlanSchema } from "./annotation-schema"
+import { labelCleanWords, renderLabeledWords } from "./label-clean-words"
 import { buildOverlay } from "./payload-builder"
-import { resolveTokenSpan } from "./token-spans"
+import { resolveTokenSpanByIds } from "./token-spans"
 import type { AnnotateOneQuestionArgs, PendingAnnotation } from "./types"
 
 const TAG = "annotations"
@@ -38,11 +40,46 @@ export async function annotateOneQuestion(
 		return []
 	}
 
-	// Build token summaries — index is implicit from array position
-	const tokenSummaries = questionTokens.map((t) => ({
-		text: t.text_corrected ?? t.text_raw,
-		pageOrder: t.page_order,
+	// Build the labelled clean-words view the LLM uses for anchoring. Each
+	// word in `student_answer` is paired with its underlying OCR token via the
+	// alignment map. Crossed-out drafts are excluded from the labelled list
+	// entirely — the LLM literally cannot pick them.
+	//
+	// The same `tokens` array is the one PageToken[] shape (with bbox etc.);
+	// we just need the id+bbox+page on each. The alignment function expects
+	// the shared PageToken shape, which `allTokens` already conforms to via
+	// the data loader.
+	const pageTokens = questionTokens.map((t) => ({
+		id: t.id,
+		page_order: t.page_order,
+		para_index: 0,
+		line_index: 0,
+		word_index: 0,
+		text_raw: t.text_raw,
+		text_corrected: t.text_corrected,
+		bbox: t.bbox as [number, number, number, number],
+		confidence: 0,
+		question_id: t.question_id,
+		answer_char_start: null,
+		answer_char_end: null,
 	}))
+	const alignment = alignTokensToAnswer(
+		gradingResult.student_answer,
+		pageTokens,
+	)
+	const { labeled, aliasToTokenId } = labelCleanWords(
+		gradingResult.student_answer,
+		pageTokens,
+		alignment,
+	)
+
+	if (labeled.length === 0) {
+		logger.info(TAG, "No labelled words available — skipping annotation", {
+			jobId,
+			question_id: gradingResult.question_id,
+		})
+		return []
+	}
 
 	const markSchemeContext = markScheme
 		? {
@@ -63,7 +100,8 @@ export async function annotateOneQuestion(
 		questionText: gradingResult.question_text,
 		stimuli,
 		maxScore: gradingResult.max_score,
-		tokens: tokenSummaries,
+		labeledWords: renderLabeledWords(labeled),
+		labeledWordCount: labeled.length,
 		examBoard,
 		subject,
 		markScheme: markSchemeContext,
@@ -94,18 +132,26 @@ export async function annotateOneQuestion(
 	for (let i = 0; i < plan.annotations.length; i++) {
 		const item = plan.annotations[i]
 
-		const span = resolveTokenSpan(
-			item.anchor_start,
-			item.anchor_end,
-			questionTokens,
-		)
-		if (!span) {
-			logger.info(TAG, "Invalid token indices — skipping annotation", {
+		const startTokenId = aliasToTokenId.get(item.anchor_start_token)
+		const endTokenId = aliasToTokenId.get(item.anchor_end_token)
+		if (!startTokenId || !endTokenId) {
+			logger.info(TAG, "Unknown token alias — skipping annotation", {
 				jobId,
 				question_id: gradingResult.question_id,
-				anchor_start: item.anchor_start,
-				anchor_end: item.anchor_end,
-				token_count: questionTokens.length,
+				anchor_start_token: item.anchor_start_token,
+				anchor_end_token: item.anchor_end_token,
+				known_aliases_count: aliasToTokenId.size,
+			})
+			continue
+		}
+
+		const span = resolveTokenSpanByIds(startTokenId, endTokenId, pageTokens)
+		if (!span) {
+			logger.info(TAG, "Token IDs not found — skipping annotation", {
+				jobId,
+				question_id: gradingResult.question_id,
+				start_token_id: startTokenId,
+				end_token_id: endTokenId,
 			})
 			continue
 		}

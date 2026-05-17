@@ -19,15 +19,15 @@ import { z } from "zod/v4"
  * need. Don't reintroduce them into THIS prompt without that separation.
  */
 export const AnnotationPlanItemSchema = z.object({
-	anchor_start: z
-		.number()
+	anchor_start_token: z
+		.string()
 		.describe(
-			"Start token index as an integer (0-based, inclusive) from the OCR token array",
+			"Token alias (e.g. 't14') where the annotation span BEGINS. Pick from the labelled words shown in <StudentAnswerLabeled>. Single-word anchors set start === end.",
 		),
-	anchor_end: z
-		.number()
+	anchor_end_token: z
+		.string()
 		.describe(
-			"End token index as an integer (0-based, inclusive) from the OCR token array",
+			"Token alias (e.g. 't18') where the annotation span ENDS (inclusive). For a single-word anchor, set end equal to start. The end must come at or after the start in reading order.",
 		),
 	sentiment: z
 		.enum(["positive", "negative", "neutral"])

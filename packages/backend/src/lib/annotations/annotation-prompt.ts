@@ -11,11 +11,6 @@ import {
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-type TokenSummary = {
-	text: string
-	pageOrder: number
-}
-
 type MarkSchemeContext = {
 	description: string
 	guidance: string | null
@@ -35,7 +30,15 @@ type AnnotationPromptArgs = {
 	 * annotator can anchor mark-point spans against the case study context. */
 	stimuli?: QuestionStimulusContext[]
 	maxScore: number
-	tokens: TokenSummary[]
+	/**
+	 * Pre-rendered "[t1]word [t2]word …" string built from the CLEAN answer
+	 * text + the existing OCR↔answer alignment. Crossed-out drafts are
+	 * excluded at the labelling step so the LLM literally cannot pick them.
+	 * Replaces the noisy OCR token array that previously fed this prompt.
+	 */
+	labeledWords: string
+	/** Count of anchorable words — used by the anchoring instructions block. */
+	labeledWordCount: number
 	examBoard: string | null
 	subject: string | null
 	markScheme: MarkSchemeContext | null
@@ -153,9 +156,17 @@ function studentAnswerSection(answer: string): string {
 	return `<StudentAnswer>\n${answer}\n</StudentAnswer>`
 }
 
-function ocrTokensSection(tokens: TokenSummary[]): string {
-	const tokenList = tokens.map((t, i) => `[${i}] "${t.text}"`).join(" ")
-	return `<OCRTokens>\n${tokenList}\n</OCRTokens>`
+function labeledAnswerSection(labeledWords: string): string {
+	if (labeledWords.length === 0) {
+		return "<StudentAnswerLabeled>\n(no labelled words available — annotations cannot be anchored)\n</StudentAnswerLabeled>"
+	}
+	return `<StudentAnswerLabeled>
+The CLEAN student answer, with each word prefixed by a token alias (t1, t2, …). To anchor an annotation, pick the alias of the FIRST word in the span as anchor_start_token and the alias of the LAST word as anchor_end_token. Single-word anchors use the same alias for both.
+
+Crossed-out drafts have been excluded from this list — they cannot and must not be annotated. Only words shown here are anchorable.
+
+${labeledWords}
+</StudentAnswerLabeled>`
 }
 
 function subjectContext(
@@ -204,8 +215,8 @@ function questionTypeGuidance(maxScore: number): string {
 // ─── Static rule sections ────────────────────────────────────────────────────
 
 const ANNOTATION_STRATEGY = `ANNOTATION STRATEGY:
-- When <AoAwards> is present (LoR marking): the descriptor evaluations are the CANONICAL anchor source. Produce roughly one annotation per evaluation. For each MET evaluation: locate the evidence quote in the OCR tokens above (it is verbatim from the student answer) and anchor a positive signal annotation (tick / underline / double_underline) with reason derived from the descriptor. For each NOT MET evaluation: anchor a negative signal annotation (cross / circle) at the most relevant location — the end of the paragraph where the gap occurs, or the closest related claim — with the gap description in the comment field. Set ao_category to the award's AO code and ao_quality based on met (strong/valid) vs not-met (incorrect/partial).
-- When <MarkPointResults> is present (point-based marking): for each AWARDED point find the specific text that earned it and place a tick or appropriate mark, optionally tagging the AO. For each DENIED point: identify what is missing or weak and annotate with a cross/circle and a brief comment in the comment field explaining what was needed.
+- When <AoAwards> is present (LoR marking): the descriptor evaluations are the CANONICAL anchor source. Produce ONE annotation per evaluation. For each MET evaluation: find the evidence quote in <StudentAnswerLabeled> above (the evidence is a verbatim substring of the clean answer; locate it word-by-word in the labelled list and use the alias of the first matching word as anchor_start_token and the alias of the last as anchor_end_token), and place a positive signal annotation (tick / underline / double_underline) with reason derived from the descriptor. For each NOT MET evaluation: place a negative signal annotation (cross / circle) at the most relevant location — the end of the paragraph where the gap occurs, or the closest related claim — with the gap description in the comment field. Set ao_category to the award's AO code and ao_quality based on met (strong/valid) vs not-met (incorrect/partial).
+- When <MarkPointResults> is present (point-based marking): for each AWARDED point find the specific text that earned it (in <StudentAnswerLabeled>) and place a tick or appropriate mark, optionally tagging the AO. For each DENIED point: identify what is missing or weak and annotate with a cross/circle and a brief comment in the comment field explaining what was needed.
 - Use your examiner judgement to classify AO skills from the content and context — do not rely on keyword matching.
 - The AO labels (e.g. AO1, AO2) and their meanings come from the level descriptors and mark scheme. Use the exact labels and definitions from those descriptors. Do not assume which AOs exist or what they mean.
 - If the mark scheme or level descriptors describe what good analysis looks like, use that to assess quality — not a checklist of trigger words.`
@@ -286,14 +297,15 @@ function densitySection(
 - Avoid over-marking`
 }
 
-function anchoringSection(tokenCount: number): string {
+function anchoringSection(wordCount: number): string {
 	return `ANCHORING:
-- anchor_start and anchor_end are token indices from the OCR token list above
-- anchor_start is the first token index (inclusive), anchor_end is the last (inclusive)
-- Choose the minimal span that captures the annotated phrase (1-5 tokens typically)
-- Each annotation must anchor to a different token span (no overlapping ranges)
-- anchor_start must be <= anchor_end
-- Both must be valid indices (0 to ${tokenCount - 1})`
+- anchor_start_token and anchor_end_token are token aliases (e.g. "t14") from <StudentAnswerLabeled> above.
+- Pick the alias of the FIRST word in the annotated span as anchor_start_token, and the alias of the LAST word as anchor_end_token.
+- For a single-word anchor (e.g. one misspelt word), set anchor_start_token === anchor_end_token.
+- Choose the minimal span that captures the annotated phrase (1-5 words typically).
+- Each annotation must anchor to a different span — no overlapping ranges.
+- anchor_start_token must come at or before anchor_end_token in reading order.
+- Both aliases MUST appear in <StudentAnswerLabeled> above (${wordCount} anchorable words available). Crossed-out content is excluded from the labelled list — do not invent aliases for it.`
 }
 
 // ─── Public API ──────────────────────────────────────────────────────────────
@@ -312,7 +324,8 @@ export function buildAnnotationPrompt(args: AnnotationPromptArgs): string {
 		questionText,
 		stimuli,
 		maxScore,
-		tokens,
+		labeledWords,
+		labeledWordCount,
 		examBoard,
 		subject,
 		markScheme,
@@ -333,7 +346,7 @@ export function buildAnnotationPrompt(args: AnnotationPromptArgs): string {
 		wwwEbiSection(r),
 		levelDescriptorsSection(levelDescriptors),
 		studentAnswerSection(r.student_answer),
-		ocrTokensSection(tokens),
+		labeledAnswerSection(labeledWords),
 		subjectContext(examBoard, subject),
 	]
 
@@ -347,7 +360,7 @@ export function buildAnnotationPrompt(args: AnnotationPromptArgs): string {
 		REASON_FIELD,
 		POINT_BASED_GUIDANCE,
 		densitySection(maxScore, r.ao_awards),
-		anchoringSection(tokens.length),
+		anchoringSection(labeledWordCount),
 		GLOBAL_RULES,
 	]
 

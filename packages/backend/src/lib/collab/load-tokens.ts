@@ -11,7 +11,7 @@ const BboxSchema = z.tuple([z.number(), z.number(), z.number(), z.number()])
  * assignment are dropped.
  *
  * Returns the precomputed `answer_char_start` / `answer_char_end` from
- * the DB — populated at extraction time by the `mapTokensToChars` step.
+ * the DB — populated at extraction time by `attributeScript` via cursor-based indexOf over per-token corrected_texts.
  * Consumers feed these directly into `tokenAlignmentFromOffsets`
  * (zero-cost reshape) instead of re-running an in-memory aligner.
  *

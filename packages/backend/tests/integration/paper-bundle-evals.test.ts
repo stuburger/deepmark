@@ -11,7 +11,10 @@ import {
 import { validateBundle } from "../../src/processors/paper-bundle/validate"
 import { AQA_BUSINESS_Y10_3_3_VOL2_FIXTURE } from "./fixtures/paper-bundle/aqa-business-y10-3-3-vol2/fixture"
 import { EDEXCEL_ENGLISH_LANG_P1_MAY_2025_FIXTURE } from "./fixtures/paper-bundle/edexcel-english-lang-p1-may-2025/fixture"
-import { fixturePath, type PaperBundleFixture } from "./fixtures/paper-bundle/types"
+import {
+	type PaperBundleFixture,
+	fixturePath,
+} from "./fixtures/paper-bundle/types"
 
 /**
  * Paper-bundle eval suite.
@@ -318,7 +321,6 @@ for (const fixture of FIXTURES) {
 			},
 			BUNDLE_TIMEOUT_MS + 30_000,
 		)
-
 		;(filesReady ? it : it.skip)(
 			"printed paper total matches sum of section totals when both are populated",
 			() => {

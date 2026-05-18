@@ -17,7 +17,7 @@ import { useRouter } from "next/navigation"
 import { useRef, useState } from "react"
 import { toast } from "sonner"
 import { AcquiredLabel } from "./acquired-label"
-import { StagedFilesList, type StagedFileRow } from "./staged-files-list"
+import { type StagedFileRow, StagedFilesList } from "./staged-files-list"
 
 type CommittableFile = StagedFileRow & {
 	tempUploadId: string
@@ -217,9 +217,7 @@ export function NewPaperUploadClient() {
 			/>
 
 			<div className="flex items-center justify-end gap-3">
-				{goError && (
-					<p className="text-xs text-muted-foreground">{goError}</p>
-				)}
+				{goError && <p className="text-xs text-muted-foreground">{goError}</p>}
 				<Button
 					disabled={goError !== null || goMutation.isPending}
 					onClick={() => goMutation.mutate()}

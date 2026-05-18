@@ -46,7 +46,12 @@ const TWO_OF: ChoiceAwareSection = {
 describe("partitionResultsByChoice — kind=all", () => {
 	it("includes every result, sums awarded", () => {
 		// Edexcel English Lang P1 Sec A: 4 questions, all answered.
-		const results = [r("q1", 1, 1), r("q2", 2, 2), r("q3", 4, 6), r("q4", 12, 15)]
+		const results = [
+			r("q1", 1, 1),
+			r("q2", 2, 2),
+			r("q3", 4, 6),
+			r("q4", 12, 15),
+		]
 		const out = partitionResultsByChoice({
 			sections: [{ ...ALL, question_ids: ["q1", "q2", "q3", "q4"] }],
 			results,
@@ -81,8 +86,12 @@ describe("partitionResultsByChoice — kind=any_n_of", () => {
 		})
 		expect(out.totalAwarded).toBe(28)
 		expect(out.includedIds).toEqual(new Set(["q5"]))
-		expect(out.results.find((x) => x.question_id === "q5")?.included_in_total).toBe(true)
-		expect(out.results.find((x) => x.question_id === "q6")?.included_in_total).toBe(false)
+		expect(
+			out.results.find((x) => x.question_id === "q5")?.included_in_total,
+		).toBe(true)
+		expect(
+			out.results.find((x) => x.question_id === "q6")?.included_in_total,
+		).toBe(false)
 	})
 
 	it("picks the only answered alternative, excludes empty stubs", () => {
@@ -93,8 +102,12 @@ describe("partitionResultsByChoice — kind=any_n_of", () => {
 			results: [r("q5", 0, 40, empty), r("q6", 28, 40)],
 		})
 		expect(out.totalAwarded).toBe(28)
-		expect(out.results.find((x) => x.question_id === "q6")?.included_in_total).toBe(true)
-		expect(out.results.find((x) => x.question_id === "q5")?.included_in_total).toBe(false)
+		expect(
+			out.results.find((x) => x.question_id === "q6")?.included_in_total,
+		).toBe(true)
+		expect(
+			out.results.find((x) => x.question_id === "q5")?.included_in_total,
+		).toBe(false)
 	})
 
 	it("preserves the denominator when neither alternative was answered", () => {
@@ -155,8 +168,12 @@ describe("partitionResultsByChoice — mixed sections", () => {
 		// Every Sec A id participates + Q6 (the chosen Sec B alternative).
 		// Q5 (the stub) is the only excluded id.
 		expect(out.includedIds).toEqual(new Set(["q1", "q2", "q3", "q4", "q6"]))
-		expect(out.results.find((x) => x.question_id === "q1")?.included_in_total).toBe(true)
-		expect(out.results.find((x) => x.question_id === "q5")?.included_in_total).toBe(false)
+		expect(
+			out.results.find((x) => x.question_id === "q1")?.included_in_total,
+		).toBe(true)
+		expect(
+			out.results.find((x) => x.question_id === "q5")?.included_in_total,
+		).toBe(false)
 	})
 })
 

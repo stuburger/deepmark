@@ -81,7 +81,7 @@ function shapePages(
  * sorted within each page into spatial reading order (top→bottom, left→right).
  *
  * Reading order matters: `answer_text` was authored by the attribution LLM
- * in this same spatial order, and the per-question `mapTokensToChars` step
+ * in this same spatial order, and the per-question `attributeScript` (cursor-based indexOf over corrected_texts)
  * relies on the same ordering when emitting `tokenId → char_start/end`
  * mappings. Downstream consumers reshape those persisted offsets via
  * `tokenAlignmentFromOffsets` (pure lookup; no in-memory matching).

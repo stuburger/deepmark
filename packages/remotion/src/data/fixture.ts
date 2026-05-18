@@ -1,7 +1,7 @@
 // Snapshot of a real DeepMark submission — Y10 Media, "Eshan A", 55/83 marks.
 // Submission id: 33e76752-1099-44fc-8f0c-42a77bf5c0c7
 // Pages 2, 7 and 11 lifted verbatim from student_paper_annotations.
-import type { Fixture } from "./types";
+import type { Fixture } from "./types"
 
 export const fixture: Fixture = {
 	studentName: "Eshan A",
@@ -139,4 +139,4 @@ export const fixture: Fixture = {
 			],
 		},
 	],
-};
+}

@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto"
+import type { GradingResult } from "@mcp-gcse/shared"
 import {
 	TEST_EXAM_PAPER_ID,
 	TEST_PROCESSING_BATCH_ID,
@@ -6,8 +8,6 @@ import {
 	db,
 	ensureExamPaper,
 } from "@mcp-gcse/test-utils"
-import type { GradingResult } from "@mcp-gcse/shared"
-import { randomUUID } from "node:crypto"
 import { afterEach, beforeAll, describe, expect, it } from "vitest"
 import { writeMarkingResults } from "../../src/processors/annotation-projection"
 
@@ -81,8 +81,14 @@ describe("writeMarkingResults projection", () => {
 		submissionId = await createSubmission()
 
 		await writeMarkingResults(submissionId, [
-			gradingResult(Q1, { awarded_score: 1, feedback_summary: "Correct option C." }),
-			gradingResult(Q2, { awarded_score: 0, feedback_summary: "Wrong choice." }),
+			gradingResult(Q1, {
+				awarded_score: 1,
+				feedback_summary: "Correct option C.",
+			}),
+			gradingResult(Q2, {
+				awarded_score: 0,
+				feedback_summary: "Wrong choice.",
+			}),
 		])
 
 		const answers = await db.answer.findMany({

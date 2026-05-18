@@ -15,7 +15,10 @@ export type StagedFileLabel =
 	| "unrecognised"
 
 /** What the user can actually submit — `unrecognised` is excluded. */
-export type CommittableStagedFileLabel = Exclude<StagedFileLabel, "unrecognised">
+export type CommittableStagedFileLabel = Exclude<
+	StagedFileLabel,
+	"unrecognised"
+>
 
 export type ClassifiedStagedFile = {
 	tempUploadId: string

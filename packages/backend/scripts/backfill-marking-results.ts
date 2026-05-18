@@ -64,7 +64,9 @@ function parseFlags(argv: string[]): Flags {
 			const next = argv[++i]
 			limit = Number(next)
 			if (Number.isNaN(limit)) {
-				throw new Error(`--limit requires a number, got ${JSON.stringify(next)}`)
+				throw new Error(
+					`--limit requires a number, got ${JSON.stringify(next)}`,
+				)
 			}
 		} else if (a === "--submission-id") {
 			submissionId = argv[++i]
@@ -107,7 +109,10 @@ async function listCandidates(): Promise<
 	// recent run per submission — the projection treats `(submission, question)`
 	// as the unique key and the latest run wins.
 	const seen = new Set<string>()
-	const out: Array<{ submission_id: string; grading_results: GradingResult[] }> = []
+	const out: Array<{
+		submission_id: string
+		grading_results: GradingResult[]
+	}> = []
 	for (const r of rows) {
 		if (seen.has(r.submission_id)) continue
 		seen.add(r.submission_id)

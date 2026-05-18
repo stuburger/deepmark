@@ -19,4 +19,4 @@ export const tokens = {
 	warningSoft: "#FBF1DD",
 	error: "#C8362E",
 	errorSoft: "#FBEAE8",
-} as const;
+} as const

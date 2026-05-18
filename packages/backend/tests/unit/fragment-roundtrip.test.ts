@@ -100,7 +100,9 @@ describe("fragment round-trip via deriveAnnotationsFromDoc", () => {
 			},
 		})
 
-		const json = yXmlFragmentToProsemirrorJSON(doc.getXmlFragment(DOC_FRAGMENT_NAME))
+		const json = yXmlFragmentToProsemirrorJSON(
+			doc.getXmlFragment(DOC_FRAGMENT_NAME),
+		)
 		const pmDoc = schema.nodeFromJSON(json)
 		const annotations = deriveAnnotationsFromDoc(pmDoc)
 

@@ -91,7 +91,10 @@ describe("buildDesiredRows", () => {
 describe("diffAnnotations", () => {
 	it("idempotent: re-projecting the same rows produces no ops", () => {
 		const same = [row({ id: "a" }), row({ id: "b" }), row({ id: "c" })]
-		const plan = diffAnnotations(same, same.map((r) => ({ ...r })))
+		const plan = diffAnnotations(
+			same,
+			same.map((r) => ({ ...r })),
+		)
 		expect(plan).toEqual({ inserts: [], updates: [], deleteIds: [] })
 	})
 
@@ -188,12 +191,8 @@ describe("diffAnnotations", () => {
 	})
 
 	it("source and grading_run_id changes are detected", () => {
-		const existing = [
-			row({ id: "a", source: "ai", grading_run_id: "grun-1" }),
-		]
-		const desired = [
-			row({ id: "a", source: "teacher", grading_run_id: null }),
-		]
+		const existing = [row({ id: "a", source: "ai", grading_run_id: "grun-1" })]
+		const desired = [row({ id: "a", source: "teacher", grading_run_id: null })]
 		const plan = diffAnnotations(existing, desired)
 		expect(plan.updates.map((r) => r.id)).toEqual(["a"])
 	})

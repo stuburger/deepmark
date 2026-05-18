@@ -27,7 +27,9 @@ function assertJpeg(buf: Buffer | null): asserts buf is Buffer {
 
 describe("extractJpegFromPdfPage", () => {
 	it("returns a JPEG for a normal embedded-DCTDecode stream (happy path)", async () => {
-		const bytes = fs.readFileSync(path.join(FIXTURE_DIR, "normal-jpeg-stream.pdf"))
+		const bytes = fs.readFileSync(
+			path.join(FIXTURE_DIR, "normal-jpeg-stream.pdf"),
+		)
 		const jpeg = await extractJpegFromPdfPage(bytes)
 		assertJpeg(jpeg)
 	})

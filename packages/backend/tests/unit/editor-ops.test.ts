@@ -27,7 +27,9 @@ type DocJson = {
 }
 
 function readJson(doc: Y.Doc): DocJson {
-	return yXmlFragmentToProsemirrorJSON(doc.getXmlFragment(DOC_FRAGMENT_NAME)) as DocJson
+	return yXmlFragmentToProsemirrorJSON(
+		doc.getXmlFragment(DOC_FRAGMENT_NAME),
+	) as DocJson
 }
 
 const editors: Array<{ cleanup: () => void }> = []

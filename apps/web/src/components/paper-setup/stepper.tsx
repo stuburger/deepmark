@@ -41,10 +41,7 @@ export function PaperSetupStepper(props: StepperState) {
 					<li key={step.key} className="flex items-center gap-2">
 						<Pill label={step.label} state={state} />
 						{idx < steps.length - 1 && (
-							<span
-								aria-hidden
-								className="h-px w-6 bg-border-quiet"
-							/>
+							<span aria-hidden className="h-px w-6 bg-border-quiet" />
 						)}
 					</li>
 				)
@@ -82,9 +79,7 @@ function Pill({ label, state }: { label: string; state: PillState }) {
 			{state === "inProgress" && (
 				<Loader2 aria-hidden className="size-3.5 animate-spin text-primary" />
 			)}
-			{state === "failed" && (
-				<AlertCircle aria-hidden className="size-3.5" />
-			)}
+			{state === "failed" && <AlertCircle aria-hidden className="size-3.5" />}
 			<span>{label}</span>
 			{state === "skipped" && (
 				<span className="text-[10px] uppercase tracking-wide opacity-60">

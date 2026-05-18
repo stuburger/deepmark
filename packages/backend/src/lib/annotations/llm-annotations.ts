@@ -1,6 +1,6 @@
 import { logger } from "@/lib/infra/logger"
 import { outputSchema } from "@/lib/infra/output-schema"
-import { tokenAlignmentFromOffsets } from "@mcp-gcse/shared"
+import { alignTokensToAnswer } from "@mcp-gcse/shared"
 import { generateText } from "ai"
 import { buildAnnotationPrompt } from "./annotation-prompt"
 import { AnnotationPlanSchema } from "./annotation-schema"
@@ -42,10 +42,10 @@ export async function annotateOneQuestion(
 
 	// Build the labelled clean-words view the LLM uses for anchoring. Each
 	// word in `student_answer` is paired with its underlying OCR token via
-	// the persisted alignment (answer_char_start/end on the token rows,
-	// produced at extraction time by mapTokensToChars — no in-memory
-	// matching here). Crossed-out drafts are excluded from the labelled
-	// list entirely so the LLM literally cannot pick them.
+	// `alignTokensToAnswer` — fuzzy Levenshtein match at runtime. Annotation
+	// positioning is approximate; the marker-facing answer text is what the
+	// grader read. Crossed-out drafts are excluded from the labelled list
+	// entirely so the LLM literally cannot pick them.
 	const pageTokens = questionTokens.map((t) => ({
 		id: t.id,
 		page_order: t.page_order,
@@ -60,7 +60,7 @@ export async function annotateOneQuestion(
 		answer_char_start: t.answer_char_start,
 		answer_char_end: t.answer_char_end,
 	}))
-	const alignment = tokenAlignmentFromOffsets(pageTokens)
+	const alignment = alignTokensToAnswer(gradingResult.student_answer, pageTokens)
 	const { labeled, aliasToTokenId } = labelCleanWords(
 		gradingResult.student_answer,
 		pageTokens,

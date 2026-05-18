@@ -65,7 +65,8 @@ export async function commitBatchService(
 	if (!examPaper) {
 		return {
 			ok: false,
-			error: "Batch is not yet linked to an exam paper — wait for extraction to finish.",
+			error:
+				"Batch is not yet linked to an exam paper — wait for extraction to finish.",
 		}
 	}
 

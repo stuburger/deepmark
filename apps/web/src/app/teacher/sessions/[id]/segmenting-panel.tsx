@@ -26,8 +26,8 @@ export function SegmentingPanel({
 					Reading your scripts
 				</h1>
 				<p className="text-sm text-muted-foreground">
-					We're scanning each page, splitting students out, and proposing
-					names. This takes a moment — usually 1–2 minutes.
+					We're scanning each page, splitting students out, and proposing names.
+					This takes a moment — usually 1–2 minutes.
 				</p>
 			</div>
 

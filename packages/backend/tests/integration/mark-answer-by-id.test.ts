@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto"
 import {
 	TEST_EXAM_PAPER_ID,
 	TEST_PROCESSING_BATCH_ID,
@@ -6,7 +7,6 @@ import {
 	db,
 	ensureExamPaper,
 } from "@mcp-gcse/test-utils"
-import { randomUUID } from "node:crypto"
 import { afterEach, beforeAll, describe, expect, it } from "vitest"
 import { markAnswerById } from "../../src/services/mark-answer"
 

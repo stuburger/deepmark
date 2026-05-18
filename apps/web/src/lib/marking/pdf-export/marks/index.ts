@@ -1,8 +1,8 @@
 import {
 	type TextMark,
 	type TextSegment,
+	alignTokensToAnswer,
 	deriveTextMarks,
-	tokenAlignmentFromOffsets,
 } from "@mcp-gcse/shared"
 import { aoHex, aoLabel } from "../../ao-palette"
 import type {
@@ -39,11 +39,11 @@ const CIRCLE_HIGHLIGHT_BG = "#FEF3C7"
 // ── marksForQuestion ──────────────────────────────────────────────────
 
 /**
- * Reads the precomputed token offsets (`answer_char_start/end` populated
- * upstream by the extract Lambda's `mapTokensToChars` step) and projects
- * structured annotations onto character ranges in `student_answer`.
- * Returns an empty array for deterministic / unaligned questions.
- * No in-memory matching — see CLAUDE.md.
+ * Fuzzy-matches OCR tokens against the LLM-authored `student_answer` via
+ * `alignTokensToAnswer` (Levenshtein) and projects structured annotations
+ * onto character ranges in that text. Returns an empty array for
+ * deterministic / unaligned questions. Annotation positioning is
+ * approximate by design — the grader-facing text is the canonical view.
  */
 export function marksForQuestion(
 	result: GradingResult,
@@ -53,7 +53,7 @@ export function marksForQuestion(
 	if (result.marking_method === "deterministic") return []
 	const qTokens = pageTokens.filter((t) => t.question_id === result.question_id)
 	if (qTokens.length === 0) return []
-	const alignment = tokenAlignmentFromOffsets(qTokens)
+	const alignment = alignTokensToAnswer(result.student_answer ?? "", qTokens)
 	if (Object.keys(alignment.tokenMap).length === 0) return []
 	const qAnnotations = annotations.filter(
 		(a) => a.question_id === result.question_id,

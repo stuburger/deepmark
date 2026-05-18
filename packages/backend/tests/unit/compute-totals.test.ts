@@ -60,7 +60,12 @@ describe("computeTotals — kind=all", () => {
 			]),
 		]
 		const out = computeTotals({
-			gradingResults: [r("q1", 1, 1), r("q2", 2, 2), r("q3", 4, 6), r("q4", 12, 15)],
+			gradingResults: [
+				r("q1", 1, 1),
+				r("q2", 2, 2),
+				r("q3", 4, 6),
+				r("q4", 12, 15),
+			],
 			sections,
 			answerMap: answerMap({ q1: "a", q2: "b", q3: "c", q4: "d" }),
 		})

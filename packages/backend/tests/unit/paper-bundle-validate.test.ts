@@ -154,7 +154,8 @@ describe("validateBundle", () => {
 		}
 		const r = validateBundle(b)
 		expect(r.ok).toBe(false)
-		if (!r.ok) expect(r.error).toMatch(/sum to 24 but question total_marks is 40/)
+		if (!r.ok)
+			expect(r.error).toMatch(/sum to 24 but question total_marks is 40/)
 	})
 
 	it("accepts multi-skill level_of_response with parallel AO grids", () => {

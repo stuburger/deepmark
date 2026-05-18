@@ -102,7 +102,10 @@ function expressionUsesActionClient(node: ts.Expression): boolean {
 
 function unwrapToBase(node: ts.Expression): ts.Expression {
 	let current: ts.Expression = node
-	while (ts.isCallExpression(current) || ts.isPropertyAccessExpression(current)) {
+	while (
+		ts.isCallExpression(current) ||
+		ts.isPropertyAccessExpression(current)
+	) {
 		current = ts.isPropertyAccessExpression(current)
 			? current.expression
 			: current.expression
@@ -110,10 +113,7 @@ function unwrapToBase(node: ts.Expression): ts.Expression {
 	return current
 }
 
-function checkNoRawAuth(
-	source: ts.SourceFile,
-	relPath: string,
-): Violation[] {
+function checkNoRawAuth(source: ts.SourceFile, relPath: string): Violation[] {
 	if (isAuthAllowedFile(relPath)) return []
 	const violations: Violation[] = []
 	for (const stmt of source.statements) {

@@ -71,7 +71,10 @@ describe("batch grade completion (ProcessingBatch)", () => {
 		}
 	})
 
-	async function makeBatch(totalJobs: number, kind: "initial" | "re_grade" = "initial") {
+	async function makeBatch(
+		totalJobs: number,
+		kind: "initial" | "re_grade" = "initial",
+	) {
 		const batch = await db.batchIngestJob.create({
 			data: {
 				exam_paper_id: TEST_EXAM_PAPER_ID,

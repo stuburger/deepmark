@@ -21,7 +21,6 @@ import {
 } from "@/lib/scan-extraction/attribute-script"
 import { runVisionOcr } from "@/lib/scan-extraction/cloud-vision-ocr"
 import { comprehendPage } from "@/lib/scan-extraction/comprehend-page"
-import { mapTokensToChars } from "@/lib/scan-extraction/map-tokens-to-chars"
 import { persistTokens } from "@/lib/scan-extraction/persist-tokens"
 import { saveVisionRaw } from "@/lib/scan-extraction/save-vision-raw"
 import { SQSClient, SendMessageCommand } from "@aws-sdk/client-sqs"
@@ -297,18 +296,13 @@ export async function handler(
 			answers_total: reconstructedAnswers.length,
 		})
 
-		// Phase 2b — per-question token↔char mapping. For each question with
-		// a non-empty answer_text, ask the LLM to map every assigned OCR
-		// token to its char position in the cleaned answer. Persist on
-		// answer_char_start/end. Downstream consumers (editor seed,
-		// annotation labelling) read these directly — no in-memory aligner,
-		// no fuzzy matching, no Levenshtein. See CLAUDE.md.
-		await persistTokenCharOffsets({
-			jobId,
-			reconstructedAnswers,
-			llm,
-			timeoutMs,
-		})
+		// Note: per-token char offsets (answer_char_start/end) were persisted
+		// inside attributeScript itself — the attribution LLM emits
+		// `corrected_texts` parallel to each page span's tokens (each entry
+		// must appear verbatim in answer_text in order); attributeScript
+		// recovers char positions via cursor-based `indexOf`. No separate
+		// mapping step needed. See CLAUDE.md "Token↔text mapping is the
+		// extract LLM's job".
 
 		await db.ocrRun.update({
 			where: { id: jobId },
@@ -366,105 +360,3 @@ export async function handler(
 	}
 }
 
-// ─── Phase 2b: token char-offset persistence ──────────────────────────────────
-
-type PersistTokenCharOffsetsArgs = {
-	jobId: string
-	reconstructedAnswers: Array<{ question_id: string; answer_text: string }>
-	llm: ReturnType<typeof createLlmRunner>
-	timeoutMs?: import("@mcp-gcse/shared").LlmTimeoutMs
-}
-
-/**
- * For each answered question, call `mapTokensToChars` (LLM) to map every
- * assigned OCR token to its character position in the cleaned `answer_text`.
- * Persist `answer_char_start` / `answer_char_end` on each token row.
- *
- * NO IN-MEMORY MATCHING. The LLM that owns the cleaned text owns the
- * mapping — single source of truth. Downstream consumers (editor seed,
- * annotation prompt) read the persisted offsets directly via
- * `tokenAlignmentFromOffsets`. See CLAUDE.md.
- *
- * Runs questions in parallel (one LLM call per question). Failure of one
- * question logs + skips for that question — the rest still get mapped.
- */
-async function persistTokenCharOffsets({
-	jobId,
-	reconstructedAnswers,
-	llm,
-	timeoutMs,
-}: PersistTokenCharOffsetsArgs): Promise<void> {
-	const answersWithText = reconstructedAnswers.filter((a) =>
-		a.answer_text.trim(),
-	)
-	if (answersWithText.length === 0) return
-
-	const startedAt = Date.now()
-
-	await Promise.all(
-		answersWithText.map(async (answer) => {
-			try {
-				// Tokens have been attributed by Phase 2a — pull them in
-				// reading order (page → para → line → word) for THIS question.
-				const tokens = await db.studentPaperPageToken.findMany({
-					where: {
-						submission_id: jobId,
-						question_id: answer.question_id,
-					},
-					orderBy: [
-						{ page_order: "asc" },
-						{ para_index: "asc" },
-						{ line_index: "asc" },
-						{ word_index: "asc" },
-					],
-					select: {
-						id: true,
-						text_raw: true,
-						text_corrected: true,
-					},
-				})
-
-				if (tokens.length === 0) return
-
-				const { mappings } = await mapTokensToChars({
-					answerText: answer.answer_text,
-					tokens: tokens.map((t) => ({
-						text_raw: t.text_raw,
-						text_corrected: t.text_corrected,
-					})),
-					llm,
-					timeoutMs,
-				})
-
-				// Each mapping refers to tokens in the same input order.
-				const updates: Promise<unknown>[] = []
-				for (const m of mappings) {
-					const token = tokens[m.token_index]
-					if (!token) continue
-					updates.push(
-						db.studentPaperPageToken.update({
-							where: { id: token.id },
-							data: {
-								answer_char_start: m.char_start,
-								answer_char_end: m.char_end,
-							},
-						}),
-					)
-				}
-				await Promise.all(updates)
-			} catch (err) {
-				logger.warn(TAG, "Token char-offset mapping failed for question", {
-					jobId,
-					question_id: answer.question_id,
-					error: String(err),
-				})
-			}
-		}),
-	)
-
-	logger.info(TAG, "Token char-offset persistence complete", {
-		jobId,
-		questions_mapped: answersWithText.length,
-		duration_ms: Date.now() - startedAt,
-	})
-}

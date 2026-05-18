@@ -75,7 +75,12 @@ export const web = new sst.aws.Nextjs("Web", {
 		pdfRendererFn,
 		// Non-prod only: address + creds for the on-demand collab service
 		// scale-up control. Production has no link → server actions early-return.
-		...(collabServiceRef ? [collabServiceRef] : []),
+		// On-demand collab service scale-up control. Always linked so
+		// `Resource.CollabServiceRef` is dereferenceable on every stage;
+		// the Linkable carries empty `clusterArn`/`serviceName` strings
+		// on stages without their own Service. Consumers detect that and
+		// short-circuit. See infra/collab.ts.
+		collabServiceRef,
 	],
 	// Non-prod stages get ECS perms scoped to the dev collab service so the
 	// scale-up server action (and status query) can call DescribeServices /

@@ -1,8 +1,5 @@
 import * as path from "node:path"
-import type {
-	ExpectedScript,
-	SegmentationFixture,
-} from "./y10-scanpaper-1"
+import type { ExpectedScript, SegmentationFixture } from "./y10-scanpaper-1"
 
 /**
  * y10_scanpapers_merged_cleaned — 58-page merged PDF containing 21 Year 10

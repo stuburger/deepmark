@@ -1,8 +1,8 @@
 "use client"
 
+import { StagingReviewDialog } from "@/app/teacher/exam-papers/[id]/staging-review-dialog"
 import { PaperSetupStepper } from "@/components/paper-setup/stepper"
 import { Button } from "@/components/ui/button"
-import { StagingReviewDialog } from "@/app/teacher/exam-papers/[id]/staging-review-dialog"
 import { useBatchIngestion } from "@/lib/batch/lifecycle/use-ingestion"
 import { formatElapsedShort } from "@/lib/format/date"
 import { getPaperSetupSession } from "@/lib/paper-setup/queries"
@@ -41,8 +41,7 @@ export function SessionLiveView({ sessionId }: { sessionId: string }) {
 				data.batch.status === "staging" ||
 				data.batch.status === "committed"
 			const segFailed = data.batch?.status === "failed"
-			const terminal =
-				bundleFailed || segFailed || (bundleDone && segDone)
+			const terminal = bundleFailed || segFailed || (bundleDone && segDone)
 			return terminal ? false : POLL_MS
 		},
 	})
@@ -146,10 +145,7 @@ export function SessionLiveView({ sessionId }: { sessionId: string }) {
 		return (
 			<div className="space-y-6">
 				{stepper}
-				<SegmentingPanel
-					createdAt={session.createdAt}
-					scriptsFilename={null}
-				/>
+				<SegmentingPanel createdAt={session.createdAt} scriptsFilename={null} />
 			</div>
 		)
 	}
@@ -338,13 +334,9 @@ function FailurePanel({
 					<p className="text-sm text-muted-foreground">{message}</p>
 				</div>
 			</div>
-			<Button
-				nativeButton={false}
-				render={<Link href="/teacher/papers/new" />}
-			>
+			<Button nativeButton={false} render={<Link href="/teacher/papers/new" />}>
 				Try again
 			</Button>
 		</div>
 	)
 }
-

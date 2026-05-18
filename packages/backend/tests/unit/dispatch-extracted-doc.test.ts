@@ -149,8 +149,9 @@ describe("dispatchExtractedDocOps", () => {
 							bbox: [0, 0, 100, 100],
 							confidence: 1,
 							question_id: "q1",
-							// Precomputed offsets (produced upstream by mapTokensToChars
-							// at extraction time and persisted on
+							// Precomputed offsets (produced upstream by attributeScript via
+							// cursor-based indexOf over corrected_texts at extraction time
+							// and persisted on
 							// student_paper_page_tokens.answer_char_start/end). The
 							// dispatcher reads these directly via
 							// tokenAlignmentFromOffsets — no in-memory matching.

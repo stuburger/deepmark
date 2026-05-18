@@ -463,9 +463,21 @@ export async function attributeScript({
 		}
 	}
 
-	// ── 6. Persist token question_id + text_corrected ─────────────────────
+	// ── 6. Persist per-token state ────────────────────────────────────────
+	// The LLM authored `answer_text` per question (marker-facing, with
+	// corrections, paragraphs, punctuation). We trust that text and persist
+	// only:
+	//   • `question_id` per attributed token (so consumers can group)
+	//   • `text_corrected` from the sparse `corrections` list (so the scan
+	//     overlay can render the corrected word at the token's bbox)
+	// Token → char-position mapping is NOT precomputed here — consumers do a
+	// runtime fuzzy align via `alignTokensToAnswer` (Levenshtein) when they
+	// need it. Annotation positioning is therefore approximate; the marker
+	// text the grader reads is polished. See CLAUDE.md.
 	const tokenUpdates: Promise<unknown>[] = []
 	let tokensAssigned = 0
+	let correctionsApplied = 0
+
 	for (const [pageOrder, assignments] of assignmentsByPage) {
 		const pagePts = orderedTokensByPage.get(pageOrder) ?? []
 		for (const a of assignments) {
@@ -483,8 +495,6 @@ export async function attributeScript({
 		}
 	}
 
-	// OCR corrections.
-	let correctionsApplied = 0
 	for (const c of parsed.corrections) {
 		const pagePts = orderedTokensByPage.get(c.page)
 		if (!pagePts) continue
@@ -574,8 +584,8 @@ export async function attributeScript({
 		answers_with_text: answers.filter((a) => a.answer_text.length > 0).length,
 		mcq_answered: mcqAnswered,
 		tokens_assigned: tokensAssigned,
-		regions_created: regionRows.length,
 		corrections_applied: correctionsApplied,
+		regions_created: regionRows.length,
 	})
 
 	void logOcrRunEvent(db, jobId, {

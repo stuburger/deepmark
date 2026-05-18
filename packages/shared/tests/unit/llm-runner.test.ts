@@ -41,10 +41,7 @@ function createRunner(
 		stubModel(`${entry.provider}/${entry.model}`),
 	)
 	const logger = { warn: vi.fn(), info: vi.fn() }
-	const runner = new LlmRunner(
-		{ getConfig, resolveModel, logger },
-		overrides,
-	)
+	const runner = new LlmRunner({ getConfig, resolveModel, logger }, overrides)
 	return { runner, getConfig, resolveModel, logger }
 }
 
@@ -269,11 +266,9 @@ describe("LlmRunner", () => {
 	it("does not time out fast-resolving calls", async () => {
 		const { runner } = createRunner({ grading: [GOOGLE_FLASH] })
 
-		const result = await runner.call(
-			"grading",
-			async () => "fast",
-			{ timeoutMs: 1000 },
-		)
+		const result = await runner.call("grading", async () => "fast", {
+			timeoutMs: 1000,
+		})
 
 		expect(result).toBe("fast")
 	})
@@ -307,11 +302,9 @@ describe("LlmRunner", () => {
 		const { runner } = createRunner({ grading: [GOOGLE_FLASH] })
 
 		try {
-			await runner.call(
-				"grading",
-				() => new Promise(() => {}),
-				{ timeoutMs: 25 },
-			)
+			await runner.call("grading", () => new Promise(() => {}), {
+				timeoutMs: 25,
+			})
 			throw new Error("expected timeout")
 		} catch (err) {
 			expect(err).toBeInstanceOf(LlmTimeoutError)
@@ -324,11 +317,7 @@ describe("LlmRunner", () => {
 		const { runner, logger } = createRunner({ grading: [GOOGLE_FLASH] })
 
 		await runner
-			.call(
-				"grading",
-				() => new Promise(() => {}),
-				{ timeoutMs: 30 },
-			)
+			.call("grading", () => new Promise(() => {}), { timeoutMs: 30 })
 			.catch(() => {})
 
 		expect(logger.warn).toHaveBeenCalledWith(

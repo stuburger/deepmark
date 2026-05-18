@@ -170,10 +170,7 @@ const createInput = z.object({
 export const createPaperFromStaged = authenticatedAction
 	.inputSchema(createInput)
 	.action(
-		async ({
-			parsedInput: { files },
-			ctx,
-		}): Promise<{ sessionId: string }> => {
+		async ({ parsedInput: { files }, ctx }): Promise<{ sessionId: string }> => {
 			const qp = files.filter((f) => f.label === "question_paper")
 			const ms = files.filter((f) => f.label === "mark_scheme")
 			const stim = files.filter((f) => f.label === "stimulus_pack")

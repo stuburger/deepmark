@@ -68,6 +68,17 @@ function buildMcqAnswersSchema(mcqQuestions: McqSchemaQuestion[]) {
  * Ranges on the same page must be pairwise disjoint across questions; this
  * is enforced by post-parse validation (overlap → reject + retry).
  *
+ * The LLM also authors `answer_text` per question — a clean, marker-facing
+ * transcription that fixes OCR misreads, preserves student spelling errors,
+ * adds natural punctuation and paragraph breaks. Token char positions are
+ * recovered downstream by fuzzy-matching OCR tokens against this text
+ * (Levenshtein in `alignTokensToAnswer`); annotation positioning is
+ * approximate but the marker reads polished prose.
+ *
+ * Sparse `corrections` patch Cloud Vision OCR misreads on individual
+ * tokens, so `text_corrected` on the token row reflects what the student
+ * actually wrote (used by the scan overlay when rendering raw OCR text).
+ *
  * MCQ answers (`mcq_answers`) are constrained per-question by enum: each
  * MCQ branch literal-matches its `question_id` and enum-matches against
  * the option labels that actually exist on that question.
@@ -83,6 +94,11 @@ export function buildScriptAttributionSchema(
 						.string()
 						.describe(
 							"The question_id exactly as provided in the question list",
+						),
+					answer_text: z
+						.string()
+						.describe(
+							"The student's complete answer, marker-facing, concatenated across all pages it spans. Read directly from the image — clean punctuation, sensible paragraph breaks (use '\\n' for paragraph breaks), and correct Cloud Vision misreads against what you actually see. PRESERVE genuine student spelling errors (e.g. 'excitment', 'aswell', 'definately') — AO6 grades spelling and the marker must see them. Do NOT include printed exam text (question labels, stems, headers, footers, page numbers). Render mathematical symbols and punctuation accurately ('-', '=', '+', '%', '£', etc.).",
 						),
 					pages: z
 						.array(
@@ -107,15 +123,10 @@ export function buildScriptAttributionSchema(
 						.describe(
 							"One entry per page this answer appears on. A multi-page (continuation) answer has one entry per page it spans.",
 						),
-					answer_text: z
-						.string()
-						.describe(
-							"The student's complete answer text for this question, concatenated across all pages it spans, in reading order. PRESERVE original punctuation (-, =, +, commas, full stops, etc.) and mathematical symbols exactly as the student wrote or typed them — read them from the image and transcript, not from the OCR token list (which often drops punctuation). Include line breaks between paragraphs as '\\n'. Do NOT include printed exam text (question labels, stems, headers, footers).",
-						),
 				}),
 			)
 			.describe(
-				"For every question the student ANSWERED (handwritten OR typed inline), the token ranges that contain the student's answer and the clean answer text. Omit questions with no answer anywhere in the script. Omit pages where this question is not answered.",
+				"For every question the student ANSWERED (handwritten OR typed inline), the token ranges that contain the student's answer plus the clean marker-facing answer_text. Omit questions with no answer anywhere in the script. Omit pages where this question is not answered.",
 			),
 		corrections: z
 			.array(
@@ -127,12 +138,12 @@ export function buildScriptAttributionSchema(
 					corrected: z
 						.string()
 						.describe(
-							"The correct word as written or typed by the student, read from the image. Use the page transcript as a reference.",
+							"The correct word as written or typed by the student, read from the image. Verify against the page transcript before correcting.",
 						),
 				}),
 			)
 			.describe(
-				"Tokens where Cloud Vision misread the text. Compare each token against the transcript; include a correction only where Vision clearly got a word wrong. Do NOT correct genuine student spelling mistakes — only Vision OCR failures. Return an empty array if there are no corrections.",
+				"Tokens where Cloud Vision misread the text. Compare each Vision token against the transcript and against what you see on the page; include a correction only where Vision clearly got a word wrong. Do NOT correct genuine student spelling mistakes — only Vision OCR failures. Return an empty array if there are no corrections.",
 			),
 		mcq_answers: buildMcqAnswersSchema(mcqQuestions).describe(
 			"For each MCQ question the student answered, the option letter they picked. Read the student's selection however they indicated it: tick or cross in a checkbox, circled letter, circled option text, filled-in box, or a handwritten or typed letter on blank space. Omit MCQ questions the student did not answer (no entry — do not return an entry with a fabricated label). Empty array if the script has no MCQs or none were answered.",
@@ -219,20 +230,27 @@ Do FOUR things:
      • INVALID (one range inside another): Q1 [0,100), Q2 [50,80)
    - When two answers sit next to each other on a page, pick the exact index where the previous answer ends and the next begins — do NOT include the next question's label or opening token inside the previous answer's range.
    - Include crossings-out and corrections the student made — they belong to the same answer.
-   - Omit questions the student didn't answer. Omit MCQ questions from \`answer_spans\` and \`answer_text\` — MCQ selections are returned in \`mcq_answers\` (step 4 below).
+   - Omit questions the student didn't answer. Omit MCQ questions from \`answer_spans\` — MCQ selections are returned in \`mcq_answers\` (step 4 below).
 
-2. WRITE answer_text per question:
-   - For every question you produced a span for, also return \`answer_text\` — the student's clean, complete answer as written or typed.
-   - PRESERVE punctuation and mathematical symbols the student actually wrote or typed: \`-\`, \`=\`, \`+\`, \`.\`, \`,\`, \`%\`, \`£\`, \`$\`, brackets, arrows, etc. The OCR token list routinely drops these because Cloud Vision's word-level output skips tight/small standalone marks — read them from the image and transcript, not from the tokens.
-   - Concatenate multi-page answers in reading order. Separate paragraphs with a single newline (\`\\n\`).
-   - Keep the student's own spelling and grammar — do NOT silently correct genuine student errors.
-   - Do NOT include printed exam text (question labels like "9.", question stems, "END OF QUESTIONS", page footers). Only what the student wrote or typed.
+2. WRITE \`answer_text\` per question (marker-facing, ONE per question, concatenated across pages):
+   - This is what the marker reads. Read directly from the image and transcribe what the student actually wrote.
+   - Fix Cloud Vision OCR misreads silently — write the correct word as the student wrote it. The OCR token list is a hint, not the source of truth; the image is.
+   - PRESERVE the student's spelling exactly, including genuine misspellings:
+     • Student wrote "excitment" → write "excitment" (do not fix to "excitement"). AO6 grades spelling.
+     • Student wrote "aswell" / "definately" / "alot" → keep verbatim.
+     • Tie-breaker: when in doubt about whether a misspelling is OCR or student, PRESERVE IT. Under-correction is safer than over-correction.
+   - Add punctuation and capitalisation as the student wrote them. Use sensible paragraph breaks ('\\n') where the student left a visible blank line on the page.
+   - PRESERVE mathematical symbols and punctuation: '-', '=', '+', '.', ',', '%', '£', '$', brackets, arrows. Read these from the image — Cloud Vision's word tokens routinely drop standalone marks.
+   - Concatenate multi-page answers in reading order. Separate paragraphs with a single '\\n'.
+   - Do NOT include printed exam text (question labels like "9.", question stems, "END OF QUESTIONS", page footers like "4 | Page"). Only what the student wrote or typed.
+   - Do NOT include the student's name written on a cover page or in a name field — that's not part of any answer.
 
-3. CORRECT OCR misreads (optional):
-   - Compare each token's text against the transcript for that page.
-   - If Cloud Vision clearly misread a word (e.g. Vision "Suly", transcript "Sales"), return a correction.
-   - Do NOT correct genuine student spelling errors — only Vision OCR failures.
-   - Skip tokens Vision read correctly.
+3. PATCH Cloud Vision OCR misreads (\`corrections\`):
+   - For each token where Vision clearly misread the word, return \`{ page, token_index, corrected }\`. This populates \`text_corrected\` on the token row so the scan overlay can show what the student actually wrote at that token's bbox.
+   - Identify Vision misreads by comparing the OCR token against the page transcript AND the image. If transcript and image agree on word X but the OCR token reads Y, correct to X.
+   - DO NOT correct genuine STUDENT spelling errors — same rules as step 2 above.
+   - Return an empty \`corrections\` array if Vision got everything right. Most tokens are correct; corrections are sparse.
+   - Do NOT emit corrections for tokens outside any \`answer_spans\` range — patching printed exam text or page headers wastes output budget.
 
 4. EXTRACT MCQ selections (\`mcq_answers\`):
    - For every question marked [multiple-choice] in the question list, identify the single option letter the student selected by inspecting the page image.

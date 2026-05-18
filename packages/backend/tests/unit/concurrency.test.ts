@@ -42,16 +42,12 @@ describe("concurrencyLimit", () => {
 	it("runs serially when concurrency is 1", async () => {
 		let inFlight = 0
 		let peakInFlight = 0
-		await concurrencyLimit(
-			1,
-			Array.from({ length: 5 }),
-			async () => {
-				inFlight++
-				peakInFlight = Math.max(peakInFlight, inFlight)
-				await new Promise((r) => setTimeout(r, 5))
-				inFlight--
-			},
-		)
+		await concurrencyLimit(1, Array.from({ length: 5 }), async () => {
+			inFlight++
+			peakInFlight = Math.max(peakInFlight, inFlight)
+			await new Promise((r) => setTimeout(r, 5))
+			inFlight--
+		})
 		expect(peakInFlight).toBe(1)
 	})
 
@@ -74,15 +70,15 @@ describe("concurrencyLimit", () => {
 	})
 
 	it("rejects on invalid concurrency (zero, negative, non-integer)", async () => {
-		await expect(
-			concurrencyLimit(0, [1, 2], async (x) => x),
-		).rejects.toThrow(/concurrency/i)
-		await expect(
-			concurrencyLimit(-1, [1, 2], async (x) => x),
-		).rejects.toThrow(/concurrency/i)
-		await expect(
-			concurrencyLimit(1.5, [1, 2], async (x) => x),
-		).rejects.toThrow(/concurrency/i)
+		await expect(concurrencyLimit(0, [1, 2], async (x) => x)).rejects.toThrow(
+			/concurrency/i,
+		)
+		await expect(concurrencyLimit(-1, [1, 2], async (x) => x)).rejects.toThrow(
+			/concurrency/i,
+		)
+		await expect(concurrencyLimit(1.5, [1, 2], async (x) => x)).rejects.toThrow(
+			/concurrency/i,
+		)
 	})
 
 	it("passes the index as the second argument to fn", async () => {

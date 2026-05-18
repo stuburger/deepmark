@@ -3,8 +3,8 @@
 import {
 	type TextMark,
 	type TokenAlignment,
+	alignTokensToAnswer,
 	deriveTextMarks,
-	tokenAlignmentFromOffsets,
 } from "@mcp-gcse/shared"
 import { useMemo } from "react"
 import type { GradingResult, PageToken, StudentPaperAnnotation } from "../types"
@@ -22,13 +22,10 @@ export type QuestionAlignments = {
  * Computes token alignment, text marks, and per-question token maps from
  * grading results, annotations, and page tokens.
  *
- * Reads precomputed `answer_char_start` / `answer_char_end` directly off
- * the token rows (populated upstream by the extract Lambda's
- * `mapTokensToChars` step). Pure reshape — NO LEVENSHTEIN, NO FUZZY
- * MATCHING, NO IN-MEMORY ALIGNMENT. See CLAUDE.md.
- *
- * Tokens whose offsets are null (page artifacts the extract LLM didn't
- * map to any answer word) are skipped — no fallback.
+ * Uses `alignTokensToAnswer` (Levenshtein) at runtime to map each OCR
+ * token to a char range in the LLM-authored `student_answer`. Annotation
+ * positioning is approximate by design — the grader-facing text is the
+ * canonical source of truth; annotation highlights are a visual aid.
  */
 export function useQuestionAlignments(
 	gradingResults: GradingResult[],
@@ -48,7 +45,7 @@ export function useQuestionAlignments(
 
 			tokensMap.set(r.question_id, qTokens)
 
-			const alignment = tokenAlignmentFromOffsets(qTokens)
+			const alignment = alignTokensToAnswer(r.student_answer ?? "", qTokens)
 			if (Object.keys(alignment.tokenMap).length === 0) continue
 
 			alignments.set(r.question_id, alignment)

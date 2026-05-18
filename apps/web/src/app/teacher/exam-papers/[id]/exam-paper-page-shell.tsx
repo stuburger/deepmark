@@ -32,6 +32,7 @@ import {
 	TooltipProvider,
 	TooltipTrigger,
 } from "@/components/ui/tooltip"
+import { useBatchIngestion } from "@/lib/batch/lifecycle/use-ingestion"
 import type { Currency } from "@/lib/billing/types"
 import { deleteExamPaper } from "@/lib/exam-paper/paper/mutations"
 import type {
@@ -65,7 +66,6 @@ import { EditableTitle } from "./editable-title"
 import { ExamPaperAnalyticsTab } from "./exam-paper-analytics-tab"
 import { capitalize } from "./exam-paper-helpers"
 import { ExamPaperQuestionsCard } from "./exam-paper-questions-card"
-import { useBatchIngestion } from "@/lib/batch/lifecycle/use-ingestion"
 import { useExamPaperLiveQueries } from "./hooks/use-exam-paper-live-queries"
 import { useLinkMarkScheme } from "./hooks/use-exam-paper-mutations"
 import { useSimilarQuestions } from "./hooks/use-similar-questions"

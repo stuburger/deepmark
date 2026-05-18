@@ -6,41 +6,41 @@ import {
 	staticFile,
 	useCurrentFrame,
 	useVideoConfig,
-} from "remotion";
-import type { PageScene } from "../data/types";
-import { AnnotationCallout } from "./AnnotationCallout";
-import { AnnotationOverlay } from "./AnnotationOverlay";
-import { tokens } from "./tokens";
+} from "remotion"
+import type { PageScene } from "../data/types"
+import { AnnotationCallout } from "./AnnotationCallout"
+import { AnnotationOverlay } from "./AnnotationOverlay"
+import { tokens } from "./tokens"
 
 type Props = {
-	scene: PageScene;
-};
+	scene: PageScene
+}
 
-const PAGE_ENTER_FRAMES = 18;
-const ANNOTATION_STAGGER = 22;
-const ANNOTATION_DURATION = 130;
+const PAGE_ENTER_FRAMES = 18
+const ANNOTATION_STAGGER = 22
+const ANNOTATION_DURATION = 130
 
 export function getPageSceneDuration(scene: PageScene) {
 	const lastEnter =
-		PAGE_ENTER_FRAMES + (scene.annotations.length - 1) * ANNOTATION_STAGGER;
-	return lastEnter + ANNOTATION_DURATION + 30;
+		PAGE_ENTER_FRAMES + (scene.annotations.length - 1) * ANNOTATION_STAGGER
+	return lastEnter + ANNOTATION_DURATION + 30
 }
 
 export function PageSceneComp({ scene }: Props) {
-	const frame = useCurrentFrame();
-	const { fps } = useVideoConfig();
+	const frame = useCurrentFrame()
+	const { fps } = useVideoConfig()
 
 	const enter = spring({
 		frame,
 		fps,
 		config: { damping: 18, stiffness: 110, mass: 0.9 },
-	});
+	})
 	const pageOpacity = interpolate(frame, [0, 14], [0, 1], {
 		extrapolateRight: "clamp",
-	});
-	const pageScale = 0.965 + 0.035 * enter;
+	})
+	const pageScale = 0.965 + 0.035 * enter
 
-	const tally = computeRunningTally(scene, frame);
+	const tally = computeRunningTally(scene, frame)
 
 	return (
 		<AbsoluteFill
@@ -74,7 +74,7 @@ export function PageSceneComp({ scene }: Props) {
 					}}
 				>
 					{scene.annotations.map((annotation, idx) => {
-						const enterDelay = PAGE_ENTER_FRAMES + idx * ANNOTATION_STAGGER;
+						const enterDelay = PAGE_ENTER_FRAMES + idx * ANNOTATION_STAGGER
 						return (
 							<AnnotationCallout
 								key={idx}
@@ -82,7 +82,7 @@ export function PageSceneComp({ scene }: Props) {
 								enterDelayFrames={enterDelay}
 								exitFrame={enterDelay + ANNOTATION_DURATION + 30}
 							/>
-						);
+						)
 					})}
 				</div>
 				<FinalMarkChip scene={scene} />
@@ -130,15 +130,15 @@ export function PageSceneComp({ scene }: Props) {
 				</div>
 			</div>
 		</AbsoluteFill>
-	);
+	)
 }
 
 function QuestionHeader({
 	scene,
 	tally,
 }: {
-	scene: PageScene;
-	tally: number;
+	scene: PageScene
+	tally: number
 }) {
 	return (
 		<div
@@ -202,21 +202,21 @@ function QuestionHeader({
 				</span>
 			</div>
 		</div>
-	);
+	)
 }
 
 function FinalMarkChip({ scene }: { scene: PageScene }) {
-	const frame = useCurrentFrame();
-	const { fps } = useVideoConfig();
-	const total = getPageSceneDuration(scene);
-	const local = frame - (total - 65);
-	if (local < 0) return null;
+	const frame = useCurrentFrame()
+	const { fps } = useVideoConfig()
+	const total = getPageSceneDuration(scene)
+	const local = frame - (total - 65)
+	if (local < 0) return null
 
 	const enter = spring({
 		frame: local,
 		fps,
 		config: { damping: 14, stiffness: 130, mass: 0.7 },
-	});
+	})
 
 	return (
 		<div
@@ -248,18 +248,18 @@ function FinalMarkChip({ scene }: { scene: PageScene }) {
 				{scene.feedbackSummary}
 			</div>
 		</div>
-	);
+	)
 }
 
 function computeRunningTally(scene: PageScene, frame: number) {
 	// Tally ramps up over the duration of the annotation stagger, then locks.
 	const lastFrame =
-		PAGE_ENTER_FRAMES + (scene.annotations.length - 1) * ANNOTATION_STAGGER + 20;
+		PAGE_ENTER_FRAMES + (scene.annotations.length - 1) * ANNOTATION_STAGGER + 20
 	const t = interpolate(frame, [PAGE_ENTER_FRAMES, lastFrame], [0, 1], {
 		extrapolateLeft: "clamp",
 		extrapolateRight: "clamp",
-	});
-	return Math.round(t * scene.awarded);
+	})
+	return Math.round(t * scene.awarded)
 }
 
 function DotGrid() {
@@ -276,5 +276,5 @@ function DotGrid() {
 				zIndex: 0,
 			}}
 		/>
-	);
+	)
 }

@@ -1,48 +1,48 @@
-import { interpolate, spring, useCurrentFrame, useVideoConfig } from "remotion";
-import type { Annotation } from "../data/types";
-import { tokens } from "./tokens";
+import { interpolate, spring, useCurrentFrame, useVideoConfig } from "remotion"
+import type { Annotation } from "../data/types"
+import { tokens } from "./tokens"
 
 type Props = {
-	annotation: Annotation;
-	enterDelayFrames: number;
-};
+	annotation: Annotation
+	enterDelayFrames: number
+}
 
 // Bbox is [yMin, xMin, yMax, xMax] normalised 0–1000 — convert to percentage of
 // the page surface so the overlay sits exactly where the marker pointed.
 function bboxToStyle(bbox: Annotation["bbox"]) {
-	const [yMin, xMin, yMax, xMax] = bbox;
+	const [yMin, xMin, yMax, xMax] = bbox
 	return {
 		top: `${yMin / 10}%`,
 		left: `${xMin / 10}%`,
 		width: `${(xMax - xMin) / 10}%`,
 		height: `${(yMax - yMin) / 10}%`,
-	} as const;
+	} as const
 }
 
 function colorForSentiment(sentiment: Annotation["sentiment"]) {
-	if (sentiment === "negative") return tokens.error;
-	if (sentiment === "neutral") return tokens.warning;
-	return tokens.success;
+	if (sentiment === "negative") return tokens.error
+	if (sentiment === "neutral") return tokens.warning
+	return tokens.success
 }
 
 export function AnnotationOverlay({ annotation, enterDelayFrames }: Props) {
-	const frame = useCurrentFrame();
-	const { fps } = useVideoConfig();
+	const frame = useCurrentFrame()
+	const { fps } = useVideoConfig()
 
-	const local = frame - enterDelayFrames;
-	if (local < 0) return null;
+	const local = frame - enterDelayFrames
+	if (local < 0) return null
 
 	const progress = spring({
 		frame: local,
 		fps,
 		config: { damping: 14, stiffness: 140, mass: 0.7 },
-	});
+	})
 	const drawProgress = interpolate(local, [0, 18], [0, 1], {
 		extrapolateRight: "clamp",
-	});
+	})
 
-	const color = colorForSentiment(annotation.sentiment);
-	const style = bboxToStyle(annotation.bbox);
+	const color = colorForSentiment(annotation.sentiment)
+	const style = bboxToStyle(annotation.bbox)
 
 	return (
 		<div
@@ -61,7 +61,7 @@ export function AnnotationOverlay({ annotation, enterDelayFrames }: Props) {
 				draw={drawProgress}
 			/>
 		</div>
-	);
+	)
 }
 
 function SignalShape({
@@ -69,14 +69,14 @@ function SignalShape({
 	color,
 	draw,
 }: {
-	signal: Annotation["signal"];
-	color: string;
-	draw: number;
+	signal: Annotation["signal"]
+	color: string
+	draw: number
 }) {
 	if (signal === "underline" || signal === "double_underline") {
 		// Hand-drawn-feeling underline anchored to the baseline of the bbox.
-		const pathLength = 100;
-		const visible = pathLength * draw;
+		const pathLength = 100
+		const visible = pathLength * draw
 		return (
 			<svg
 				viewBox="0 0 100 20"
@@ -112,12 +112,12 @@ function SignalShape({
 					/>
 				)}
 			</svg>
-		);
+		)
 	}
 
 	if (signal === "box") {
-		const total = 400;
-		const visible = total * draw;
+		const total = 400
+		const visible = total * draw
 		return (
 			<svg
 				viewBox="0 0 100 60"
@@ -143,12 +143,12 @@ function SignalShape({
 					strokeDasharray={`${visible} ${total}`}
 				/>
 			</svg>
-		);
+		)
 	}
 
 	if (signal === "circle") {
-		const total = 240;
-		const visible = total * draw;
+		const total = 240
+		const visible = total * draw
 		return (
 			<svg
 				viewBox="0 0 100 60"
@@ -173,7 +173,7 @@ function SignalShape({
 					strokeDasharray={`${visible} ${total}`}
 				/>
 			</svg>
-		);
+		)
 	}
 
 	if (signal === "tick") {
@@ -190,7 +190,7 @@ function SignalShape({
 					strokeDasharray={`${40 * draw} 40`}
 				/>
 			</MarginGlyph>
-		);
+		)
 	}
 
 	if (signal === "cross") {
@@ -215,10 +215,10 @@ function SignalShape({
 					strokeDasharray={`${20 * draw} 20`}
 				/>
 			</MarginGlyph>
-		);
+		)
 	}
 
-	return null;
+	return null
 }
 
 function MarginGlyph({
@@ -226,9 +226,9 @@ function MarginGlyph({
 	draw,
 	children,
 }: {
-	color: string;
-	draw: number;
-	children: React.ReactNode;
+	color: string
+	draw: number
+	children: React.ReactNode
 }) {
 	return (
 		<svg
@@ -246,5 +246,5 @@ function MarginGlyph({
 		>
 			{children}
 		</svg>
-	);
+	)
 }

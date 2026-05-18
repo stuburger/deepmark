@@ -47,6 +47,11 @@ declare module "sst" {
       "type": "sst.aws.Function"
       "url": string
     }
+    "CollabServiceRef": {
+      "clusterArn": string
+      "serviceName": string
+      "type": "sst.sst.Linkable"
+    }
     "CollabServiceSecret": {
       "type": "sst.sst.Secret"
       "value": string

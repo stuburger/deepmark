@@ -331,22 +331,6 @@ export const LLM_CALL_SITE_DEFAULTS: Array<{
 		],
 	},
 	{
-		key: "token-char-mapping",
-		display_name: "Token → Char Mapping",
-		description:
-			"Per-question map of OCR token → char range in the cleaned student_answer. Runs once per answered question after attribution; the LLM that authored the cleaned text owns the mapping. Replaces all client- and server-side fuzzy alignment (see CLAUDE.md: no Levenshtein, no in-memory text matching).",
-		input_type: "text",
-		phase: "answer-detection",
-		step: 3,
-		multiplier: "per-question",
-		// Flash is plenty for the focused word-indexing task. Anthropic
-		// fallback covers Gemini overload windows.
-		models: [
-			{ provider: "google", model: "gemini-2.5-flash", temperature: 0 },
-			{ provider: "anthropic", model: "claude-sonnet-4-6", temperature: 0 },
-		],
-	},
-	{
 		key: "script-attribution",
 		display_name: "Script-Level Answer Attribution",
 		description:

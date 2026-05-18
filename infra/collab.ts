@@ -184,23 +184,22 @@ if (collabService && !_PRODUCTION_) {
  * Resolves to `{ clusterArn, serviceName }` for a stage's collab Service —
  * used by the web app + scale-down cron to call ECS UpdateService.
  *
- * Currently defined ONLY when a stage owns its own collabService (i.e.
- * `hasStageVpc && !_PRODUCTION_`, which is no stage today). Production
- * doesn't expose scale-up (always-on); stages without their own Service
- * have nothing local to scale and don't reach into another stage's plane.
- *
- * The SSM-based cross-stage lookup that used to live here was tied to a
- * design where development published its (cluster, service) tuple for PR
- * stages to scale. With dev no longer owning a Service, no one publishes
- * — so consumers get `undefined` and skip the scale-up flow gracefully.
- * Both `crons.ts` and `web.ts` already guard on truthiness.
+ * Always synthesised so consumers can dereference `Resource.CollabServiceRef`
+ * without throwing "not linked". When the stage doesn't own a real Service
+ * (production: always-on; personal stages: nothing local to scale) the
+ * properties are empty strings — consumers detect that as "no manageable
+ * service" and short-circuit. We chose placeholder-link over try/catch
+ * because SST's Resource accessor THROWS rather than returning undefined
+ * for unlinked names, and `??` can't catch a throw.
  */
-export const collabServiceRef = collabService
-	? new sst.Linkable("CollabServiceRef", {
-			properties: {
-				// biome-ignore lint/style/noNonNullAssertion: collabService implies cluster
-				clusterArn: cluster!.nodes.cluster.arn,
-				serviceName: collabService.nodes.service.name,
-			},
-		})
-	: undefined
+const collabServiceProperties = collabService
+	? {
+			// biome-ignore lint/style/noNonNullAssertion: collabService implies cluster
+			clusterArn: cluster!.nodes.cluster.arn as unknown as string,
+			serviceName: collabService.nodes.service.name as unknown as string,
+		}
+	: { clusterArn: "", serviceName: "" }
+
+export const collabServiceRef = new sst.Linkable("CollabServiceRef", {
+	properties: collabServiceProperties,
+})

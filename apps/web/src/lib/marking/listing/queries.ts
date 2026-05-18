@@ -58,7 +58,9 @@ async function fetchPapersForListing(
 		existing.sections.push({
 			choice_kind: section.choice_kind,
 			choice_n: section.choice_n,
-			question_ids: section.exam_section_questions.map((esq) => esq.question.id),
+			question_ids: section.exam_section_questions.map(
+				(esq) => esq.question.id,
+			),
 		})
 		out.set(paperId, existing)
 	}

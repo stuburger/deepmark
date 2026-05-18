@@ -73,16 +73,19 @@ For LoR especially, `content` should be canonical and stable across extractions.
 
 Same MS → same intermediate → same markdown. Repeatability is earned at the renderer, not at the LLM. New subject quirks land in the catch-all `extras` field and the renderer appends them; no schema migration.
 
-### No fuzzy text matching, anywhere
+### Fuzzy text matching — bounded use only
 
-**No Levenshtein. No normalised edit distance. No "if it's a close enough string match, count it." No in-memory text-to-text alignment of any kind.** If two pieces of text need to be related (OCR tokens ↔ cleaned answer text, descriptor evidence ↔ student writing, anything else), the LLM that produces one of the texts is the one that emits the mapping — at source, exactly, persisted on the row.
+**Fuzzy matching (Levenshtein, normalised edit distance) is acceptable for ONE thing only: positioning annotation highlights over the LLM-authored `student_answer` at consumer load time.** Annotation positioning is a visual aid; getting it ~90% right is fine because the grader-facing text is the source of truth, not the highlight location.
 
-Concretely:
-- OCR token → char position in cleaned `answer_text` is produced by the extract Lambda's `mapTokensToChars` LLM call and persisted on `student_paper_page_tokens.answer_char_start/end`. Downstream consumers reshape via `tokenAlignmentFromOffsets` (pure lookup, zero matching).
-- Annotation anchor → token is the annotation LLM's job, given clean text + token aliases — no string matching by the dispatcher.
-- A token whose offsets are null is a page artifact the extract LLM decided doesn't belong to any answer word. Skip it. Do not "fall back" to fuzzy matching to recover it.
+**Where fuzzy matching is BANNED:**
+- **Marking decisions.** The marker LLM never picks between mark points / descriptors by string-distance heuristics. Every Level award and mark-point allocation must come from explicit LLM judgement, not "this word looks similar to that word."
+- **Attribution boundaries.** Which tokens belong to which question is the LLM's job in `attributeScript`, emitted as exact `[token_start, token_end)` ranges. Never fuzzy-match OCR tokens against a question's expected text to decide membership.
+- **Mark-scheme alignment.** Descriptor evidence ↔ student writing is the marker LLM's call (verbatim quote or close paraphrase, the LLM judges), not a Levenshtein match by code.
 
-The rule exists because fuzzy text matching ALWAYS produces silent miscalibration: spelling drift between OCR and clean text causes Levenshtein to either accept wrong matches (annotation lands on the wrong word) or reject right ones (annotation disappears). Both bugs look fine in code review and surface as unexplainable UI weirdness in production. The architecturally correct answer is to never need the bridge — the LLM that owns the canonical text owns the mapping.
+**Where it's allowed:**
+- `alignTokensToAnswer(student_answer, tokens)` in `@mcp-gcse/shared/editor/alignment` — fuzzy-maps OCR tokens to char positions in the LLM-authored answer text so the editor/PDF/scan overlay can draw annotation highlights. Approximate by design.
+
+The boundary: anything the grader's score depends on must be explicit LLM judgement. Anything that's purely visual decoration over the canonical answer text can use fuzzy matching to avoid the cost of an extra LLM call.
 
 ### Holistic judgements are not allowed
 

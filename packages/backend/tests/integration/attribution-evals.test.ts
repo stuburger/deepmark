@@ -1,3 +1,6 @@
+import { mkdir, writeFile } from "node:fs/promises"
+import { join } from "node:path"
+import { sortTokensSpatially } from "@mcp-gcse/shared"
 import { db } from "@mcp-gcse/test-utils"
 import { Resource } from "sst"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
@@ -7,14 +10,13 @@ import {
 	type AttributeScriptQuestion,
 	attributeScript,
 } from "../../src/lib/scan-extraction/attribute-script"
-import { sortTokensSpatially } from "@mcp-gcse/shared"
 import { AARON_BROWN_FIXTURE } from "./fixtures/attribution/aaron-brown/fixture"
 import { KAI_JASSI_FIXTURE } from "./fixtures/attribution/kai-jassi/fixture"
-import { RYAN_C_TYPED_FIXTURE } from "./fixtures/attribution/ryan-c-typed/fixture"
 import {
 	cleanupSubmission,
 	seedFixture,
 } from "./fixtures/attribution/load-fixture"
+import { RYAN_C_TYPED_FIXTURE } from "./fixtures/attribution/ryan-c-typed/fixture"
 import type { FixtureSpec } from "./fixtures/attribution/shared-types"
 
 /**
@@ -48,6 +50,77 @@ const FIXTURES: FixtureSpec[] = [
 ]
 
 const ATTRIBUTION_TIMEOUT_MS = 5 * 60_000
+
+const OUTPUT_DIR = join(__dirname, "output")
+
+/**
+ * Writes a markdown snapshot of the per-question `answer_text` produced by
+ * the current attribution pipeline, alongside per-question token counts and
+ * OCR-correction counts. Non-asserting — purely for human inspection. The
+ * `tests/integration/output/` directory is gitignored.
+ */
+async function writeAnswerTextSnapshot({
+	fixtureName,
+	submissionId,
+	fixtureQuestions,
+	answersByQuestionId,
+}: {
+	fixtureName: string
+	submissionId: string
+	fixtureQuestions: FixtureSpec["questions"]
+	answersByQuestionId: Map<string, string>
+}): Promise<void> {
+	const tokenStats = await db.studentPaperPageToken.findMany({
+		where: { submission_id: submissionId, question_id: { not: null } },
+		select: { question_id: true, text_corrected: true },
+	})
+	const statsById = new Map<string, { tokens: number; corrected: number }>()
+	for (const t of tokenStats) {
+		if (!t.question_id) continue
+		const entry = statsById.get(t.question_id) ?? { tokens: 0, corrected: 0 }
+		entry.tokens++
+		if (t.text_corrected) entry.corrected++
+		statsById.set(t.question_id, entry)
+	}
+
+	const lines: string[] = []
+	lines.push(`# Attribution snapshot — ${fixtureName}`)
+	lines.push("")
+	lines.push(`Generated: ${new Date().toISOString()}`)
+	lines.push(`Submission: \`${submissionId}\``)
+	lines.push("")
+
+	for (const q of fixtureQuestions) {
+		const answer = answersByQuestionId.get(q.id) ?? ""
+		const stats = statsById.get(q.id) ?? { tokens: 0, corrected: 0 }
+		const isMcq = q.question_type === "multiple_choice"
+		const truncatedQuestion =
+			q.text.length > 200 ? `${q.text.slice(0, 200)}…` : q.text
+
+		lines.push(`## Q${q.question_number}${isMcq ? " [MCQ]" : ""}`)
+		lines.push("")
+		lines.push(`**Question:** ${truncatedQuestion}`)
+		lines.push("")
+		lines.push(
+			`**Tokens attributed:** ${stats.tokens} · **OCR corrections:** ${stats.corrected} · **Answer length:** ${answer.length} chars`,
+		)
+		lines.push("")
+		if (answer.length === 0) {
+			lines.push("_(no answer attributed)_")
+		} else {
+			lines.push("**Answer text:**")
+			lines.push("")
+			lines.push("```")
+			lines.push(answer)
+			lines.push("```")
+		}
+		lines.push("")
+	}
+
+	await mkdir(OUTPUT_DIR, { recursive: true })
+	const outputPath = join(OUTPUT_DIR, `${fixtureName}.md`)
+	await writeFile(outputPath, lines.join("\n"), "utf-8")
+}
 
 describe.each(FIXTURES)("script-level attribution evals — $name", (fixture) => {
 	const submissionId = `sub-eval-${fixture.name}-${Date.now()}`
@@ -91,6 +164,16 @@ describe.each(FIXTURES)("script-level attribution evals — $name", (fixture) =>
 				q.id,
 			]),
 		)
+
+		// Snapshot the rendered answer_text for human inspection. Non-asserting
+		// — just lets the reader see what the new compose loop actually emits.
+		// File path is gitignored; rerun the eval to refresh.
+		await writeAnswerTextSnapshot({
+			fixtureName: fixture.name,
+			submissionId,
+			fixtureQuestions: fixture.questions,
+			answersByQuestionId,
+		})
 	}, ATTRIBUTION_TIMEOUT_MS)
 
 	afterAll(async () => {
@@ -255,6 +338,18 @@ describe.each(FIXTURES)("script-level attribution evals — $name", (fixture) =>
 			missingText,
 			`${missingText.length} attributed question(s) produced no answer_text: [${missingText.join(", ")}]. Attribution must return answer_text whenever it assigns tokens.`,
 		).toEqual([])
+	})
+
+	// Evals 7 / 8 / 9 (char-offset coverage, range validity, monotonicity)
+	// were specific to the compose-loop architecture that wrote
+	// answer_char_start/end at extraction time. Under the LLM-authored
+	// answer_text + runtime fuzzy alignment design, those columns are not
+	// populated by attribution and char positions are recomputed by
+	// consumers via `alignTokensToAnswer` on demand. The evals no longer
+	// have anything to assert — annotation positioning is approximate by
+	// design and not verifiable from the DB alone.
+	it.skip("Eval 7 — RETIRED (char offsets no longer written by attribution)", () => {
+		expect(true).toBe(true)
 	})
 
 	// ── Eval 6 — punctuation preservation in answer_text ───────────────────

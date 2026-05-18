@@ -264,7 +264,9 @@ function toJobPayload(
 		sections: (sub.exam_paper?.sections ?? []).map((section) => ({
 			choice_kind: section.choice_kind,
 			choice_n: section.choice_n,
-			question_ids: section.exam_section_questions.map((esq) => esq.question.id),
+			question_ids: section.exam_section_questions.map(
+				(esq) => esq.question.id,
+			),
 		})),
 		results: preTaggedResults,
 	})

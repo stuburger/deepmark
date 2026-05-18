@@ -4,11 +4,11 @@ import {
 	type McqRow,
 	type OcrTokenSpec,
 	type PageToken,
+	alignTokensToAnswer,
 	applyOcrTokenMarks,
 	insertMcqTableBlock,
 	insertQuestionBlock,
 	setAnswerText,
-	tokenAlignmentFromOffsets,
 } from "@mcp-gcse/shared"
 import type { EditorView } from "@tiptap/pm/view"
 import { HeadlessEditor } from "./headless-editor"
@@ -139,7 +139,7 @@ export function dispatchExtractedDocOps(
 		setAnswerText(view, q.questionId, answer.text)
 
 		if (answer.tokens.length === 0) continue
-		const alignment = tokenAlignmentFromOffsets(answer.tokens)
+		const alignment = alignTokensToAnswer(answer.text, answer.tokens)
 		const tokenSpecs: OcrTokenSpec[] = []
 		for (const t of answer.tokens) {
 			const offset = alignment.tokenMap[t.id]

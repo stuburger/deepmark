@@ -21,9 +21,7 @@ const appDir = path.join(projectRoot, "src", "app")
 
 async function detectAlphaBounds(imagePath) {
 	const image = sharp(imagePath).ensureAlpha()
-	const { data, info } = await image
-		.raw()
-		.toBuffer({ resolveWithObject: true })
+	const { data, info } = await image.raw().toBuffer({ resolveWithObject: true })
 
 	let minX = info.width
 	let minY = info.height

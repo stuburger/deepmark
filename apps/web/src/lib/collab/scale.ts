@@ -45,8 +45,16 @@ export type CollabServiceStatus = {
 	autoStopsAt: string | null
 }
 
+/**
+ * `Resource.CollabServiceRef` is always linked (see infra/collab.ts) but
+ * carries empty-string placeholder properties on stages without a real
+ * Service (production: always-on; personal `sst dev` stages: nothing to
+ * scale). Detect the placeholder via empty values and hide the UI.
+ */
 function ref(): { clusterArn: string; serviceName: string } | null {
-	return Resource.CollabServiceRef ?? null
+	const r = Resource.CollabServiceRef
+	if (!r?.clusterArn || !r?.serviceName) return null
+	return { clusterArn: r.clusterArn, serviceName: r.serviceName }
 }
 
 export const getCollabStatus = authenticatedAction.action(

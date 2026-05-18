@@ -4,29 +4,29 @@ import {
 	spring,
 	useCurrentFrame,
 	useVideoConfig,
-} from "remotion";
-import { tokens } from "./tokens";
+} from "remotion"
+import { tokens } from "./tokens"
 
 type Props = {
-	studentName: string;
-	paperTitle: string;
-	awarded: number;
-	max: number;
-};
+	studentName: string
+	paperTitle: string
+	awarded: number
+	max: number
+}
 
-export const INTRO_DURATION = 90;
+export const INTRO_DURATION = 90
 
 export function IntroCard({ studentName, paperTitle, awarded, max }: Props) {
-	const frame = useCurrentFrame();
-	const { fps } = useVideoConfig();
-	const enter = spring({ frame, fps, config: { damping: 18, stiffness: 110 } });
+	const frame = useCurrentFrame()
+	const { fps } = useVideoConfig()
+	const enter = spring({ frame, fps, config: { damping: 18, stiffness: 110 } })
 	const exit = interpolate(
 		frame,
 		[INTRO_DURATION - 16, INTRO_DURATION],
 		[1, 0],
 		{ extrapolateLeft: "clamp", extrapolateRight: "clamp" },
-	);
-	const opacity = Math.min(enter, exit);
+	)
+	const opacity = Math.min(enter, exit)
 
 	return (
 		<AbsoluteFill
@@ -81,7 +81,8 @@ export function IntroCard({ studentName, paperTitle, awarded, max }: Props) {
 					}}
 				>
 					Watch us mark{" "}
-					<span style={{ color: tokens.teal }}>{studentName}'s</span> {paperTitle}.
+					<span style={{ color: tokens.teal }}>{studentName}'s</span>{" "}
+					{paperTitle}.
 				</div>
 				<div
 					style={{
@@ -101,7 +102,7 @@ export function IntroCard({ studentName, paperTitle, awarded, max }: Props) {
 				</div>
 			</div>
 		</AbsoluteFill>
-	);
+	)
 }
 
 function Stat({ label, value }: { label: string; value: string }) {
@@ -121,7 +122,7 @@ function Stat({ label, value }: { label: string; value: string }) {
 				{value}
 			</div>
 		</div>
-	);
+	)
 }
 
 function Divider() {
@@ -133,5 +134,5 @@ function Divider() {
 				background: tokens.border,
 			}}
 		/>
-	);
+	)
 }

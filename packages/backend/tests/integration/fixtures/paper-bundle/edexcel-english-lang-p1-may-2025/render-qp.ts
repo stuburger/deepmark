@@ -266,10 +266,14 @@ function drawSection(ctx: Ctx, section: Section): Ctx {
 	// Pearson always prints a "TOTAL FOR SECTION X = N MARKS" line. For
 	// any_n_of sections N reflects the choice (one alternative's marks), not
 	// the sum of alternatives.
-	c = drawText(c, `TOTAL FOR ${section.title} = ${section.printedTotal} MARKS`, {
-		font: c.bold,
-		size: 11,
-	})
+	c = drawText(
+		c,
+		`TOTAL FOR ${section.title} = ${section.printedTotal} MARKS`,
+		{
+			font: c.bold,
+			size: 11,
+		},
+	)
 	if (section.title === "SECTION B") {
 		c = spacer(c, 12)
 		c = drawText(c, SPAG_FOOTNOTE, {
@@ -329,7 +333,9 @@ async function main() {
 	const out = path.join(__dirname, "question-paper.pdf")
 	const bytes = await doc.save()
 	fs.writeFileSync(out, bytes)
-	console.log(`wrote ${out} (${bytes.byteLength} bytes, ${ctx.doc.getPageCount()} pages)`)
+	console.log(
+		`wrote ${out} (${bytes.byteLength} bytes, ${ctx.doc.getPageCount()} pages)`,
+	)
 }
 
 main().catch((err) => {

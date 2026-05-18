@@ -9,7 +9,7 @@ import {
 import type { LanguageModel } from "ai"
 import { describe, expect, it, vi } from "vitest"
 
-// `comprehendPage` and `mapTokensToChars` ultimately import from `@/db`
+// `comprehendPage` ultimately imports from `@/db`
 // (via `llm-runtime.ts` → `llm-config.ts`), which reads SST `Resource` at
 // module-load time. Stubbing the SST module lets the import graph evaluate
 // without an active `sst dev` session — actual values never get used
@@ -28,9 +28,8 @@ vi.mock("sst", () => ({
 	),
 }))
 
-import { comprehendPage } from "../../src/lib/scan-extraction/comprehend-page"
-import { mapTokensToChars } from "../../src/lib/scan-extraction/map-tokens-to-chars"
 import { generateExaminerSummary } from "../../src/lib/grading/examiner-summary"
+import { comprehendPage } from "../../src/lib/scan-extraction/comprehend-page"
 
 // ─── Why this test exists ──────────────────────────────────────────────────
 //
@@ -125,43 +124,10 @@ describe("timeout-seam — service-level forwarding", () => {
 
 	it("comprehendPage forwards undefined when timeoutMs is omitted (runner default applies)", async () => {
 		const runner = makeCapturingRunner()
-		await comprehendPage(
-			"base64-image",
-			"image/jpeg",
-			{},
-			runner,
-		).catch(() => {})
+		await comprehendPage("base64-image", "image/jpeg", {}, runner).catch(
+			() => {},
+		)
 		expect(runner.capturedTimeoutMs).toBeUndefined()
-	})
-
-	it("mapTokensToChars forwards timeoutMs to LlmRunner.call", async () => {
-		const runner = makeCapturingRunner()
-		const thunk: LlmTimeoutMs = () => 67_890
-
-		await mapTokensToChars({
-			answerText: "hello world",
-			tokens: [
-				{
-					page_order: 1,
-					para_index: 0,
-					line_index: 0,
-					word_index: 0,
-					text_raw: "hello",
-				},
-				{
-					page_order: 1,
-					para_index: 0,
-					line_index: 0,
-					word_index: 1,
-					text_raw: "world",
-				},
-			],
-			llm: runner,
-			timeoutMs: thunk,
-		}).catch(() => {})
-
-		expect(runner.capturedCallSite).toBe("token-char-mapping")
-		expect(runner.capturedTimeoutMs).toBe(thunk)
 	})
 
 	it("Grader forwards constructor-supplied timeoutMs to LlmRunner.call", async () => {

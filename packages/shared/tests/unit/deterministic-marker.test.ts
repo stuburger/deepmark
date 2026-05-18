@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
-import { DeterministicMarker } from "../../src/marking/deterministic"
 import type { QuestionWithMarkScheme } from "../../src/grading/types"
+import { DeterministicMarker } from "../../src/marking/deterministic"
 
 function mcq(correct: string[]): QuestionWithMarkScheme {
 	return {

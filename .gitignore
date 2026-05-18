@@ -22,6 +22,11 @@ sample-data/
 # Local scratch dir for pulling artefacts (PDFs, traces) out of S3/DB.
 tmp/
 
+# Per-fixture attribution snapshots written by the attribution eval suite —
+# renders the LLM's actual answer_text output for human inspection. Refreshed
+# on every eval run.
+packages/backend/tests/integration/output/
+
 # Real-student stress fixture for batch-classify smoke test (44 MB,
 # contains real Year 10 mock answers + names from production).
 # Re-fetch from production S3 if needed:

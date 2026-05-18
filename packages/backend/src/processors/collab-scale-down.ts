@@ -32,10 +32,15 @@ const ecs = new ECSClient({})
 
 export async function handler(): Promise<void> {
 	const ref = Resource.CollabServiceRef
-	if (!ref) {
-		// Should never happen — the cron is only wired on stages where the
-		// Linkable exists. Bail loudly so we notice if infra drifts.
-		logger.error(TAG, "CollabServiceRef linkable is not present on this stage")
+	// CollabServiceRef is always synthesised (see infra/collab.ts) but
+	// carries empty placeholder strings on stages without a real Service.
+	// The cron is only wired on stages that DO own a Service, so empties
+	// here mean infra drift — bail loudly.
+	if (!ref?.clusterArn || !ref?.serviceName) {
+		logger.error(
+			TAG,
+			"CollabServiceRef has empty placeholder values on a stage where the cron is wired — infra drift",
+		)
 		return
 	}
 	const { clusterArn, serviceName } = ref

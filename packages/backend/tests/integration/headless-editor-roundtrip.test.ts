@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto"
 import { HocuspocusProvider } from "@hocuspocus/provider"
 import {
 	DOC_FRAGMENT_NAME,
@@ -6,7 +7,6 @@ import {
 	setAnswerText,
 } from "@mcp-gcse/shared"
 import { yXmlFragmentToProsemirrorJSON } from "@tiptap/y-tiptap"
-import { randomUUID } from "node:crypto"
 import { Resource } from "sst"
 import { afterEach, describe, expect, it } from "vitest"
 import WebSocket from "ws"
@@ -78,7 +78,10 @@ function closeReader(reader: Reader): void {
 
 async function waitFor<T>(
 	check: () => T | null | undefined,
-	{ timeoutMs = 5_000, intervalMs = 50 }: { timeoutMs?: number; intervalMs?: number } = {},
+	{
+		timeoutMs = 5_000,
+		intervalMs = 50,
+	}: { timeoutMs?: number; intervalMs?: number } = {},
 ): Promise<T> {
 	const start = Date.now()
 	while (Date.now() - start < timeoutMs) {
@@ -219,7 +222,9 @@ describe("HeadlessEditor — live Hocuspocus roundtrip", () => {
 		await writerB.flush(500)
 
 		await waitFor(() => {
-			const json = yXmlFragmentToProsemirrorJSON(reader.doc.getXmlFragment(DOC_FRAGMENT_NAME)) as {
+			const json = yXmlFragmentToProsemirrorJSON(
+				reader.doc.getXmlFragment(DOC_FRAGMENT_NAME),
+			) as {
 				content?: Array<{
 					content?: Array<{
 						text?: string

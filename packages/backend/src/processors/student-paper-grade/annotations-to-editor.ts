@@ -5,18 +5,19 @@ import {
 	type AnnotationMarkSpec,
 	type AnnotationSignal,
 	type PageToken,
+	alignTokensToAnswer,
 	applyAnnotationMark,
 	isMarkSignal,
-	tokenAlignmentFromOffsets,
 } from "@mcp-gcse/shared"
 
 /**
  * Dispatch all AI annotations for a *single* question as PM `addMark`
- * transactions on the supplied editor. Resolves character ranges from
- * the persisted per-token offsets (`answer_char_start/end`) via the pure
- * `tokenAlignmentFromOffsets` helper — no in-memory matching. Annotation
- * marks carry the original scan token + bbox metadata so the round-trip
- * via `deriveAnnotationsFromDoc` is lossless.
+ * transactions on the supplied editor. Resolves character ranges via
+ * `alignTokensToAnswer` — fuzzy (Levenshtein) match of OCR tokens against
+ * the LLM-authored answer text. Annotation positioning is approximate;
+ * the grader-facing text is the source of truth. Annotation marks carry
+ * the original scan token + bbox metadata so the round-trip via
+ * `deriveAnnotationsFromDoc` is lossless.
  *
  * Called once per question, immediately after that question is graded and
  * annotated — so marks appear in the doc progressively as the grade Lambda
@@ -37,7 +38,7 @@ export function dispatchAnnotationsForQuestion(args: {
 	if (args.annotations.length === 0) return
 	if (args.answerText.length === 0 || args.tokens.length === 0) return
 
-	const alignment = tokenAlignmentFromOffsets(args.tokens)
+	const alignment = alignTokensToAnswer(args.answerText, args.tokens)
 	const specs: AnnotationSpec[] = []
 	for (const ann of args.annotations) {
 		const spec = pendingAnnotationToSpec(args.jobId, ann, alignment.tokenMap)

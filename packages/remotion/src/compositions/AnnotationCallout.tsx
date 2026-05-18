@@ -1,19 +1,19 @@
-import { interpolate, spring, useCurrentFrame, useVideoConfig } from "remotion";
-import type { Annotation } from "../data/types";
-import { tokens } from "./tokens";
+import { interpolate, spring, useCurrentFrame, useVideoConfig } from "remotion"
+import type { Annotation } from "../data/types"
+import { tokens } from "./tokens"
 
 type Props = {
-	annotation: Annotation;
-	enterDelayFrames: number;
-	exitFrame: number;
-};
+	annotation: Annotation
+	enterDelayFrames: number
+	exitFrame: number
+}
 
 function colorForSentiment(sentiment: Annotation["sentiment"]) {
 	if (sentiment === "negative")
-		return { fg: tokens.error, bg: tokens.errorSoft, dot: tokens.error };
+		return { fg: tokens.error, bg: tokens.errorSoft, dot: tokens.error }
 	if (sentiment === "neutral")
-		return { fg: tokens.warning, bg: tokens.warningSoft, dot: tokens.warning };
-	return { fg: tokens.success, bg: tokens.successSoft, dot: tokens.success };
+		return { fg: tokens.warning, bg: tokens.warningSoft, dot: tokens.warning }
+	return { fg: tokens.success, bg: tokens.successSoft, dot: tokens.success }
 }
 
 // Comment card that pops in next to the annotation; lives in the side rail
@@ -23,25 +23,25 @@ export function AnnotationCallout({
 	enterDelayFrames,
 	exitFrame,
 }: Props) {
-	const frame = useCurrentFrame();
-	const { fps } = useVideoConfig();
-	const local = frame - enterDelayFrames;
-	if (local < 0 || frame > exitFrame) return null;
+	const frame = useCurrentFrame()
+	const { fps } = useVideoConfig()
+	const local = frame - enterDelayFrames
+	if (local < 0 || frame > exitFrame) return null
 
 	const enter = spring({
 		frame: local,
 		fps,
 		config: { damping: 16, stiffness: 150, mass: 0.8 },
-	});
+	})
 	const exit = interpolate(frame, [exitFrame - 12, exitFrame], [1, 0], {
 		extrapolateLeft: "clamp",
 		extrapolateRight: "clamp",
-	});
-	const opacity = Math.min(enter, exit);
-	const translateY = (1 - enter) * 14;
+	})
+	const opacity = Math.min(enter, exit)
+	const translateY = (1 - enter) * 14
 
-	const palette = colorForSentiment(annotation.sentiment);
-	const headline = annotation.comment ?? annotation.reason;
+	const palette = colorForSentiment(annotation.sentiment)
+	const headline = annotation.comment ?? annotation.reason
 
 	return (
 		<div
@@ -85,5 +85,5 @@ export function AnnotationCallout({
 				</div>
 			)}
 		</div>
-	);
+	)
 }

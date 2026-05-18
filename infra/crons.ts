@@ -11,7 +11,13 @@ import { _PRODUCTION_, isPermanentStage } from "./config"
  * Production has no cron (the service is always-on).
  * sst dev has no cron (no cloud resources).
  */
-if (!$dev && !_PRODUCTION_ && isPermanentStage && collabServiceRef) {
+// `collabServiceRef` is always synthesised (with empty-string placeholder
+// properties on stages without their own Service — see infra/collab.ts).
+// The cron itself is only wired on permanent non-prod stages where a real
+// Service exists; the handler additionally guards against the empty
+// placeholder so a misconfigured deploy bails loudly instead of
+// thrashing ECS APIs against an empty cluster ARN.
+if (!$dev && !_PRODUCTION_ && isPermanentStage) {
 	new sst.aws.Cron("CollabScaleDown", {
 		// Window is 30–45 min: tag age check is "> 30 min", cron fires every 15.
 		schedule: "rate(15 minutes)",

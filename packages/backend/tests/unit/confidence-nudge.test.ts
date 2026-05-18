@@ -1,8 +1,8 @@
-import { describe, expect, it } from "vitest"
 import {
 	LOW_CONFIDENCE_NUDGE_THRESHOLD,
 	isLowConfidence,
 } from "@mcp-gcse/shared"
+import { describe, expect, it } from "vitest"
 
 describe("isLowConfidence", () => {
 	it("flags values strictly below the threshold", () => {

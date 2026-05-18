@@ -1,0 +1,14 @@
+{
+	"name": "deepmark-shared-gmail-dns",
+	"version": "1.0.0",
+	"type": "module",
+	"private": true,
+	"scripts": {
+		"deploy": "sst deploy --stage=production",
+		"remove": "sst remove --stage=production"
+	},
+	"dependencies": {
+		"@pulumi/aws": "^7.16.0",
+		"sst": "^3.17.25"
+	}
+}

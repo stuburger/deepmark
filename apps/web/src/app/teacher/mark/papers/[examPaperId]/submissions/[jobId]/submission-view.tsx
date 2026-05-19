@@ -142,7 +142,8 @@ export function SubmissionView({
 			// setter, each transaction allocates a fresh Set and triggers
 			// another render, ad infinitum.
 			setHighlightedTokenIds((prev) => {
-				if (!tokenIds || tokenIds.length === 0) return prev === null ? prev : null
+				if (!tokenIds || tokenIds.length === 0)
+					return prev === null ? prev : null
 				if (prev && prev.size === tokenIds.length) {
 					let allMatch = true
 					for (const id of tokenIds) {

@@ -6,32 +6,7 @@ import {
 import type { Editor } from "@tiptap/core"
 import type { Node as PmNode } from "@tiptap/pm/model"
 import { useEffect } from "react"
-
-/**
- * Locate the `questionAnswer` block containing a ProseMirror position and
- * convert that position to a character offset within the block's answer
- * text. Returns null when the position isn't inside any question block.
- *
- * The schema seeds answer text via `state.schema.text(...)` (plain text +
- * inline marks), so `pmPos - blockContentStart` equals the char offset
- * into the answer. No HardBreak / atom inline nodes are used in seeded
- * answers, so we don't need a per-child accumulation pass.
- */
-function pmPosToAnswerChar(
-	doc: PmNode,
-	pos: number,
-): { questionId: string; char: number } | null {
-	if (pos < 0 || pos > doc.content.size) return null
-	const $pos = doc.resolve(pos)
-	for (let depth = $pos.depth; depth >= 0; depth--) {
-		const node = $pos.node(depth)
-		if (node.type.name !== "questionAnswer") continue
-		const questionId = node.attrs.questionId as string | null
-		if (!questionId) return null
-		return { questionId, char: pos - $pos.start(depth) }
-	}
-	return null
-}
+import { pmPosToAnswerChar } from "./pm-pos-mapping"
 
 /**
  * Map a PM range `[from, to)` to a set of tokenIds in the scan, via the

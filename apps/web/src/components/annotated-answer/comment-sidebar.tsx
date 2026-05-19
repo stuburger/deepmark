@@ -60,6 +60,24 @@ function layoutCards(
 
 // ─── Component ──────────────────────────────────────────────────────────────
 
+/** Identity-stable empty default so the initial useState reference doesn't
+ *  flicker (and to keep the dedup short-circuit clean on first mount). */
+const EMPTY_CARDS: CommentCard[] = []
+
+/** Compact fingerprint over the fields that drive card render output. Used
+ *  to skip setRawCards when recompute produces structurally identical
+ *  cards — without it, every PM transaction allocates a fresh array,
+ *  triggers a render, and (when upstream prop identities flicker) can
+ *  cascade into a Maximum-update-depth loop. */
+function cardsFingerprint(cards: CommentCard[]): string {
+	return cards
+		.map(
+			(c) =>
+				`${c.id}|${c.markType}|${c.sentiment}|${c.idealY}|${c.from}|${c.to}|${c.reason ?? ""}|${c.comment ?? ""}|${c.aoCategory ?? ""}|${c.aoDisplay ?? ""}|${c.aoQuality ?? ""}|${c.chainType ?? ""}|${c.phrase ?? ""}`,
+		)
+		.join("\n")
+}
+
 export function CommentSidebar({
 	editor,
 	activeAnnotationId,
@@ -69,8 +87,9 @@ export function CommentSidebar({
 	activeAnnotationId?: string | null
 	onActiveAnnotationChange?: (annotationId: string | null) => void
 }) {
-	const [rawCards, setRawCards] = useState<CommentCard[]>([])
+	const [rawCards, setRawCards] = useState<CommentCard[]>(EMPTY_CARDS)
 	const containerRef = useRef<HTMLDivElement>(null)
+	const prevFingerprintRef = useRef("")
 
 	const recompute = useCallback(() => {
 		const { doc } = editor.state
@@ -177,6 +196,9 @@ export function CommentSidebar({
 			})
 		}
 
+		const fp = cardsFingerprint(newCards)
+		if (fp === prevFingerprintRef.current) return
+		prevFingerprintRef.current = fp
 		setRawCards(newCards)
 	}, [editor])
 

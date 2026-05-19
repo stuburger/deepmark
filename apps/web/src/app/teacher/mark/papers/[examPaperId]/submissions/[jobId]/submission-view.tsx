@@ -131,10 +131,30 @@ export function SubmissionView({
 	const handleTokenHighlight = useCallback(
 		(tokenIds: string[] | null) => {
 			if (!inspectMode) {
-				setHighlightedTokenIds(null)
+				setHighlightedTokenIds((prev) => (prev === null ? prev : null))
 				return
 			}
-			setHighlightedTokenIds(tokenIds ? new Set(tokenIds) : null)
+			// Functional setState with content-equality short-circuit. Returning
+			// the previous reference when contents match keeps React from
+			// re-rendering, which is what gates the inspect-mode feedback loop:
+			// useTokenHighlight fires on every PM transaction (including ones
+			// caused by our own re-renders), so without identity dedup at the
+			// setter, each transaction allocates a fresh Set and triggers
+			// another render, ad infinitum.
+			setHighlightedTokenIds((prev) => {
+				if (!tokenIds || tokenIds.length === 0) return prev === null ? prev : null
+				if (prev && prev.size === tokenIds.length) {
+					let allMatch = true
+					for (const id of tokenIds) {
+						if (!prev.has(id)) {
+							allMatch = false
+							break
+						}
+					}
+					if (allMatch) return prev
+				}
+				return new Set(tokenIds)
+			})
 		},
 		[inspectMode],
 	)

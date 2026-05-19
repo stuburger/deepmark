@@ -1,10 +1,15 @@
 "use client"
 
-import type { StudentPaperAnnotation } from "@/lib/marking/types"
+import type { PageToken, StudentPaperAnnotation } from "@/lib/marking/types"
 import { useCurrentUser } from "@/lib/users/use-current-user"
 import { cn } from "@/lib/utils"
 import type { HocuspocusProvider } from "@hocuspocus/provider"
-import { OcrTokenMark, ParagraphNode, annotationMarks } from "@mcp-gcse/shared"
+import {
+	OcrTokenMark,
+	ParagraphNode,
+	type TokenAlignment,
+	annotationMarks,
+} from "@mcp-gcse/shared"
 import BoldExtension from "@tiptap/extension-bold"
 import Collaboration from "@tiptap/extension-collaboration"
 import CollaborationCaret from "@tiptap/extension-collaboration-caret"
@@ -34,6 +39,10 @@ import { QuestionAnswerNode } from "./question-answer-node"
 import { useDerivedAnnotations } from "./use-derived-annotations"
 import { useTokenHighlight } from "./use-token-highlight"
 
+// Stable identity for the default — avoids a fresh `new Map()` per render
+// causing useTokenHighlight's effect to re-bind on every transaction.
+const EMPTY_ALIGNMENT_MAP: ReadonlyMap<string, TokenAlignment> = new Map()
+
 // ─── Main component ─────────────────────────────────────────────────────────
 
 /**
@@ -51,6 +60,8 @@ import { useTokenHighlight } from "./use-token-highlight"
 export function AnnotatedAnswerSheet({
 	ydoc,
 	provider,
+	tokensByQuestion,
+	alignmentByQuestion,
 	onDerivedAnnotations,
 	onTokenHighlight,
 	onAskDeepMark,
@@ -64,6 +75,16 @@ export function AnnotatedAnswerSheet({
 	 * skipped and the editor is single-user.
 	 */
 	provider?: HocuspocusProvider | null
+	/**
+	 * Per-question OCR tokens + alignments from `useQuestionAlignments`.
+	 * Required for runtime alignment to populate scan bboxes on derived
+	 * annotations and for cursor/selection → tokenId highlight resolution.
+	 * Empty maps are fine — render-time alignment simply falls back to
+	 * cached `scanBbox` mark attrs (for AI marks) and skips cursor
+	 * highlights until tokens load.
+	 */
+	tokensByQuestion?: ReadonlyMap<string, ReadonlyArray<PageToken>>
+	alignmentByQuestion?: ReadonlyMap<string, TokenAlignment>
 	onDerivedAnnotations?: (annotations: StudentPaperAnnotation[]) => void
 	onTokenHighlight?: (tokenIds: string[] | null) => void
 	/**
@@ -213,9 +234,19 @@ export function AnnotatedAnswerSheet({
 	)
 
 	// Derive annotations from PM state for the scan overlay.
-	useDerivedAnnotations(editor, stableOnDerived)
+	useDerivedAnnotations(
+		editor,
+		stableOnDerived,
+		alignmentByQuestion,
+		tokensByQuestion,
+	)
 
-	useTokenHighlight(editor, activeAnnotationId, onTokenHighlight)
+	useTokenHighlight(
+		editor,
+		activeAnnotationId,
+		alignmentByQuestion ?? EMPTY_ALIGNMENT_MAP,
+		onTokenHighlight,
+	)
 
 	// Paint the active annotation's mark range with the
 	// `is-active-annotation` decoration class so CSS can darken the mark and

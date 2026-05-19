@@ -19,6 +19,7 @@ import {
 	type DerivedTeacherOverride,
 	type GradingResult,
 	type MarkPointResult,
+	type PageToken,
 	type StudentPaperAnnotation,
 	deriveAnnotationsFromDoc,
 	deriveExaminerSummaryFromDoc,
@@ -112,9 +113,17 @@ async function processRecord(rec: S3EventRecord): Promise<void> {
 		return
 	}
 
+	// Load OCR tokens per question for runtime alignment inside
+	// `deriveAnnotationsFromDoc`. Render-time alignment (Levenshtein on
+	// `student_answer`) is the canonical bbox source; the cached `scanBbox`
+	// attrs path is an optimisation, and any remaining persisted
+	// `ocrToken` marks in legacy Y-docs are a fallback. Cost: one
+	// indexed query per snapshot — bounded by submission size.
+	const tokensByQuestion = await loadTokensByQuestion(submissionId)
+
 	let derived: ProjectedSnapshot
 	try {
-		derived = deriveSnapshot(bytes)
+		derived = deriveSnapshot(bytes, tokensByQuestion)
 	} catch (err) {
 		// Surface the submissionId + key so on-call can correlate with the
 		// snapshot in S3. Re-throwing makes the SQS handler mark the record as
@@ -156,7 +165,10 @@ type ProjectedSnapshot = {
  * rows). All three derivations walk the same `PmNode` so the snapshot
  * is only deserialized once per invocation.
  */
-function deriveSnapshot(bytes: Uint8Array): ProjectedSnapshot {
+function deriveSnapshot(
+	bytes: Uint8Array,
+	tokensByQuestion: ReadonlyMap<string, PageToken[]>,
+): ProjectedSnapshot {
 	const doc = new Y.Doc()
 	try {
 		Y.applyUpdate(doc, bytes)
@@ -172,7 +184,7 @@ function deriveSnapshot(bytes: Uint8Array): ProjectedSnapshot {
 		const json = yXmlFragmentToProsemirrorJSON(fragment)
 		const node = getEditorSchema().nodeFromJSON(json)
 		return {
-			annotations: deriveAnnotationsFromDoc(node),
+			annotations: deriveAnnotationsFromDoc(node, { tokensByQuestion }),
 			gradingResults: deriveGradingResultsFromDoc(node),
 			teacherOverrides: deriveTeacherOverridesFromDoc(node),
 			examinerSummary: deriveExaminerSummaryFromDoc(node),
@@ -180,6 +192,51 @@ function deriveSnapshot(bytes: Uint8Array): ProjectedSnapshot {
 	} finally {
 		doc.destroy()
 	}
+}
+
+async function loadTokensByQuestion(
+	submissionId: string,
+): Promise<Map<string, PageToken[]>> {
+	const rows = await db.studentPaperPageToken.findMany({
+		where: { submission_id: submissionId, question_id: { not: null } },
+		select: {
+			id: true,
+			page_order: true,
+			para_index: true,
+			line_index: true,
+			word_index: true,
+			text_raw: true,
+			text_corrected: true,
+			bbox: true,
+			confidence: true,
+			question_id: true,
+			answer_char_start: true,
+			answer_char_end: true,
+		},
+	})
+	const out = new Map<string, PageToken[]>()
+	for (const r of rows) {
+		const qid = r.question_id
+		if (!qid) continue
+		const token: PageToken = {
+			id: r.id,
+			page_order: r.page_order,
+			para_index: r.para_index,
+			line_index: r.line_index,
+			word_index: r.word_index,
+			text_raw: r.text_raw,
+			text_corrected: r.text_corrected,
+			bbox: r.bbox as [number, number, number, number],
+			confidence: r.confidence,
+			question_id: qid,
+			answer_char_start: r.answer_char_start,
+			answer_char_end: r.answer_char_end,
+		}
+		const list = out.get(qid) ?? []
+		list.push(token)
+		out.set(qid, list)
+	}
+	return out
 }
 
 async function downloadSnapshot(

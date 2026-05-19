@@ -8,8 +8,10 @@ import {
 import { useDocHasQuestionBlocks } from "@/components/annotated-answer/use-doc-has-question-blocks"
 import { useYDoc } from "@/components/annotated-answer/use-y-doc"
 import { OrganicMarkingLoader } from "@/components/marking-loader"
+import { useQuestionAlignments } from "@/lib/marking/alignment/use-question-alignments"
 import type {
 	GradingResult,
+	PageToken,
 	StudentPaperAnnotation,
 	StudentPaperResultPayload,
 	TeacherOverride,
@@ -21,6 +23,8 @@ export function GradingResultsPanel({
 	jobId,
 	data,
 	answers,
+	annotations,
+	pageTokens,
 	activeQuestionNumber,
 	onAnswerSaved,
 	overridesByQuestionId,
@@ -33,6 +37,10 @@ export function GradingResultsPanel({
 	jobId: string
 	data: StudentPaperResultPayload
 	answers: Record<string, string>
+	/** Anchored + spatial annotations — feeds runtime alignment so cursor /
+	 *  selection highlights and projected scan bboxes use the latest aligner. */
+	annotations: StudentPaperAnnotation[]
+	pageTokens: PageToken[]
 	activeQuestionNumber: string | null
 	onAnswerSaved: (questionId: string, text: string) => void
 	overridesByQuestionId?: Map<string, TeacherOverride>
@@ -45,6 +53,14 @@ export function GradingResultsPanel({
 	toolbarSlot?: HTMLElement | null
 	aoOpen?: boolean
 }) {
+	// Runtime per-question alignment. Feeds the editor's render-time
+	// cursor / selection / annotation → token resolution and supplies the
+	// tokens map used by deriveAnnotationsFromDoc when projecting bboxes.
+	const { tokensByQuestion, alignmentByQuestion } = useQuestionAlignments(
+		data.grading_results,
+		annotations,
+		pageTokens,
+	)
 	// Build grading results lookup map for context
 	const gradingResultsMap = useMemo(() => {
 		const map = new Map<string, GradingResult>()
@@ -125,6 +141,8 @@ export function GradingResultsPanel({
 					<AnnotatedAnswerSheet
 						ydoc={ydoc}
 						provider={provider}
+						tokensByQuestion={tokensByQuestion}
+						alignmentByQuestion={alignmentByQuestion}
 						onDerivedAnnotations={onDerivedAnnotations}
 						onTokenHighlight={onTokenHighlight}
 						onAskDeepMark={onAskDeepMark}

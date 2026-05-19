@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/tooltip"
 import type { MarkingPhase } from "@/lib/marking/stages/phase"
 import type {
+	PageToken,
 	StudentPaperAnnotation,
 	StudentPaperJobPayload,
 	TeacherOverride,
@@ -32,6 +33,8 @@ type SharedPanelProps = {
 	jobId: string
 	data: StudentPaperJobPayload
 	phase: MarkingPhase
+	annotations: StudentPaperAnnotation[]
+	pageTokens: PageToken[]
 	activeQuestionNumber: string | null
 	overridesByQuestionId?: Map<string, TeacherOverride>
 	onDerivedAnnotations?: (annotations: StudentPaperAnnotation[]) => void
@@ -46,6 +49,8 @@ export function ResultsPanel({
 	jobId,
 	data,
 	phase,
+	annotations,
+	pageTokens,
 	activeQuestionNumber,
 	overridesByQuestionId,
 	onDerivedAnnotations,
@@ -134,6 +139,8 @@ export function ResultsPanel({
 						<MarkingResults
 							jobId={jobId}
 							data={data}
+							annotations={annotations}
+							pageTokens={pageTokens}
 							activeQuestionNumber={activeQuestionNumber}
 							overridesByQuestionId={overridesByQuestionId}
 							onDerivedAnnotations={onDerivedAnnotations}

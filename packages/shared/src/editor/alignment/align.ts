@@ -54,7 +54,7 @@ const DEFAULT_OPTIONS = {
  */
 export function alignTokensToAnswer(
 	answer: string,
-	tokens: PageToken[],
+	tokens: ReadonlyArray<PageToken>,
 	options: AlignmentOptions = {},
 ): TokenAlignment {
 	if (tokens.length === 0 || answer.length === 0) {

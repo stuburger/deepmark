@@ -2,6 +2,7 @@ import {
 	DOC_FRAGMENT_NAME,
 	applyAnnotationMark,
 	applyOcrTokenMarks,
+	clearOcrTokenMarks,
 	insertMcqTableBlock,
 	insertQuestionBlock,
 	setAnswerText,
@@ -245,6 +246,92 @@ describe("applyOcrTokenMarks", () => {
 		const markTypes = tickSeg?.marks?.map((m) => m.type) ?? []
 		expect(markTypes).toContain("tick")
 		expect(markTypes).toContain("ocrToken")
+	})
+})
+
+describe("clearOcrTokenMarks", () => {
+	it("removes every ocrToken mark from the question block", () => {
+		const { doc, view } = makeEditor()
+		insertQuestionBlock(view, { questionId: "q1", questionNumber: "1" })
+		setAnswerText(view, "q1", "hello world")
+		applyOcrTokenMarks(view, "q1", [
+			{
+				id: "tok-hello",
+				bbox: [10, 20, 30, 40],
+				pageOrder: 1,
+				charStart: 0,
+				charEnd: 5,
+			},
+			{
+				id: "tok-world",
+				bbox: [10, 60, 30, 100],
+				pageOrder: 1,
+				charStart: 6,
+				charEnd: 11,
+			},
+		])
+
+		clearOcrTokenMarks(view, "q1")
+
+		const json = readJson(doc)
+		const segments = json.content[0].content ?? []
+		// Once ocrToken marks are gone, the three segments collapse into one
+		// run of "hello world" (no remaining marks to break the text).
+		expect(segments).toHaveLength(1)
+		expect(segments[0].text).toBe("hello world")
+		expect(segments[0].marks ?? []).toEqual([])
+	})
+
+	it("preserves annotation marks while stripping only ocrToken", () => {
+		const { doc, view } = makeEditor()
+		insertQuestionBlock(view, { questionId: "q1", questionNumber: "1" })
+		setAnswerText(view, "q1", "tick this")
+		applyAnnotationMark(view, "q1", {
+			signal: "tick",
+			sentiment: "positive",
+			from: 0,
+			to: 4,
+			attrs: { annotationId: "ai-1", reason: "correct" },
+		})
+		applyOcrTokenMarks(view, "q1", [
+			{
+				id: "tok-tick",
+				bbox: [10, 20, 30, 40],
+				pageOrder: 1,
+				charStart: 0,
+				charEnd: 4,
+			},
+		])
+
+		clearOcrTokenMarks(view, "q1")
+
+		const json = readJson(doc)
+		const segments = json.content[0].content ?? []
+		const tickSeg = segments.find((s) => s.text === "tick")
+		expect(tickSeg).toBeDefined()
+		const markTypes = tickSeg?.marks?.map((m) => m.type) ?? []
+		expect(markTypes).toContain("tick")
+		expect(markTypes).not.toContain("ocrToken")
+	})
+
+	it("is a no-op on a block with no ocrToken marks", () => {
+		const { doc, view } = makeEditor()
+		insertQuestionBlock(view, { questionId: "q1", questionNumber: "1" })
+		setAnswerText(view, "q1", "plain answer")
+
+		const sizeBefore = view.state.doc.content.size
+		clearOcrTokenMarks(view, "q1")
+		expect(view.state.doc.content.size).toBe(sizeBefore)
+
+		const json = readJson(doc)
+		const segments = json.content[0].content ?? []
+		expect(segments).toHaveLength(1)
+		expect(segments[0].text).toBe("plain answer")
+	})
+
+	it("is a no-op when the question block does not exist", () => {
+		const { view } = makeEditor()
+		expect(() => clearOcrTokenMarks(view, "missing-q")).not.toThrow()
 	})
 })
 

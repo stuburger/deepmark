@@ -2,10 +2,8 @@ import { logger } from "@/lib/infra/logger"
 import {
 	type AnnotationMarkSpec,
 	type McqRow,
-	type OcrTokenSpec,
 	type PageToken,
-	alignTokensToAnswer,
-	applyOcrTokenMarks,
+	clearOcrTokenMarks,
 	insertMcqTableBlock,
 	insertQuestionBlock,
 	setAnswerText,
@@ -138,23 +136,12 @@ export function dispatchExtractedDocOps(
 
 		setAnswerText(view, q.questionId, answer.text)
 
-		if (answer.tokens.length === 0) continue
-		const alignment = alignTokensToAnswer(answer.text, answer.tokens)
-		const tokenSpecs: OcrTokenSpec[] = []
-		for (const t of answer.tokens) {
-			const offset = alignment.tokenMap[t.id]
-			if (!offset) continue
-			tokenSpecs.push({
-				id: t.id,
-				bbox: t.bbox,
-				pageOrder: t.page_order,
-				charStart: offset.start,
-				charEnd: offset.end,
-			})
-		}
-		if (tokenSpecs.length > 0) {
-			applyOcrTokenMarks(view, q.questionId, tokenSpecs)
-		}
+		// One-shot strip of any legacy `ocrToken` marks left over from a
+		// prior seed run before render-time alignment landed. Idempotent —
+		// no-op once the doc is clean. New seeds never apply per-word marks:
+		// cursor / selection / annotation → token resolution happens at the
+		// consumer via `alignTokensToAnswer` (see useQuestionAlignments).
+		clearOcrTokenMarks(view, q.questionId)
 	}
 }
 

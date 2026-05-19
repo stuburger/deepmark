@@ -1,6 +1,7 @@
 "use client"
 
 import type {
+	PageToken,
 	StudentPaperAnnotation,
 	StudentPaperJobPayload,
 	TeacherOverride,
@@ -16,6 +17,8 @@ import { GradingResultsPanel } from "./grading-results-panel"
 export function MarkingResults({
 	jobId,
 	data,
+	annotations,
+	pageTokens,
 	activeQuestionNumber,
 	overridesByQuestionId,
 	onDerivedAnnotations,
@@ -26,6 +29,8 @@ export function MarkingResults({
 }: {
 	jobId: string
 	data: StudentPaperJobPayload
+	annotations: StudentPaperAnnotation[]
+	pageTokens: PageToken[]
 	activeQuestionNumber?: string | null
 	overridesByQuestionId?: Map<string, TeacherOverride>
 	onDerivedAnnotations?: (annotations: StudentPaperAnnotation[]) => void
@@ -48,6 +53,8 @@ export function MarkingResults({
 			jobId={jobId}
 			data={data}
 			answers={answers}
+			annotations={annotations}
+			pageTokens={pageTokens}
 			activeQuestionNumber={activeQuestionNumber ?? null}
 			onAnswerSaved={(id, text) =>
 				setAnswers((prev) => ({ ...prev, [id]: text }))

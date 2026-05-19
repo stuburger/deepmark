@@ -462,6 +462,41 @@ export function applyOcrTokenMarks(
 }
 
 /**
+ * Strip every `ocrToken` mark from a question's answer block in one
+ * transaction. Used at editor-seed time to clean any legacy ocrToken
+ * marks left behind by the pre-render-time-alignment build (when
+ * `applyOcrTokenMarks` was the source of cursor-to-token mapping). The
+ * mapping now lives at the consumer via `alignTokensToAnswer`; persisted
+ * marks would compete with it and go stale.
+ *
+ * Idempotent — no-op if the block doesn't exist, the schema doesn't
+ * register the mark, or no ocrToken marks are present.
+ */
+export function clearOcrTokenMarks(
+	view: EditorView,
+	questionId: string,
+): void {
+	const { state, dispatch } = view
+	const block = findQuestionBlock(state.doc, questionId)
+	if (!block) return
+
+	const markType = state.schema.marks.ocrToken
+	if (!markType) return
+
+	const tr = state.tr
+	let removed = false
+	block.node.descendants((node, posInBlock) => {
+		if (!node.isText) return
+		if (!node.marks.some((m) => m.type === markType)) return
+		const from = block.start + posInBlock
+		const to = from + node.nodeSize
+		tr.removeMark(from, to, markType)
+		removed = true
+	})
+	if (removed) dispatch(tr)
+}
+
+/**
  * Apply a single annotation mark over a character range within a question's
  * answer text. Existing annotation marks and ocrToken marks on the block
  * are preserved by ProseMirror's natural mark composition — `tr.addMark`

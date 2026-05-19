@@ -316,6 +316,8 @@ export function SubmissionView({
 									jobId={jobId}
 									data={data}
 									phase={phase}
+									annotations={annotations}
+									pageTokens={pageTokens}
 									activeQuestionNumber={activeQuestionNumber}
 									overridesByQuestionId={overridesByQuestionId}
 									onDerivedAnnotations={handleDerivedAnnotations}
@@ -370,6 +372,8 @@ export function SubmissionView({
 								jobId={jobId}
 								data={data}
 								phase={phase}
+								annotations={annotations}
+								pageTokens={pageTokens}
 								activeQuestionNumber={activeQuestionNumber}
 								overridesByQuestionId={overridesByQuestionId}
 								onDerivedAnnotations={handleDerivedAnnotations}

@@ -121,7 +121,13 @@ describe("dispatchExtractedDocOps", () => {
 		expect(q2?.content).toBeUndefined()
 	})
 
-	it("applies ocrToken marks to text spans matching the per-token alignment", () => {
+	it("emits no per-word ocrToken marks — alignment is render-time only", () => {
+		// Sanity-check the architectural decision baked into editor-seed: the
+		// PM doc should contain plain text after seeding, never per-word
+		// ocrToken marks. Cursor / selection / annotation → token resolution
+		// is computed by consumers via `alignTokensToAnswer` (memoised in
+		// `useQuestionAlignments`). See
+		// docs/build-plan-2026-05-19-render-time-alignment.md.
 		const { doc, view } = makeEditor()
 		dispatchExtractedDocOps(
 			view,
@@ -149,12 +155,6 @@ describe("dispatchExtractedDocOps", () => {
 							bbox: [0, 0, 100, 100],
 							confidence: 1,
 							question_id: "q1",
-							// Precomputed offsets (produced upstream by attributeScript via
-							// cursor-based indexOf over corrected_texts at extraction time
-							// and persisted on
-							// student_paper_page_tokens.answer_char_start/end). The
-							// dispatcher reads these directly via
-							// tokenAlignmentFromOffsets — no in-memory matching.
 							answer_char_start: 0,
 							answer_char_end: 5,
 						},
@@ -179,22 +179,17 @@ describe("dispatchExtractedDocOps", () => {
 
 		const json = readJson(doc)
 		const q1 = json.content[0]
-		// PM splits text into separate text nodes per distinct mark set, so
-		// the question's answer reads back as multiple text fragments. The
-		// concatenated text equals the original answer.
 		const fragments = q1?.content ?? []
 		const concatText = fragments.map((f) => f.text ?? "").join("")
 		expect(concatText).toBe("hello world")
 
-		const tokenIds = new Set<string>()
+		const ocrMarks: unknown[] = []
 		for (const f of fragments) {
 			for (const m of f.marks ?? []) {
-				if (m.type === "ocrToken" && m.attrs?.tokenId) {
-					tokenIds.add(m.attrs.tokenId as string)
-				}
+				if (m.type === "ocrToken") ocrMarks.push(m)
 			}
 		}
-		expect([...tokenIds].sort()).toEqual(["tok-1", "tok-2"])
+		expect(ocrMarks).toEqual([])
 	})
 
 	it("is idempotent on repeat call with the same inputs (within a single view)", () => {

@@ -6,6 +6,7 @@ import { annotateOneQuestion } from "../../src/lib/annotations/llm-annotations"
 import type { PendingAnnotation } from "../../src/lib/annotations/types"
 import { createLlmRunner } from "../../src/lib/infra/llm-runtime"
 import { JAUFFERDEEN_Q2_FIXTURE } from "./fixtures/annotations/jaufferdeen-q2/fixture"
+import { JAUFFERDEEN_Q6_FIXTURE } from "./fixtures/annotations/jaufferdeen-q6/fixture"
 import { loadFixtureTokens } from "./fixtures/annotations/load-fixture"
 import type { AnnotationFixtureSpec } from "./fixtures/annotations/shared-types"
 
@@ -38,7 +39,10 @@ import type { AnnotationFixtureSpec } from "./fixtures/annotations/shared-types"
  * Non-asserting; refreshed every run; gitignored.
  */
 
-const FIXTURES: AnnotationFixtureSpec[] = [JAUFFERDEEN_Q2_FIXTURE]
+const FIXTURES: AnnotationFixtureSpec[] = [
+	JAUFFERDEEN_Q2_FIXTURE,
+	JAUFFERDEEN_Q6_FIXTURE,
+]
 const ANNOTATION_TIMEOUT_MS = 3 * 60_000
 const OUTPUT_DIR = join(__dirname, "output")
 

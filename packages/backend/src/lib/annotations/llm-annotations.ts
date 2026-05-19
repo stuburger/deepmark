@@ -4,9 +4,8 @@ import { alignTokensToAnswer } from "@mcp-gcse/shared"
 import { generateText } from "ai"
 import { buildAnnotationPrompt } from "./annotation-prompt"
 import { AnnotationPlanSchema } from "./annotation-schema"
-import { labelCleanWords, renderLabeledWords } from "./label-clean-words"
 import { buildOverlay } from "./payload-builder"
-import { resolveTokenSpanByIds } from "./token-spans"
+import { resolveTokenSpanByCharRange } from "./token-spans"
 import type { AnnotateOneQuestionArgs, PendingAnnotation } from "./types"
 
 const TAG = "annotations"
@@ -27,7 +26,9 @@ export async function annotateOneQuestion(
 		timeoutMs,
 	} = args
 
-	// Filter tokens for this question
+	// Filter tokens for this question. Used downstream to compute the bbox
+	// hull for each annotation's char range (the LLM emits a char range only;
+	// per-mark bbox is derived from the underlying OCR tokens).
 	const questionTokens = allTokens.filter(
 		(t) => t.question_id === gradingResult.question_id,
 	)
@@ -40,12 +41,15 @@ export async function annotateOneQuestion(
 		return []
 	}
 
-	// Build the labelled clean-words view the LLM uses for anchoring. Each
-	// word in `student_answer` is paired with its underlying OCR token via
-	// `alignTokensToAnswer` — fuzzy Levenshtein match at runtime. Annotation
-	// positioning is approximate; the marker-facing answer text is what the
-	// grader read. Crossed-out drafts are excluded from the labelled list
-	// entirely so the LLM literally cannot pick them.
+	const answer = gradingResult.student_answer
+	if (answer.length === 0) {
+		logger.info(TAG, "Empty student_answer — skipping annotation", {
+			jobId,
+			question_id: gradingResult.question_id,
+		})
+		return []
+	}
+
 	const pageTokens = questionTokens.map((t) => ({
 		id: t.id,
 		page_order: t.page_order,
@@ -60,20 +64,13 @@ export async function annotateOneQuestion(
 		answer_char_start: t.answer_char_start,
 		answer_char_end: t.answer_char_end,
 	}))
-	const alignment = alignTokensToAnswer(gradingResult.student_answer, pageTokens)
-	const { labeled, aliasToTokenId } = labelCleanWords(
-		gradingResult.student_answer,
-		pageTokens,
-		alignment,
-	)
 
-	if (labeled.length === 0) {
-		logger.info(TAG, "No labelled words available — skipping annotation", {
-			jobId,
-			question_id: gradingResult.question_id,
-		})
-		return []
-	}
+	// Fuzzy align tokens → clean-text char positions ONCE per question. The
+	// alignment is consumed by `resolveTokenSpanByCharRange` to map an LLM-
+	// emitted char range back to its underlying OCR tokens (for bbox + token
+	// IDs). The LLM itself never sees this — it works against the canonical
+	// clean answer text and emits char offsets directly.
+	const alignment = alignTokensToAnswer(answer, pageTokens)
 
 	const markSchemeContext = markScheme
 		? {
@@ -94,8 +91,6 @@ export async function annotateOneQuestion(
 		questionText: gradingResult.question_text,
 		stimuli,
 		maxScore: gradingResult.max_score,
-		labeledWords: renderLabeledWords(labeled),
-		labeledWordCount: labeled.length,
 		examBoard,
 		subject,
 		markScheme: markSchemeContext,
@@ -120,41 +115,70 @@ export async function annotateOneQuestion(
 		{ timeoutMs },
 	)
 
-	// Resolve token indices to spans and build pending records
 	const pending: PendingAnnotation[] = []
 
 	for (let i = 0; i < plan.annotations.length; i++) {
 		const item = plan.annotations[i]
 
-		const startTokenId = aliasToTokenId.get(item.anchor_start_token)
-		const endTokenId = aliasToTokenId.get(item.anchor_end_token)
-		if (!startTokenId || !endTokenId) {
-			logger.info(TAG, "Unknown token alias — skipping annotation", {
-				jobId,
-				question_id: gradingResult.question_id,
-				anchor_start_token: item.anchor_start_token,
-				anchor_end_token: item.anchor_end_token,
-				known_aliases_count: aliasToTokenId.size,
-			})
+		// ── Phrase resolution ────────────────────────────────────────────
+		// The LLM emits a verbatim phrase from the student's answer. We
+		// resolve it via exact-string search — no fuzzy match, no char
+		// counting on the LLM's side. The prompt requires phrase to be
+		// unique within the answer; ambiguous matches default to the first
+		// occurrence (logged) since annotators typically refer to the
+		// earliest mention.
+		const charStart = answer.indexOf(item.phrase)
+		if (charStart < 0) {
+			logger.info(
+				TAG,
+				"Annotation phrase not found in answer — skipping (LLM hallucination check)",
+				{
+					jobId,
+					question_id: gradingResult.question_id,
+					phrase: item.phrase.slice(0, 80),
+				},
+			)
 			continue
 		}
+		const charEnd = charStart + item.phrase.length
+		if (answer.indexOf(item.phrase, charStart + 1) >= 0) {
+			logger.info(
+				TAG,
+				"Annotation phrase appears multiple times — defaulting to first occurrence",
+				{
+					jobId,
+					question_id: gradingResult.question_id,
+					phrase: item.phrase.slice(0, 80),
+				},
+			)
+		}
 
-		const span = resolveTokenSpanByIds(startTokenId, endTokenId, pageTokens)
+		// ── Resolve bbox / token IDs from the char range ─────────────────
+		const span = resolveTokenSpanByCharRange(
+			charStart,
+			charEnd,
+			pageTokens,
+			alignment,
+		)
 		if (!span) {
-			logger.info(TAG, "Token IDs not found — skipping annotation", {
-				jobId,
-				question_id: gradingResult.question_id,
-				start_token_id: startTokenId,
-				end_token_id: endTokenId,
-			})
+			logger.info(
+				TAG,
+				"No OCR tokens overlap annotation char range — skipping",
+				{
+					jobId,
+					question_id: gradingResult.question_id,
+					char_start: charStart,
+					char_end: charEnd,
+					phrase: item.phrase.slice(0, 60),
+				},
+			)
 			continue
 		}
 
 		const overlay = buildOverlay(item)
 		if (!overlay) {
 			// LLM returned an item missing signal or reason. Schema enforces
-			// both as required, so this is belt-and-suspenders — log + drop
-			// instead of persisting an empty placeholder (the Q4 bug).
+			// both as required, so this is belt-and-suspenders.
 			logger.info(TAG, "Annotation item missing signal or reason — skipping", {
 				jobId,
 				question_id: gradingResult.question_id,
@@ -169,6 +193,9 @@ export async function annotateOneQuestion(
 			pageOrder: span.pageOrder,
 			...overlay,
 			sentiment: item.sentiment,
+			phrase: item.phrase,
+			charStart,
+			charEnd,
 			anchorTokenStartId: span.startTokenId,
 			anchorTokenEndId: span.endTokenId,
 			bbox: span.bbox,

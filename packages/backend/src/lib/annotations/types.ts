@@ -14,8 +14,32 @@ type BasePendingAnnotation = {
 	questionId: string
 	pageOrder: number
 	sentiment: string
+	/**
+	 * The exact substring of `student_answer` this annotation covers. Source
+	 * of truth for what was annotated. Always equal to
+	 * `student_answer.slice(charStart, charEnd)` — verified at construction
+	 * time; malformed records are dropped before reaching this type.
+	 */
+	phrase: string
+	/** Inclusive UTF-16 char offset into `student_answer`. */
+	charStart: number
+	/** Exclusive UTF-16 char offset into `student_answer`. */
+	charEnd: number
+	/**
+	 * Token IDs whose char range overlaps [charStart, charEnd) — first and
+	 * last in reading order. Used to compute the scan-overlay bbox; null when
+	 * no token covers the range (e.g. the phrase falls in inserted
+	 * punctuation that has no underlying OCR token).
+	 */
 	anchorTokenStartId: string | null
 	anchorTokenEndId: string | null
+	/**
+	 * Bounding-box hull of the tokens covered by the char range. Used for the
+	 * `student_paper_annotations.bbox` denormalised column and the scan
+	 * overlay's initial render. The PM doc's `ocrToken` marks are the
+	 * canonical source of truth for per-word bboxes; this hull is a
+	 * convenience.
+	 */
 	bbox: NormalisedBox
 	sortOrder: number
 }

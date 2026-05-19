@@ -19,15 +19,11 @@ import { z } from "zod/v4"
  * need. Don't reintroduce them into THIS prompt without that separation.
  */
 export const AnnotationPlanItemSchema = z.object({
-	anchor_start_token: z
+	phrase: z
 		.string()
+		.min(1)
 		.describe(
-			"Token alias (e.g. 't14') where the annotation span BEGINS. Pick from the labelled words shown in <StudentAnswerLabeled>. Single-word anchors set start === end.",
-		),
-	anchor_end_token: z
-		.string()
-		.describe(
-			"Token alias (e.g. 't18') where the annotation span ENDS (inclusive). For a single-word anchor, set end equal to start. The end must come at or after the start in reading order.",
+			"Verbatim substring from <StudentAnswer> that this annotation covers — copied EXACTLY (punctuation, capitalisation, internal whitespace). MUST appear exactly ONCE in the answer. If your intended phrase appears more than once, extend it with leading or trailing context (a few extra words) until it becomes unique. Server resolves the anchor by exact-string search; ambiguous phrases default to the first occurrence and are logged.",
 		),
 	sentiment: z
 		.enum(["positive", "negative", "neutral"])

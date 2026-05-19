@@ -4,20 +4,29 @@ import type { HeadlessEditor } from "@/lib/collab/headless-editor"
 import {
 	type AnnotationMarkSpec,
 	type AnnotationSignal,
-	type PageToken,
-	alignTokensToAnswer,
 	applyAnnotationMark,
 	isMarkSignal,
 } from "@mcp-gcse/shared"
 
 /**
  * Dispatch all AI annotations for a *single* question as PM `addMark`
- * transactions on the supplied editor. Resolves character ranges via
- * `alignTokensToAnswer` — fuzzy (Levenshtein) match of OCR tokens against
- * the LLM-authored answer text. Annotation positioning is approximate;
- * the grader-facing text is the source of truth. Annotation marks carry
- * the original scan token + bbox metadata so the round-trip via
- * `deriveAnnotationsFromDoc` is lossless.
+ * transactions on the supplied editor.
+ *
+ * The annotation LLM emits a verbatim `phrase` from the student answer;
+ * `annotateOneQuestion` resolved that to a char range via `indexOf` and
+ * stamped `charStart` / `charEnd` directly onto the `PendingAnnotation`.
+ * So this function reads PM-mark `from`/`to` straight off the pending
+ * record — no fuzzy alignment, no token-ID lookup, no char counting
+ * on the LLM's part. The grader-facing text is the canonical source of
+ * truth; the LLM's quote is anchored exactly where it appears in that text.
+ *
+ * Scan-side metadata (bbox / pageOrder / anchor token IDs) is carried
+ * through onto the PM mark attrs so `deriveAnnotationsFromDoc` can
+ * reverse-resolve the bbox without re-aligning. This is kept for now to
+ * avoid a coordinated schema change across the editor + projection layer;
+ * the schema-removal pass can land later, at which point
+ * `deriveAnnotationsFromDoc` falls back to ocrToken-hull (already
+ * implemented at `derive-annotations.ts:124-140`).
  *
  * Called once per question, immediately after that question is graded and
  * annotated — so marks appear in the doc progressively as the grade Lambda
@@ -32,16 +41,14 @@ export function dispatchAnnotationsForQuestion(args: {
 	jobId: string
 	questionId: string
 	answerText: string
-	tokens: PageToken[]
 	annotations: PendingAnnotation[]
 }): void {
 	if (args.annotations.length === 0) return
-	if (args.answerText.length === 0 || args.tokens.length === 0) return
+	if (args.answerText.length === 0) return
 
-	const alignment = alignTokensToAnswer(args.answerText, args.tokens)
 	const specs: AnnotationSpec[] = []
 	for (const ann of args.annotations) {
-		const spec = pendingAnnotationToSpec(args.jobId, ann, alignment.tokenMap)
+		const spec = pendingAnnotationToSpec(args.jobId, ann, args.answerText)
 		if (spec) specs.push(spec)
 	}
 	if (specs.length === 0) return
@@ -57,13 +64,15 @@ export function dispatchAnnotationsForQuestion(args: {
 function pendingAnnotationToSpec(
 	jobId: string,
 	a: PendingAnnotation,
-	tokenMap: Record<string, { start: number; end: number }>,
+	answerText: string,
 ): AnnotationSpec | null {
-	if (!a.anchorTokenStartId || !a.anchorTokenEndId) return null
-	const startOffset = tokenMap[a.anchorTokenStartId]
-	const endOffset = tokenMap[a.anchorTokenEndId]
-	if (!startOffset || !endOffset) return null
-	if (startOffset.start >= endOffset.end) return null
+	// Belt-and-suspenders sanity check: the pending annotation already passed
+	// `indexOf`-based validation in `annotateOneQuestion`. We re-verify here
+	// in case the answerText drifted between grading and dispatch (e.g.
+	// teacher edits during the grading window).
+	if (a.charStart < 0 || a.charEnd <= a.charStart) return null
+	if (a.charEnd > answerText.length) return null
+	if (answerText.slice(a.charStart, a.charEnd) !== a.phrase) return null
 
 	const signal = signalFromPending(a)
 	if (!signal) return null
@@ -81,8 +90,9 @@ function pendingAnnotationToSpec(
 	const attrs: Record<string, unknown> = {
 		annotationId,
 		reason: payload.reason ?? null,
-		// Carry scan metadata so deriveAnnotationsFromDoc can reverse-resolve
-		// the bbox without needing the alignment map again.
+		// Scan-side metadata carried for now so `deriveAnnotationsFromDoc`
+		// gets the bbox without re-aligning. Slated for removal once the
+		// editor + projection layer migrate to the ocrToken-hull fallback.
 		scanBbox: a.bbox,
 		scanPageOrder: a.pageOrder,
 		scanTokenStartId: a.anchorTokenStartId,
@@ -102,8 +112,8 @@ function pendingAnnotationToSpec(
 	const mark: AnnotationMarkSpec = {
 		signal,
 		sentiment,
-		from: startOffset.start,
-		to: endOffset.end,
+		from: a.charStart,
+		to: a.charEnd,
 		attrs,
 	}
 

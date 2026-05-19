@@ -243,12 +243,39 @@ describe.each(FIXTURES)("annotation evals — $name", (fixture) => {
 		},
 	)
 
-	// Eval 8 — gated until the phrase-anchoring rework lands. Once the LLM
-	// emits { phrase, char_start, char_end }, this asserts:
-	//   answer.slice(char_start, char_end) === phrase
-	// for every emitted annotation. See
-	// docs/build-plan-2026-05-18-annotation-llm-phrase-anchoring.md.
-	it.skip("Eval 8 — RESERVED phrase consistency check (post-rework)", () => {
-		expect(true).toBe(true)
+	// Eval 8 — phrase-anchoring contract. Every persisted annotation's
+	// `phrase` MUST appear in `student_answer` (resolved via indexOf, no
+	// fuzzy match). The pipeline drops phrase-not-found annotations before
+	// they reach `pending`, so this is the eval form of an invariant — if
+	// it ever fires, something downstream is bypassing the indexOf check
+	// in `annotateOneQuestion` and we'd be persisting hallucinated quotes.
+	// Also catches drift in `charStart`/`charEnd` vs `phrase` (the
+	// belt-and-suspenders check `dispatchAnnotationsForQuestion` does).
+	it("Eval 8 — every annotation's phrase appears in student_answer at its char range", () => {
+		const answer = run.studentAnswer
+		const violations: Array<{ idx: number; reason: string; phrase: string }> =
+			[]
+		for (const [i, a] of run.pending.entries()) {
+			const slice = answer.slice(a.charStart, a.charEnd)
+			if (slice !== a.phrase) {
+				violations.push({
+					idx: i,
+					reason: `slice [${a.charStart}, ${a.charEnd}) = "${slice.slice(0, 40)}…" != phrase`,
+					phrase: a.phrase.slice(0, 40),
+				})
+				continue
+			}
+			if (answer.indexOf(a.phrase) < 0) {
+				violations.push({
+					idx: i,
+					reason: "phrase not present in student_answer",
+					phrase: a.phrase.slice(0, 40),
+				})
+			}
+		}
+		expect(
+			violations,
+			`${violations.length} annotation(s) violate the phrase-anchoring contract: ${JSON.stringify(violations, null, 2)}`,
+		).toEqual([])
 	})
 })

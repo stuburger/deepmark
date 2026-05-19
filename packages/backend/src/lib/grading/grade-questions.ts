@@ -198,7 +198,6 @@ export async function gradeAndAnnotateAll(
 				jobId,
 				questionId: result.question_id,
 				answerText: result.student_answer,
-				tokens: tokensByQuestion.get(result.question_id) ?? [],
 				annotations,
 			})
 		}),

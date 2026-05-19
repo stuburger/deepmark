@@ -15,10 +15,12 @@ import { useQuery } from "@tanstack/react-query"
 // Stable empty-array constants. `tokensQuery.data ?? []` would allocate a
 // new `[]` per render while the query is pending, which cascades into
 // re-binding the editor's transaction listeners every render (via
-// useQuestionAlignments → useDerivedAnnotations). Using module-scoped
-// frozen constants keeps the prop identity stable.
-const EMPTY_PAGE_TOKENS: ReadonlyArray<PageToken> = Object.freeze([])
-const EMPTY_SCAN_PAGES: ReadonlyArray<ScanPage> = Object.freeze([])
+// useQuestionAlignments → useDerivedAnnotations). Module-scoped constants
+// fix the identity. They're not frozen because Object.freeze on an empty
+// array protects against nothing — the consumer chain types `PageToken[]`
+// and downstream code should not mutate these arrays anyway.
+const EMPTY_PAGE_TOKENS: PageToken[] = []
+const EMPTY_SCAN_PAGES: ScanPage[] = []
 
 export function useMarkingJobData({
 	examPaperId,
@@ -108,8 +110,8 @@ export function useMarkingJobData({
 
 	return {
 		jobData: jobQuery.data ?? null,
-		scanPages: (scanQuery.data ?? EMPTY_SCAN_PAGES) as ScanPage[],
-		pageTokens: (tokensQuery.data ?? EMPTY_PAGE_TOKENS) as PageToken[],
+		scanPages: scanQuery.data ?? EMPTY_SCAN_PAGES,
+		pageTokens: tokensQuery.data ?? EMPTY_PAGE_TOKENS,
 		stages: stagesQuery.data ?? null,
 		isLoading,
 		error: error ?? (notFound ? new Error("Submission not found") : null),

@@ -1,15 +1,20 @@
 "use client"
 
+import { useFingerprintGuard } from "@/hooks/use-fingerprint-guard"
 import type { PageToken, StudentPaperAnnotation } from "@/lib/marking/types"
 import { type TokenAlignment, deriveAnnotationsFromDoc } from "@mcp-gcse/shared"
 import type { Editor } from "@tiptap/core"
-import { useEffect, useRef } from "react"
+import { useCallback, useEffect, useRef } from "react"
 
 export { deriveAnnotationsFromDoc }
 
 /** Compact fingerprint that captures identity + payload-relevant attrs. */
 function annotationFingerprint(a: StudentPaperAnnotation): string {
 	return `${a.id}|${a.overlay_type}|${a.sentiment}|${JSON.stringify(a.payload)}`
+}
+
+function annotationsFingerprint(arr: StudentPaperAnnotation[]): string {
+	return arr.map(annotationFingerprint).sort().join("\n")
 }
 
 /**
@@ -29,9 +34,12 @@ export function useDerivedAnnotations(
 	alignmentByQuestion?: ReadonlyMap<string, TokenAlignment>,
 	tokensByQuestion?: ReadonlyMap<string, ReadonlyArray<PageToken>>,
 ): void {
-	const prevFingerprintRef = useRef("")
 	const onChangeRef = useRef(onChange)
 	onChangeRef.current = onChange
+
+	const isDuplicate = useFingerprintGuard<StudentPaperAnnotation[]>(
+		useCallback((arr) => annotationsFingerprint(arr), []),
+	)
 
 	useEffect(() => {
 		if (!editor) return
@@ -41,11 +49,7 @@ export function useDerivedAnnotations(
 				alignmentByQuestion,
 				tokensByQuestion,
 			})
-
-			const fp = derived.map(annotationFingerprint).sort().join("\n")
-			if (fp === prevFingerprintRef.current) return
-
-			prevFingerprintRef.current = fp
+			if (isDuplicate(derived)) return
 			onChangeRef.current(derived)
 		}
 
@@ -58,5 +62,5 @@ export function useDerivedAnnotations(
 		// Both maps are memoised by `useQuestionAlignments` — identity only
 		// changes when their inputs change, so this deps array doesn't cause
 		// render storms.
-	}, [editor, alignmentByQuestion, tokensByQuestion])
+	}, [editor, alignmentByQuestion, tokensByQuestion, isDuplicate])
 }

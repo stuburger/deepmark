@@ -1,6 +1,7 @@
 import type { Editor } from "@tiptap/core"
 import { QuestionAnswerNodeSchema } from "@mcp-gcse/shared"
 import { ReactNodeViewRenderer } from "@tiptap/react"
+import { findEnclosingQuestionAnswer } from "./pm-pos-mapping"
 import { QuestionAnswerView } from "./question-answer-view"
 
 /**
@@ -20,19 +21,12 @@ import { QuestionAnswerView } from "./question-answer-view"
  * `hardBreak` atom (which fits `content: "inline*"`), not a block split.
  */
 function insertHardBreakIfInQuestion({ editor }: { editor: Editor }): boolean {
-	const { selection } = editor.state
-	let inQuestionAnswer = false
-	for (let d = selection.$from.depth; d > 0; d--) {
-		if (selection.$from.node(d).type.name === "questionAnswer") {
-			inQuestionAnswer = true
-			break
-		}
-	}
 	// Outside a questionAnswer block (examiner-summary paragraph, mcqTable
 	// boundary, …) we fall through to Tiptap's default Enter handling so
 	// the leading paragraph still splits naturally on Enter.
-	if (!inQuestionAnswer) return false
-
+	if (findEnclosingQuestionAnswer(editor.state.selection.$from) === null) {
+		return false
+	}
 	return editor.chain().focus().insertContent({ type: "hardBreak" }).run()
 }
 

@@ -36,6 +36,7 @@ import { InsertParagraphPlugin } from "./insert-paragraph-plugin"
 import { MARK_ACTIONS } from "./mark-actions"
 import { McqTableNode } from "./mcq-table-node"
 import { QuestionAnswerNode } from "./question-answer-node"
+import { findEnclosingQuestionAnswer } from "./pm-pos-mapping"
 import { useDerivedAnnotations } from "./use-derived-annotations"
 import { useTokenHighlight } from "./use-token-highlight"
 
@@ -344,20 +345,13 @@ export function AnnotatedAnswerSheet({
 								const { from, to, $from } = editor.state.selection
 								const text = editor.state.doc.textBetween(from, to, " ").trim()
 								if (!text) return
-								// Walk up the selection ancestors to find the enclosing
-								// questionAnswer node (if any) and pull its question
-								// number off the attrs so the chat can label the chip.
-								let questionNumber: string | null = null
-								for (let depth = $from.depth; depth > 0; depth--) {
-									const node = $from.node(depth)
-									if (node.type.name === "questionAnswer") {
-										const attrs = node.attrs as {
-											questionNumber?: string | null
-										}
-										questionNumber = attrs.questionNumber ?? null
-										break
-									}
-								}
+								// Read the enclosing questionAnswer's questionNumber so
+								// the chat panel can label the context chip. Null when
+								// the selection sits in a non-question block (cover
+								// page, examiner-summary paragraph).
+								const block = findEnclosingQuestionAnswer($from)
+								const questionNumber =
+									(block?.node.attrs.questionNumber as string | null) ?? null
 								onAskDeepMark({ text, questionNumber })
 							}}
 							className="inline-flex items-center gap-1.5 rounded-md border border-primary/40 bg-foreground/95 backdrop-blur-md px-2.5 py-1.5 text-xs font-medium text-background shadow-toolbar"

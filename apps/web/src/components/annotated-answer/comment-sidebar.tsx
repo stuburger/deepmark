@@ -1,5 +1,6 @@
 "use client"
 
+import { useFingerprintGuard } from "@/hooks/use-fingerprint-guard"
 import { TIPTAP_TO_ENTRY } from "@mcp-gcse/shared"
 import type { Editor } from "@tiptap/core"
 import {
@@ -89,7 +90,9 @@ export function CommentSidebar({
 }) {
 	const [rawCards, setRawCards] = useState<CommentCard[]>(EMPTY_CARDS)
 	const containerRef = useRef<HTMLDivElement>(null)
-	const prevFingerprintRef = useRef("")
+	const isDuplicate = useFingerprintGuard<CommentCard[]>(
+		useCallback((cards) => cardsFingerprint(cards), []),
+	)
 
 	const recompute = useCallback(() => {
 		const { doc } = editor.state
@@ -196,11 +199,9 @@ export function CommentSidebar({
 			})
 		}
 
-		const fp = cardsFingerprint(newCards)
-		if (fp === prevFingerprintRef.current) return
-		prevFingerprintRef.current = fp
+		if (isDuplicate(newCards)) return
 		setRawCards(newCards)
-	}, [editor])
+	}, [editor, isDuplicate])
 
 	useEffect(() => {
 		recompute()

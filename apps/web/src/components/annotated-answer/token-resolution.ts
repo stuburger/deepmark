@@ -4,7 +4,7 @@ import {
 	tokenIdsInRange,
 } from "@mcp-gcse/shared"
 import type { Node as PmNode } from "@tiptap/pm/model"
-import { pmPosToAnswerChar } from "./pm-pos-mapping"
+import { pmPosToAnswerChar, pmPosToCharInBlock } from "./pm-pos-mapping"
 
 /**
  * Pure resolvers that map PM positions / annotation ids to OCR tokenIds via
@@ -48,17 +48,16 @@ export function resolveTokensForRange(
 		const alignment = alignmentByQuestion.get(questionId)
 		if (!alignment) return false
 
-		const startPt = pmPosToAnswerChar(doc, overlapFrom)
-		const endPt = pmPosToAnswerChar(doc, overlapTo)
-		if (!startPt || !endPt) return false
-		if (
-			startPt.questionId !== questionId ||
-			endPt.questionId !== questionId
-		)
-			return false
+		// We already have the block + blockStart in hand from the
+		// descendants walk — use `pmPosToCharInBlock` directly to avoid
+		// the doc-rooted variant's redundant `doc.resolve` + ancestor walk
+		// (which would re-find the same block twice per overlap).
+		const charFrom = pmPosToCharInBlock(node, blockStart, overlapFrom)
+		const charTo = pmPosToCharInBlock(node, blockStart, overlapTo)
+		if (charFrom === null || charTo === null) return false
 
-		const charTo = Math.max(endPt.char, startPt.char + 1)
-		for (const id of tokenIdsInRange(startPt.char, charTo, alignment)) {
+		const clampedTo = Math.max(charTo, charFrom + 1)
+		for (const id of tokenIdsInRange(charFrom, clampedTo, alignment)) {
 			if (!seen.has(id)) {
 				seen.add(id)
 				ids.push(id)

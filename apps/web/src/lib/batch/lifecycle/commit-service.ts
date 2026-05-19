@@ -211,13 +211,22 @@ export async function commitBatchService(
 			data: { status: "submitted" },
 		})
 
-		// Ingest is done — the batch is `committed` and disappears from the
-		// staging banner. Grading progress is owned by ProcessingBatch from
-		// here on, and emits its own batch.completed event when settled.
-		await tx.batchIngestJob.update({
-			where: { id: batchJobId },
-			data: { status: "committed" as BatchStatus },
+		// Stay in `staging` as long as there are still undecided scripts so the
+		// review dialog can be re-opened to handle the leftovers (teacher
+		// submits 2 of 14 → 12 proposed remain → dialog stays available).
+		// Only flip to `committed` when every script has been resolved
+		// (submitted or excluded). Each commit already creates its own
+		// ProcessingBatch (above), so the "marking complete" email still fires
+		// once per sub-batch — this only affects ingest UI visibility.
+		const undecidedCount = await tx.stagedScript.count({
+			where: { batch_job_id: batchJobId, status: "proposed" },
 		})
+		if (undecidedCount === 0) {
+			await tx.batchIngestJob.update({
+				where: { id: batchJobId },
+				data: { status: "committed" as BatchStatus },
+			})
+		}
 
 		return jobs
 	})

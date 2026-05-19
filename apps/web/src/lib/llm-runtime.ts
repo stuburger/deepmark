@@ -69,6 +69,11 @@ export function getDefaultRunner(): LlmRunner {
 /**
  * Loads the model config for a call site and executes with fallback.
  * Web-side equivalent of the backend callLlmWithFallback.
+ *
+ * Pass `opts.timeoutMs` to override the runner's 90s default. The `signal`
+ * the runner provides into `fn` is the abort signal driven by that timeout —
+ * forward it to `generateText({ abortSignal: signal })` so the fetch is
+ * genuinely cancelled when the timeout fires.
  */
 export async function callLlmWithFallback<T>(
 	callSiteKey: string,
@@ -76,8 +81,10 @@ export async function callLlmWithFallback<T>(
 		model: LanguageModel,
 		entry: LlmModelEntry,
 		report: LlmCallReport,
+		signal: AbortSignal,
 	) => Promise<T>,
-	llm?: LlmRunner,
+	opts?: { timeoutMs?: number; llm?: LlmRunner },
 ): Promise<T> {
-	return (llm ?? getDefaultRunner()).call(callSiteKey, fn)
+	const { llm, timeoutMs } = opts ?? {}
+	return (llm ?? getDefaultRunner()).call(callSiteKey, fn, { timeoutMs })
 }

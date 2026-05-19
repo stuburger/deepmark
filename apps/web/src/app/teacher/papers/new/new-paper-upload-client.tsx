@@ -112,6 +112,9 @@ export function NewPaperUploadClient() {
 						status: cls.error ? "error" : "classified",
 						error: cls.error,
 					}))
+					if (cls.error) {
+						toast.error(`${file.name}: ${cls.error}`)
+					}
 				} catch (err) {
 					const message = err instanceof Error ? err.message : "Upload failed"
 					updateFile(slot.clientId, (f) => ({

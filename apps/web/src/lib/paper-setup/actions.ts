@@ -9,10 +9,26 @@ import {
 	S3Client,
 } from "@aws-sdk/client-s3"
 import { SQSClient, SendMessageCommand } from "@aws-sdk/client-sqs"
+import { LlmTimeoutError } from "@mcp-gcse/shared"
 import { Output, generateText } from "ai"
+import { PDFDocument } from "pdf-lib"
 import { Resource } from "sst"
 import { z } from "zod"
 import type { ClassifiedStagedFile } from "./types"
+
+// 60s is generous for the sampled-PDF payload we now send (≤ 5 pages for
+// files over 10 pages). On timeout the file falls back to `unrecognised`
+// with a friendly error and the UI surfaces a manual <Select>.
+const CLASSIFY_TIMEOUT_MS = 60_000
+
+// Skip sampling for short PDFs — the whole file fits in the prompt budget
+// and the cover-plus-mid-page signals we need are all visible anyway.
+const CLASSIFY_SAMPLE_THRESHOLD = 10
+
+// 5 pages is enough to discriminate the four labels: cover (candidate-info
+// fill state, header), three mid-doc samples (answer-space vs printed
+// questions vs mark grid vs source extract), and the back page.
+const CLASSIFY_SAMPLE_PAGES = 5
 
 const s3 = new S3Client({})
 const sqs = new SQSClient({})
@@ -72,13 +88,15 @@ export const classifyStagedFiles = authenticatedAction
 			const classifications = await Promise.all(
 				files.map(async (f): Promise<ClassifiedStagedFile> => {
 					try {
-						const pdfBase64 = await fetchTempPdf(f.tempUploadId)
+						const pdfBytes = await fetchTempPdfBytes(f.tempUploadId)
+						const pdfBase64 = await preparePdfForClassify(pdfBytes)
 						const { output } = await callLlmWithFallback(
 							"paper-setup-classifier",
-							async (model, entry, report) => {
+							async (model, entry, report, signal) => {
 								const r = await generateText({
 									model,
 									temperature: entry.temperature,
+									abortSignal: signal,
 									messages: [
 										{
 											role: "user",
@@ -100,6 +118,7 @@ export const classifyStagedFiles = authenticatedAction
 								report.usage = r.usage
 								return r
 							},
+							{ timeoutMs: CLASSIFY_TIMEOUT_MS },
 						)
 						return {
 							tempUploadId: f.tempUploadId,
@@ -107,10 +126,16 @@ export const classifyStagedFiles = authenticatedAction
 							error: null,
 						}
 					} catch (err) {
-						const message = err instanceof Error ? err.message : String(err)
+						const message =
+							err instanceof LlmTimeoutError
+								? "Took too long to identify — please choose the file type manually."
+								: err instanceof Error
+									? err.message
+									: String(err)
 						ctx.log.warn("classifyStagedFiles file failed", {
 							tempUploadId: f.tempUploadId,
 							error: message,
+							timeout: err instanceof LlmTimeoutError,
 						})
 						return {
 							tempUploadId: f.tempUploadId,
@@ -328,12 +353,54 @@ function batchSourceKey(batchId: string, filename: string): string {
 	return `batches/${batchId}/source/${filename}`
 }
 
-async function fetchTempPdf(s3Key: string): Promise<string> {
+async function fetchTempPdfBytes(s3Key: string): Promise<Uint8Array> {
 	const cmd = new GetObjectCommand({ Bucket: bucketName, Key: s3Key })
 	const response = await s3.send(cmd)
 	const body = await response.Body?.transformToByteArray()
 	if (!body?.length) throw new Error("Empty staged PDF")
-	return Buffer.from(body).toString("base64")
+	return body
+}
+
+/**
+ * Returns base64-encoded PDF bytes suitable for sending to the classifier.
+ *
+ * For PDFs over `CLASSIFY_SAMPLE_THRESHOLD` pages, builds a smaller PDF from
+ * cover + evenly-spaced mid-doc pages + back page so the payload stays
+ * bounded regardless of source size (a 300-page student-script bundle would
+ * otherwise sit at ~100 MB base64 and hang the request). The four labels
+ * we discriminate (question_paper / mark_scheme / stimulus_pack /
+ * scripts_bundle) all have their decisive signals on the cover and mid-doc
+ * — full pagination doesn't help the model.
+ */
+async function preparePdfForClassify(bytes: Uint8Array): Promise<string> {
+	const source = await PDFDocument.load(bytes, { ignoreEncryption: true })
+	const pageCount = source.getPageCount()
+
+	if (pageCount <= CLASSIFY_SAMPLE_THRESHOLD) {
+		return Buffer.from(bytes).toString("base64")
+	}
+
+	const indices = sampleIndices(pageCount, CLASSIFY_SAMPLE_PAGES)
+	const sampled = await PDFDocument.create()
+	const copied = await sampled.copyPages(source, indices)
+	for (const page of copied) sampled.addPage(page)
+	const out = await sampled.save()
+	return Buffer.from(out).toString("base64")
+}
+
+/**
+ * Picks `count` page indices from a `total`-page document: always include
+ * the first and last page, then evenly space the rest between them.
+ * Returned indices are 0-based, sorted ascending, and unique.
+ */
+function sampleIndices(total: number, count: number): number[] {
+	if (total <= count) return Array.from({ length: total }, (_, i) => i)
+	const set = new Set<number>([0, total - 1])
+	const innerSlots = count - 2
+	for (let i = 1; i <= innerSlots; i++) {
+		set.add(Math.round((i * (total - 1)) / (innerSlots + 1)))
+	}
+	return [...set].sort((a, b) => a - b)
 }
 
 async function copyTempToDurable(

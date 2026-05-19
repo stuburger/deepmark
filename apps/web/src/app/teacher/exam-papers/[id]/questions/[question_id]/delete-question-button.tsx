@@ -6,6 +6,7 @@ import { deleteQuestion } from "@/lib/exam-paper/questions/mutations"
 import { Trash2 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useState } from "react"
+import { toast } from "sonner"
 
 export function DeleteQuestionButton({
 	questionId,
@@ -17,17 +18,17 @@ export function DeleteQuestionButton({
 	const router = useRouter()
 	const [open, setOpen] = useState(false)
 	const [deleting, setDeleting] = useState(false)
-	const [error, setError] = useState<string | null>(null)
 
 	async function handleConfirm() {
 		setDeleting(true)
-		setError(null)
 		const result = await deleteQuestion({ questionId })
 		setDeleting(false)
 		if (result?.serverError) {
-			setError(result.serverError)
+			toast.error(result.serverError)
+			setOpen(false)
 			return
 		}
+		toast.success("Question deleted")
 		router.push(`/teacher/exam-papers/${examPaperId}`)
 		router.refresh()
 	}
@@ -55,8 +56,6 @@ export function DeleteQuestionButton({
 				loading={deleting}
 				onConfirm={handleConfirm}
 			/>
-
-			{error && <p className="text-sm text-destructive mt-2">{error}</p>}
 		</>
 	)
 }

@@ -90,14 +90,16 @@ export const updateQuestion = resourceAction({
 /**
  * Fully deletes a question and all associated data in a transaction.
  *
- * Cascade order (child-first to avoid FK violations):
+ * Cascade order (child-first to avoid FK violations). MarkingResult FKs both
+ * Answer AND MarkScheme, so it must be deleted before either parent:
  *  1. MarkSchemeTestRun → MarkScheme
  *  2. ExemplarAnswer linked to question or its mark schemes
- *  3. MarkScheme
- *  4. QuestionBankItem
- *  5. MarkingResult → Answer
- *  6. ExamSectionQuestion
- *  7. Question
+ *  3. MarkingResult → Answer + MarkScheme
+ *  4. MarkScheme
+ *  5. QuestionBankItem
+ *  6. Answer
+ *  7. ExamSectionQuestion
+ *  8. Question
  */
 export const deleteQuestion = resourceAction({
 	type: "question",
@@ -107,6 +109,21 @@ export const deleteQuestion = resourceAction({
 }).action(
 	async ({ parsedInput: { questionId }, ctx }): Promise<{ ok: true }> => {
 		ctx.log.info("deleteQuestion called", { questionId })
+
+		// Guard: a question with marked submissions can't be cleanly deleted —
+		// the per-submission Y.Doc still carries `questionAnswer`/`mcqAnswer`
+		// blocks keyed by this questionId, and removing the DB rows would
+		// orphan them. Force the teacher to delete the submissions first.
+		const answerCount = await db.answer.count({
+			where: { question_id: questionId },
+		})
+		if (answerCount > 0) {
+			throw new Error(
+				`This question has been answered in ${answerCount} student ${
+					answerCount === 1 ? "submission" : "submissions"
+				} and can't be deleted. Delete those submissions first, then try again.`,
+			)
+		}
 
 		await db.$transaction(async (tx) => {
 			const markSchemes = await tx.markScheme.findMany({
@@ -134,16 +151,24 @@ export const deleteQuestion = resourceAction({
 				},
 			})
 
+			// Cover both FK paths: results tied to this question's answers OR
+			// to its mark schemes. They overlap in practice but the OR is the
+			// safe statement of intent.
+			await tx.markingResult.deleteMany({
+				where: {
+					OR: [
+						{ answer_id: { in: answerIds } },
+						{ mark_scheme_id: { in: markSchemeIds } },
+					],
+				},
+			})
+
 			await tx.markScheme.deleteMany({
 				where: { question_id: questionId },
 			})
 
 			await tx.questionBankItem.deleteMany({
 				where: { question_id: questionId },
-			})
-
-			await tx.markingResult.deleteMany({
-				where: { answer_id: { in: answerIds } },
 			})
 
 			await tx.answer.deleteMany({

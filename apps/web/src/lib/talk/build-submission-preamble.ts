@@ -8,6 +8,13 @@ import type {
 export type SubmissionPreambleInput = {
 	payload: StudentPaperJobPayload
 	annotations: StudentPaperAnnotation[]
+	/**
+	 * Per-question mark scheme markdown, keyed by mark_scheme_id. Source is
+	 * `MarkScheme.content` — the canonical markdown that the grader read.
+	 * Optional: any question whose mark_scheme_id is missing from the map
+	 * (or whose content is null) simply skips the MS section.
+	 */
+	markSchemesById?: ReadonlyMap<string, string | null>
 }
 
 /**
@@ -19,7 +26,7 @@ export type SubmissionPreambleInput = {
 export function buildSubmissionPreamble(
 	input: SubmissionPreambleInput,
 ): string {
-	const { payload, annotations } = input
+	const { payload, annotations, markSchemesById } = input
 	const annotationsByQuestion = groupAnnotationsByQuestion(annotations)
 
 	const lines: string[] = []
@@ -57,10 +64,14 @@ export function buildSubmissionPreamble(
 	}
 
 	for (const result of payload.grading_results) {
+		const msContent = result.mark_scheme_id
+			? (markSchemesById?.get(result.mark_scheme_id) ?? null)
+			: null
 		renderQuestion(
 			lines,
 			result,
 			annotationsByQuestion.get(result.question_id) ?? [],
+			msContent,
 		)
 	}
 
@@ -71,6 +82,7 @@ function renderQuestion(
 	lines: string[],
 	r: GradingResult,
 	questionAnnotations: StudentPaperAnnotation[],
+	markSchemeContent: string | null,
 ): void {
 	const method = r.marking_method ?? "unspecified"
 	const excluded =
@@ -94,6 +106,13 @@ function renderQuestion(
 			lines.push(indent(s.content.trim(), "  "))
 			lines.push("")
 		}
+	}
+
+	if (markSchemeContent?.trim()) {
+		lines.push("**Mark scheme**")
+		lines.push("")
+		lines.push(markSchemeContent.trim())
+		lines.push("")
 	}
 
 	if (r.marking_method === "deterministic") {

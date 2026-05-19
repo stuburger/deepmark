@@ -1,4 +1,5 @@
 import { routeHandler } from "@/lib/authz"
+import { db } from "@/lib/db"
 import { getJobAnnotations } from "@/lib/marking/annotations/queries"
 import { getStudentPaperJob } from "@/lib/marking/submissions/queries"
 import { buildSubmissionPreamble } from "@/lib/talk/build-submission-preamble"
@@ -62,7 +63,12 @@ export const POST = routeHandler.authenticated(async (ctx, req) => {
 			return new Response("Submission not found", { status: 404 })
 		}
 		const annotations = annResult?.data?.annotations ?? []
-		const preamble = buildSubmissionPreamble({ payload, annotations })
+		const markSchemesById = await loadMarkSchemesForResults(payload)
+		const preamble = buildSubmissionPreamble({
+			payload,
+			annotations,
+			markSchemesById,
+		})
 		system.push({
 			role: "system",
 			content: preamble,
@@ -94,6 +100,27 @@ export const POST = routeHandler.authenticated(async (ctx, req) => {
 
 	return result.toUIMessageStreamResponse()
 })
+
+/**
+ * Loads MarkScheme.content for every distinct mark_scheme_id present on the
+ * payload's grading results. Direct db read by id is safe here — the caller
+ * is already viewer-authz'd on the submission, and these ids come from a
+ * payload they're authorised to see.
+ */
+async function loadMarkSchemesForResults(payload: {
+	grading_results: ReadonlyArray<{ mark_scheme_id?: string | null }>
+}): Promise<Map<string, string | null>> {
+	const ids = new Set<string>()
+	for (const r of payload.grading_results) {
+		if (r.mark_scheme_id) ids.add(r.mark_scheme_id)
+	}
+	if (ids.size === 0) return new Map()
+	const rows = await db.markScheme.findMany({
+		where: { id: { in: Array.from(ids) } },
+		select: { id: true, content: true },
+	})
+	return new Map(rows.map((r) => [r.id, r.content]))
+}
 
 function injectSelectionIntoLastUserMessage(
 	messages: ModelMessage[],

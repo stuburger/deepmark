@@ -4,6 +4,8 @@ import { useChat } from "@ai-sdk/react"
 import { DefaultChatTransport } from "ai"
 import { ArrowUp, AtSign, Loader2, Sparkles, Square, X } from "lucide-react"
 import { useEffect, useMemo, useRef, useState } from "react"
+import ReactMarkdown from "react-markdown"
+import remarkGfm from "remark-gfm"
 import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
@@ -63,6 +65,7 @@ export function TalkToDeepMarkChat({
 	const [input, setInput] = useState("")
 	const [chip, setChip] = useState<Prefill | null>(null)
 	const scrollRef = useRef<HTMLDivElement>(null)
+	const textareaRef = useRef<HTMLTextAreaElement>(null)
 
 	const transport = useMemo(
 		() =>
@@ -85,10 +88,15 @@ export function TalkToDeepMarkChat({
 
 	// Ingest parent-driven prefill into the chip slot. We replace any existing
 	// chip — Phase 5 ships single-chip selection; multi-chip can come later.
+	// Focus the textarea so the teacher can type immediately after clicking
+	// "Talk to DeepMark" in the editor bubble.
 	useEffect(() => {
 		if (!prefill) return
 		setChip(prefill)
 		onPrefillConsumed?.()
+		// rAF gives the LHS panel a tick to mount the textarea when the chat
+		// is being opened for the first time alongside the prefill.
+		requestAnimationFrame(() => textareaRef.current?.focus())
 	}, [prefill, onPrefillConsumed])
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: scroll on every message/token update
@@ -183,6 +191,7 @@ export function TalkToDeepMarkChat({
 							</div>
 						)}
 						<Textarea
+							ref={textareaRef}
 							value={input}
 							onChange={(e) => setInput(e.target.value)}
 							onKeyDown={handleKeyDown}
@@ -302,14 +311,110 @@ function MessageBubble({
 		>
 			<div
 				className={cn(
-					"max-w-[85%] whitespace-pre-wrap text-sm leading-[1.55]",
+					"max-w-[85%] text-sm leading-[1.55]",
 					isUser
-						? "rounded-md border border-border bg-card px-3.5 py-2.5 text-foreground shadow-tile"
+						? "whitespace-pre-wrap rounded-md border border-border bg-card px-3.5 py-2.5 text-foreground shadow-tile"
 						: "text-foreground",
 				)}
 			>
-				{text}
+				{isUser ? text : <AssistantMarkdown text={text} />}
 			</div>
 		</div>
+	)
+}
+
+/**
+ * Renders assistant text as markdown. We don't use @tailwindcss/typography
+ * (not installed); instead each markdown element maps to a JSX component
+ * with explicit design-token classes so nothing leaks into the global
+ * style and we stay within our `text-foreground`, `border-border-quiet`,
+ * etc. vocabulary.
+ */
+function AssistantMarkdown({ text }: { text: string }) {
+	return (
+		<ReactMarkdown
+			remarkPlugins={[remarkGfm]}
+			components={{
+				p: ({ children }) => (
+					<p className="[&:not(:first-child)]:mt-3">{children}</p>
+				),
+				strong: ({ children }) => (
+					<strong className="font-semibold">{children}</strong>
+				),
+				em: ({ children }) => <em className="italic">{children}</em>,
+				ul: ({ children }) => (
+					<ul className="my-2 list-disc space-y-1 pl-5">{children}</ul>
+				),
+				ol: ({ children }) => (
+					<ol className="my-2 list-decimal space-y-1 pl-5">{children}</ol>
+				),
+				li: ({ children }) => <li>{children}</li>,
+				code: ({ children }) => (
+					<code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px]">
+						{children}
+					</code>
+				),
+				pre: ({ children }) => (
+					<pre className="my-2 overflow-x-auto rounded bg-muted p-3 font-mono text-[11px]">
+						{children}
+					</pre>
+				),
+				h1: ({ children }) => (
+					<h3 className="mt-3 mb-1 font-semibold text-foreground">
+						{children}
+					</h3>
+				),
+				h2: ({ children }) => (
+					<h3 className="mt-3 mb-1 font-semibold text-foreground">
+						{children}
+					</h3>
+				),
+				h3: ({ children }) => (
+					<h3 className="mt-3 mb-1 font-semibold text-foreground">
+						{children}
+					</h3>
+				),
+				h4: ({ children }) => (
+					<h4 className="mt-3 mb-1 font-semibold text-foreground">
+						{children}
+					</h4>
+				),
+				blockquote: ({ children }) => (
+					<blockquote className="my-2 border-l-2 border-border-quiet pl-3 italic text-muted-foreground">
+						{children}
+					</blockquote>
+				),
+				a: ({ href, children }) => (
+					<a
+						href={href}
+						target="_blank"
+						rel="noopener noreferrer"
+						className="text-primary underline underline-offset-2 hover:no-underline"
+					>
+						{children}
+					</a>
+				),
+				hr: () => <hr className="my-3 border-border-quiet" />,
+				table: ({ children }) => (
+					<div className="my-2 overflow-x-auto">
+						<table className="w-full border-collapse text-[12px]">
+							{children}
+						</table>
+					</div>
+				),
+				th: ({ children }) => (
+					<th className="border border-border-quiet px-2 py-1 text-left font-semibold">
+						{children}
+					</th>
+				),
+				td: ({ children }) => (
+					<td className="border border-border-quiet px-2 py-1 align-top">
+						{children}
+					</td>
+				),
+			}}
+		>
+			{text}
+		</ReactMarkdown>
 	)
 }

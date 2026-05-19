@@ -294,6 +294,65 @@ describe("buildSubmissionPreamble", () => {
 		expect(out).toContain('phrase="because of this"')
 	})
 
+	it("renders mark scheme content per question when supplied", () => {
+		const payload = makePayload({
+			grading_results: [
+				makeResult({
+					question_id: "q1",
+					question_number: "1",
+					mark_scheme_id: "ms-1",
+				}),
+				makeResult({
+					question_id: "q2",
+					question_number: "2",
+					mark_scheme_id: "ms-2",
+				}),
+				makeResult({
+					question_id: "q3",
+					question_number: "3",
+					mark_scheme_id: null,
+				}),
+			],
+		})
+		const markSchemesById = new Map<string, string | null>([
+			["ms-1", "Award 1 mark for any correct city."],
+			["ms-2", "AO1 (2): identify two reasons. AO2 (4): explain each."],
+		])
+		const out = buildSubmissionPreamble({
+			payload,
+			annotations: [],
+			markSchemesById,
+		})
+		expect(out).toContain("**Mark scheme**")
+		expect(out).toContain("Award 1 mark for any correct city.")
+		expect(out).toContain("AO1 (2): identify two reasons.")
+		// Q3 has no mark_scheme_id — no MS section should appear for it.
+		const q3Idx = out.indexOf("### Q3 ")
+		const tailAfterQ3 = out.slice(q3Idx)
+		expect(tailAfterQ3.indexOf("**Mark scheme**")).toBe(-1)
+	})
+
+	it("omits the mark scheme block when content is null or empty", () => {
+		const payload = makePayload({
+			grading_results: [
+				makeResult({
+					question_id: "q1",
+					question_number: "1",
+					mark_scheme_id: "ms-1",
+				}),
+			],
+		})
+		const markSchemesById = new Map<string, string | null>([
+			["ms-1", "   "], // whitespace only
+		])
+		const out = buildSubmissionPreamble({
+			payload,
+			annotations: [],
+			markSchemesById,
+		})
+		expect(out).not.toContain("**Mark scheme**")
+	})
+
 	it("handles empty grading_results gracefully", () => {
 		const out = buildSubmissionPreamble({
 			payload: makePayload(),

@@ -21,19 +21,50 @@ function resolveTokensForRange(
 	to: number,
 	alignmentByQuestion: ReadonlyMap<string, TokenAlignment>,
 ): string[] | null {
-	const start = pmPosToAnswerChar(doc, from)
-	if (!start) return null
-	const end = pmPosToAnswerChar(doc, to)
-	// Selections that cross question boundaries are clamped to the start's
-	// question — every token highlight is necessarily scoped to one question
-	// (the scan overlay only renders one question at a time).
-	const charTo =
-		end && end.questionId === start.questionId
-			? end.char
-			: pmPosToAnswerChar(doc, to - 1)?.char ?? start.char
-	const alignment = alignmentByQuestion.get(start.questionId)
-	if (!alignment) return null
-	const ids = tokenIdsInRange(start.char, Math.max(charTo, start.char + 1), alignment)
+	// Walk every `questionAnswer` block that overlaps the selection. For
+	// each, clip the selection to the block's PM range, convert clipped
+	// endpoints to answer-char offsets, and look up tokenIds via that
+	// question's alignment. Union the results across blocks — selections
+	// can legitimately span multiple questions and the scan overlay
+	// renders highlights per-page, not per-question.
+	const ids: string[] = []
+	const seen = new Set<string>()
+
+	doc.descendants((node, pos) => {
+		if (node.type.name !== "questionAnswer") return
+		const questionId = node.attrs.questionId as string | null
+		if (!questionId) return
+
+		const blockStart = pos + 1
+		const blockEnd = blockStart + node.content.size
+		const overlapFrom = Math.max(from, blockStart)
+		const overlapTo = Math.min(to, blockEnd)
+		if (overlapTo <= overlapFrom) return false // no overlap; don't recurse
+
+		const alignment = alignmentByQuestion.get(questionId)
+		if (!alignment) return false
+
+		const startPt = pmPosToAnswerChar(doc, overlapFrom)
+		const endPt = pmPosToAnswerChar(doc, overlapTo)
+		if (!startPt || !endPt) return false
+		if (
+			startPt.questionId !== questionId ||
+			endPt.questionId !== questionId
+		)
+			return false
+
+		const charTo = Math.max(endPt.char, startPt.char + 1)
+		for (const id of tokenIdsInRange(startPt.char, charTo, alignment)) {
+			if (!seen.has(id)) {
+				seen.add(id)
+				ids.push(id)
+			}
+		}
+		// Don't descend further — child block nodes can't appear inside
+		// `questionAnswer` (content: "inline*").
+		return false
+	})
+
 	return ids.length > 0 ? ids : null
 }
 
@@ -66,7 +97,12 @@ function resolveTokensForAnnotation(
 			const matches = child.marks.some(
 				(m) => (m.attrs.annotationId as string | null) === annotationId,
 			)
-			if (!matches) return
+			// `continue` (not `return`) — we need to scan EVERY child in the
+			// block to find the annotation's text. `return` here exits the
+			// descendants callback and abandons subsequent children, which
+			// silently breaks any annotation that doesn't start at the very
+			// first text child of its question block.
+			if (!matches) continue
 			// Multiple question blocks holding marks with the same annotationId
 			// would be a doc-corruption bug; pick the first match.
 			questionId = qid

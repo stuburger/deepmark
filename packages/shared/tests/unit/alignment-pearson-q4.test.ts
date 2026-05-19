@@ -161,20 +161,25 @@ describe("alignTokensToAnswer — Pearson Q4 fixture (drift regression)", () => 
 	// own paragraph's char range.
 
 	const PARAGRAPH_BOUNDARIES = (() => {
-		// Paragraphs are separated by literal "\n" in this answer
-		const starts: number[] = [0]
-		for (let i = 0; i < fixture.answer.length; i++) {
-			if (fixture.answer[i] === "\n") starts.push(i + 1)
-		}
+		// Robust splitter: any run of newline characters separates
+		// paragraphs (handles `\n`, `\n\n`, `\r\n`). The fixture today
+		// uses single `\n`, but the LLM author can emit doubles when
+		// rewriting; not coupling to a specific form keeps the test
+		// honest under future answer-text changes.
+		const matches = Array.from(fixture.answer.matchAll(/\n+/g))
 		const boundaries: Array<{ index: number; start: number; end: number }> =
 			[]
-		for (let i = 0; i < starts.length; i++) {
-			boundaries.push({
-				index: i,
-				start: starts[i],
-				end: i + 1 < starts.length ? starts[i + 1] : fixture.answer.length,
-			})
+		let cursor = 0
+		for (let i = 0; i < matches.length; i++) {
+			const m = matches[i]
+			boundaries.push({ index: i, start: cursor, end: m.index ?? cursor })
+			cursor = (m.index ?? cursor) + m[0].length
 		}
+		boundaries.push({
+			index: boundaries.length,
+			start: cursor,
+			end: fixture.answer.length,
+		})
 		return boundaries
 	})()
 

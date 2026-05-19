@@ -139,10 +139,11 @@ export const extractPdfMetadata = authenticatedAction
 
 			const { output: raw } = await callLlmWithFallback(
 				"pdf-metadata-detection",
-				async (model, entry, report) => {
+				async (model, entry, report, signal) => {
 					const result = await generateText({
 						model,
 						temperature: entry.temperature,
+						abortSignal: signal,
 						messages: [
 							{
 								role: "user",

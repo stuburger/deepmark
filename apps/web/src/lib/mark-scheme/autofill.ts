@@ -115,10 +115,11 @@ Only return the letter for both fields (e.g. "A", "B", "C", or "D").`
 
 			const { output } = await callLlmWithFallback(
 				"mark-scheme-autofill",
-				async (model, entry, report) => {
+				async (model, entry, report, signal) => {
 					const result = await generateText({
 						model,
 						temperature: entry.temperature,
+						abortSignal: signal,
 						messages: [{ role: "user", content: prompt }],
 						output: Output.object({ schema: McqSchema }),
 					})
@@ -187,10 +188,11 @@ Rules:
 
 			const { output } = await callLlmWithFallback(
 				"mark-scheme-autofill",
-				async (model, entry, report) => {
+				async (model, entry, report, signal) => {
 					const result = await generateText({
 						model,
 						temperature: entry.temperature,
+						abortSignal: signal,
 						messages: [{ role: "user", content: lorPrompt }],
 						output: Output.object({ schema: LoRSchema }),
 					})
@@ -243,10 +245,11 @@ Return JSON with:
 
 		const { output } = await callLlmWithFallback(
 			"mark-scheme-autofill",
-			async (model, entry, report) => {
+			async (model, entry, report, signal) => {
 				const result = await generateText({
 					model,
 					temperature: entry.temperature,
+					abortSignal: signal,
 					messages: [{ role: "user", content: prompt }],
 					output: Output.object({ schema: WrittenSchema }),
 				})

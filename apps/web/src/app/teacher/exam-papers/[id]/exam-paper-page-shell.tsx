@@ -58,7 +58,7 @@ import {
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { parseAsString, parseAsStringEnum, useQueryState } from "nuqs"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import { CapBiteModal } from "./cap-bite-modal"
 import { DocumentThumbnail } from "./document-thumbnail"
@@ -165,6 +165,16 @@ export function ExamPaperPageShell({
 	} = useBatchIngestion(paper.id, {
 		onCapBite: (message) => setCapBiteMessage(message),
 	})
+
+	// Auto-close the staging dialog only when the batch is fully resolved
+	// (server transitions BatchIngestJob → "committed", getActiveBatchForPaper
+	// returns null, ingestion becomes null). Partial commits leave the dialog
+	// open so the teacher keeps reviewing the leftovers in place; they can
+	// dismiss manually if they want a break. The banner re-entry is still
+	// available either way.
+	useEffect(() => {
+		if (stagingOpen && !ingestion) setStagingOpen(false)
+	}, [stagingOpen, ingestion])
 
 	// Submissions — flat list, 60s poll + SW-triggered refresh
 	const {

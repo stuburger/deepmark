@@ -1,4 +1,8 @@
-import type { GradingResult, MarkPointResult } from "@mcp-gcse/shared"
+import type {
+	AoAwardRow,
+	GradingResult,
+	MarkPointResult,
+} from "@mcp-gcse/shared"
 import { describe, expect, it } from "vitest"
 import {
 	type DesiredRow,
@@ -72,7 +76,52 @@ describe("marking-result-projection", () => {
 				level_awarded: 2,
 				why_not_next_level: "needs detail",
 				cap_applied: "AO1 cap",
+				ao_awards: [],
+				what_went_well: [],
+				even_better_if: [],
 			})
+		})
+
+		it("carries ao_awards, what_went_well, even_better_if through from the GradingResult", () => {
+			const aoAwards: AoAwardRow[] = [
+				{
+					ao_code: "AO5",
+					level_awarded: 3,
+					awarded_marks: 12,
+					max_marks: 16,
+					descriptor_evaluations: [
+						{ descriptor: "Communicates clearly", met: true, evidence: "…" },
+					],
+					why_not_next_level: "lacked sustained tone",
+				},
+			]
+			const out = buildDesiredRows([
+				gradingResult({
+					question_id: "q1",
+					mark_scheme_id: "ms1",
+					ao_awards: aoAwards,
+					what_went_well: ["Clear structure", "Apt vocabulary"],
+					even_better_if: ["Vary sentence openings"],
+				}),
+			])
+			expect(out[0].ao_awards).toEqual(aoAwards)
+			expect(out[0].what_went_well).toEqual([
+				"Clear structure",
+				"Apt vocabulary",
+			])
+			expect(out[0].even_better_if).toEqual(["Vary sentence openings"])
+		})
+
+		it("defaults ao_awards/www/ebi to [] when GradingResult omits them", () => {
+			const out = buildDesiredRows([
+				gradingResult({ question_id: "q1", mark_scheme_id: "ms1" }),
+			])
+			// `gradingResult()` helper leaves these undefined — projection
+			// must materialise [] so Prisma writes the column default
+			// shape instead of `undefined`.
+			expect(out[0].ao_awards).toEqual([])
+			expect(out[0].what_went_well).toEqual([])
+			expect(out[0].even_better_if).toEqual([])
 		})
 	})
 
@@ -124,6 +173,95 @@ describe("marking-result-projection", () => {
 			expect(plan.updates).toHaveLength(1)
 		})
 
+		it("updates when ao_awards jsonb differs (canonicalised, key-order insensitive)", () => {
+			// Same AO award, but PG may return keys in a different order after
+			// jsonb storage. canonicalJson must normalise so the diff doesn't
+			// trip a spurious update.
+			const aoFromPg: AoAwardRow = {
+				ao_code: "AO5",
+				level_awarded: 3,
+				awarded_marks: 12,
+				max_marks: 16,
+				descriptor_evaluations: [],
+				why_not_next_level: "x",
+			}
+			const aoFromDoc: AoAwardRow = {
+				// fields in different order — same data
+				why_not_next_level: "x",
+				descriptor_evaluations: [],
+				max_marks: 16,
+				awarded_marks: 12,
+				level_awarded: 3,
+				ao_code: "AO5",
+			} as AoAwardRow
+
+			const noop = diffMarkingResults(
+				[
+					existingRow({
+						answer_id: "a1",
+						question_id: "q1",
+						ao_awards: [aoFromPg],
+					}),
+				],
+				[desiredRow({ question_id: "q1", ao_awards: [aoFromDoc] })],
+			)
+			expect(noop.updates).toHaveLength(0)
+
+			// Real change: awarded_marks bumped from 12 to 14.
+			const changed = diffMarkingResults(
+				[
+					existingRow({
+						answer_id: "a1",
+						question_id: "q1",
+						ao_awards: [aoFromPg],
+					}),
+				],
+				[
+					desiredRow({
+						question_id: "q1",
+						ao_awards: [{ ...aoFromPg, awarded_marks: 14 }],
+					}),
+				],
+			)
+			expect(changed.updates).toHaveLength(1)
+		})
+
+		it("updates when what_went_well or even_better_if changes (order-sensitive)", () => {
+			const plan = diffMarkingResults(
+				[
+					existingRow({
+						answer_id: "a1",
+						question_id: "q1",
+						what_went_well: ["A", "B"],
+					}),
+				],
+				[desiredRow({ question_id: "q1", what_went_well: ["B", "A"] })],
+			)
+			expect(plan.updates).toHaveLength(1)
+
+			const ebi = diffMarkingResults(
+				[
+					existingRow({
+						answer_id: "a1",
+						question_id: "q1",
+						even_better_if: ["x"],
+					}),
+				],
+				[desiredRow({ question_id: "q1", even_better_if: ["x", "y"] })],
+			)
+			expect(ebi.updates).toHaveLength(1)
+		})
+
+		it("no-op when ao_awards/www/ebi are identical (default empties)", () => {
+			const plan = diffMarkingResults(
+				[existingRow({ answer_id: "a1", question_id: "q1" })],
+				[desiredRow({ question_id: "q1" })],
+			)
+			expect(plan.inserts).toHaveLength(0)
+			expect(plan.updates).toHaveLength(0)
+			expect(plan.deleteAnswerIds).toHaveLength(0)
+		})
+
 		it("updates when mark_points_results jsonb differs (canonicalised)", () => {
 			const a: MarkPointResult = {
 				pointNumber: 1,
@@ -173,6 +311,9 @@ describe("marking-result-projection", () => {
 				why_not_next_level: null,
 				cap_applied: null,
 				mark_points_results: [] as MarkPointResult[],
+				ao_awards: [] as AoAwardRow[],
+				what_went_well: [] as string[],
+				even_better_if: [] as string[],
 			}
 			const plan = diffMarkingResults(
 				[
@@ -255,6 +396,9 @@ function desiredRow(over: Partial<DesiredRow> = {}): DesiredRow {
 		level_awarded: null,
 		why_not_next_level: null,
 		cap_applied: null,
+		ao_awards: [],
+		what_went_well: [],
+		even_better_if: [],
 		...over,
 	}
 }
@@ -274,6 +418,9 @@ function existingRow(over: Partial<ExistingRow> = {}): ExistingRow {
 		level_awarded: null,
 		why_not_next_level: null,
 		cap_applied: null,
+		ao_awards: [],
+		what_went_well: [],
+		even_better_if: [],
 		...over,
 	}
 }

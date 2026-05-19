@@ -1,4 +1,8 @@
-import type { GradingResult, MarkPointResult } from "@mcp-gcse/shared"
+import type {
+	AoAwardRow,
+	GradingResult,
+	MarkPointResult,
+} from "@mcp-gcse/shared"
 
 /**
  * Pure diff helper for the Yjs → (Answer + MarkingResult) projection. Given
@@ -30,6 +34,9 @@ export type DesiredRow = {
 	level_awarded: number | null
 	why_not_next_level: string | null
 	cap_applied: string | null
+	ao_awards: AoAwardRow[]
+	what_went_well: string[]
+	even_better_if: string[]
 }
 
 export type ExistingRow = {
@@ -46,6 +53,9 @@ export type ExistingRow = {
 	level_awarded: number | null
 	why_not_next_level: string | null
 	cap_applied: string | null
+	ao_awards: AoAwardRow[]
+	what_went_well: string[]
+	even_better_if: string[]
 }
 
 export type DiffPlan = {
@@ -79,6 +89,9 @@ export function buildDesiredRows(derived: GradingResult[]): DesiredRow[] {
 			level_awarded: r.level_awarded ?? null,
 			why_not_next_level: r.why_not_next_level ?? null,
 			cap_applied: r.cap_applied ?? null,
+			ao_awards: r.ao_awards ?? [],
+			what_went_well: r.what_went_well ?? [],
+			even_better_if: r.even_better_if ?? [],
 		})
 	}
 	return out
@@ -127,9 +140,20 @@ function rowsEqual(e: ExistingRow, d: DesiredRow): boolean {
 		e.level_awarded === d.level_awarded &&
 		e.why_not_next_level === d.why_not_next_level &&
 		e.cap_applied === d.cap_applied &&
+		stringArrayEqual(e.what_went_well, d.what_went_well) &&
+		stringArrayEqual(e.even_better_if, d.even_better_if) &&
 		canonicalJson(e.mark_points_results) ===
-			canonicalJson(d.mark_points_results)
+			canonicalJson(d.mark_points_results) &&
+		canonicalJson(e.ao_awards) === canonicalJson(d.ao_awards)
 	)
+}
+
+/** Order-sensitive string-array equality. WWW/EBI bullets are presented in
+ *  doc order; reordering is a meaningful edit and should diff as a change. */
+function stringArrayEqual(a: string[], b: string[]): boolean {
+	if (a.length !== b.length) return false
+	for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false
+	return true
 }
 
 /**

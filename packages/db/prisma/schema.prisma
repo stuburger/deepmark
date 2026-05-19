@@ -429,6 +429,16 @@ model MarkingResult {
   level_awarded       Int?
   why_not_next_level  String?
   cap_applied         String?
+  /// Per-AO awards with descriptor evaluations. AoAwardRow[] from
+  /// @mcp-gcse/shared — len 1 for single-skill LoR, 2+ for parallel grids,
+  /// empty for non-LoR questions. Promoted to a column so analytics can
+  /// group/filter by ao_code (CLAUDE.md "Structure ONLY what you'll
+  /// programmatically operate on" — AO codes called out explicitly).
+  ao_awards           Json     @default("[]")
+  /// Bullet list of strengths (WWW). Mirrors the questionAnswer doc attr.
+  what_went_well      String[] @default([])
+  /// Bullet list of improvements (EBI). Mirrors the questionAnswer doc attr.
+  even_better_if      String[] @default([])
   answer      Answer     @relation(fields: [answer_id], references: [id])
   mark_scheme MarkScheme @relation(fields: [mark_scheme_id], references: [id])
 

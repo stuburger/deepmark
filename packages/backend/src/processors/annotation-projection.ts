@@ -15,6 +15,7 @@ import type { SqsEvent } from "@/lib/infra/sqs-job-runner"
 import { GetObjectCommand, S3Client } from "@aws-sdk/client-s3"
 import type { Prisma } from "@mcp-gcse/db"
 import {
+	type AoAwardRow,
 	DOC_FRAGMENT_NAME,
 	type DerivedTeacherOverride,
 	type GradingResult,
@@ -437,6 +438,9 @@ export async function writeMarkingResults(
 						level_awarded: true,
 						why_not_next_level: true,
 						cap_applied: true,
+						ao_awards: true,
+						what_went_well: true,
+						even_better_if: true,
 					},
 				},
 			},
@@ -459,6 +463,9 @@ export async function writeMarkingResults(
 				level_awarded: mr?.level_awarded ?? null,
 				why_not_next_level: mr?.why_not_next_level ?? null,
 				cap_applied: mr?.cap_applied ?? null,
+				ao_awards: (mr?.ao_awards as AoAwardRow[] | null) ?? [],
+				what_went_well: mr?.what_went_well ?? [],
+				even_better_if: mr?.even_better_if ?? [],
 			}
 		})
 
@@ -501,6 +508,9 @@ export async function writeMarkingResults(
 					level_awarded: row.level_awarded,
 					why_not_next_level: row.why_not_next_level,
 					cap_applied: row.cap_applied,
+					ao_awards: row.ao_awards as Prisma.InputJsonValue,
+					what_went_well: row.what_went_well,
+					even_better_if: row.even_better_if,
 				},
 			})
 		}
@@ -554,6 +564,9 @@ async function applyMarkingResultUpdate(
 				level_awarded: row.level_awarded,
 				why_not_next_level: row.why_not_next_level,
 				cap_applied: row.cap_applied,
+				ao_awards: row.ao_awards as Prisma.InputJsonValue,
+				what_went_well: row.what_went_well,
+				even_better_if: row.even_better_if,
 			},
 		})
 		return
@@ -572,6 +585,9 @@ async function applyMarkingResultUpdate(
 			level_awarded: row.level_awarded,
 			why_not_next_level: row.why_not_next_level,
 			cap_applied: row.cap_applied,
+			ao_awards: row.ao_awards as Prisma.InputJsonValue,
+			what_went_well: row.what_went_well,
+			even_better_if: row.even_better_if,
 		},
 	})
 }

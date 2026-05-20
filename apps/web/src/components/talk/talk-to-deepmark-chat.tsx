@@ -120,17 +120,22 @@ export function TalkToDeepMarkChat({
 		[submissionId],
 	)
 
-	// Refs so the onToolCall closure always sees the latest callbacks +
-	// addToolOutput. Cleanup item #5 will collapse these into a single
-	// callbacksRef.
-	const addAnnRef = useRef(onAddAnnotation)
-	addAnnRef.current = onAddAnnotation
-	const updateAnnRef = useRef(onUpdateAnnotation)
-	updateAnnRef.current = onUpdateAnnotation
-	const removeAnnRef = useRef(onRemoveAnnotation)
-	removeAnnRef.current = onRemoveAnnotation
-	const linkScanRef = useRef(onLinkToScan)
-	linkScanRef.current = onLinkToScan
+	// Single ref bag so the onToolCall closure always sees the latest
+	// dispatchers. Writing the ref on every render is intentional — the
+	// closure captures the ref identity, not the values, so updates are
+	// picked up without re-creating the useChat instance.
+	const callbacksRef = useRef({
+		onAddAnnotation,
+		onUpdateAnnotation,
+		onRemoveAnnotation,
+		onLinkToScan,
+	})
+	callbacksRef.current = {
+		onAddAnnotation,
+		onUpdateAnnotation,
+		onRemoveAnnotation,
+		onLinkToScan,
+	}
 
 	const { messages, sendMessage, status, stop, error, addToolOutput } =
 		useChat<TalkUIMessage>({
@@ -151,13 +156,19 @@ export function TalkToDeepMarkChat({
 				// the workspace, so TypeScript treats it as nominally
 				// distinct. Behaviour is sound — narrowing above ensures
 				// only the four dispatchable variants reach here.
+				const {
+					onAddAnnotation,
+					onUpdateAnnotation,
+					onRemoveAnnotation,
+					onLinkToScan,
+				} = callbacksRef.current
 				const result = await dispatchToolCall(
 					toolCall as DispatchableToolCall,
 					{
-						addAnnotation: addAnnRef.current,
-						updateAnnotation: updateAnnRef.current,
-						removeAnnotation: removeAnnRef.current,
-						linkToScan: linkScanRef.current,
+						addAnnotation: onAddAnnotation,
+						updateAnnotation: onUpdateAnnotation,
+						removeAnnotation: onRemoveAnnotation,
+						linkToScan: onLinkToScan,
 					},
 				)
 				addToolOutput({

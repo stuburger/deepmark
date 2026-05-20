@@ -90,6 +90,11 @@ function renderQuestion(
 	lines.push(
 		`### Q${r.question_number} · ${r.awarded_score}/${r.max_score} marks · ${method}${excluded}`,
 	)
+	// Question id exposed for tool-call addressing. The model uses this
+	// when the teacher's request targets a question other than the
+	// currently-selected one (the chip carries the selected question's id
+	// directly).
+	lines.push(`_questionId: ${r.question_id}_`)
 	lines.push("")
 
 	lines.push("**Question**")

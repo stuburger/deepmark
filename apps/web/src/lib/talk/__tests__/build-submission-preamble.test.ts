@@ -118,6 +118,18 @@ describe("buildSubmissionPreamble", () => {
 		expect(a).toBe(b)
 	})
 
+	it("exposes the questionId beneath each question heading", () => {
+		const payload = makePayload({
+			grading_results: [
+				makeResult({ question_id: "q-uuid-1", question_number: "1" }),
+				makeResult({ question_id: "q-uuid-2", question_number: "2" }),
+			],
+		})
+		const out = buildSubmissionPreamble({ payload, annotations: [] })
+		expect(out).toContain("_questionId: q-uuid-1_")
+		expect(out).toContain("_questionId: q-uuid-2_")
+	})
+
 	it("includes every question's heading", () => {
 		const payload = makePayload({
 			grading_results: [

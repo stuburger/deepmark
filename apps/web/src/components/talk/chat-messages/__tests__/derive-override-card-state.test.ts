@@ -6,7 +6,6 @@ describe("deriveOverrideCardState", () => {
 		expect(
 			deriveOverrideCardState({
 				partState: "input-streaming",
-				errorReason: null,
 			}),
 		).toEqual({ kind: "pending" })
 	})
@@ -15,7 +14,6 @@ describe("deriveOverrideCardState", () => {
 		expect(
 			deriveOverrideCardState({
 				partState: "input-available",
-				errorReason: null,
 			}),
 		).toEqual({ kind: "pending" })
 	})
@@ -25,17 +23,27 @@ describe("deriveOverrideCardState", () => {
 			deriveOverrideCardState({
 				partState: "output-available",
 				output: { accepted: true },
-				errorReason: null,
 			}),
 		).toEqual({ kind: "accepted" })
 	})
 
-	it("returns dismissed when output reports accepted: false", () => {
+	it("returns dismissed when output reports accepted: false (teacher dismiss)", () => {
 		expect(
 			deriveOverrideCardState({
 				partState: "output-available",
 				output: { accepted: false },
-				errorReason: null,
+			}),
+		).toEqual({ kind: "dismissed" })
+	})
+
+	it("returns dismissed when output reports accepted: false (mutation failure)", () => {
+		// Mutation failures and teacher dismissals share the same visible
+		// state — the toast handles the human signal, the model gets the
+		// reason via the tool output. The card collapses the same way.
+		expect(
+			deriveOverrideCardState({
+				partState: "output-available",
+				output: { accepted: false },
 			}),
 		).toEqual({ kind: "dismissed" })
 	})
@@ -47,34 +55,7 @@ describe("deriveOverrideCardState", () => {
 			deriveOverrideCardState({
 				partState: "output-available",
 				output: {},
-				errorReason: null,
 			}),
 		).toEqual({ kind: "dismissed" })
-	})
-
-	it("returns error when errorReason is set, regardless of part state", () => {
-		expect(
-			deriveOverrideCardState({
-				partState: "input-available",
-				errorReason: "Server returned 500",
-			}),
-		).toEqual({ kind: "error", reason: "Server returned 500" })
-
-		expect(
-			deriveOverrideCardState({
-				partState: "output-available",
-				output: { accepted: true },
-				errorReason: "Server returned 500",
-			}),
-		).toEqual({ kind: "error", reason: "Server returned 500" })
-	})
-
-	it("ignores empty-string errorReason (falsy)", () => {
-		expect(
-			deriveOverrideCardState({
-				partState: "input-available",
-				errorReason: "",
-			}),
-		).toEqual({ kind: "pending" })
 	})
 })

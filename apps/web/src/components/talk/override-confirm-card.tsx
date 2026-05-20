@@ -1,7 +1,6 @@
 "use client"
 
 import { Button } from "@/components/ui/button"
-import { cn } from "@/lib/utils"
 import { ArrowRight, Check, Loader2, X } from "lucide-react"
 import { useState } from "react"
 
@@ -15,6 +14,8 @@ import { useState } from "react"
  *   - input-available → pending (buttons live)
  *   - output-available + accepted → collapsed "Accepted" line
  *   - output-available + !accepted → collapsed "Dismissed" line
+ *     (covers both teacher-dismiss and mutation-failure; failures get
+ *     a separate Sonner toast for the human signal)
  *
  * `isApplying` is a transient local state covering the time between the
  * Accept click and the server action resolving — buttons disable, label
@@ -37,7 +38,6 @@ type CardState =
 	| { kind: "pending" }
 	| { kind: "accepted" }
 	| { kind: "dismissed" }
-	| { kind: "error"; reason: string }
 
 type OverrideConfirmCardProps = {
 	input: OverrideToolInput
@@ -85,7 +85,7 @@ export function OverrideConfirmCard({
 		)
 	}
 
-	// Pending or error — show the full card.
+	// Pending — show the full card.
 	async function handleAccept() {
 		if (isApplying) return
 		setIsApplying(true)
@@ -97,12 +97,7 @@ export function OverrideConfirmCard({
 	}
 
 	return (
-		<div
-			className={cn(
-				"mt-2 max-w-md rounded-md border bg-card shadow-tile",
-				state.kind === "error" ? "border-destructive" : "border-border",
-			)}
-		>
+		<div className="mt-2 max-w-md rounded-md border border-border bg-card shadow-tile">
 			<div className="px-3 pt-2.5 pb-1.5">
 				<div className="font-mono text-[10px] uppercase tracking-[0.05em] text-muted-foreground">
 					Suggested score override
@@ -129,11 +124,6 @@ export function OverrideConfirmCard({
 				<p className="mt-1.5 text-[12px] leading-snug text-muted-foreground">
 					{input.reason}
 				</p>
-				{state.kind === "error" ? (
-					<p className="mt-1.5 text-[12px] leading-snug text-destructive">
-						Couldn't apply: {state.reason}
-					</p>
-				) : null}
 			</div>
 			<div className="flex items-center justify-end gap-1.5 border-t border-border-quiet px-2 py-1.5">
 				<Button

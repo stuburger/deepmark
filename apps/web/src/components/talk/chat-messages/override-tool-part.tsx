@@ -3,7 +3,7 @@
 import type { TalkTools } from "@/lib/talk/tools"
 import type { useChat } from "@ai-sdk/react"
 import type { ToolUIPart } from "ai"
-import { useState } from "react"
+import { toast } from "sonner"
 import {
 	OverrideConfirmCard,
 	type OverrideContextEntry,
@@ -26,20 +26,19 @@ export type OverrideCardState =
 	| { kind: "pending" }
 	| { kind: "accepted" }
 	| { kind: "dismissed" }
-	| { kind: "error"; reason: string }
 
 /**
- * Pure derivation of the confirm-card's visible state from the SDK part
- * + the in-flight error reason. Lifted out of the JSX so the
- * pending/accepted/dismissed/error state machine can be tested without
- * rendering React.
+ * Pure derivation of the confirm-card's visible state from the SDK part.
+ * Failure is no longer a separate `error` kind — mutation failures are
+ * written to `addToolOutput` as `{ accepted: false, reason }` so the
+ * model sees them; the card collapses to "dismissed" the same way as a
+ * teacher dismissal. The teacher gets a Sonner toast at failure-time for
+ * the human-facing signal.
  */
 export function deriveOverrideCardState(args: {
 	partState: string
 	output?: { accepted?: boolean }
-	errorReason: string | null
 }): OverrideCardState {
-	if (args.errorReason) return { kind: "error", reason: args.errorReason }
 	if (args.partState === "output-available") {
 		return args.output?.accepted ? { kind: "accepted" } : { kind: "dismissed" }
 	}
@@ -48,10 +47,10 @@ export function deriveOverrideCardState(args: {
 
 /**
  * Renders a `proposeTeacherOverride` tool-call part as a confirm card.
- * Pending → Accept/Dismiss buttons; once the teacher decides, the part
- * transitions to output-available and the card collapses. Cleanup item
- * #6 will route mutation failures through addToolOutput instead of the
- * local errorReason state.
+ * Pending → Accept/Dismiss buttons; once the teacher decides (or the
+ * mutation fails), the part transitions to output-available and the
+ * card collapses. Mutation failures route through addToolOutput so the
+ * model can react on the next turn.
  */
 export function OverrideToolPart({
 	part,
@@ -64,7 +63,6 @@ export function OverrideToolPart({
 	overrideContextByQuestion?: ReadonlyMap<string, OverrideContextEntry>
 	addToolOutput: ReturnType<typeof useChat<TalkUIMessage>>["addToolOutput"]
 }) {
-	const [errorReason, setErrorReason] = useState<string | null>(null)
 	// During input-streaming the input is DeepPartial; on output-error the
 	// SDK may report it as undefined. In both cases we can't render the
 	// confirm card; bail out silently.
@@ -76,15 +74,14 @@ export function OverrideToolPart({
 	const state = deriveOverrideCardState({
 		partState: part.state,
 		output: part.state === "output-available" ? part.output : undefined,
-		errorReason,
 	})
 
 	async function handleAccept() {
-		setErrorReason(null)
 		// Re-narrow inside the async closure — TS doesn't carry the outer
 		// `if (!input) return null` guard across the function boundary.
 		if (!input) return
 		if (!onProposeOverride) {
+			toast.error("Override mutation not wired in this surface.")
 			addToolOutput({
 				tool: "proposeTeacherOverride",
 				toolCallId: part.toolCallId,
@@ -103,12 +100,20 @@ export function OverrideToolPart({
 				output: { accepted: true },
 			})
 		} else {
-			setErrorReason(result.reason)
+			// Surface the failure to the teacher (toast) AND the model
+			// (addToolOutput). The card collapses to "dismissed" — the
+			// override didn't apply, the model can suggest a fix on the
+			// next turn.
+			toast.error(`Couldn't apply override: ${result.reason}`)
+			addToolOutput({
+				tool: "proposeTeacherOverride",
+				toolCallId: part.toolCallId,
+				output: { accepted: false, reason: result.reason },
+			})
 		}
 	}
 
 	function handleDismiss() {
-		setErrorReason(null)
 		addToolOutput({
 			tool: "proposeTeacherOverride",
 			toolCallId: part.toolCallId,

@@ -67,19 +67,16 @@ export const AoAwardSchema = z.object({
 		),
 	levelAwarded: z
 		.number()
-		.int()
-		.describe("Level awarded for this dimension (1-based)."),
+		.describe("Level awarded for this dimension (1-based integer)."),
 	awardedMarks: z
 		.number()
-		.int()
 		.describe(
-			"Marks awarded within the level's range. Must be inside the level's printed band.",
+			"Marks awarded within the level's range (integer). Must be inside the level's printed band.",
 		),
 	maxMarks: z
 		.number()
-		.int()
 		.describe(
-			"Max marks for this dimension (from ao_allocations.marks, or totalPoints for single-skill 'Overall').",
+			"Max marks for this dimension (integer; from ao_allocations.marks, or totalPoints for single-skill 'Overall').",
 		),
 	descriptorEvaluations: z
 		.array(DescriptorEvaluationSchema)
@@ -104,15 +101,13 @@ export const LoRQuestionGradeSchema = z.object({
 		),
 	totalScore: z
 		.number()
-		.int()
 		.describe(
-			"Sum of awardedMarks across aoAwards. Must equal the aggregate exactly.",
+			"Sum of awardedMarks across aoAwards (integer). Must equal the aggregate exactly.",
 		),
 	levelAwarded: z
 		.number()
-		.int()
 		.describe(
-			"Headline Level — mirror aoAwards[0].levelAwarded for single-skill marking. For multi-skill questions this is the primary AO's Level; the canonical per-AO data lives in aoAwards.",
+			"Headline Level (integer) — mirror aoAwards[0].levelAwarded for single-skill marking. For multi-skill questions this is the primary AO's Level; the canonical per-AO data lives in aoAwards.",
 		),
 	whyNotNextLevel: z
 		.string()

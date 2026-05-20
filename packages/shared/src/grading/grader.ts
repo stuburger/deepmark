@@ -193,13 +193,19 @@ export class Grader {
 		// per-award sum. The LLM's claimed totalScore is the headline number,
 		// but aoAwards is the canonical data — if the LLM's arithmetic is off,
 		// trust the per-award sum.
+		// `.int()` removed from the LLM-facing schema (Anthropic + Gemini both
+		// reject min/max-bounded integers in structured-output schemas, which
+		// is what Zod v4 emits for `.int()`). Round here so the downstream
+		// shape stays integer.
 		const aoAwards = output.aoAwards.map((a) => ({
 			...a,
-			awardedMarks: clamp(a.awardedMarks, 0, a.maxMarks),
+			levelAwarded: Math.round(a.levelAwarded),
+			maxMarks: Math.round(a.maxMarks),
+			awardedMarks: clamp(Math.round(a.awardedMarks), 0, Math.round(a.maxMarks)),
 		}))
 		const sumFromAwards = aoAwards.reduce((s, a) => s + a.awardedMarks, 0)
 		const totalScore = Math.min(
-			Math.max(0, sumFromAwards || output.totalScore),
+			Math.max(0, sumFromAwards || Math.round(output.totalScore)),
 			maxPossibleScore,
 		)
 		const scorePercentage =
@@ -209,6 +215,7 @@ export class Grader {
 
 		return {
 			...output,
+			levelAwarded: Math.round(output.levelAwarded),
 			aoAwards,
 			questionId: question.id,
 			totalScore,

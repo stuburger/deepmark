@@ -20,7 +20,10 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
 import { ChipBadge } from "./chat-messages/chip-badge"
 import { MessageBubble } from "./chat-messages/message-bubble"
-import { dispatchToolCall } from "./dispatch-tool-call"
+import {
+	type DispatchableToolCall,
+	dispatchToolCall,
+} from "./dispatch-tool-call"
 import type { OverrideContextEntry } from "./override-confirm-card"
 import type { Prefill, TalkUIMessage, ToolDispatchResult } from "./types"
 
@@ -139,22 +142,28 @@ export function TalkToDeepMarkChat({
 				// proposeTeacherOverride is human-in-the-loop — the confirm
 				// card renders inline and writes the tool output on accept /
 				// dismiss. We do nothing here; the card resolves it.
-				if (
-					(toolCall as { toolName?: string }).toolName ===
-					"proposeTeacherOverride"
-				) {
-					return
-				}
-				const result = await dispatchToolCall(toolCall, {
-					addAnnotation: addAnnRef.current,
-					updateAnnotation: updateAnnRef.current,
-					removeAnnotation: removeAnnRef.current,
-					linkToScan: linkScanRef.current,
-				})
+				if (toolCall.toolName === "proposeTeacherOverride") return
+				if (toolCall.dynamic) return
+				// Single boundary cast: the SDK's narrowed ToolCall union is
+				// structurally identical to DispatchableToolCall (we
+				// hand-rolled it to match), but the SDK's `ToolCall` lives
+				// under `@ai-sdk/provider-utils` which is duplicated across
+				// the workspace, so TypeScript treats it as nominally
+				// distinct. Behaviour is sound — narrowing above ensures
+				// only the four dispatchable variants reach here.
+				const result = await dispatchToolCall(
+					toolCall as DispatchableToolCall,
+					{
+						addAnnotation: addAnnRef.current,
+						updateAnnotation: updateAnnRef.current,
+						removeAnnotation: removeAnnRef.current,
+						linkToScan: linkScanRef.current,
+					},
+				)
 				addToolOutput({
-					tool: toolCall.toolName as never,
+					tool: toolCall.toolName,
 					toolCallId: toolCall.toolCallId,
-					output: result as never,
+					output: result,
 				})
 			},
 			// When all tool calls in the latest assistant turn have results,

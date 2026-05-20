@@ -8,7 +8,19 @@ import type { OverrideContextEntry } from "../override-confirm-card"
 import type { Prefill, TalkUIMessage } from "../types"
 import { ChipBadge } from "./chip-badge"
 import { type OnProposeOverride, OverrideToolPart } from "./override-tool-part"
-import { ToolCallPill, type ToolPartShape } from "./tool-call-pill"
+import { type TalkToolPart, ToolCallPill } from "./tool-call-pill"
+
+/**
+ * Structural type guard for the tool-call message parts. The SDK ships
+ * `isToolUIPart`, but its type predicate references the top-level `ai`
+ * package's `UIMessagePart`, which has a different declaration identity
+ * from `@ai-sdk/react`'s bundled-`ai` `UIMessagePart` (dual-package
+ * hazard). The runtime check is dead simple and identity-agnostic so we
+ * inline it here.
+ */
+function isTalkToolPart(p: { type: string }): p is TalkToolPart {
+	return p.type.startsWith("tool-") || p.type === "dynamic-tool"
+}
 
 /**
  * Single message in the chat. Two variants:
@@ -46,11 +58,7 @@ export function MessageBubble({
 			}
 		: null
 
-	const toolParts = !isUser
-		? (message.parts.filter(
-				(p) => typeof p.type === "string" && p.type.startsWith("tool-"),
-			) as unknown as ToolPartShape[])
-		: []
+	const toolParts = !isUser ? message.parts.filter(isTalkToolPart) : []
 
 	if (!text && toolParts.length === 0 && !selectionChip) return null
 

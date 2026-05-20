@@ -1,4 +1,6 @@
-import type { UIMessage } from "ai"
+import type { TalkTools } from "@/lib/talk/tools"
+import type { UIMessage } from "@ai-sdk/react"
+import type { UIDataTypes } from "ai"
 
 /** Selection forwarded from the editor (or any future @-mention surface) into chat. */
 export type Prefill = {
@@ -22,7 +24,7 @@ export type TalkMetadata = {
 	}
 }
 
-export type TalkUIMessage = UIMessage<TalkMetadata>
+export type TalkUIMessage = UIMessage<TalkMetadata, UIDataTypes, TalkTools>
 
 /** Result returned by every client-side tool dispatcher. */
 export type ToolDispatchResult =

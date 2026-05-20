@@ -113,6 +113,85 @@ const linkToScanInput = z.object({
 })
 
 /**
+ * Output schemas. Defined alongside inputs so the SDK can infer the typed
+ * `part.output` on each ToolUIPart variant and `addToolOutput`'s `output`
+ * arg is checked at compile time.
+ */
+const toolDispatchResultOutput = z.union([
+	z.object({ ok: z.literal(true), annotationId: z.string().optional() }),
+	z.object({ ok: z.literal(false), reason: z.string() }),
+])
+
+const proposeTeacherOverrideOutput = z.union([
+	z.object({ accepted: z.literal(true) }),
+	z.object({ accepted: z.literal(false), reason: z.string() }),
+])
+
+const TALK_TOOLS = {
+	addAnnotation: tool({
+		description:
+			"Add a new annotation mark to the student's answer. Pass the exact verbatim text to mark in `phrase` — the client finds it in the student's answer. Use one of the 6 signal types (tick, cross, underline, double_underline, box, circle). Tag with AO only when the mark scheme explicitly credits an AO.",
+		inputSchema: addAnnotationInput,
+		outputSchema: toolDispatchResultOutput,
+	}),
+	updateAnnotation: tool({
+		description:
+			"Update an existing annotation's payload (signal, comment, AO tags, label). Reference by annotationId returned from a prior add.",
+		inputSchema: updateAnnotationInput,
+		outputSchema: toolDispatchResultOutput,
+	}),
+	removeAnnotation: tool({
+		description:
+			"Remove an existing annotation from the student's answer. Reference by annotationId.",
+		inputSchema: removeAnnotationInput,
+		outputSchema: toolDispatchResultOutput,
+	}),
+	proposeTeacherOverride: tool({
+		description:
+			"Propose a score override for a question. Does NOT apply directly — surfaces a confirm card in the conversation that the teacher must accept. Only call this when the teacher explicitly disputes a mark or asks for a re-mark. Never propose unsolicited overrides.",
+		inputSchema: proposeTeacherOverrideInput,
+		outputSchema: proposeTeacherOverrideOutput,
+	}),
+	linkToScan: tool({
+		description:
+			"Scroll the scan view to a question (and optionally to a specific token range). UI navigation only; no data is modified.",
+		inputSchema: linkToScanInput,
+		outputSchema: toolDispatchResultOutput,
+	}),
+} as const
+
+type AnnotationOutput =
+	| { ok: true; annotationId?: string }
+	| { ok: false; reason: string }
+
+type LinkToScanOutput = { ok: true } | { ok: false; reason: string }
+
+type OverrideOutput = { accepted: true } | { accepted: false; reason: string }
+
+/**
+ * UI-side tool type bundle. Plug into `UIMessage<METADATA, …, TalkTools>`
+ * to type `useChat` end-to-end: tool-call inputs, message parts, and
+ * `addToolOutput` outputs are all checked.
+ *
+ * Hand-rolled rather than `InferUITools<typeof TALK_TOOLS>` because the
+ * SDK helper is constrained to `ToolSet` (= `Record<string, Tool>`),
+ * which widens both the key set to plain `string` AND the input/output
+ * pair under inference — `InferUIMessageToolCall` then collapses to
+ * `ToolCall<string, unknown>` downstream. Writing the type explicitly
+ * preserves the literal keys + precise input/output shapes.
+ */
+export type TalkTools = {
+	addAnnotation: { input: AddAnnotationInput; output: AnnotationOutput }
+	updateAnnotation: { input: UpdateAnnotationInput; output: AnnotationOutput }
+	removeAnnotation: { input: RemoveAnnotationInput; output: AnnotationOutput }
+	proposeTeacherOverride: {
+		input: ProposeTeacherOverrideInput
+		output: OverrideOutput
+	}
+	linkToScan: { input: LinkToScanInput; output: LinkToScanOutput }
+}
+
+/**
  * Builds the tool object passed to `streamText`. Tools are only registered
  * when a submissionId is present — general-assistant mode (dashboard,
  * /teacher/talk) gets a tool-less prompt. The factory is a thin layer so
@@ -120,33 +199,7 @@ const linkToScanInput = z.object({
  */
 export function buildTalkTools(submissionId: string | undefined) {
 	if (!submissionId) return undefined
-	return {
-		addAnnotation: tool({
-			description:
-				"Add a new annotation mark to the student's answer. Pass the exact verbatim text to mark in `phrase` — the client finds it in the student's answer. Use one of the 6 signal types (tick, cross, underline, double_underline, box, circle). Tag with AO only when the mark scheme explicitly credits an AO.",
-			inputSchema: addAnnotationInput,
-		}),
-		updateAnnotation: tool({
-			description:
-				"Update an existing annotation's payload (signal, comment, AO tags, label). Reference by annotationId returned from a prior add.",
-			inputSchema: updateAnnotationInput,
-		}),
-		removeAnnotation: tool({
-			description:
-				"Remove an existing annotation from the student's answer. Reference by annotationId.",
-			inputSchema: removeAnnotationInput,
-		}),
-		proposeTeacherOverride: tool({
-			description:
-				"Propose a score override for a question. Does NOT apply directly — surfaces a confirm card in the conversation that the teacher must accept. Only call this when the teacher explicitly disputes a mark or asks for a re-mark. Never propose unsolicited overrides.",
-			inputSchema: proposeTeacherOverrideInput,
-		}),
-		linkToScan: tool({
-			description:
-				"Scroll the scan view to a question (and optionally to a specific token range). UI navigation only; no data is modified.",
-			inputSchema: linkToScanInput,
-		}),
-	}
+	return TALK_TOOLS
 }
 
 export type AddAnnotationInput = z.infer<typeof addAnnotationInput>

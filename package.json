@@ -62,5 +62,8 @@
 		"node": ">=22.0.0"
 	},
 	"packageManager": "bun@1.2.12",
-	"trustedDependencies": ["@biomejs/biome", "aws-sdk", "esbuild"]
+	"trustedDependencies": ["@biomejs/biome", "aws-sdk", "esbuild"],
+	"overrides": {
+		"ai": "6.0.174"
+	}
 }

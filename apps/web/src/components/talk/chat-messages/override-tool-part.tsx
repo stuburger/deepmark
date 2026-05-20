@@ -1,19 +1,26 @@
 "use client"
 
-import type { ProposeTeacherOverrideInput } from "@/lib/talk/tools"
+import type { TalkTools } from "@/lib/talk/tools"
 import type { useChat } from "@ai-sdk/react"
+import type { ToolUIPart } from "ai"
 import { useState } from "react"
 import {
 	OverrideConfirmCard,
 	type OverrideContextEntry,
 } from "../override-confirm-card"
 import type { TalkUIMessage } from "../types"
-import type { ToolPartShape } from "./tool-call-pill"
 
 /** Callback the chat surface owns: server action that writes the override. */
-export type OnProposeOverride = (
-	input: ProposeTeacherOverrideInput,
-) => Promise<{ ok: true } | { ok: false; reason: string }>
+export type OnProposeOverride = (input: {
+	questionId: string
+	suggestedScore: number
+	reason: string
+}) => Promise<{ ok: true } | { ok: false; reason: string }>
+
+type OverridePart = Extract<
+	ToolUIPart<TalkTools>,
+	{ type: "tool-proposeTeacherOverride" }
+>
 
 /**
  * Renders a `proposeTeacherOverride` tool-call part as a confirm card.
@@ -28,19 +35,18 @@ export function OverrideToolPart({
 	overrideContextByQuestion,
 	addToolOutput,
 }: {
-	part: ToolPartShape
+	part: OverridePart
 	onProposeOverride?: OnProposeOverride
 	overrideContextByQuestion?: ReadonlyMap<string, OverrideContextEntry>
 	addToolOutput: ReturnType<typeof useChat<TalkUIMessage>>["addToolOutput"]
 }) {
 	const [errorReason, setErrorReason] = useState<string | null>(null)
-	const input = part.input as
-		| {
-				questionId: string
-				suggestedScore: number
-				reason: string
-		  }
-		| undefined
+	// During input-streaming the input is DeepPartial; on output-error the
+	// SDK may report it as undefined. In both cases we can't render the
+	// confirm card; bail out silently.
+	if (part.state === "input-streaming") return null
+	if (part.state === "output-error" && !part.input) return null
+	const input = part.input
 	if (!input) return null
 
 	let state:
@@ -51,32 +57,33 @@ export function OverrideToolPart({
 	if (errorReason) {
 		state = { kind: "error", reason: errorReason }
 	} else if (part.state === "output-available") {
-		const accepted = (part.output as { accepted?: boolean } | undefined)
-			?.accepted
-		state = accepted ? { kind: "accepted" } : { kind: "dismissed" }
+		state = part.output.accepted ? { kind: "accepted" } : { kind: "dismissed" }
 	} else {
 		state = { kind: "pending" }
 	}
 
 	async function handleAccept() {
 		setErrorReason(null)
-		if (!onProposeOverride || !input) {
+		// Re-narrow inside the async closure — TS doesn't carry the outer
+		// `if (!input) return null` guard across the function boundary.
+		if (!input) return
+		if (!onProposeOverride) {
 			addToolOutput({
-				tool: "proposeTeacherOverride" as never,
+				tool: "proposeTeacherOverride",
 				toolCallId: part.toolCallId,
 				output: {
 					accepted: false,
 					reason: "Override mutation not wired in this surface.",
-				} as never,
+				},
 			})
 			return
 		}
 		const result = await onProposeOverride(input)
 		if (result.ok) {
 			addToolOutput({
-				tool: "proposeTeacherOverride" as never,
+				tool: "proposeTeacherOverride",
 				toolCallId: part.toolCallId,
-				output: { accepted: true } as never,
+				output: { accepted: true },
 			})
 		} else {
 			setErrorReason(result.reason)
@@ -86,12 +93,12 @@ export function OverrideToolPart({
 	function handleDismiss() {
 		setErrorReason(null)
 		addToolOutput({
-			tool: "proposeTeacherOverride" as never,
+			tool: "proposeTeacherOverride",
 			toolCallId: part.toolCallId,
 			output: {
 				accepted: false,
 				reason: "Teacher dismissed the suggestion.",
-			} as never,
+			},
 		})
 	}
 

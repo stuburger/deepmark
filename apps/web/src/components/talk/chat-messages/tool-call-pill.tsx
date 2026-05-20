@@ -1,37 +1,17 @@
 "use client"
 
+import type { TalkTools } from "@/lib/talk/tools"
 import { cn } from "@/lib/utils"
+import { type DynamicToolUIPart, type ToolUIPart, getToolName } from "ai"
 
-/**
- * Shape we read off a `tool-*` UIMessagePart at runtime. The AI SDK's typed
- * union splits per registered tool name; we narrow by reading the runtime
- * `type` field as a string. The fields we care about (`toolCallId`, `state`,
- * `input`, `output`, `errorText`) are stable across every tool-* part in the
- * SDK's union — cleanup item #2 will replace this with `isToolUIPart` once
- * the chat is fully typed.
- */
-export type ToolPartShape = {
-	type: string
-	toolCallId: string
-	state:
-		| "input-streaming"
-		| "input-available"
-		| "output-available"
-		| "output-error"
-		| "approval-requested"
-		| "approval-responded"
-		| "output-denied"
-	input?: Record<string, unknown>
-	output?: { ok?: boolean; reason?: string; annotationId?: string }
-	errorText?: string
-}
+export type TalkToolPart = ToolUIPart<TalkTools> | DynamicToolUIPart
 
 const TOOL_LABELS: Record<string, string> = {
-	"tool-addAnnotation": "annotation",
-	"tool-updateAnnotation": "annotation update",
-	"tool-removeAnnotation": "annotation removal",
-	"tool-linkToScan": "scan navigation",
-	"tool-proposeTeacherOverride": "score override",
+	addAnnotation: "annotation",
+	updateAnnotation: "annotation update",
+	removeAnnotation: "annotation removal",
+	linkToScan: "scan navigation",
+	proposeTeacherOverride: "score override",
 }
 
 /**
@@ -41,16 +21,24 @@ const TOOL_LABELS: Record<string, string> = {
  * ok (output-available with ok !== false), error (output-error or
  * output-available with ok === false).
  */
-export function ToolCallPill({ part }: { part: ToolPartShape }) {
-	const label = TOOL_LABELS[part.type] ?? part.type.replace(/^tool-/, "")
-	const phraseRaw = part.input?.phrase
+export function ToolCallPill({ part }: { part: TalkToolPart }) {
+	const toolName = getToolName(part)
+	const label = TOOL_LABELS[toolName] ?? toolName
+
+	// All client-tool outputs share the ToolDispatchResult shape
+	// (`{ ok: boolean; reason?: string }`); narrowing here is purely a
+	// runtime read of the discriminator.
+	const phraseRaw =
+		part.input && typeof part.input === "object"
+			? (part.input as { phrase?: unknown }).phrase
+			: undefined
 	const phrase =
 		typeof phraseRaw === "string" ? `"${truncate(phraseRaw, 40)}"` : null
 
 	let status: "pending" | "ok" | "error" = "pending"
 	let detail: string | null = null
 	if (part.state === "output-available") {
-		const out = part.output
+		const out = part.output as { ok?: boolean; reason?: string } | undefined
 		if (out && out.ok === false) {
 			status = "error"
 			detail = out.reason ?? null

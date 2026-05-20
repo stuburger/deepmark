@@ -22,6 +22,30 @@ type OverridePart = Extract<
 	{ type: "tool-proposeTeacherOverride" }
 >
 
+export type OverrideCardState =
+	| { kind: "pending" }
+	| { kind: "accepted" }
+	| { kind: "dismissed" }
+	| { kind: "error"; reason: string }
+
+/**
+ * Pure derivation of the confirm-card's visible state from the SDK part
+ * + the in-flight error reason. Lifted out of the JSX so the
+ * pending/accepted/dismissed/error state machine can be tested without
+ * rendering React.
+ */
+export function deriveOverrideCardState(args: {
+	partState: string
+	output?: { accepted?: boolean }
+	errorReason: string | null
+}): OverrideCardState {
+	if (args.errorReason) return { kind: "error", reason: args.errorReason }
+	if (args.partState === "output-available") {
+		return args.output?.accepted ? { kind: "accepted" } : { kind: "dismissed" }
+	}
+	return { kind: "pending" }
+}
+
 /**
  * Renders a `proposeTeacherOverride` tool-call part as a confirm card.
  * Pending → Accept/Dismiss buttons; once the teacher decides, the part
@@ -49,18 +73,11 @@ export function OverrideToolPart({
 	const input = part.input
 	if (!input) return null
 
-	let state:
-		| { kind: "pending" }
-		| { kind: "accepted" }
-		| { kind: "dismissed" }
-		| { kind: "error"; reason: string }
-	if (errorReason) {
-		state = { kind: "error", reason: errorReason }
-	} else if (part.state === "output-available") {
-		state = part.output.accepted ? { kind: "accepted" } : { kind: "dismissed" }
-	} else {
-		state = { kind: "pending" }
-	}
+	const state = deriveOverrideCardState({
+		partState: part.state,
+		output: part.state === "output-available" ? part.output : undefined,
+		errorReason,
+	})
 
 	async function handleAccept() {
 		setErrorReason(null)

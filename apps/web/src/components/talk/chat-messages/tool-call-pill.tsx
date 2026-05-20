@@ -14,20 +14,34 @@ const TOOL_LABELS: Record<string, string> = {
 	proposeTeacherOverride: "score override",
 }
 
-/**
- * Compact inline status pill for a single tool call — DeepMark applying a
- * tick, succeeded, failed, etc. Renders three statuses derived from the
- * AI-SDK part state: pending (input-streaming / input-available),
- * ok (output-available with ok !== false), error (output-error or
- * output-available with ok === false).
- */
-export function ToolCallPill({ part }: { part: TalkToolPart }) {
-	const toolName = getToolName(part)
-	const label = TOOL_LABELS[toolName] ?? toolName
+export type PillStatus = "pending" | "ok" | "error"
 
-	// All client-tool outputs share the ToolDispatchResult shape
-	// (`{ ok: boolean; reason?: string }`); narrowing here is purely a
-	// runtime read of the discriminator.
+export type PillDisplay = {
+	label: string
+	status: PillStatus
+	phrase: string | null
+	detail: string | null
+}
+
+/** Subset of a tool-call part this module reads — kept loose so the
+ *  derivation is testable without depending on SDK-side types. */
+export type PillPartInput = {
+	toolName: string
+	state: string
+	input?: unknown
+	output?: unknown
+	errorText?: string
+}
+
+/**
+ * Pure derivation of what the pill should show. Lifted out of the JSX so
+ * the (interesting) state-machine logic — pending / ok / error and detail
+ * extraction across the three input/output states — can be tested without
+ * mounting React or a DOM.
+ */
+export function derivePillDisplay(part: PillPartInput): PillDisplay {
+	const label = TOOL_LABELS[part.toolName] ?? part.toolName
+
 	const phraseRaw =
 		part.input && typeof part.input === "object"
 			? (part.input as { phrase?: unknown }).phrase
@@ -35,7 +49,7 @@ export function ToolCallPill({ part }: { part: TalkToolPart }) {
 	const phrase =
 		typeof phraseRaw === "string" ? `"${truncate(phraseRaw, 40)}"` : null
 
-	let status: "pending" | "ok" | "error" = "pending"
+	let status: PillStatus = "pending"
 	let detail: string | null = null
 	if (part.state === "output-available") {
 		const out = part.output as { ok?: boolean; reason?: string } | undefined
@@ -49,6 +63,22 @@ export function ToolCallPill({ part }: { part: TalkToolPart }) {
 		status = "error"
 		detail = part.errorText ?? null
 	}
+
+	return { label, status, phrase, detail }
+}
+
+/**
+ * Compact inline status pill for a single tool call — DeepMark applying a
+ * tick, succeeded, failed, etc.
+ */
+export function ToolCallPill({ part }: { part: TalkToolPart }) {
+	const { label, status, phrase, detail } = derivePillDisplay({
+		toolName: getToolName(part),
+		state: part.state,
+		input: part.input,
+		output: "output" in part ? part.output : undefined,
+		errorText: "errorText" in part ? part.errorText : undefined,
+	})
 
 	return (
 		<div

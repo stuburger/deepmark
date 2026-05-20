@@ -18,8 +18,16 @@ import { type TalkToolPart, ToolCallPill } from "./tool-call-pill"
  * hazard). The runtime check is dead simple and identity-agnostic so we
  * inline it here.
  */
-function isTalkToolPart(p: { type: string }): p is TalkToolPart {
+export function isTalkToolPart(p: { type: string }): p is TalkToolPart {
 	return p.type.startsWith("tool-") || p.type === "dynamic-tool"
+}
+
+/**
+ * Which renderer the bubble should use for a tool part. Pure dispatch
+ * decision lifted out so it can be tested without React.
+ */
+export function pickToolRenderer(part: TalkToolPart): "override" | "pill" {
+	return part.type === "tool-proposeTeacherOverride" ? "override" : "pill"
 }
 
 /**
@@ -87,7 +95,10 @@ export function MessageBubble({
 					)
 				) : null}
 				{toolParts.map((p) => {
-					if (p.type === "tool-proposeTeacherOverride") {
+					if (pickToolRenderer(p) === "override") {
+						// pickToolRenderer narrows runtime; re-check the type
+						// discriminator so TS sees the OverridePart variant.
+						if (p.type !== "tool-proposeTeacherOverride") return null
 						return (
 							<OverrideToolPart
 								key={p.toolCallId}

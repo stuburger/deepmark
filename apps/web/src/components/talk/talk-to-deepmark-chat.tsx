@@ -1,35 +1,30 @@
 "use client"
 
+import { Button } from "@/components/ui/button"
+import { Textarea } from "@/components/ui/textarea"
+import { TooltipProvider } from "@/components/ui/tooltip"
 import type {
 	AddAnnotationInput,
 	ProposeTeacherOverrideInput,
 	RemoveAnnotationInput,
 	UpdateAnnotationInput,
 } from "@/lib/talk/tools"
+import { cn } from "@/lib/utils"
 import { useChat } from "@ai-sdk/react"
 import {
 	DefaultChatTransport,
 	lastAssistantMessageIsCompleteWithToolCalls,
 } from "ai"
-import { ArrowUp, AtSign, Loader2, Sparkles, Square, X } from "lucide-react"
+import { ArrowUp, Loader2, Sparkles, Square } from "lucide-react"
 import { useEffect, useMemo, useRef, useState } from "react"
-import ReactMarkdown from "react-markdown"
-import remarkGfm from "remark-gfm"
 import { toast } from "sonner"
-import {
-	OverrideConfirmCard,
-	type OverrideContextEntry,
-} from "./override-confirm-card"
+import { ChipBadge } from "./chat-messages/chip-badge"
+import { MessageBubble } from "./chat-messages/message-bubble"
+import { dispatchToolCall } from "./dispatch-tool-call"
+import type { OverrideContextEntry } from "./override-confirm-card"
+import type { Prefill, TalkUIMessage, ToolDispatchResult } from "./types"
 
-import { Button } from "@/components/ui/button"
-import { Textarea } from "@/components/ui/textarea"
-import {
-	Tooltip,
-	TooltipContent,
-	TooltipProvider,
-	TooltipTrigger,
-} from "@/components/ui/tooltip"
-import { cn } from "@/lib/utils"
+export type { ToolDispatchResult } from "./types"
 
 const SUGGESTIONS = [
 	"Explain AO1 vs AO2 for English Literature",
@@ -37,16 +32,6 @@ const SUGGESTIONS = [
 	"What's the difference between point-based and LoR marking?",
 	"How should I interpret a 12-mark essay grade?",
 ]
-
-type Prefill = {
-	text: string
-	questionNumber: string | null
-	questionId?: string | null
-}
-
-export type ToolDispatchResult =
-	| { ok: true; annotationId?: string }
-	| { ok: false; reason: string }
 
 type TalkToDeepMarkChatProps = {
 	className?: string
@@ -133,8 +118,8 @@ export function TalkToDeepMarkChat({
 	)
 
 	// Refs so the onToolCall closure always sees the latest callbacks +
-	// addToolOutput. addToolOutput is destructured from useChat below; its
-	// binding is hoisted so the closure resolves it at call-time.
+	// addToolOutput. Cleanup item #5 will collapse these into a single
+	// callbacksRef.
 	const addAnnRef = useRef(onAddAnnotation)
 	addAnnRef.current = onAddAnnotation
 	const updateAnnRef = useRef(onUpdateAnnotation)
@@ -144,8 +129,8 @@ export function TalkToDeepMarkChat({
 	const linkScanRef = useRef(onLinkToScan)
 	linkScanRef.current = onLinkToScan
 
-	const { messages, sendMessage, status, stop, error, addToolOutput } = useChat(
-		{
+	const { messages, sendMessage, status, stop, error, addToolOutput } =
+		useChat<TalkUIMessage>({
 			transport,
 			onError: (err) => {
 				toast.error(err.message || "Failed to reach DeepMark.")
@@ -176,8 +161,7 @@ export function TalkToDeepMarkChat({
 			// auto-send to give the model a chance to react ("done", "I tried
 			// X but it failed, let me try Y").
 			sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
-		},
-	)
+		})
 
 	const isStreaming = status === "submitted" || status === "streaming"
 	const hasMessages = messages.length > 0
@@ -209,19 +193,25 @@ export function TalkToDeepMarkChat({
 		// still gets the <selection> block and can respond to it.
 		if (!trimmed && !chip) return
 		if (isStreaming) return
+		const selection = chip
+			? {
+					text: chip.text,
+					questionNumber: chip.questionNumber,
+					questionId: chip.questionId ?? null,
+				}
+			: undefined
+		// Stash the selection in message metadata so the chip can render
+		// inside the user bubble — and so it round-trips through any future
+		// persistence layer that reloads the message list. The model still
+		// gets the selection via `body.selection` (route formats it into a
+		// <selection> tag on the user message).
 		sendMessage(
-			{ text: trimmed },
-			chip
-				? {
-						body: {
-							selection: {
-								text: chip.text,
-								questionNumber: chip.questionNumber,
-								questionId: chip.questionId ?? null,
-							},
-						},
-					}
-				: undefined,
+			{
+				role: "user",
+				parts: [{ type: "text", text: trimmed }],
+				metadata: selection ? { selection } : undefined,
+			},
+			selection ? { body: { selection } } : undefined,
 		)
 		setInput("")
 		setChip(null)
@@ -355,428 +345,5 @@ export function TalkToDeepMarkChat({
 				)}
 			</div>
 		</TooltipProvider>
-	)
-}
-
-type ToolCallShape = {
-	toolName: string
-	toolCallId: string
-	input: Record<string, unknown>
-}
-
-type ToolCallbacks = {
-	addAnnotation?: TalkToDeepMarkChatProps["onAddAnnotation"]
-	updateAnnotation?: TalkToDeepMarkChatProps["onUpdateAnnotation"]
-	removeAnnotation?: TalkToDeepMarkChatProps["onRemoveAnnotation"]
-	linkToScan?: TalkToDeepMarkChatProps["onLinkToScan"]
-}
-
-/**
- * Dispatch a single tool call to the parent-supplied callback. Unknown
- * tools or absent callbacks resolve to `{ ok: false, reason }` so the
- * model can self-correct on the next turn.
- */
-async function dispatchToolCall(
-	toolCall: unknown,
-	cbs: ToolCallbacks,
-): Promise<ToolDispatchResult> {
-	const tc = toolCall as ToolCallShape
-	switch (tc.toolName) {
-		case "addAnnotation": {
-			if (!cbs.addAnnotation) return notAvailable()
-			return cbs.addAnnotation(tc.input as AddAnnotationInput)
-		}
-		case "updateAnnotation": {
-			if (!cbs.updateAnnotation) return notAvailable()
-			return cbs.updateAnnotation(tc.input as UpdateAnnotationInput)
-		}
-		case "removeAnnotation": {
-			if (!cbs.removeAnnotation) return notAvailable()
-			return cbs.removeAnnotation(tc.input as RemoveAnnotationInput)
-		}
-		case "linkToScan": {
-			cbs.linkToScan?.(
-				tc.input as {
-					questionId: string
-					tokenStart?: string
-					tokenEnd?: string
-				},
-			)
-			return { ok: true }
-		}
-		default:
-			return { ok: false, reason: `Unknown tool: ${tc.toolName}` }
-	}
-}
-
-function notAvailable(): ToolDispatchResult {
-	return {
-		ok: false,
-		reason: "Tool callback not wired in this surface. Try again later.",
-	}
-}
-
-function ChipBadge({
-	chip,
-	onRemove,
-}: {
-	chip: Prefill
-	onRemove: () => void
-}) {
-	const label = chip.questionNumber ? `Q${chip.questionNumber}` : "Selection"
-	const preview =
-		chip.text.length > 240 ? `${chip.text.slice(0, 240)}…` : chip.text
-	return (
-		<Tooltip>
-			<TooltipTrigger
-				render={
-					<span className="inline-flex items-center gap-1 rounded-sm border border-primary/40 bg-foreground/95 pl-1.5 pr-0.5 py-0.5 text-[11px] font-medium text-primary">
-						<AtSign className="h-2.5 w-2.5 text-primary" aria-hidden />
-						<span className="font-mono">{label}</span>
-						<button
-							type="button"
-							onClick={onRemove}
-							aria-label={`Remove ${label} context`}
-							className="inline-flex items-center justify-center h-3.5 w-3.5 rounded-sm text-background/60 hover:text-background hover:bg-white/10 transition-colors"
-						>
-							<X className="h-2.5 w-2.5" aria-hidden />
-						</button>
-					</span>
-				}
-			/>
-			<TooltipContent side="top" sideOffset={4} className="max-w-xs">
-				<span className="block whitespace-pre-wrap text-xs leading-snug">
-					{preview}
-				</span>
-			</TooltipContent>
-		</Tooltip>
-	)
-}
-
-function MessageBubble({
-	message,
-	onProposeOverride,
-	overrideContextByQuestion,
-	addToolOutput,
-}: {
-	message: ReturnType<typeof useChat>["messages"][number]
-	onProposeOverride?: TalkToDeepMarkChatProps["onProposeOverride"]
-	overrideContextByQuestion?: TalkToDeepMarkChatProps["overrideContextByQuestion"]
-	addToolOutput: ReturnType<typeof useChat>["addToolOutput"]
-}) {
-	const isUser = message.role === "user"
-	const text = message.parts
-		.filter((p): p is { type: "text"; text: string } => p.type === "text")
-		.map((p) => p.text)
-		.join("")
-
-	// Tool-call parts (assistant only). Each renders as a compact inline
-	// status pill — DeepMark adding a tick, succeeded, failed, etc. The
-	// AI SDK's typed union splits per registered tool name; we narrow by
-	// reading the runtime `type` field as a string and casting to a
-	// minimal shape — the field set we care about (`toolCallId`, `state`,
-	// `input`, `output`, `errorText`) is consistent across every tool-*
-	// part in the SDK's union.
-	const toolParts = !isUser
-		? (message.parts.filter(
-				(p) => typeof p.type === "string" && p.type.startsWith("tool-"),
-			) as unknown as ToolPartShape[])
-		: []
-
-	if (!text && toolParts.length === 0) return null
-
-	return (
-		<div
-			className={cn("flex w-full", isUser ? "justify-end" : "justify-start")}
-		>
-			<div
-				className={cn(
-					"max-w-[85%] text-sm leading-[1.55]",
-					isUser
-						? "whitespace-pre-wrap rounded-md border border-border bg-card px-3.5 py-2.5 text-foreground shadow-tile"
-						: "text-foreground",
-				)}
-			>
-				{text ? isUser ? text : <AssistantMarkdown text={text} /> : null}
-				{toolParts.map((p) => {
-					if (p.type === "tool-proposeTeacherOverride") {
-						return (
-							<OverrideToolPart
-								key={p.toolCallId}
-								part={p}
-								onProposeOverride={onProposeOverride}
-								overrideContextByQuestion={overrideContextByQuestion}
-								addToolOutput={addToolOutput}
-							/>
-						)
-					}
-					return <ToolCallPill key={p.toolCallId} part={p} />
-				})}
-			</div>
-		</div>
-	)
-}
-
-/**
- * Renders a `proposeTeacherOverride` tool-call part as a confirm card.
- * Pending → Accept/Dismiss buttons; once the teacher decides, the part
- * transitions to output-available and the card collapses.
- */
-function OverrideToolPart({
-	part,
-	onProposeOverride,
-	overrideContextByQuestion,
-	addToolOutput,
-}: {
-	part: ToolPartShape
-	onProposeOverride?: TalkToDeepMarkChatProps["onProposeOverride"]
-	overrideContextByQuestion?: TalkToDeepMarkChatProps["overrideContextByQuestion"]
-	addToolOutput: ReturnType<typeof useChat>["addToolOutput"]
-}) {
-	const [errorReason, setErrorReason] = useState<string | null>(null)
-	const input = part.input as
-		| {
-				questionId: string
-				suggestedScore: number
-				reason: string
-		  }
-		| undefined
-	if (!input) return null
-
-	// Derive the visible state from the AI-SDK part state.
-	let state:
-		| { kind: "pending" }
-		| { kind: "accepted" }
-		| { kind: "dismissed" }
-		| { kind: "error"; reason: string }
-	if (errorReason) {
-		state = { kind: "error", reason: errorReason }
-	} else if (part.state === "output-available") {
-		const accepted = (part.output as { accepted?: boolean } | undefined)
-			?.accepted
-		state = accepted ? { kind: "accepted" } : { kind: "dismissed" }
-	} else {
-		state = { kind: "pending" }
-	}
-
-	async function handleAccept() {
-		setErrorReason(null)
-		if (!onProposeOverride || !input) {
-			addToolOutput({
-				tool: "proposeTeacherOverride" as never,
-				toolCallId: part.toolCallId,
-				output: {
-					accepted: false,
-					reason: "Override mutation not wired in this surface.",
-				} as never,
-			})
-			return
-		}
-		const result = await onProposeOverride(input)
-		if (result.ok) {
-			addToolOutput({
-				tool: "proposeTeacherOverride" as never,
-				toolCallId: part.toolCallId,
-				output: { accepted: true } as never,
-			})
-		} else {
-			setErrorReason(result.reason)
-		}
-	}
-
-	function handleDismiss() {
-		setErrorReason(null)
-		addToolOutput({
-			tool: "proposeTeacherOverride" as never,
-			toolCallId: part.toolCallId,
-			output: {
-				accepted: false,
-				reason: "Teacher dismissed the suggestion.",
-			} as never,
-		})
-	}
-
-	return (
-		<OverrideConfirmCard
-			input={input}
-			state={state}
-			context={overrideContextByQuestion?.get(input.questionId)}
-			onAccept={handleAccept}
-			onDismiss={handleDismiss}
-		/>
-	)
-}
-
-type ToolPartShape = {
-	type: string
-	toolCallId: string
-	state:
-		| "input-streaming"
-		| "input-available"
-		| "output-available"
-		| "output-error"
-		| "approval-requested"
-		| "approval-responded"
-		| "output-denied"
-	input?: Record<string, unknown>
-	output?: { ok?: boolean; reason?: string; annotationId?: string }
-	errorText?: string
-}
-
-const TOOL_LABELS: Record<string, string> = {
-	"tool-addAnnotation": "annotation",
-	"tool-updateAnnotation": "annotation update",
-	"tool-removeAnnotation": "annotation removal",
-	"tool-linkToScan": "scan navigation",
-	"tool-proposeTeacherOverride": "score override",
-}
-
-function ToolCallPill({ part }: { part: ToolPartShape }) {
-	const label = TOOL_LABELS[part.type] ?? part.type.replace(/^tool-/, "")
-	const phrase =
-		typeof part.input?.phrase === "string"
-			? `"${truncate(part.input.phrase as string, 40)}"`
-			: null
-
-	let status: "pending" | "ok" | "error" = "pending"
-	let detail: string | null = null
-	if (part.state === "output-available") {
-		const out = part.output
-		if (out && out.ok === false) {
-			status = "error"
-			detail = out.reason ?? null
-		} else {
-			status = "ok"
-		}
-	} else if (part.state === "output-error") {
-		status = "error"
-		detail = part.errorText ?? null
-	}
-
-	return (
-		<div
-			className={cn(
-				"mt-2 inline-flex items-center gap-1.5 rounded-sm border px-2 py-1 font-mono text-[11px]",
-				status === "ok" && "border-success/40 bg-success-50 text-success-700",
-				status === "error" && "border-error/40 bg-error-50 text-error-700",
-				status === "pending" &&
-					"border-border-quiet bg-muted text-muted-foreground",
-			)}
-		>
-			<span>
-				{status === "pending" && "…"}
-				{status === "ok" && "✓"}
-				{status === "error" && "×"}
-			</span>
-			<span>
-				{status === "pending" && `Applying ${label}`}
-				{status === "ok" && `Applied ${label}`}
-				{status === "error" && `Failed ${label}`}
-				{phrase ? ` — ${phrase}` : ""}
-			</span>
-			{detail && status === "error" ? (
-				<span className="text-muted-foreground"> · {truncate(detail, 80)}</span>
-			) : null}
-		</div>
-	)
-}
-
-function truncate(s: string, max: number): string {
-	return s.length > max ? `${s.slice(0, max)}…` : s
-}
-
-/**
- * Renders assistant text as markdown. We don't use @tailwindcss/typography
- * (not installed); instead each markdown element maps to a JSX component
- * with explicit design-token classes so nothing leaks into the global
- * style and we stay within our `text-foreground`, `border-border-quiet`,
- * etc. vocabulary.
- */
-function AssistantMarkdown({ text }: { text: string }) {
-	return (
-		<ReactMarkdown
-			remarkPlugins={[remarkGfm]}
-			components={{
-				p: ({ children }) => (
-					<p className="[&:not(:first-child)]:mt-3">{children}</p>
-				),
-				strong: ({ children }) => (
-					<strong className="font-semibold">{children}</strong>
-				),
-				em: ({ children }) => <em className="italic">{children}</em>,
-				ul: ({ children }) => (
-					<ul className="my-2 list-disc space-y-1 pl-5">{children}</ul>
-				),
-				ol: ({ children }) => (
-					<ol className="my-2 list-decimal space-y-1 pl-5">{children}</ol>
-				),
-				li: ({ children }) => <li>{children}</li>,
-				code: ({ children }) => (
-					<code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px]">
-						{children}
-					</code>
-				),
-				pre: ({ children }) => (
-					<pre className="my-2 overflow-x-auto rounded bg-muted p-3 font-mono text-[11px]">
-						{children}
-					</pre>
-				),
-				h1: ({ children }) => (
-					<h3 className="mt-3 mb-1 font-semibold text-foreground">
-						{children}
-					</h3>
-				),
-				h2: ({ children }) => (
-					<h3 className="mt-3 mb-1 font-semibold text-foreground">
-						{children}
-					</h3>
-				),
-				h3: ({ children }) => (
-					<h3 className="mt-3 mb-1 font-semibold text-foreground">
-						{children}
-					</h3>
-				),
-				h4: ({ children }) => (
-					<h4 className="mt-3 mb-1 font-semibold text-foreground">
-						{children}
-					</h4>
-				),
-				blockquote: ({ children }) => (
-					<blockquote className="my-2 border-l-2 border-border-quiet pl-3 italic text-muted-foreground">
-						{children}
-					</blockquote>
-				),
-				a: ({ href, children }) => (
-					<a
-						href={href}
-						target="_blank"
-						rel="noopener noreferrer"
-						className="text-primary underline underline-offset-2 hover:no-underline"
-					>
-						{children}
-					</a>
-				),
-				hr: () => <hr className="my-3 border-border-quiet" />,
-				table: ({ children }) => (
-					<div className="my-2 overflow-x-auto">
-						<table className="w-full border-collapse text-[12px]">
-							{children}
-						</table>
-					</div>
-				),
-				th: ({ children }) => (
-					<th className="border border-border-quiet px-2 py-1 text-left font-semibold">
-						{children}
-					</th>
-				),
-				td: ({ children }) => (
-					<td className="border border-border-quiet px-2 py-1 align-top">
-						{children}
-					</td>
-				),
-			}}
-		>
-			{text}
-		</ReactMarkdown>
 	)
 }

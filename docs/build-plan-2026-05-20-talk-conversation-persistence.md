@@ -79,7 +79,9 @@ model TalkConversationSubmission {
 - A conversation is a list-of-messages-as-a-unit; we never query *into* a turn.
 - Mutations are append-only.
 - AI-SDK `UIMessage[]` has a variable nested shape (parts array, tool-call parts, tool-result parts when Phase 3+4 lands). JSONB absorbs that without schema churn.
-- The persisted shape MUST be the full `UIMessage[]` (with `parts`), not a flattened `{role, content}`. We need tool-call state preserved for resume after Phase 3+4.
+- The persisted shape MUST be the full `UIMessage[]` (with `parts` AND `metadata`), not a flattened `{role, content}`. We need tool-call state preserved for resume after Phase 3+4.
+
+**Selection metadata (already on `main`):** user messages already carry their selection chip in `message.metadata.selection: { text, questionNumber, questionId } | undefined` — typed via `TalkMetadata` in `talk-to-deepmark-chat.tsx`. Persisting `UIMessage[]` as-is captures this for free; the bubble renders it from metadata on reload. Do NOT strip metadata when writing the JSONB. Server-side, today the route reads selection from `body.selection`; once persistence lands, the route should read it from the latest user message's `metadata.selection` and `body.selection` can be deleted as a redundant transport. See "Route handler" below.
 
 **Why a separate join table and not a `submission_id String[]`:**
 - We need `first_referenced_at` per submission for "earliest-referencing conversation" lookups.
@@ -158,7 +160,8 @@ Two open questions worth resolving when this is built:
 
 `apps/web/src/app/api/talk/route.ts`:
 
-- Input shape extends to `{ conversationId?, submissionId?, mentionedSubmissionIds?, selection?, messages }`. `messages` from `useChat` already includes the full history client-side; we use the client-provided history for the LLM call and persist it server-side via `appendConversationTurn` in the `streamText` `onFinish` callback.
+- Input shape extends to `{ conversationId?, submissionId?, mentionedSubmissionIds?, messages }`. `messages` from `useChat` already includes the full history client-side; we use the client-provided history for the LLM call and persist it server-side via `appendConversationTurn` in the `streamText` `onFinish` callback.
+- **Drop the `selection` body field.** Today the client double-sends the selection (once on `message.metadata.selection`, once on `body.selection`). When persistence lands, source it from the latest user message's `metadata.selection` and remove the `body.selection` plumbing on both sides. The `formatUserMessageWithSelection` wrapper continues to wrap the text into a `<selection>` tag for the LLM — it just gets its input from metadata instead of body.
 - After `streamText` finishes, write the full message list (user turn + assistant turn) to the DB via `appendConversationTurn`. The returned `conversationId` is shipped to the client via a custom UI-stream chunk (Vercel AI SDK supports `streamData.append({ conversationId })`).
 - `submissionId` (primary, from the editor) and `mentionedSubmissionIds` (from any client-side @-mentions, plus any server-detected URL references — defer URL parsing if time-pressured) collectively become the preamble's submission set. Each is authz'd independently; failures get the system-note treatment.
 

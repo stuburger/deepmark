@@ -216,6 +216,11 @@ export type LinkToScanInput = z.infer<typeof linkToScanInput>
  * formatting underline; doubleUnderline camelCase) — single source of truth
  * for the mapping lives here so both the tool dispatcher and any future
  * server-side validation stay in sync.
+ *
+ * The `unreachable` default fails the build when a new signal is added to
+ * MARK_SIGNAL but not wired here — TypeScript narrows the parameter to
+ * `never` in the default branch, and the typed throw blocks compilation
+ * until the new case is handled.
  */
 export function signalToMarkName(signal: z.infer<typeof MARK_SIGNAL>): string {
 	switch (signal) {
@@ -231,5 +236,11 @@ export function signalToMarkName(signal: z.infer<typeof MARK_SIGNAL>): string {
 			return "box"
 		case "circle":
 			return "circle"
+		default:
+			return unreachable(signal)
 	}
+}
+
+function unreachable(value: never): never {
+	throw new Error(`signalToMarkName missing case for signal: ${String(value)}`)
 }

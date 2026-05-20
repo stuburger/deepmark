@@ -1,5 +1,5 @@
 import { routeHandler } from "@/lib/authz"
-import { db } from "@/lib/db"
+import { getMarkSchemeContents } from "@/lib/mark-scheme/queries"
 import { getJobAnnotations } from "@/lib/marking/annotations/queries"
 import { getStudentPaperJob } from "@/lib/marking/submissions/queries"
 import { buildSubmissionPreamble } from "@/lib/talk/build-submission-preamble"
@@ -111,9 +111,10 @@ export const POST = routeHandler.authenticated(async (ctx, req) => {
 
 /**
  * Loads MarkScheme.content for every distinct mark_scheme_id present on the
- * payload's grading results. Direct db read by id is safe here — the caller
- * is already viewer-authz'd on the submission, and these ids come from a
- * payload they're authorised to see.
+ * payload's grading results. The caller is already viewer-authz'd on the
+ * submission and the ids come from a payload they're authorised to see, so
+ * the underlying server action uses `authenticatedAction` rather than
+ * per-row resource authz.
  */
 async function loadMarkSchemesForResults(payload: {
 	grading_results: ReadonlyArray<{ mark_scheme_id?: string | null }>
@@ -123,11 +124,9 @@ async function loadMarkSchemesForResults(payload: {
 		if (r.mark_scheme_id) ids.add(r.mark_scheme_id)
 	}
 	if (ids.size === 0) return new Map()
-	const rows = await db.markScheme.findMany({
-		where: { id: { in: Array.from(ids) } },
-		select: { id: true, content: true },
-	})
-	return new Map(rows.map((r) => [r.id, r.content]))
+	const result = await getMarkSchemeContents({ ids: Array.from(ids) })
+	const contents = result?.data?.contents ?? {}
+	return new Map(Object.entries(contents))
 }
 
 function injectSelectionIntoLastUserMessage(

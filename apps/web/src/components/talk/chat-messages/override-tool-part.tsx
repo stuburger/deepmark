@@ -5,6 +5,7 @@ import type { useChat } from "@ai-sdk/react"
 import type { ToolUIPart } from "ai"
 import { toast } from "sonner"
 import {
+	type OverrideCardState,
 	OverrideConfirmCard,
 	type OverrideContextEntry,
 } from "../override-confirm-card"
@@ -21,11 +22,6 @@ type OverridePart = Extract<
 	ToolUIPart<TalkTools>,
 	{ type: "tool-proposeTeacherOverride" }
 >
-
-export type OverrideCardState =
-	| { kind: "pending" }
-	| { kind: "accepted" }
-	| { kind: "dismissed" }
 
 /**
  * Pure derivation of the confirm-card's visible state from the SDK part.

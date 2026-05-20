@@ -34,14 +34,14 @@ export type OverrideContextEntry = {
 	maxScore: number
 }
 
-type CardState =
+export type OverrideCardState =
 	| { kind: "pending" }
 	| { kind: "accepted" }
 	| { kind: "dismissed" }
 
 type OverrideConfirmCardProps = {
 	input: OverrideToolInput
-	state: CardState
+	state: OverrideCardState
 	context?: OverrideContextEntry
 	onAccept: () => Promise<void>
 	onDismiss: () => void

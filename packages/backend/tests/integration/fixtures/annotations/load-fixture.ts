@@ -25,3 +25,23 @@ export function loadFixtureTokens(fixture: AnnotationFixtureSpec): TokenRow[] {
 		answer_char_end: null,
 	}))
 }
+
+/**
+ * Loads a fixture's `fixture.json` — the captured-from-DB LLM-facing inputs
+ * (gradingResult + markScheme + paper metadata). Pairs with `loadFixtureTokens`
+ * and the hand-tuned `expectations` block in the TS wrapper to compose a
+ * complete `AnnotationFixtureSpec`.
+ *
+ * Why runtime read instead of `import x from "./fixture.json"`: the backend
+ * package's tsconfig doesn't enable `resolveJsonModule`, and we don't want
+ * to flip it project-wide just for fixtures.
+ */
+export function loadFixtureData(
+	fixtureDir: string,
+): Omit<AnnotationFixtureSpec, "name" | "dir" | "expectations"> {
+	const raw = readFileSync(join(fixtureDir, "fixture.json"), "utf-8")
+	return JSON.parse(raw) as Omit<
+		AnnotationFixtureSpec,
+		"name" | "dir" | "expectations"
+	>
+}

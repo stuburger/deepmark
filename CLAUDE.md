@@ -886,6 +886,59 @@ Whenever you change **any** file in `packages/backend/src/processors/student-pap
 
 ---
 
+## Annotation Eval Suite — and the fixture-iteration philosophy
+
+A parallel suite at `packages/backend/tests/integration/annotation-evals.test.ts` guards the LLM-driven annotation pipeline (per-question feedback marks on graded scripts).
+
+**Philosophy: real teacher feedback → frozen fixture → regression test.** When a teacher flags a graded paper as wrong, or you spot a hard case worth locking in, capture it as a fixture *immediately*. Every captured fixture is one more case the marker can never silently regress on.
+
+### Capturing a new fixture
+
+```bash
+AWS_PROFILE=deepmark bunx sst shell --stage=stuartbourhill -- \
+  bun packages/backend/scripts/fixturise.ts \
+    --submission <submission-id> --question <question-number> --name <fixture-name>
+```
+
+This pulls the LLM-facing inputs (student answer, mark scheme, AO awards, OCR tokens) and writes them to `tests/integration/fixtures/annotations/<fixture-name>/` as JSON. The fixture survives any later DB delete — the eval is fed by the frozen file forever.
+
+After capture:
+1. Open the generated `fixture.ts` wrapper, hand-tune `expectations` (annotation count bounds, required AO codes, required signals).
+2. Register the constant in the `FIXTURES` array in `annotation-evals.test.ts`.
+3. Run the suite to confirm the fixture's expectations hold.
+
+### Swapping the model for a fixture run
+
+Evals use the project's `LlmRunner` so the call-site → model mapping can be overridden per run. To A/B test a different model against `llm-annotations`:
+
+```ts
+import { createLlmRunner } from "@/lib/infra/llm-runtime"
+
+const llm = createLlmRunner({
+  "llm-annotations": [{ provider: "anthropic", modelId: "claude-sonnet-4-6" }],
+})
+// then pass `llm` into annotateOneQuestion / regenerateAnnotationsFromDb
+```
+
+Use this when iterating on the annotation prompt or evaluating a new model — no infra changes needed.
+
+### Replaying annotation against an old submission
+
+`regenerateAnnotationsFromDb({ markingResultId, llm })` in `packages/backend/src/lib/annotations/regenerate-from-db.ts` re-runs the annotation LLM against a previously-graded question using only the DB row (no live grading flow). Pure: returns `PendingAnnotation[]`, doesn't touch the Y.Doc or any projection rows.
+
+Use this when:
+- A prompt change just landed — re-annotate fixtures and diff outputs.
+- A teacher flagged a paper — regenerate and check if the new prompt would catch what they saw.
+- Building a comparison script ("here's prompt v1 vs v2 against the same paper").
+
+It is NOT the path for the live grading flow — that already runs annotation inline.
+
+### Don't loosen, tighten
+
+When the model improves, ratchet the expectations bounds upward (lower max, raise min). When it regresses, fix the prompt — don't widen the bounds. Same discipline as the attribution suite.
+
+---
+
 ## Infrastructure (SST v4)
 
 - **`sst.config.ts`** — app entry, imports `infra/` modules.
@@ -985,30 +1038,3 @@ bun test:integration             # All integration tests (requires SST env via s
 # Filter by project: --project backend:integration, --project web:integration
 ```
 
----
-
-## Active Priorities (as of April 2026)
-
-### Tier 1 — Accuracy / Trust
-- Fix MCQ OCR alignment (detect tick near label, ignore crossed-out marks, low-confidence flag)
-- Add bounding box scan coverage check — warn or block if coverage is low
-- Add inference / "benefit of the doubt" layer; default to balanced examiner mode
-- Improve 2-marker and 12-marker handling (partial semantic credit, borderline push-up)
-
-### Tier 2 — UX / Flow
-- Gate "missing mark scheme" message behind processing state
-- Progressive dashboard reveal (hide analytics until marking is complete)
-- Enforce upload order: QP → MS → scripts
-- Add cancel/replace option during upload
-
-### Tier 3 — Refinement
-- Compress LLM feedback to short examiner-style bullets
-- Deduplicate similar questions (click to review/merge/delete)
-- Show scripts as "Zack (5 pages)" not page-by-page
-- Add granular processing status messages ("Parsing… Detecting MCQs… Applying AO…")
-
-### Upcoming Builds
-- Landing page
-- Softness/strictness slider
-- Homework mode (auto mark scheme generation)
-- Annotation engine (Phase 3 of marking pipeline)

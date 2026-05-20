@@ -31,7 +31,13 @@ export function ChatPanel({
 	submissionId: string
 	studentName: string | null
 	onSwitchToScan: () => void
-	prefill?: { text: string; questionNumber: string | null } | null
+	prefill?: {
+		text: string
+		questionNumber: string | null
+		questionId?: string | null
+		tokenStart?: string | null
+		tokenEnd?: string | null
+	} | null
 	onPrefillConsumed?: () => void
 }) {
 	return (

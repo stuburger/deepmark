@@ -21,6 +21,9 @@ import { z } from "zod"
 const selectionSchema = z.object({
 	text: z.string().min(1),
 	questionNumber: z.string().nullable().optional(),
+	questionId: z.string().nullable().optional(),
+	tokenStart: z.string().nullable().optional(),
+	tokenEnd: z.string().nullable().optional(),
 })
 
 const talkInputSchema = z.object({

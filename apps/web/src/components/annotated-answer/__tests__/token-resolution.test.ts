@@ -3,6 +3,7 @@ import type { Schema } from "@tiptap/pm/model"
 import { beforeAll, describe, expect, it } from "vitest"
 import {
 	resolveTokenAtCursor,
+	resolveTokenRangeForSelection,
 	resolveTokensForAnnotation,
 	resolveTokensForRange,
 } from "../token-resolution"
@@ -67,7 +68,13 @@ describe("resolveTokenAtCursor", () => {
 			],
 		})
 		const alignments = new Map([
-			["q1", makeAlignment([["t1", 0, 5], ["t2", 6, 11]])],
+			[
+				"q1",
+				makeAlignment([
+					["t1", 0, 5],
+					["t2", 6, 11],
+				]),
+			],
 		])
 
 		// PM pos 1 = char 0 (start of 'hello') — covered by t1.
@@ -281,9 +288,7 @@ describe("resolveTokensForAnnotation", () => {
 					content: [
 						{
 							type: "text",
-							marks: [
-								{ type: "tick", attrs: { annotationId: "ann-1" } },
-							],
+							marks: [{ type: "tick", attrs: { annotationId: "ann-1" } }],
 							text: "hello",
 						},
 						{ type: "text", text: " world" },
@@ -328,23 +333,17 @@ describe("resolveTokensForAnnotation", () => {
 							// Different annotation on the first child — passes the
 							// marks-length guard but matches a different
 							// annotationId, hitting the bug path.
-							marks: [
-								{ type: "tick", attrs: { annotationId: "ann-other" } },
-							],
+							marks: [{ type: "tick", attrs: { annotationId: "ann-other" } }],
 							text: "before ",
 						},
 						{
 							type: "text",
-							marks: [
-								{ type: "tick", attrs: { annotationId: "ann-2" } },
-							],
+							marks: [{ type: "tick", attrs: { annotationId: "ann-2" } }],
 							text: "target",
 						},
 						{
 							type: "text",
-							marks: [
-								{ type: "tick", attrs: { annotationId: "ann-other" } },
-							],
+							marks: [{ type: "tick", attrs: { annotationId: "ann-other" } }],
 							text: " after",
 						},
 					],
@@ -353,12 +352,10 @@ describe("resolveTokensForAnnotation", () => {
 		})
 		// textContent: "before target after"
 		// 'target' lives at chars [7, 13). Make t-target cover it.
-		const alignments = new Map([
-			["q1", makeAlignment([["t-target", 7, 13]])],
+		const alignments = new Map([["q1", makeAlignment([["t-target", 7, 13]])]])
+		expect(resolveTokensForAnnotation(doc, "ann-2", alignments)).toEqual([
+			"t-target",
 		])
-		expect(
-			resolveTokensForAnnotation(doc, "ann-2", alignments),
-		).toEqual(["t-target"])
 	})
 
 	it("merges char extents across multiple text children carrying the same annotationId", () => {
@@ -375,9 +372,7 @@ describe("resolveTokensForAnnotation", () => {
 					content: [
 						{
 							type: "text",
-							marks: [
-								{ type: "tick", attrs: { annotationId: "ann-3" } },
-							],
+							marks: [{ type: "tick", attrs: { annotationId: "ann-3" } }],
 							text: "left ",
 						},
 						{
@@ -390,9 +385,7 @@ describe("resolveTokensForAnnotation", () => {
 						},
 						{
 							type: "text",
-							marks: [
-								{ type: "tick", attrs: { annotationId: "ann-3" } },
-							],
+							marks: [{ type: "tick", attrs: { annotationId: "ann-3" } }],
 							text: " right",
 						},
 					],
@@ -425,9 +418,7 @@ describe("resolveTokensForAnnotation", () => {
 					content: [
 						{
 							type: "text",
-							marks: [
-								{ type: "tick", attrs: { annotationId: "ann-1" } },
-							],
+							marks: [{ type: "tick", attrs: { annotationId: "ann-1" } }],
 							text: "hello",
 						},
 					],
@@ -450,17 +441,168 @@ describe("resolveTokensForAnnotation", () => {
 					content: [
 						{
 							type: "text",
-							marks: [
-								{ type: "tick", attrs: { annotationId: "ann-1" } },
-							],
+							marks: [{ type: "tick", attrs: { annotationId: "ann-1" } }],
 							text: "hello",
 						},
 					],
 				},
 			],
 		})
-		expect(
-			resolveTokensForAnnotation(doc, "ann-1", new Map()),
-		).toBeNull()
+		expect(resolveTokensForAnnotation(doc, "ann-1", new Map())).toBeNull()
+	})
+})
+
+// ─── resolveTokenRangeForSelection ───────────────────────────────────────────
+
+describe("resolveTokenRangeForSelection", () => {
+	it("returns first and last token IDs in spatial order for a range inside one block", () => {
+		const doc = schema.nodeFromJSON({
+			type: "doc",
+			content: [
+				{
+					type: "questionAnswer",
+					attrs: { questionId: "q1" },
+					content: [{ type: "text", text: "hello world today" }],
+				},
+			],
+		})
+		const alignments = new Map([
+			[
+				"q1",
+				makeAlignment([
+					["t1", 0, 5],
+					["t2", 6, 11],
+					["t3", 12, 17],
+				]),
+			],
+		])
+		// PM positions 1..18 covers "hello world today" (chars 0..17).
+		const result = resolveTokenRangeForSelection(doc, 1, 18, alignments)
+		expect(result).toEqual({
+			questionId: "q1",
+			tokenStart: "t1",
+			tokenEnd: "t3",
+		})
+	})
+
+	it("sorts by spatial position even when tokenMap insertion order is jumbled", () => {
+		const doc = schema.nodeFromJSON({
+			type: "doc",
+			content: [
+				{
+					type: "questionAnswer",
+					attrs: { questionId: "q1" },
+					content: [{ type: "text", text: "hello world today" }],
+				},
+			],
+		})
+		// Intentionally out-of-order insertion: t3 first, then t1, then t2.
+		const alignments = new Map([
+			[
+				"q1",
+				makeAlignment([
+					["t3", 12, 17],
+					["t1", 0, 5],
+					["t2", 6, 11],
+				]),
+			],
+		])
+		const result = resolveTokenRangeForSelection(doc, 1, 18, alignments)
+		expect(result).toEqual({
+			questionId: "q1",
+			tokenStart: "t1",
+			tokenEnd: "t3",
+		})
+	})
+
+	it("returns null for a collapsed range", () => {
+		const doc = schema.nodeFromJSON({
+			type: "doc",
+			content: [
+				{
+					type: "questionAnswer",
+					attrs: { questionId: "q1" },
+					content: [{ type: "text", text: "hello" }],
+				},
+			],
+		})
+		const alignments = new Map([["q1", makeAlignment([["t1", 0, 5]])]])
+		expect(resolveTokenRangeForSelection(doc, 4, 4, alignments)).toBeNull()
+	})
+
+	it("returns null when the range spans multiple question blocks", () => {
+		const doc = schema.nodeFromJSON({
+			type: "doc",
+			content: [
+				{
+					type: "questionAnswer",
+					attrs: { questionId: "q1" },
+					content: [{ type: "text", text: "first" }],
+				},
+				{
+					type: "questionAnswer",
+					attrs: { questionId: "q2" },
+					content: [{ type: "text", text: "second" }],
+				},
+			],
+		})
+		const alignments = new Map([
+			["q1", makeAlignment([["t1", 0, 5]])],
+			["q2", makeAlignment([["t2", 0, 6]])],
+		])
+		// Range covers both blocks.
+		expect(resolveTokenRangeForSelection(doc, 1, 100, alignments)).toBeNull()
+	})
+
+	it("returns null when no alignment is loaded for the overlapping block", () => {
+		const doc = schema.nodeFromJSON({
+			type: "doc",
+			content: [
+				{
+					type: "questionAnswer",
+					attrs: { questionId: "q1" },
+					content: [{ type: "text", text: "hello" }],
+				},
+			],
+		})
+		expect(resolveTokenRangeForSelection(doc, 1, 6, new Map())).toBeNull()
+	})
+
+	it("returns null when the range falls entirely between aligned tokens", () => {
+		const doc = schema.nodeFromJSON({
+			type: "doc",
+			content: [
+				{
+					type: "questionAnswer",
+					attrs: { questionId: "q1" },
+					content: [{ type: "text", text: "hi  there" }],
+				},
+			],
+		})
+		// Alignment covers "hi" [0..2) and "there" [4..9). Range PM 3..4
+		// = chars 2..3 = single whitespace between aligned tokens.
+		const alignments = new Map([
+			[
+				"q1",
+				makeAlignment([
+					["t1", 0, 2],
+					["t2", 4, 9],
+				]),
+			],
+		])
+		expect(resolveTokenRangeForSelection(doc, 3, 4, alignments)).toBeNull()
+	})
+
+	it("returns null when the range lies outside any question block", () => {
+		const doc = schema.nodeFromJSON({
+			type: "doc",
+			content: [
+				{
+					type: "paragraph",
+					content: [{ type: "text", text: "summary paragraph" }],
+				},
+			],
+		})
+		expect(resolveTokenRangeForSelection(doc, 1, 10, new Map())).toBeNull()
 	})
 })

@@ -35,8 +35,9 @@ import {
 import { InsertParagraphPlugin } from "./insert-paragraph-plugin"
 import { MARK_ACTIONS } from "./mark-actions"
 import { McqTableNode } from "./mcq-table-node"
-import { QuestionAnswerNode } from "./question-answer-node"
 import { findEnclosingQuestionAnswer } from "./pm-pos-mapping"
+import { QuestionAnswerNode } from "./question-answer-node"
+import { resolveTokenRangeForSelection } from "./token-resolution"
 import { useDerivedAnnotations } from "./use-derived-annotations"
 import { useTokenHighlight } from "./use-token-highlight"
 
@@ -101,6 +102,9 @@ export function AnnotatedAnswerSheet({
 	onAskDeepMark?: (input: {
 		text: string
 		questionNumber: string | null
+		questionId?: string | null
+		tokenStart?: string | null
+		tokenEnd?: string | null
 	}) => void
 	/**
 	 * DOM target for the AnnotationToolbar pill. When set (the editor's
@@ -345,14 +349,34 @@ export function AnnotatedAnswerSheet({
 								const { from, to, $from } = editor.state.selection
 								const text = editor.state.doc.textBetween(from, to, " ").trim()
 								if (!text) return
-								// Read the enclosing questionAnswer's questionNumber so
-								// the chat panel can label the context chip. Null when
-								// the selection sits in a non-question block (cover
-								// page, examiner-summary paragraph).
+								// Read the enclosing questionAnswer's number/id so the
+								// chat panel can label the chip and the LLM can
+								// reference the question by id. Both null when the
+								// selection sits in a non-question block (cover page,
+								// examiner-summary paragraph).
 								const block = findEnclosingQuestionAnswer($from)
 								const questionNumber =
 									(block?.node.attrs.questionNumber as string | null) ?? null
-								onAskDeepMark({ text, questionNumber })
+								const questionId =
+									(block?.node.attrs.questionId as string | null) ?? null
+								// Resolve the highlighted PM range to a token-id range
+								// via the per-question alignment. Returns null when the
+								// range spans multiple blocks, the alignment isn't
+								// loaded, or the selection falls between tokens — the
+								// chip falls back to text-only in those cases.
+								const tokenRange = resolveTokenRangeForSelection(
+									editor.state.doc,
+									from,
+									to,
+									alignmentByQuestion ?? new Map(),
+								)
+								onAskDeepMark({
+									text,
+									questionNumber,
+									questionId,
+									tokenStart: tokenRange?.tokenStart ?? null,
+									tokenEnd: tokenRange?.tokenEnd ?? null,
+								})
 							}}
 							className="inline-flex items-center gap-1.5 rounded-md border border-primary/40 bg-foreground/95 backdrop-blur-md px-2.5 py-1.5 text-xs font-medium text-background shadow-toolbar"
 						>

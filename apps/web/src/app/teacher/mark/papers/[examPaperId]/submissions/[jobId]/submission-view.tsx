@@ -181,18 +181,33 @@ export function SubmissionView({
 	const switchToChat = useCallback(() => setLhs("chat"), [setLhs])
 	const switchToScan = useCallback(() => setLhs("scan"), [setLhs])
 
-	// Selection → "Talk to DeepMark". The bubble menu emits a {text,
-	// questionNumber} pair; we open the chat panel and push it through as a
-	// context chip. ChatPanel calls `consumeChatPrefill` once it has read
-	// the prefill so a second selection re-fires the effect (otherwise a
-	// repeat selection of the same text wouldn't trigger React's referential
-	// re-evaluation).
+	// Selection → "Talk to DeepMark". The bubble menu emits a payload with
+	// the selected text + the resolved question/token handles; we open the
+	// chat panel and push it through as a context chip. ChatPanel calls
+	// `consumeChatPrefill` once it has read the prefill so a second
+	// selection re-fires the effect (otherwise a repeat selection of the
+	// same text wouldn't trigger React's referential re-evaluation).
+	//
+	// `questionId`/`tokenStart`/`tokenEnd` are set when the selection sits
+	// inside a single question block AND that question's runtime alignment
+	// is loaded; they become machine-referenceable handles in the LLM's
+	// <selection> tag so future tool calls (Phase B) can address the exact
+	// span the teacher pointed at.
 	const [chatPrefill, setChatPrefill] = useState<{
 		text: string
 		questionNumber: string | null
+		questionId?: string | null
+		tokenStart?: string | null
+		tokenEnd?: string | null
 	} | null>(null)
 	const askDeepMark = useCallback(
-		(input: { text: string; questionNumber: string | null }) => {
+		(input: {
+			text: string
+			questionNumber: string | null
+			questionId?: string | null
+			tokenStart?: string | null
+			tokenEnd?: string | null
+		}) => {
 			setChatPrefill(input)
 			setLhs("chat")
 		},

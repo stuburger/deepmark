@@ -46,7 +46,7 @@ export function useGlobalAutoResume(): AutoResumeResult {
 	const { data, isLoading } = useQuery({
 		queryKey: queryKeys.talkRecentGlobal(),
 		queryFn: async () => {
-			const result = await getRecentConversationGlobal({})
+			const result = await getRecentConversationGlobal()
 			if (result?.serverError) throw new Error(result.serverError)
 			return result?.data?.conversation ?? null
 		},

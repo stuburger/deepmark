@@ -8,7 +8,11 @@ import {
 } from "@/components/annotated-answer/talk-tool-actions"
 import { useLinkToScan } from "@/components/talk/link-to-scan-context"
 import type { OverrideContextEntry } from "@/components/talk/override-confirm-card"
-import { TalkToDeepMarkChat } from "@/components/talk/talk-to-deepmark-chat"
+import { TalkHistoryPopover } from "@/components/talk/talk-history-popover"
+import {
+	type TalkChatHandle,
+	TalkToDeepMarkChat,
+} from "@/components/talk/talk-to-deepmark-chat"
 import type { ToolDispatchResult } from "@/components/talk/talk-to-deepmark-chat"
 import type { TalkUIMessage } from "@/components/talk/types"
 import { Button } from "@/components/ui/button"
@@ -27,8 +31,8 @@ import type {
 	RemoveAnnotationInput,
 	UpdateAnnotationInput,
 } from "@/lib/talk/tools"
-import { FileText, Sparkles } from "lucide-react"
-import { useCallback, useMemo } from "react"
+import { FileText, Plus, Sparkles } from "lucide-react"
+import { useCallback, useMemo, useRef, useState } from "react"
 
 /**
  * Editor-side chat panel — thin shell around TalkToDeepMarkChat. Owns the
@@ -74,6 +78,14 @@ export function ChatPanel({
 	const linkToScan = useLinkToScan()
 	const { isLoading: autoResumeLoading, conversation: resumed } =
 		useEditorAutoResume(submissionId)
+
+	// Mirror the chat's current conversation id locally so the history
+	// popover can highlight the active row. The chat fires
+	// `onConversationIdChange` on every server-confirmed id change.
+	const [currentConversationId, setCurrentConversationId] = useState<
+		string | null
+	>(resumed?.id ?? null)
+	const chatRef = useRef<TalkChatHandle>(null)
 
 	const onAddAnnotation = useCallback(
 		async (input: AddAnnotationInput): Promise<ToolDispatchResult> => {
@@ -186,11 +198,46 @@ export function ChatPanel({
 						<Sparkles className="h-3.5 w-3.5 text-primary" aria-hidden />
 						DeepMark
 					</span>
+
+					{/* History + new-conversation controls live in this toolbar
+					    (instead of TalkToDeepMarkChat rendering its own bar
+					    underneath) so the editor surface has a single header. */}
+					<div className="ml-auto flex items-center gap-1">
+						<TalkHistoryPopover
+							currentConversationId={currentConversationId}
+							onSelect={(id) => chatRef.current?.selectConversation(id)}
+							onDelete={(deletedId) => {
+								if (deletedId === currentConversationId) {
+									chatRef.current?.newConversation()
+								}
+							}}
+						/>
+						<Tooltip>
+							<TooltipTrigger
+								render={
+									<Button
+										type="button"
+										variant="ghost"
+										size="icon"
+										onClick={() => chatRef.current?.newConversation()}
+										aria-label="Start a new conversation"
+										className="h-6 w-6 text-muted-foreground hover:text-foreground"
+									>
+										<Plus className="h-3.5 w-3.5" aria-hidden />
+									</Button>
+								}
+							/>
+							<TooltipContent side="bottom" sideOffset={6}>
+								New conversation
+							</TooltipContent>
+						</Tooltip>
+					</div>
 				</div>
 
 				<div className="flex-1 min-h-0 overflow-hidden px-3 py-3">
 					{autoResumeLoading ? null : (
 						<TalkToDeepMarkChat
+							ref={chatRef}
 							// Keying on resumed id ensures a fresh useChat instance
 							// when the auto-resume resolves to a previously-persisted
 							// conversation — initialMessages is only read on first
@@ -201,9 +248,11 @@ export function ChatPanel({
 							initialMessages={
 								resumed ? (resumed.messages as TalkUIMessage[]) : undefined
 							}
+							onConversationIdChange={setCurrentConversationId}
 							prefill={prefill}
 							onPrefillConsumed={onPrefillConsumed}
 							compact
+							hideHistoryControls
 							onAddAnnotation={onAddAnnotation}
 							onUpdateAnnotation={onUpdateAnnotation}
 							onRemoveAnnotation={onRemoveAnnotation}

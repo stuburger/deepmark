@@ -3,7 +3,10 @@ import { getMarkSchemeContents } from "@/lib/mark-scheme/queries"
 import { getJobAnnotations } from "@/lib/marking/annotations/queries"
 import { getStudentPaperJob } from "@/lib/marking/submissions/queries"
 import { buildSubmissionPreamble } from "@/lib/talk/build-submission-preamble"
-import { appendConversationTurn } from "@/lib/talk/conversations/mutations"
+import {
+	ensureConversation,
+	persistConversationTurn,
+} from "@/lib/talk/conversations/mutations"
 import {
 	TALK_SYSTEM_PROMPT,
 	formatUserMessageWithSelection,
@@ -116,21 +119,20 @@ export const POST = routeHandler.authenticated(async (ctx, req) => {
 	}
 
 	// Pre-resolve the conversation id BEFORE streaming so we can ship it
-	// to the client on the `start` part event. For a brand-new
-	// conversation we eagerly upsert with the current message list so the
-	// row exists with a stable id; onFinish (below) appends the assistant
-	// turn by patching messages.
+	// to the client on the `start` part event. Light upsert — creates an
+	// empty row (or verifies ownership of an existing one) and writes
+	// any new submission joins. The expensive JSONB write happens once
+	// in `onFinish` via persistConversationTurn.
 	let resolvedConversationId: string | null = null
 	try {
-		const initial = await appendConversationTurn({
+		const initial = await ensureConversation({
 			conversationId: incomingConversationId ?? null,
-			messages: rawMessages as unknown as Array<{ role: string }>,
-			submissionRefs,
 			model: TALK_MODEL,
+			submissionRefs,
 		})
 		resolvedConversationId = initial?.data?.conversationId ?? null
 	} catch (err) {
-		ctx.log.error("talk: failed to upsert conversation pre-stream", {
+		ctx.log.error("talk: failed to ensure conversation pre-stream", {
 			err: String(err),
 		})
 		return new Response("Failed to start conversation", { status: 500 })
@@ -162,15 +164,14 @@ export const POST = routeHandler.authenticated(async (ctx, req) => {
 		},
 		onFinish: async ({ messages }) => {
 			if (!resolvedConversationId) return
-			// Patch the full message list — `messages` is the original list
-			// plus the assistant response message. Submissions are already
-			// joined; no-op if no new ones were referenced this turn.
+			// Single JSONB write per turn. `messages` is the original list
+			// plus the assistant response. Joins were already inserted by
+			// `ensureConversation`; title is lazily derived on the first
+			// turn (when the row's title is still null).
 			try {
-				await appendConversationTurn({
+				await persistConversationTurn({
 					conversationId: resolvedConversationId,
 					messages: messages as unknown as Array<{ role: string }>,
-					submissionRefs,
-					model: TALK_MODEL,
 				})
 				ctx.log.info("talk: turn persisted", {
 					conversationId: resolvedConversationId,

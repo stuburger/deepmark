@@ -9,6 +9,7 @@ import {
 	TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { queryKeys } from "@/lib/query-keys"
+import { getConversationById } from "@/lib/talk/conversations/queries"
 import type {
 	AddAnnotationInput,
 	ProposeTeacherOverrideInput,
@@ -23,7 +24,14 @@ import {
 	lastAssistantMessageIsCompleteWithToolCalls,
 } from "ai"
 import { ArrowUp, Loader2, Plus, Sparkles, Square } from "lucide-react"
-import { useEffect, useMemo, useRef, useState } from "react"
+import {
+	forwardRef,
+	useEffect,
+	useImperativeHandle,
+	useMemo,
+	useRef,
+	useState,
+} from "react"
 import { toast } from "sonner"
 import { ChipBadge } from "./chat-messages/chip-badge"
 import { MessageBubble } from "./chat-messages/message-bubble"
@@ -88,6 +96,13 @@ type TalkToDeepMarkChatProps = {
 	 */
 	compact?: boolean
 	/**
+	 * Hide the internal history popover + new-conversation buttons. Set
+	 * when the host renders its own controls in a surrounding toolbar
+	 * (editor's ChatPanel) — pair with a ref to drive the conversation
+	 * switching from there.
+	 */
+	hideHistoryControls?: boolean
+	/**
 	 * Tool-call dispatchers. Parent (ChatPanel) builds these using the
 	 * editor handle from `EditorHandleProvider`; missing callbacks → the
 	 * tool result is `{ ok: false, reason: "Not available." }` so the
@@ -121,22 +136,39 @@ type TalkToDeepMarkChatProps = {
 	overrideContextByQuestion?: ReadonlyMap<string, OverrideContextEntry>
 }
 
-export function TalkToDeepMarkChat({
-	className,
-	submissionId,
-	conversationId: initialConversationId = null,
-	initialMessages,
-	onConversationIdChange,
-	prefill,
-	onPrefillConsumed,
-	compact = false,
-	onAddAnnotation,
-	onUpdateAnnotation,
-	onRemoveAnnotation,
-	onLinkToScan,
-	onProposeOverride,
-	overrideContextByQuestion,
-}: TalkToDeepMarkChatProps) {
+/**
+ * Imperative handle exposed via ref — lets a wrapping toolbar (e.g.
+ * the editor's ChatPanel) drive conversation switching without
+ * duplicating the history+plus UI inside this component.
+ */
+export type TalkChatHandle = {
+	selectConversation: (conversationId: string) => void
+	newConversation: () => void
+}
+
+export const TalkToDeepMarkChat = forwardRef<
+	TalkChatHandle,
+	TalkToDeepMarkChatProps
+>(function TalkToDeepMarkChat(
+	{
+		className,
+		submissionId,
+		conversationId: initialConversationId = null,
+		initialMessages,
+		onConversationIdChange,
+		prefill,
+		onPrefillConsumed,
+		compact = false,
+		hideHistoryControls = false,
+		onAddAnnotation,
+		onUpdateAnnotation,
+		onRemoveAnnotation,
+		onLinkToScan,
+		onProposeOverride,
+		overrideContextByQuestion,
+	},
+	ref,
+) {
 	const [input, setInput] = useState("")
 	const [chip, setChip] = useState<Prefill | null>(null)
 	const scrollRef = useRef<HTMLDivElement>(null)
@@ -284,9 +316,7 @@ export function TalkToDeepMarkChat({
 	async function handleSelectConversation(conversationId: string) {
 		if (conversationId === currentConversationId) return
 		try {
-			const result = await (
-				await import("@/lib/talk/conversations/queries")
-			).getConversationById({ conversationId })
+			const result = await getConversationById({ conversationId })
 			if (result?.serverError) {
 				toast.error(result.serverError)
 				return
@@ -315,6 +345,24 @@ export function TalkToDeepMarkChat({
 		setInput("")
 		textareaRef.current?.focus()
 	}
+
+	// Imperative API exposed to ref-holders (e.g. ChatPanel renders the
+	// history popover + new-conversation button in its own toolbar and
+	// drives them via this handle). The handle itself is stable across
+	// renders; handlers are read off a ref at call time so they always
+	// see the latest closures.
+	const handleSelectConversationRef = useRef(handleSelectConversation)
+	handleSelectConversationRef.current = handleSelectConversation
+	const handleNewConversationRef = useRef(handleNewConversation)
+	handleNewConversationRef.current = handleNewConversation
+	useImperativeHandle(
+		ref,
+		() => ({
+			selectConversation: (id) => handleSelectConversationRef.current(id),
+			newConversation: () => handleNewConversationRef.current(),
+		}),
+		[],
+	)
 
 	function handleConversationDeleted(deletedId: string) {
 		if (deletedId === currentConversationId) {
@@ -378,20 +426,7 @@ export function TalkToDeepMarkChat({
 					className,
 				)}
 			>
-				{showIntro && (
-					<div className="flex flex-col items-center gap-2 pb-8 text-center">
-						<Sparkles className="size-8 text-primary" />
-						<h1 className="font-editorial text-[clamp(28px,4vw,40px)] leading-[1.1] tracking-[-0.01em] text-foreground">
-							Talk to DeepMark.
-						</h1>
-						<p className="max-w-[520px] text-[13px] text-muted-foreground">
-							Ask anything about marking, the GCSE syllabus, AOs, or your
-							students' work.
-						</p>
-					</div>
-				)}
-
-				{(hasMessages || compact) && (
+				{!hideHistoryControls && (
 					<div className="flex items-center justify-end gap-1 pb-2">
 						<TalkHistoryPopover
 							currentConversationId={currentConversationId}
@@ -417,6 +452,19 @@ export function TalkToDeepMarkChat({
 								New conversation
 							</TooltipContent>
 						</Tooltip>
+					</div>
+				)}
+
+				{showIntro && (
+					<div className="flex flex-col items-center gap-2 pb-8 text-center">
+						<Sparkles className="size-8 text-primary" />
+						<h1 className="font-editorial text-[clamp(28px,4vw,40px)] leading-[1.1] tracking-[-0.01em] text-foreground">
+							Talk to DeepMark.
+						</h1>
+						<p className="max-w-[520px] text-[13px] text-muted-foreground">
+							Ask anything about marking, the GCSE syllabus, AOs, or your
+							students' work.
+						</p>
 					</div>
 				)}
 
@@ -508,4 +556,4 @@ export function TalkToDeepMarkChat({
 			</div>
 		</TooltipProvider>
 	)
-}
+})

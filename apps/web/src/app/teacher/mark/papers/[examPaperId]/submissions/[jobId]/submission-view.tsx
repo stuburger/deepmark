@@ -3,6 +3,10 @@
 import { DocOpsProvider } from "@/components/annotated-answer/doc-ops-provider"
 import { EditorHandleProvider } from "@/components/annotated-answer/editor-handle-context"
 import {
+	LinkToScanProvider,
+	type LinkToScanRequest,
+} from "@/components/talk/link-to-scan-context"
+import {
 	ResizableHandle,
 	ResizablePanel,
 	ResizablePanelGroup,
@@ -222,25 +226,22 @@ export function SubmissionView({
 		[scrollToQuestion],
 	)
 
-	// linkToScan tool — DeepMark fires a CustomEvent; we look up the
-	// questionNumber from grading_results (the tool emits questionId, our
-	// scroll helper takes questionNumber), switch the LHS back to the scan
-	// view, and scroll the target question into view.
-	useEffect(() => {
-		function handler(e: Event) {
-			const detail = (e as CustomEvent<{ questionId: string }>).detail
-			if (!detail?.questionId) return
+	// linkToScan tool — DeepMark calls into the LinkToScanProvider; we look
+	// up the questionNumber from grading_results (the tool emits questionId,
+	// our scroll helper takes questionNumber), switch the LHS back to the
+	// scan view, and scroll the target question into view.
+	const handleLinkToScan = useCallback(
+		(input: LinkToScanRequest) => {
 			const q = data.grading_results.find(
-				(r) => r.question_id === detail.questionId,
+				(r) => r.question_id === input.questionId,
 			)
 			if (!q) return
 			setLhs("scan")
 			setMobileTab("scan")
 			scrollToQuestion(q.question_number)
-		}
-		window.addEventListener("deepmark:link-to-scan", handler)
-		return () => window.removeEventListener("deepmark:link-to-scan", handler)
-	}, [data.grading_results, scrollToQuestion, setLhs])
+		},
+		[data.grading_results, scrollToQuestion, setLhs],
+	)
 
 	// Teacher overrides — read-side only. Write ops live in DocOpsProvider
 	// (consumed by NodeViews via `useDocOps()` so we don't drill callbacks
@@ -297,69 +298,127 @@ export function SubmissionView({
 	return (
 		<DocOpsProvider submissionId={docSubmissionId}>
 			<EditorHandleProvider>
-				{/* Page-card chrome — lifts the editor off the page's dot-grid texture
+				<LinkToScanProvider onLinkToScan={handleLinkToScan}>
+					{/* Page-card chrome — lifts the editor off the page's dot-grid texture
 			    as a single tile, per Geoff's v5 framing. The rounded corners +
 			    --shadow-float here are the "modal-styled-as-route" pattern: the
 			    surface reads as a focused workspace without being an actual
 			    overlay (deep-linkable, share-able, prev/next navigable). */}
-				<div className="relative flex flex-col overflow-hidden h-full rounded-xl border border-border bg-card shadow-float">
-					<div
-						className="absolute top-0 left-0 h-0.75 bg-primary pointer-events-none z-10 transition-[width] duration-500 ease-out"
-						style={{ width: `calc(56px + (100% - 56px) * ${progress})` }}
-						aria-hidden="true"
-					/>
-					<SubmissionToolbar
-						examPaperId={examPaperId}
-						jobId={jobId}
-						data={data}
-						phase={phase}
-						onNavigateToJob={onNavigateToJob}
-						onClose={onClose}
-						annotations={annotations}
-						pageTokens={pageTokens}
-						paperAccessible={paperAccessible}
-						readOnly={readOnly}
-					/>
+					<div className="relative flex flex-col overflow-hidden h-full rounded-xl border border-border bg-card shadow-float">
+						<div
+							className="absolute top-0 left-0 h-0.75 bg-primary pointer-events-none z-10 transition-[width] duration-500 ease-out"
+							style={{ width: `calc(56px + (100% - 56px) * ${progress})` }}
+							aria-hidden="true"
+						/>
+						<SubmissionToolbar
+							examPaperId={examPaperId}
+							jobId={jobId}
+							data={data}
+							phase={phase}
+							onNavigateToJob={onNavigateToJob}
+							onClose={onClose}
+							annotations={annotations}
+							pageTokens={pageTokens}
+							paperAccessible={paperAccessible}
+							readOnly={readOnly}
+						/>
 
-					{/* Mobile: scan/results tabs */}
-					{isMobile && (
-						<div className="flex-1 min-h-0 flex flex-col">
-							<Tabs
-								value={mobileTab}
-								onValueChange={setMobileTab}
-								className="h-full flex flex-col overflow-hidden gap-0"
+						{/* Mobile: scan/results tabs */}
+						{isMobile && (
+							<div className="flex-1 min-h-0 flex flex-col">
+								<Tabs
+									value={mobileTab}
+									onValueChange={setMobileTab}
+									className="h-full flex flex-col overflow-hidden gap-0"
+								>
+									<TabsList
+										variant="line"
+										className="shrink-0 w-full justify-start rounded-none border-b px-4 h-9 gap-4"
+									>
+										<TabsTrigger value="scan">Scan</TabsTrigger>
+										<TabsTrigger value="results">Results</TabsTrigger>
+									</TabsList>
+
+									<TabsContent
+										value="scan"
+										className="flex-1 min-h-0 overflow-hidden m-0 p-0"
+									>
+										<ScanPanel
+											submissionId={docSubmissionId}
+											scanPages={scanPages}
+											pageTokens={pageTokens}
+											gradingResults={data.grading_results}
+											levelDescriptors={data.level_descriptors}
+											settings={settings}
+											toggle={toggle}
+											onGradedRegionClick={handleGradedRegionClick}
+											debugMode={debugMode}
+											annotations={annotations}
+											hasAnnotations={hasAnnotations}
+										/>
+									</TabsContent>
+
+									<TabsContent
+										value="results"
+										className="flex-1 min-h-0 overflow-hidden m-0"
+									>
+										<ResultsPanel
+											jobId={jobId}
+											data={data}
+											phase={phase}
+											annotations={annotations}
+											pageTokens={pageTokens}
+											activeQuestionNumber={activeQuestionNumber}
+											overridesByQuestionId={overridesByQuestionId}
+											onDerivedAnnotations={handleDerivedAnnotations}
+											onTokenHighlight={handleTokenHighlight}
+											// No chat tab on mobile — gating disables the
+											// selection bubble so the URL doesn't silently
+											// flip to ?lhs=chat with no visible change.
+										/>
+									</TabsContent>
+								</Tabs>
+							</div>
+						)}
+
+						{/* Desktop: persistent split layout */}
+						{!isMobile && (
+							<ResizablePanelGroup
+								orientation="horizontal"
+								className="flex-1 min-h-0 flex"
 							>
-								<TabsList
-									variant="line"
-									className="shrink-0 w-full justify-start rounded-none border-b px-4 h-9 gap-4"
-								>
-									<TabsTrigger value="scan">Scan</TabsTrigger>
-									<TabsTrigger value="results">Results</TabsTrigger>
-								</TabsList>
+								<ResizablePanel defaultSize={20} minSize={15}>
+									{showChat ? (
+										<ChatPanel
+											submissionId={docSubmissionId}
+											studentName={data.student_name}
+											gradingResults={data.grading_results}
+											onSwitchToScan={switchToScan}
+											prefill={chatPrefill}
+											onPrefillConsumed={consumeChatPrefill}
+										/>
+									) : (
+										<ScanPanel
+											submissionId={docSubmissionId}
+											scanPages={scanPages}
+											pageTokens={pageTokens}
+											gradingResults={data.grading_results}
+											levelDescriptors={data.level_descriptors}
+											settings={settings}
+											toggle={toggle}
+											onGradedRegionClick={handleGradedRegionClick}
+											debugMode={debugMode}
+											annotations={annotations}
+											hasAnnotations={hasAnnotations}
+											highlightedTokenIds={highlightedTokenIds}
+											onSwitchToChat={switchToChat}
+										/>
+									)}
+								</ResizablePanel>
 
-								<TabsContent
-									value="scan"
-									className="flex-1 min-h-0 overflow-hidden m-0 p-0"
-								>
-									<ScanPanel
-										submissionId={docSubmissionId}
-										scanPages={scanPages}
-										pageTokens={pageTokens}
-										gradingResults={data.grading_results}
-										levelDescriptors={data.level_descriptors}
-										settings={settings}
-										toggle={toggle}
-										onGradedRegionClick={handleGradedRegionClick}
-										debugMode={debugMode}
-										annotations={annotations}
-										hasAnnotations={hasAnnotations}
-									/>
-								</TabsContent>
+								<ResizableHandle withHandle />
 
-								<TabsContent
-									value="results"
-									className="flex-1 min-h-0 overflow-hidden m-0"
-								>
+								<ResizablePanel defaultSize={80} minSize={50}>
 									<ResultsPanel
 										jobId={jobId}
 										data={data}
@@ -370,73 +429,17 @@ export function SubmissionView({
 										overridesByQuestionId={overridesByQuestionId}
 										onDerivedAnnotations={handleDerivedAnnotations}
 										onTokenHighlight={handleTokenHighlight}
-										// No chat tab on mobile — gating disables the
-										// selection bubble so the URL doesn't silently
-										// flip to ?lhs=chat with no visible change.
+										onAskDeepMark={askDeepMark}
 									/>
-								</TabsContent>
-							</Tabs>
-						</div>
-					)}
+								</ResizablePanel>
+							</ResizablePanelGroup>
+						)}
 
-					{/* Desktop: persistent split layout */}
-					{!isMobile && (
-						<ResizablePanelGroup
-							orientation="horizontal"
-							className="flex-1 min-h-0 flex"
-						>
-							<ResizablePanel defaultSize={20} minSize={15}>
-								{showChat ? (
-									<ChatPanel
-										submissionId={docSubmissionId}
-										studentName={data.student_name}
-										gradingResults={data.grading_results}
-										onSwitchToScan={switchToScan}
-										prefill={chatPrefill}
-										onPrefillConsumed={consumeChatPrefill}
-									/>
-								) : (
-									<ScanPanel
-										submissionId={docSubmissionId}
-										scanPages={scanPages}
-										pageTokens={pageTokens}
-										gradingResults={data.grading_results}
-										levelDescriptors={data.level_descriptors}
-										settings={settings}
-										toggle={toggle}
-										onGradedRegionClick={handleGradedRegionClick}
-										debugMode={debugMode}
-										annotations={annotations}
-										hasAnnotations={hasAnnotations}
-										highlightedTokenIds={highlightedTokenIds}
-										onSwitchToChat={switchToChat}
-									/>
-								)}
-							</ResizablePanel>
-
-							<ResizableHandle withHandle />
-
-							<ResizablePanel defaultSize={80} minSize={50}>
-								<ResultsPanel
-									jobId={jobId}
-									data={data}
-									phase={phase}
-									annotations={annotations}
-									pageTokens={pageTokens}
-									activeQuestionNumber={activeQuestionNumber}
-									overridesByQuestionId={overridesByQuestionId}
-									onDerivedAnnotations={handleDerivedAnnotations}
-									onTokenHighlight={handleTokenHighlight}
-									onAskDeepMark={askDeepMark}
-								/>
-							</ResizablePanel>
-						</ResizablePanelGroup>
-					)}
-
-					{isAdmin && (
-						<EventLog events={data.job_events} isPolling={!isTerminal} />
-					)}
-				</div>
+						{isAdmin && (
+							<EventLog events={data.job_events} isPolling={!isTerminal} />
+						)}
+					</div>
+				</LinkToScanProvider>
 			</EditorHandleProvider>
 		</DocOpsProvider>
 	)

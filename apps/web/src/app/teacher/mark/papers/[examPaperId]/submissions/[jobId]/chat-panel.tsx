@@ -6,6 +6,7 @@ import {
 	removeAnnotationById,
 	updateAnnotationById,
 } from "@/components/annotated-answer/talk-tool-helpers"
+import { useLinkToScan } from "@/components/talk/link-to-scan-context"
 import type { OverrideContextEntry } from "@/components/talk/override-confirm-card"
 import { TalkToDeepMarkChat } from "@/components/talk/talk-to-deepmark-chat"
 import type { ToolDispatchResult } from "@/components/talk/talk-to-deepmark-chat"
@@ -68,6 +69,7 @@ export function ChatPanel({
 	onPrefillConsumed?: () => void
 }) {
 	const getEditor = useEditorHandle()
+	const linkToScan = useLinkToScan()
 
 	const onAddAnnotation = useCallback(
 		async (input: AddAnnotationInput): Promise<ToolDispatchResult> => {
@@ -104,11 +106,9 @@ export function ChatPanel({
 			tokenStart?: string
 			tokenEnd?: string
 		}) => {
-			window.dispatchEvent(
-				new CustomEvent("deepmark:link-to-scan", { detail: input }),
-			)
+			linkToScan(input)
 		},
-		[],
+		[linkToScan],
 	)
 
 	const onProposeOverride = useCallback(

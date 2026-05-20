@@ -319,11 +319,7 @@ export function TalkToDeepMarkChat({
 								<span className="mr-auto font-mono text-[9px] uppercase tracking-[0.05em] text-destructive">
 									Error · try again
 								</span>
-							) : (
-								<span className="mr-auto font-mono text-[9px] uppercase tracking-[0.05em] text-ink-tertiary">
-									Claude · Anthropic
-								</span>
-							)}
+							) : null}
 							{isStreaming ? (
 								<Button
 									type="button"

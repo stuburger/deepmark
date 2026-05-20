@@ -2,11 +2,32 @@
 
 **Date:** 2026-05-20
 **Owner:** Stuart
-**Status:** Proposed — next session
+**Status:** **Core feature delivered (2026-05-20); cleanup pass pending — see "Cleanup hit list" at the bottom.**
 **Related:**
 - Builds on shipped Phase 1+2+5 of Talk to DeepMark (commits `9319b72`, `a0e5d65` on `main`)
 - Precedes `docs/build-plan-2026-05-20-talk-conversation-persistence.md` (persistence lands AFTER this so the persisted `UIMessage[]` shape includes real tool-call parts)
 - Pulls into scope what the original Talk to DeepMark plan called Phase 3 + Phase 4
+
+## Progress (as of 2026-05-20)
+
+**Delivered (pushed to `origin/main`):**
+
+| Commit | What landed |
+|---|---|
+| `7d1797f` | Pass A — tool Zod schemas, signal↔mark mapping, system-prompt tools section, selection signal threading |
+| `e0471e3` | Pass B — annotation helpers (phrase-match), `onToolCall` dispatcher, `EditorHandleProvider`, inline status pills, `linkToScan` via CustomEvent. Override card deferred. |
+| `bf44b7c` | Refactor — dropped the token-range addressing path entirely; phrase-only annotations. -558 lines net. |
+| `bb2aea6` | Fix — added `_questionId: <uuid>_` line under each question heading in the preamble; tightened prompt rules (ignore colour words, map "neutral" → underline, contiguous single line). |
+| `4801a32` | Override confirm card — `proposeTeacherOverride` re-registered; `OverrideConfirmCard` component; ChatPanel wires `upsertTeacherOverride` mutation. |
+
+**End-to-end working today:**
+- Teacher highlights text → "Talk to DeepMark" → chip in chat → DeepMark sees `<selection>` with phrase, question number, question id.
+- DeepMark can `addAnnotation` / `updateAnnotation` / `removeAnnotation` by phrase (exact match in the student's answer, single-occurrence required).
+- DeepMark can `linkToScan` → SubmissionView listens, scrolls the question into view.
+- DeepMark can `proposeTeacherOverride` → inline card with Accept/Dismiss; Accept fires the existing override mutation.
+- Conversation has no persistence (refresh wipes). That's the next build plan.
+
+**Known gap:** the cleanup hit list below — accumulated technical debt before staff review.
 
 ## Context
 
@@ -277,3 +298,90 @@ If the selection spans multiple questions or the alignment can't resolve token i
 - Voice / dictation input for tool requests.
 - Bulk tool calls ("add ticks to every correct sentence in this answer") — Phase 6 polish if teachers ask.
 - Undo/redo for DeepMark-applied annotations beyond the existing PM history (Ctrl+Z works because Yjs has undo; no special UI needed).
+
+---
+
+## Cleanup hit list (pre-review)
+
+The core feature is delivered and working. Before staff review, address the
+debt below. Each item is self-contained — pick them off in any order.
+Aggregate effort: ~2-3 hours focused work. None are blocking the feature;
+all are quality concerns a staff reviewer would flag on a first pass.
+
+### Critical (review will stall on these)
+
+1. **Split `talk-to-deepmark-chat.tsx` (~600 lines).** Too many responsibilities in one file. Suggested split:
+   - `talk-to-deepmark-chat.tsx` — chat orchestration only (useChat, useEffect, layout, form).
+   - `chat-messages/message-bubble.tsx` — `MessageBubble` + `AssistantMarkdown`.
+   - `chat-messages/tool-call-pill.tsx` — generic annotation tool pill + `TOOL_LABELS`.
+   - `chat-messages/override-tool-part.tsx` — `OverrideToolPart` (currently inside the main file).
+   - `chat-messages/chip-badge.tsx` — selection chip.
+   - `dispatch-tool-call.ts` — the `switch` + `ToolCallShape` + `ToolCallbacks` types.
+
+2. **Replace type-cast workarounds with proper AI-SDK typing.** Three places:
+   - `addToolOutput({ tool: ... as never, output: ... as never })` — should resolve by parameterising `useChat<MyUIMessage>` with a `UIMessage` typed over our tool set. Define a `TalkUIMessage = UIMessage<never, never, InferUITools<ReturnType<typeof buildTalkTools>>>` (or similar) and pass to `useChat`.
+   - `message.parts.filter(...).as unknown as ToolPartShape[]` — replace with the SDK's `isToolUIPart` helper (exported from `ai`).
+   - `(toolCall as { toolName?: string }).toolName` — same fix; the SDK provides typed `toolCall`.
+
+3. **Component-level tests are zero.** Add render tests using happy-dom (already wired) for:
+   - `OverrideConfirmCard` — pending → buttons; click Accept → loading state; output-available → collapsed accepted; output-available with `accepted: false` → dismissed; error state → retry-able.
+   - `ToolCallPill` — pending / ok / error states render correctly with phrase preview.
+   - `MessageBubble` — dispatches tool parts to the right renderer (override card vs generic pill).
+   
+   Pattern: same `@vitest-environment happy-dom` directive already used in `talk-tool-helpers.test.ts`.
+
+4. **`window.dispatchEvent("deepmark:link-to-scan")` for navigation.** Invisible coupling between ChatPanel and SubmissionView via global event listener. Replace with a small React context — `LinkToScanProvider` mounted at SubmissionView with a `useLinkToScan()` consumer in ChatPanel. Same one-listener-and-one-emitter pattern, just in-tree.
+
+### Worth fixing (small wins)
+
+5. **Single ref-bag instead of four parallel refs.** Currently `addAnnRef`, `updateAnnRef`, `removeAnnRef`, `linkScanRef` each updated separately in `talk-to-deepmark-chat.tsx`. Combine into one `callbacksRef = useRef({ ... })` updated on every render.
+
+6. **Override mutation failure → tool result.** Today, when the override mutation fails, we keep the tool call in `input-available` state and show the error via React `useState`. Cleaner: write the failure to `addToolOutput({ output: { accepted: false, reason: "Mutation failed: …" } })` so the model also learns about it. The card derives its visible state from the SDK part state, no local error tracking needed.
+
+7. **Fix HardBreak handling properly; remove the "single line" prompt rule.** `pmPosToCharInBlock` treats `HardBreak` as 0 chars. So a phrase quoted across a line break in the student's answer fails the exact match — I papered over this with a prompt rule ("contiguous single line"). The right fix: in `applyAnnotationByPhrase`, walk the block inserting `"\n"` for HardBreak nodes when building the search target, and write a matching `charToPmPosInBlock` variant that consumes HardBreaks as 1 char. Then delete the prompt rule.
+
+8. **`signalToMarkName` exhaustiveness.** The switch has a default-less return type that lets new signals slip through silently. Fix with explicit return-type narrowing or `const _exhaustive: never = signal` after the switch.
+
+9. **Split `talk-tool-helpers.ts`** into:
+   - `talk-tool-pure.ts` — `findQuestionBlock`, `charToPmPosInBlock`, `findAnnotationRange` (no editor dispatch).
+   - `talk-tool-actions.ts` — `applyAnnotationByPhrase`, `updateAnnotationById`, `removeAnnotationById` (editor-mutating).
+
+### Subjective / could go either way
+
+10. **Wrap `db.markScheme.findMany` in a server action** for consistency with the rest of the codebase. Currently inline in `/api/talk/route.ts`. The user is already viewer-authz'd, so it's safe, but it's an outlier compared to every other DB read in the codebase which goes through a resourceAction.
+
+11. **Prompt rule sprawl needs a chat eval suite.** Three behaviour patches in the system prompt so far ("ignore colour words", "neutral → underline", "contiguous single line"). Each is fine; together they're a growing list. Long-term we need a way to assert chat behaviour without re-discovering issues in production. Not a near-term blocker.
+
+12. **`OverrideToolPart` derives card state twice** — once when computing the `state` prop, once inside `OverrideConfirmCard` (the `isApplying` local state). Consolidate by making the card take `part: ToolPartShape` directly and deriving state inside.
+
+### Out of scope for this cleanup
+
+- Conversation persistence — has its own build plan (`docs/build-plan-2026-05-20-talk-conversation-persistence.md`).
+- Bulk tool calls (`addAnnotation` × N).
+- `@`-mention autocomplete UI for cross-submission references.
+
+## Order of operations for the cleanup
+
+| Step | Items | Risk | Effort |
+|---|---|---|---|
+| 1. Split files (`talk-to-deepmark-chat.tsx`, `talk-tool-helpers.ts`) | #1, #9 | Low — pure code movement | 60 min |
+| 2. Replace casts with proper typing | #2 | Medium — wrestling with AI SDK generics | 45 min |
+| 3. Add component tests | #3 | Low | 60 min |
+| 4. `LinkToScanProvider` context | #4 | Low | 20 min |
+| 5. Ref-bag refactor | #5 | Low | 10 min |
+| 6. Override-failure tool result | #6 | Low | 15 min |
+| 7. HardBreak phrase-matching | #7 | Medium — touches load-bearing token mapping; needs a new test | 45 min |
+| 8. `signalToMarkName` exhaustiveness | #8 | Trivial | 5 min |
+| 9. Wrap `db.markScheme.findMany` in action | #10 | Low | 20 min |
+
+**Total: ~4-5 hours.** Items 1-6 are the must-haves before staff review; 7-9 are bonus polish.
+
+## Acceptance criteria for the cleanup
+
+- `talk-to-deepmark-chat.tsx` < 200 lines (orchestration only).
+- Zero `as never` / `as unknown as ToolPartShape` casts in the chat surface.
+- Component tests cover `OverrideConfirmCard` (4 states), `ToolCallPill` (3 states), `MessageBubble` (dispatch logic).
+- No `window.dispatchEvent` in the talk surface.
+- `bun test:unit` + `bun typecheck` + `bun check` (biome) all green on touched files.
+- Prompt rule "Quote a contiguous run from a single line" deleted; phrase-matching handles HardBreaks correctly.
+- Build plan updated to mark the cleanup as Delivered with the resulting commit hash.

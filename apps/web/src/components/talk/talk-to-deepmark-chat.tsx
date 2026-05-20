@@ -2,7 +2,13 @@
 
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
-import { TooltipProvider } from "@/components/ui/tooltip"
+import {
+	Tooltip,
+	TooltipContent,
+	TooltipProvider,
+	TooltipTrigger,
+} from "@/components/ui/tooltip"
+import { queryKeys } from "@/lib/query-keys"
 import type {
 	AddAnnotationInput,
 	ProposeTeacherOverrideInput,
@@ -11,11 +17,12 @@ import type {
 } from "@/lib/talk/tools"
 import { cn } from "@/lib/utils"
 import { useChat } from "@ai-sdk/react"
+import { useQueryClient } from "@tanstack/react-query"
 import {
 	DefaultChatTransport,
 	lastAssistantMessageIsCompleteWithToolCalls,
 } from "ai"
-import { ArrowUp, Loader2, Sparkles, Square } from "lucide-react"
+import { ArrowUp, Loader2, Plus, Sparkles, Square } from "lucide-react"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
 import { ChipBadge } from "./chat-messages/chip-badge"
@@ -25,6 +32,7 @@ import {
 	dispatchToolCall,
 } from "./dispatch-tool-call"
 import type { OverrideContextEntry } from "./override-confirm-card"
+import { TalkHistoryPopover } from "./talk-history-popover"
 import type { Prefill, TalkUIMessage, ToolDispatchResult } from "./types"
 
 export type { ToolDispatchResult } from "./types"
@@ -45,6 +53,26 @@ type TalkToDeepMarkChatProps = {
 	 * assistant mode.
 	 */
 	submissionId?: string
+	/**
+	 * Persisted conversation to attach to. Null = start a brand-new
+	 * conversation (the server lazy-creates one on the first send). The
+	 * id may also flip from null → string mid-session when the server
+	 * lazy-creates; the change is surfaced via `onConversationIdChange`.
+	 */
+	conversationId?: string | null
+	/**
+	 * Pre-seeded messages when reviving a persisted conversation. Only
+	 * read once on first mount — switching to a different conversation
+	 * should remount the component (key on conversationId).
+	 */
+	initialMessages?: TalkUIMessage[]
+	/**
+	 * Fires whenever the server reports a different id on the assistant's
+	 * message metadata (typically just the first turn of a brand-new
+	 * conversation). Parent can mirror to URL state, invalidate the
+	 * history list, etc.
+	 */
+	onConversationIdChange?: (conversationId: string) => void
 	/**
 	 * Pushes a selection in from the parent (e.g. the editor's BubbleMenu).
 	 * The component captures it into an internal chip and immediately calls
@@ -96,6 +124,9 @@ type TalkToDeepMarkChatProps = {
 export function TalkToDeepMarkChat({
 	className,
 	submissionId,
+	conversationId: initialConversationId = null,
+	initialMessages,
+	onConversationIdChange,
 	prefill,
 	onPrefillConsumed,
 	compact = false,
@@ -110,12 +141,29 @@ export function TalkToDeepMarkChat({
 	const [chip, setChip] = useState<Prefill | null>(null)
 	const scrollRef = useRef<HTMLDivElement>(null)
 	const textareaRef = useRef<HTMLTextAreaElement>(null)
+	const queryClient = useQueryClient()
+
+	// Current conversation id, possibly null until the server lazy-creates
+	// on first send. The transport reads it via a ref so we don't
+	// recreate the DefaultChatTransport (and therefore reset useChat) on
+	// every id change.
+	const [currentConversationId, setCurrentConversationId] = useState<
+		string | null
+	>(initialConversationId)
+	const conversationIdRef = useRef(currentConversationId)
+	conversationIdRef.current = currentConversationId
 
 	const transport = useMemo(
 		() =>
 			new DefaultChatTransport({
 				api: "/api/talk",
-				body: () => (submissionId ? { submissionId } : {}),
+				body: () => {
+					const body: Record<string, unknown> = {}
+					if (submissionId) body.submissionId = submissionId
+					if (conversationIdRef.current)
+						body.conversationId = conversationIdRef.current
+					return body
+				},
 			}),
 		[submissionId],
 	)
@@ -137,51 +185,56 @@ export function TalkToDeepMarkChat({
 		onLinkToScan,
 	}
 
-	const { messages, sendMessage, status, stop, error, addToolOutput } =
-		useChat<TalkUIMessage>({
-			transport,
-			onError: (err) => {
-				toast.error(err.message || "Failed to reach DeepMark.")
-			},
-			onToolCall: async ({ toolCall }) => {
-				// proposeTeacherOverride is human-in-the-loop — the confirm
-				// card renders inline and writes the tool output on accept /
-				// dismiss. We do nothing here; the card resolves it.
-				if (toolCall.toolName === "proposeTeacherOverride") return
-				if (toolCall.dynamic) return
-				// Single boundary cast: the SDK's narrowed ToolCall union is
-				// structurally identical to DispatchableToolCall (we
-				// hand-rolled it to match), but the SDK's `ToolCall` lives
-				// under `@ai-sdk/provider-utils` which is duplicated across
-				// the workspace, so TypeScript treats it as nominally
-				// distinct. Behaviour is sound — narrowing above ensures
-				// only the four dispatchable variants reach here.
-				const {
-					onAddAnnotation,
-					onUpdateAnnotation,
-					onRemoveAnnotation,
-					onLinkToScan,
-				} = callbacksRef.current
-				const result = await dispatchToolCall(
-					toolCall as DispatchableToolCall,
-					{
-						addAnnotation: onAddAnnotation,
-						updateAnnotation: onUpdateAnnotation,
-						removeAnnotation: onRemoveAnnotation,
-						linkToScan: onLinkToScan,
-					},
-				)
-				addToolOutput({
-					tool: toolCall.toolName,
-					toolCallId: toolCall.toolCallId,
-					output: result,
-				})
-			},
-			// When all tool calls in the latest assistant turn have results,
-			// auto-send to give the model a chance to react ("done", "I tried
-			// X but it failed, let me try Y").
-			sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
-		})
+	const {
+		messages,
+		sendMessage,
+		setMessages,
+		status,
+		stop,
+		error,
+		addToolOutput,
+	} = useChat<TalkUIMessage>({
+		transport,
+		messages: initialMessages,
+		onError: (err) => {
+			toast.error(err.message || "Failed to reach DeepMark.")
+		},
+		onToolCall: async ({ toolCall }) => {
+			// proposeTeacherOverride is human-in-the-loop — the confirm
+			// card renders inline and writes the tool output on accept /
+			// dismiss. We do nothing here; the card resolves it.
+			if (toolCall.toolName === "proposeTeacherOverride") return
+			if (toolCall.dynamic) return
+			// Single boundary cast: the SDK's narrowed ToolCall union is
+			// structurally identical to DispatchableToolCall (we
+			// hand-rolled it to match), but the SDK's `ToolCall` lives
+			// under `@ai-sdk/provider-utils` which is duplicated across
+			// the workspace, so TypeScript treats it as nominally
+			// distinct. Behaviour is sound — narrowing above ensures
+			// only the four dispatchable variants reach here.
+			const {
+				onAddAnnotation,
+				onUpdateAnnotation,
+				onRemoveAnnotation,
+				onLinkToScan,
+			} = callbacksRef.current
+			const result = await dispatchToolCall(toolCall as DispatchableToolCall, {
+				addAnnotation: onAddAnnotation,
+				updateAnnotation: onUpdateAnnotation,
+				removeAnnotation: onRemoveAnnotation,
+				linkToScan: onLinkToScan,
+			})
+			addToolOutput({
+				tool: toolCall.toolName,
+				toolCallId: toolCall.toolCallId,
+				output: result,
+			})
+		},
+		// When all tool calls in the latest assistant turn have results,
+		// auto-send to give the model a chance to react ("done", "I tried
+		// X but it failed, let me try Y").
+		sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
+	})
 
 	const isStreaming = status === "submitted" || status === "streaming"
 	const hasMessages = messages.length > 0
@@ -206,6 +259,70 @@ export function TalkToDeepMarkChat({
 			behavior: "smooth",
 		})
 	}, [messages])
+
+	// Pick up the server-emitted conversationId from the latest assistant
+	// message's metadata. Fires only when it actually changes — typically
+	// just the first turn of a brand-new conversation (null → string).
+	useEffect(() => {
+		for (let i = messages.length - 1; i >= 0; i--) {
+			const m = messages[i]
+			if (m.role !== "assistant") continue
+			const id = m.metadata?.conversationId
+			if (typeof id === "string" && id !== currentConversationId) {
+				setCurrentConversationId(id)
+				onConversationIdChange?.(id)
+				// New conversation created OR existing one updated — refresh
+				// the history popover's list.
+				queryClient.invalidateQueries({
+					queryKey: queryKeys.talkConversations(),
+				})
+			}
+			break
+		}
+	}, [messages, currentConversationId, onConversationIdChange, queryClient])
+
+	async function handleSelectConversation(conversationId: string) {
+		if (conversationId === currentConversationId) return
+		try {
+			const result = await (
+				await import("@/lib/talk/conversations/queries")
+			).getConversationById({ conversationId })
+			if (result?.serverError) {
+				toast.error(result.serverError)
+				return
+			}
+			const conv = result?.data?.conversation
+			if (!conv) {
+				toast.error("Conversation not found.")
+				return
+			}
+			setMessages(conv.messages as TalkUIMessage[])
+			setCurrentConversationId(conv.id)
+			onConversationIdChange?.(conv.id)
+			setChip(null)
+		} catch (err) {
+			toast.error(err instanceof Error ? err.message : "Failed to open")
+		}
+	}
+
+	function handleNewConversation() {
+		// Lazy create — clear local state, detach the id. The next send
+		// will hit the route with conversationId=null and the server will
+		// create a new row.
+		setMessages([])
+		setCurrentConversationId(null)
+		setChip(null)
+		setInput("")
+		textareaRef.current?.focus()
+	}
+
+	function handleConversationDeleted(deletedId: string) {
+		if (deletedId === currentConversationId) {
+			// Currently-attached conversation was deleted from the popover;
+			// clear local state.
+			handleNewConversation()
+		}
+	}
 
 	function submit() {
 		const trimmed = input.trim()
@@ -271,6 +388,35 @@ export function TalkToDeepMarkChat({
 							Ask anything about marking, the GCSE syllabus, AOs, or your
 							students' work.
 						</p>
+					</div>
+				)}
+
+				{(hasMessages || compact) && (
+					<div className="flex items-center justify-end gap-1 pb-2">
+						<TalkHistoryPopover
+							currentConversationId={currentConversationId}
+							onSelect={handleSelectConversation}
+							onDelete={handleConversationDeleted}
+						/>
+						<Tooltip>
+							<TooltipTrigger
+								render={
+									<Button
+										type="button"
+										variant="ghost"
+										size="icon"
+										onClick={handleNewConversation}
+										aria-label="Start a new conversation"
+										className="h-6 w-6 text-muted-foreground hover:text-foreground"
+									>
+										<Plus className="h-3.5 w-3.5" aria-hidden />
+									</Button>
+								}
+							/>
+							<TooltipContent side="bottom" sideOffset={6}>
+								New conversation
+							</TooltipContent>
+						</Tooltip>
 					</div>
 				)}
 

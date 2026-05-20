@@ -10,6 +10,7 @@ import { useLinkToScan } from "@/components/talk/link-to-scan-context"
 import type { OverrideContextEntry } from "@/components/talk/override-confirm-card"
 import { TalkToDeepMarkChat } from "@/components/talk/talk-to-deepmark-chat"
 import type { ToolDispatchResult } from "@/components/talk/talk-to-deepmark-chat"
+import type { TalkUIMessage } from "@/components/talk/types"
 import { Button } from "@/components/ui/button"
 import {
 	Tooltip,
@@ -19,6 +20,7 @@ import {
 } from "@/components/ui/tooltip"
 import { upsertTeacherOverride } from "@/lib/marking/overrides/mutations"
 import type { GradingResult } from "@/lib/marking/types"
+import { useEditorAutoResume } from "@/lib/talk/conversations/use-auto-resume"
 import type {
 	AddAnnotationInput,
 	ProposeTeacherOverrideInput,
@@ -70,6 +72,8 @@ export function ChatPanel({
 }) {
 	const getEditor = useEditorHandle()
 	const linkToScan = useLinkToScan()
+	const { isLoading: autoResumeLoading, conversation: resumed } =
+		useEditorAutoResume(submissionId)
 
 	const onAddAnnotation = useCallback(
 		async (input: AddAnnotationInput): Promise<ToolDispatchResult> => {
@@ -185,18 +189,29 @@ export function ChatPanel({
 				</div>
 
 				<div className="flex-1 min-h-0 overflow-hidden px-3 py-3">
-					<TalkToDeepMarkChat
-						submissionId={submissionId}
-						prefill={prefill}
-						onPrefillConsumed={onPrefillConsumed}
-						compact
-						onAddAnnotation={onAddAnnotation}
-						onUpdateAnnotation={onUpdateAnnotation}
-						onRemoveAnnotation={onRemoveAnnotation}
-						onLinkToScan={onLinkToScan}
-						onProposeOverride={onProposeOverride}
-						overrideContextByQuestion={overrideContextByQuestion}
-					/>
+					{autoResumeLoading ? null : (
+						<TalkToDeepMarkChat
+							// Keying on resumed id ensures a fresh useChat instance
+							// when the auto-resume resolves to a previously-persisted
+							// conversation — initialMessages is only read on first
+							// mount.
+							key={resumed?.id ?? "new"}
+							submissionId={submissionId}
+							conversationId={resumed?.id ?? null}
+							initialMessages={
+								resumed ? (resumed.messages as TalkUIMessage[]) : undefined
+							}
+							prefill={prefill}
+							onPrefillConsumed={onPrefillConsumed}
+							compact
+							onAddAnnotation={onAddAnnotation}
+							onUpdateAnnotation={onUpdateAnnotation}
+							onRemoveAnnotation={onRemoveAnnotation}
+							onLinkToScan={onLinkToScan}
+							onProposeOverride={onProposeOverride}
+							overrideContextByQuestion={overrideContextByQuestion}
+						/>
+					)}
 				</div>
 			</div>
 		</TooltipProvider>

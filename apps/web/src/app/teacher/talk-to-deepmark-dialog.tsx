@@ -1,6 +1,7 @@
 "use client"
 
 import { TalkToDeepMarkChat } from "@/components/talk/talk-to-deepmark-chat"
+import type { TalkUIMessage } from "@/components/talk/types"
 import {
 	Dialog,
 	DialogContent,
@@ -8,6 +9,7 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@/components/ui/dialog"
+import { useGlobalAutoResume } from "@/lib/talk/conversations/use-auto-resume"
 
 type TalkToDeepMarkDialogProps = {
 	open: boolean
@@ -32,9 +34,25 @@ export function TalkToDeepMarkDialog({
 					</DialogDescription>
 				</DialogHeader>
 				<div className="flex flex-col overflow-hidden">
-					<TalkToDeepMarkChat />
+					{/* Only mount the chat after the global auto-resume has resolved
+					    so initialMessages is correct on first render. */}
+					{open ? <DialogChat /> : null}
 				</div>
 			</DialogContent>
 		</Dialog>
+	)
+}
+
+function DialogChat() {
+	const { isLoading, conversation: resumed } = useGlobalAutoResume()
+	if (isLoading) return null
+	return (
+		<TalkToDeepMarkChat
+			key={resumed?.id ?? "new"}
+			conversationId={resumed?.id ?? null}
+			initialMessages={
+				resumed ? (resumed.messages as TalkUIMessage[]) : undefined
+			}
+		/>
 	)
 }

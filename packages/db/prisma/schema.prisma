@@ -258,6 +258,8 @@ model User {
   /// admin-issued refund). Audit trail for support actions.
   paper_ledger_grants_issued PaperLedgerEntry[] @relation("LedgerGrantor")
 
+  talk_conversations TalkConversation[] @relation("UserTalkConversations")
+
   @@map("users")
 }
 
@@ -841,6 +843,7 @@ model StudentSubmission {
   feedback           SubmissionFeedback[]       @relation("SubmissionFeedback")
   annotations        StudentPaperAnnotation[]   @relation("SubmissionAnnotations")
   bookmarks          StudentSubmissionBookmark[] @relation("SubmissionBookmarks")
+  talk_conversations TalkConversationSubmission[] @relation("SubmissionTalkConversations")
 
   @@index([processing_batch_id])
   @@map("student_submissions")
@@ -1201,4 +1204,55 @@ model PaperLedgerEntry {
   @@index([user_id, kind])
   @@index([user_id, period_starts_at])
   @@map("paper_ledger")
+}
+
+/// User-owned Talk to DeepMark conversation. Persisted as a single JSONB
+/// blob of the AI-SDK UIMessage[] — we never query INTO a turn, mutations
+/// are append-only, and the SDK's UIMessage shape (parts, tool-call parts,
+/// metadata.selection) varies enough that a normalised TalkMessage table
+/// would churn the schema on every SDK upgrade.
+///
+/// Submissions a conversation references live in TalkConversationSubmission
+/// (many-to-many) so a single conversation can span multiple students /
+/// papers / surfaces — see docs/build-plan-2026-05-20-talk-conversation-persistence.md.
+model TalkConversation {
+  id          String   @id @default(cuid())
+  user_id     String
+  /// First user-message snippet, ~60 chars, auto-generated on first send.
+  /// LLM-summarised titles can come later as a one-shot batch refresh if
+  /// teacher feedback says snips read poorly.
+  title       String?
+  /// Audit / replay hook — captured per-conversation so we can attribute
+  /// a turn to the model that produced it after a future model swap.
+  model       String
+  /// AI-SDK UIMessage[] shape, NOT a flattened {role,content}. The full
+  /// shape (parts + metadata + tool-call output) round-trips intact —
+  /// metadata.selection (the chip the teacher attached at send-time) is
+  /// load-bearing for the UI and MUST NOT be stripped on write.
+  messages    Json
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  user        User                          @relation("UserTalkConversations", fields: [user_id], references: [id], onDelete: Cascade)
+  submissions TalkConversationSubmission[]  @relation("ConversationSubmissions")
+
+  @@index([user_id, updated_at(sort: Desc)])
+  @@map("talk_conversations")
+}
+
+/// Many-to-many join: which submissions a conversation has referenced.
+/// `first_referenced_at` drives the "earliest-referencing conversation"
+/// lookup; PK on (conversation_id, submission_id) makes inserts idempotent
+/// so a repeat @-mention of the same student doesn't duplicate the row.
+model TalkConversationSubmission {
+  conversation_id     String
+  submission_id       String
+  first_referenced_at DateTime @default(now())
+
+  conversation TalkConversation  @relation("ConversationSubmissions", fields: [conversation_id], references: [id], onDelete: Cascade)
+  submission   StudentSubmission @relation("SubmissionTalkConversations", fields: [submission_id], references: [id], onDelete: Cascade)
+
+  @@id([conversation_id, submission_id])
+  @@index([submission_id, first_referenced_at(sort: Desc)])
+  @@map("talk_conversation_submissions")
 }

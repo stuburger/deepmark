@@ -3,6 +3,7 @@ import { getMarkSchemeContents } from "@/lib/mark-scheme/queries"
 import { getJobAnnotations } from "@/lib/marking/annotations/queries"
 import { getStudentPaperJob } from "@/lib/marking/submissions/queries"
 import { buildSubmissionPreamble } from "@/lib/talk/build-submission-preamble"
+import { appendConversationTurn } from "@/lib/talk/conversations/mutations"
 import {
 	TALK_SYSTEM_PROMPT,
 	formatUserMessageWithSelection,
@@ -19,6 +20,8 @@ import {
 import { Resource } from "sst"
 import { z } from "zod"
 
+const TALK_MODEL = "claude-sonnet-4-6"
+
 const selectionSchema = z.object({
 	text: z.string().min(1),
 	questionNumber: z.string().nullable().optional(),
@@ -26,7 +29,9 @@ const selectionSchema = z.object({
 })
 
 const talkInputSchema = z.object({
+	conversationId: z.string().nullable().optional(),
 	submissionId: z.string().optional(),
+	mentionedSubmissionIds: z.array(z.string()).optional(),
 	selection: selectionSchema.optional(),
 	messages: z.array(z.unknown()),
 })
@@ -42,7 +47,13 @@ export const POST = routeHandler.authenticated(async (ctx, req) => {
 	if (!parsed.success) {
 		return new Response("Invalid request", { status: 400 })
 	}
-	const { submissionId, selection, messages: rawMessages } = parsed.data
+	const {
+		conversationId: incomingConversationId,
+		submissionId,
+		mentionedSubmissionIds,
+		selection,
+		messages: rawMessages,
+	} = parsed.data
 
 	const system: SystemModelMessage[] = [
 		{
@@ -90,23 +101,88 @@ export const POST = routeHandler.authenticated(async (ctx, req) => {
 		injectSelectionIntoLastUserMessage(modelMessages, selection)
 	}
 
+	// Submissions this turn references — drives the join table writes on
+	// persistence. Always includes the editor-bound submissionId (when
+	// set) plus any client-supplied @-mentions, deduped.
+	const submissionRefs: { submission_id: string }[] = []
+	const seenSubmissions = new Set<string>()
+	for (const id of [
+		...(submissionId ? [submissionId] : []),
+		...(mentionedSubmissionIds ?? []),
+	]) {
+		if (seenSubmissions.has(id)) continue
+		seenSubmissions.add(id)
+		submissionRefs.push({ submission_id: id })
+	}
+
+	// Pre-resolve the conversation id BEFORE streaming so we can ship it
+	// to the client on the `start` part event. For a brand-new
+	// conversation we eagerly upsert with the current message list so the
+	// row exists with a stable id; onFinish (below) appends the assistant
+	// turn by patching messages.
+	let resolvedConversationId: string | null = null
+	try {
+		const initial = await appendConversationTurn({
+			conversationId: incomingConversationId ?? null,
+			messages: rawMessages as unknown as Array<{ role: string }>,
+			submissionRefs,
+			model: TALK_MODEL,
+		})
+		resolvedConversationId = initial?.data?.conversationId ?? null
+	} catch (err) {
+		ctx.log.error("talk: failed to upsert conversation pre-stream", {
+			err: String(err),
+		})
+		return new Response("Failed to start conversation", { status: 500 })
+	}
+
 	const anthropic = createAnthropic({
 		apiKey: Resource.AnthropicApiKey.value,
 	})
 
 	const result = streamText({
-		model: anthropic("claude-sonnet-4-6"),
+		model: anthropic(TALK_MODEL),
 		system,
 		messages: modelMessages,
-		// Tools only register in editor mode (submissionId present). General-
-		// assistant mode (dashboard, /teacher/talk) sees no tools so the model
-		// answers in prose.
-		// No `execute` fns — tool calls pass through the stream and the client
-		// resolves each via `onToolCall` / `addToolResult`.
 		tools: buildTalkTools(submissionId),
 	})
 
-	return result.toUIMessageStreamResponse()
+	return result.toUIMessageStreamResponse({
+		// Surface the resolved conversation id on every assistant turn's
+		// metadata. The client uses this to pin to a brand-new conversation
+		// on its first reply (and to confirm it's still pointing at the
+		// same row on subsequent turns).
+		messageMetadata: ({ part }) => {
+			if (part.type === "start" || part.type === "finish") {
+				return resolvedConversationId
+					? { conversationId: resolvedConversationId }
+					: undefined
+			}
+			return undefined
+		},
+		onFinish: async ({ messages }) => {
+			if (!resolvedConversationId) return
+			// Patch the full message list — `messages` is the original list
+			// plus the assistant response message. Submissions are already
+			// joined; no-op if no new ones were referenced this turn.
+			try {
+				await appendConversationTurn({
+					conversationId: resolvedConversationId,
+					messages: messages as unknown as Array<{ role: string }>,
+					submissionRefs,
+					model: TALK_MODEL,
+				})
+				ctx.log.info("talk: turn persisted", {
+					conversationId: resolvedConversationId,
+					turns: messages.length,
+				})
+			} catch (err) {
+				ctx.log.error("talk: failed to persist final turn", {
+					err: String(err),
+				})
+			}
+		},
+	})
 })
 
 /**

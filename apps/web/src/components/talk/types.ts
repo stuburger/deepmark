@@ -10,11 +10,16 @@ export type Prefill = {
 }
 
 /**
- * Per-message metadata persisted with the UIMessage by the AI SDK. The
- * selection chip the teacher attached to a message lives here so it
- * round-trips through reload and (once persistence lands) DB storage.
- * The model never sees metadata — the route still threads selection
- * through `body.selection` for the server-side <selection> wrapper.
+ * Per-message metadata persisted with the UIMessage by the AI SDK.
+ *
+ * - `selection`: chip the teacher attached at send-time (user messages).
+ *   Round-trips through reload and DB storage; the model never sees it
+ *   (the route threads selection through `body.selection` for the
+ *   server-side <selection> wrapper).
+ * - `conversationId`: server-emitted on each assistant turn so the
+ *   client can pin to the persisted conversation row (especially on the
+ *   first turn of a brand-new conversation, where the id is unknown
+ *   until the server creates it).
  */
 export type TalkMetadata = {
 	selection?: {
@@ -22,6 +27,7 @@ export type TalkMetadata = {
 		questionNumber: string | null
 		questionId: string | null
 	}
+	conversationId?: string
 }
 
 export type TalkUIMessage = UIMessage<TalkMetadata, UIDataTypes, TalkTools>

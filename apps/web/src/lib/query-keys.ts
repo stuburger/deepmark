@@ -36,4 +36,9 @@ export const queryKeys = {
 	currentUser: () => ["currentUser"] as const,
 	// ─── Collab service (non-prod scale-to-zero control) ───────────────────────
 	collabStatus: () => ["collabStatus"] as const,
+	// ─── Talk to DeepMark ──────────────────────────────────────────────────────
+	talkConversations: () => ["talkConversations"] as const,
+	talkRecentForSubmission: (submissionId: string) =>
+		["talkRecentForSubmission", submissionId] as const,
+	talkRecentGlobal: () => ["talkRecentGlobal"] as const,
 }

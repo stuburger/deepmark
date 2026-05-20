@@ -28,7 +28,7 @@ DeepMark is an AI-powered marking tool for teachers, primarily targeting the UK 
 
 ## Pre-launch operating mode (READ FIRST)
 
-**DeepMark has zero real users.** Public launch is targeted for 2026-05-15. Until that clause is removed from this file, the following hard rules apply:
+**DeepMark has zero real users.** Public launch is targeted for **2026-05-24 (Sunday)** — slipped on 2026-05-20 from the original 2026-05-15 target. Until that clause is removed from this file, the following hard rules apply:
 
 - **No grandfathering. No legacy maintenance. No backwards compatibility.** Schema breaks are fine. Renames are fine. Deleting old code paths is fine. There is no production data to preserve and no integrations to support.
 - **Never propose migration shims, compatibility flags, dual-write paths, or "for existing X, keep doing Y" branches.** If you find such code already in the repo, delete it as part of your change.

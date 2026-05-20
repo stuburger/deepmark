@@ -1,0 +1,79 @@
+{
+	"gradingResult": {
+		"_v": 1,
+		"question_id": "cmpboamjb000y02la6emk9hbx",
+		"question_number": "02.4",
+		"question_text": "D@SO Ltd has set an aim of increasing profits. Recommend whether D@SO Ltd should introduce just-in-time (JIT) stock control. Give reasons for your recommendation.",
+		"student_answer": "I would recommend for JIT as compared to JIC it's far cheaper and that extra money could be invested in other parts of the business which will help grow it.\n\nOne factor is that switching to JIT can reduce having too much stock which is then wasted. This could cause unwanted cost.\n\nSecond factor is that storage cost, having more stock will equal to a higher cost. But with JIT they come quick and in smaller batches cost which will reduce Storage cost. Space which could be used for production area\n\nMy conclusion is that JIC can reduce an unwanted cost aswell which so would mean a higher profit. Money which could help the business. Aswell as a bigger production area.",
+		"awarded_score": 4,
+		"max_score": 9,
+		"llm_reasoning": "The student makes a recommendation (JIT) and gives basic reasons: reduced waste/excess stock, lower storage costs, and the freed-up space for production. These points loosely connect to Item A (storage room, production area). However, the analysis is shallow — there is no chain of reasoning beyond one step, no mention of the bulk-buying discount D@SO currently receives, no mention of the higher prices from the local supplier, no discussion of Christmas demand unpredictability, and no balanced evaluation or conditional judgement. The application is generic rather than specific to D@SO's context (e.g. no mention of China imports, 24-hour delivery, or the specific profit aim mechanism). This places the answer firmly at Level 2 — some knowledge, some application, some analysis, a recommendation with basic reasoning — but well short of Level 3 which requires developed analysis with a chain of reasoning and a balanced, conditional evaluation. Within Level 2 (typically 3-5 marks on a 9-mark question with 3 levels), the evidence is thin but present across multiple criteria, so 4 marks is appropriate — above the bottom of the band but not at the top.",
+		"feedback_summary": "Awarded 4/9 (Level 2); needs a balanced evaluation with counter-arguments and a developed chain of reasoning.",
+		"marking_method": "level_of_response",
+		"mark_points_results": [],
+		"mark_scheme_id": "cmpboamjv000z02lao54jqhi3",
+		"level_awarded": 2,
+		"why_not_next_level": "The response lacks a developed chain of reasoning, ignores the bulk-buying discount and higher local supplier prices from Item A, and offers no conditional or balanced evaluation.",
+		"ao_awards": [
+			{
+				"ao_code": "Overall",
+				"max_marks": 9,
+				"awarded_marks": 4,
+				"level_awarded": 2,
+				"why_not_next_level": "The response lacks a developed chain of reasoning, ignores the bulk-buying discount and higher local supplier prices from Item A, and offers no conditional or balanced evaluation.",
+				"descriptor_evaluations": [
+					{
+						"met": true,
+						"evidence": "with JIT they come quick and in smaller batches cost which will reduce Storage cost. Space which could be used for production area — references JIT and links to D@SO's storage/production context from Item A.",
+						"descriptor": "Demonstrates some knowledge and understanding of JIT stock control with some application to the context of D@SO Ltd"
+					},
+					{
+						"met": true,
+						"evidence": "having more stock will equal to a higher cost. But with JIT they come quick and in smaller batches cost which will reduce Storage cost",
+						"descriptor": "Provides some analysis of the impact of JIT on D@SO Ltd's aim of increasing profits"
+					},
+					{
+						"met": true,
+						"evidence": "I would recommend for JIT as compared to JIC it's far cheaper and that extra money could be invested in other parts of the business",
+						"descriptor": "Makes a recommendation with some reasoning"
+					},
+					{
+						"met": false,
+						"evidence": "No specific reference to bulk-buying discount loss, Christmas demand unpredictability, or the China vs local supplier price differential from Item A.",
+						"descriptor": "Demonstrates detailed knowledge and understanding of JIT with well-developed application to D@SO Ltd's specific context"
+					},
+					{
+						"met": false,
+						"evidence": "No chain of reasoning beyond one step — student does not explain how reduced storage costs lead through to profit figures or capacity expansion outcomes.",
+						"descriptor": "Provides well-developed analysis with a clear chain of reasoning linking JIT to D@SO's profit aim"
+					},
+					{
+						"met": false,
+						"evidence": "No counter-argument considered (e.g. loss of bulk discount, higher local supplier prices); conclusion is one-sided and generic with no 'it depends' judgement.",
+						"descriptor": "Makes a justified recommendation with a balanced evaluation considering both sides and a conditional judgement"
+					}
+				]
+			}
+		],
+		"what_went_well": [
+			"Correctly identified JIT reduces storage costs for D@SO.",
+			"Linked freed storage space to expanding production area.",
+			"Made a clear recommendation with basic reasoning."
+		],
+		"even_better_if": [
+			"Try weighing the loss of D@SO's bulk-buying discount.",
+			"Next time, build a chain: lower costs → higher margin → more profit.",
+			"Try concluding with 'it depends on…' using Item A details."
+		]
+	},
+	"markScheme": {
+		"description": "D@SO Ltd has set an aim of increasing profits. Recommend whether D@SO Ltd should introduce just-in-time (JIT) stock control. Give reasons for your recommendation.",
+		"guidance": null,
+		"marking_method": "level_of_response",
+		"content": "Application: Yes: £ falling in value and raw material costs increasing. A local supplier has recently lowered its prices and can deliver within 24 hours. Storage room can be reduced and used to expand production. No: Receives a discount from suppliers for bulk buying and buffer stock helps during busy times such as Christmas, prices lower than local supplier. Analysis: If D@SO Ltd can implement a JIT stock control system, the storage room previously used to hold the buffer stock can be used to increase the production facilities of the lights, as no buffer stock will need to be stored as stock will be ordered when needed. As the business is currently importing from China, a local supplier is needed to allow them to change to JIT. As the local supplier can deliver within 24 hours, this means it will not affect waiting times for production which is particularly important all year round but especially at Christmas which is D@SO's busiest time of the year. Converting the storage room will therefore help with growth, as it can be used to increase production capacity and therefore sales. This should help to meet the aim of improving profits particularly as the local supplier has recently reduced its prices for the raw materials. Using JIT means that the business will be ordering small amounts frequently. Although the raw material costs are rising from China, D@SO currently receive a discount for buying in bulk. This will keep the variable cost per unit low meaning that the profit margin is higher on sales. The prices from the alternative local supplier are higher than the ones offered from China. This means that the higher costs, if not covered with additional sales from the increased production capacity that the change to JIT stock control would allow, will result in the objective of increasing profits not being met. Evaluation/Conclusion: depends on costs of delivery, depends on how quickly stock goes out of date, depends on if the pound continues to fall in value, if the local supplier is reliable with deliveries, ethical objectives – would the business rather use a British supplier and reduce its carbon footprint?",
+		"mark_points": []
+	},
+	"levelDescriptors": null,
+	"examBoard": "AQA",
+	"subject": "business"
+}

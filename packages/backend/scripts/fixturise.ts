@@ -115,43 +115,40 @@ async function main(): Promise<void> {
 		process.exit(1)
 	}
 
-	const question = await db.question.findFirst({
+	// Find the answer for this (submission, question_number) pair. Question is
+	// linked to ExamPaper through exam_section_questions → exam_sections, so
+	// we can't filter on `exam_paper_id` directly on Question. The submission
+	// scopes us to one paper, so filtering by question_number alone within a
+	// submission's answers is unambiguous.
+	const answer = await db.answer.findFirst({
 		where: {
-			exam_paper_id: submission.exam_paper_id,
-			question_number: args.questionNumber,
+			submission_id: args.submissionId,
+			question: { question_number: args.questionNumber },
 		},
 		select: {
 			id: true,
-			question_number: true,
-			// DB column `text` is renamed to `question_text` in GradingResult.
-			text: true,
-			points: true,
-			mark_schemes: {
+			question_id: true,
+			student_answer: true,
+			question: {
 				select: {
 					id: true,
-					description: true,
-					guidance: true,
-					marking_method: true,
-					content: true,
-					mark_points: true,
+					question_number: true,
+					text: true,
+					points: true,
+					mark_schemes: {
+						select: {
+							id: true,
+							description: true,
+							guidance: true,
+							marking_method: true,
+							content: true,
+							mark_points: true,
+						},
+						orderBy: { created_at: "desc" },
+						take: 1,
+					},
 				},
-				orderBy: { created_at: "desc" },
-				take: 1,
 			},
-		},
-	})
-	if (!question) {
-		console.error(
-			`Question ${args.questionNumber} not found on paper ${submission.exam_paper_id}`,
-		)
-		process.exit(1)
-	}
-
-	const answer = await db.answer.findFirst({
-		where: { submission_id: args.submissionId, question_id: question.id },
-		select: {
-			id: true,
-			student_answer: true,
 			marking_results: {
 				orderBy: { marked_at: "desc" },
 				take: 1,
@@ -174,10 +171,11 @@ async function main(): Promise<void> {
 	})
 	if (!answer) {
 		console.error(
-			`No answer row for (submission=${args.submissionId}, question=${question.id}). Has this paper been graded?`,
+			`No answer found for (submission=${args.submissionId}, question_number=${args.questionNumber}). Has the question been graded on this submission?`,
 		)
 		process.exit(1)
 	}
+	const question = answer.question
 	const mr = answer.marking_results[0] ?? null
 	if (!mr) {
 		console.error(
@@ -291,7 +289,7 @@ async function main(): Promise<void> {
 		`  1. Open ${wrapperPath} and tune \`expectations\` for this fixture.`,
 	)
 	console.log(
-		`  2. Add JAUFFERDEEN_${args.name.toUpperCase().replace(/-/g, "_")}_FIXTURE to FIXTURES in tests/integration/annotation-evals.test.ts`,
+		`  2. Add ${args.name.toUpperCase().replace(/-/g, "_")}_FIXTURE to FIXTURES in tests/integration/annotation-evals.test.ts`,
 	)
 	console.log("  3. Run the eval suite to verify it passes.")
 
@@ -301,8 +299,8 @@ async function main(): Promise<void> {
 function renderWrapper(name: string): string {
 	const constName = `${name.toUpperCase().replace(/-/g, "_")}_FIXTURE`
 	return `import { join } from "node:path"
+import { loadFixtureData } from "../load-fixture"
 import type { AnnotationFixtureSpec } from "../shared-types"
-import fixtureData from "./fixture.json"
 
 /**
  * ${name} — captured from a real graded submission via
@@ -315,7 +313,7 @@ import fixtureData from "./fixture.json"
 export const ${constName}: AnnotationFixtureSpec = {
 \tname: "${name}",
 \tdir: join(__dirname),
-\t...(fixtureData as Omit<AnnotationFixtureSpec, "name" | "dir" | "expectations">),
+\t...loadFixtureData(__dirname),
 \texpectations: {
 \t\t// Tune these once you've seen what the LLM actually emits against this fixture.
 \t\tannotationCount: { min: 1, max: 10 },

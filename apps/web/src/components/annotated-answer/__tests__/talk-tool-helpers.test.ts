@@ -6,12 +6,14 @@ import { beforeAll, describe, expect, it } from "vitest"
 import { pmPosToCharInBlock } from "../pm-pos-mapping"
 import {
 	applyAnnotationByPhrase,
+	removeAnnotationById,
+	updateAnnotationById,
+} from "../talk-tool-actions"
+import {
 	charToPmPosInBlock,
 	findAnnotationRange,
 	findQuestionBlock,
-	removeAnnotationById,
-	updateAnnotationById,
-} from "../talk-tool-helpers"
+} from "../talk-tool-pure"
 
 async function buildSchema(): Promise<Schema> {
 	const { getSchema } = await import("@tiptap/core")
@@ -310,6 +312,43 @@ describe("applyAnnotationByPhrase", () => {
 			})
 			expect(result.ok).toBe(false)
 			if (!result.ok) expect(result.reason).toContain("more than once")
+		} finally {
+			editor.destroy()
+		}
+	})
+
+	it("matches a phrase that spans a HardBreak via embedded \\n", async () => {
+		// Pre-fix: node.textContent stripped the HardBreak so "end\nstart"
+		// silently glued to "endstart" — phrases crossing line breaks always
+		// failed. Now buildBlockTextWithBreaks inserts a "\n" for each
+		// HardBreak and the phrase resolves.
+		const editor = await buildEditor({
+			type: "doc",
+			content: [
+				{
+					type: "questionAnswer",
+					attrs: { questionId: "q1" },
+					content: [
+						{ type: "text", text: "first line ends here" },
+						{ type: "hardBreak" },
+						{ type: "text", text: "second line continues" },
+					],
+				},
+			],
+		})
+		try {
+			const result = applyAnnotationByPhrase(editor, {
+				questionId: "q1",
+				phrase: "ends here\nsecond line",
+				signal: "underline",
+				reason: "spans a break",
+			})
+			expect(result.ok).toBe(true)
+			if (result.ok) {
+				const range = findAnnotationRange(editor.state.doc, result.annotationId)
+				expect(range).not.toBeNull()
+				expect(range?.mark.type.name).toBe("annotationUnderline")
+			}
 		} finally {
 			editor.destroy()
 		}

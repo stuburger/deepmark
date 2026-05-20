@@ -5,7 +5,7 @@ import {
 	applyAnnotationByPhrase,
 	removeAnnotationById,
 	updateAnnotationById,
-} from "@/components/annotated-answer/talk-tool-helpers"
+} from "@/components/annotated-answer/talk-tool-actions"
 import { useLinkToScan } from "@/components/talk/link-to-scan-context"
 import type { OverrideContextEntry } from "@/components/talk/override-confirm-card"
 import { TalkToDeepMarkChat } from "@/components/talk/talk-to-deepmark-chat"

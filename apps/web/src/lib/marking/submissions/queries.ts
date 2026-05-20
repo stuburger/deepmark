@@ -737,6 +737,7 @@ export const getAdjacentSubmissions = resourcesAction({
 	}): Promise<{
 		prevId: string | null
 		nextId: string | null
+		nextUnconfirmedId: string | null
 		totalCount: number
 		confirmedCount: number
 	}> => {
@@ -749,11 +750,41 @@ export const getAdjacentSubmissions = resourcesAction({
 		const confirmedCount = all.filter((s) => s.confirmed_at !== null).length
 		const idx = all.findIndex((s) => s.id === jobId)
 		if (idx === -1) {
-			return { prevId: null, nextId: null, totalCount, confirmedCount }
+			return {
+				prevId: null,
+				nextId: null,
+				nextUnconfirmedId: null,
+				totalCount,
+				confirmedCount,
+			}
 		}
+
+		// Auto-advance target: walk forward from the current position to find
+		// the next unconfirmed submission, wrapping to the start if nothing
+		// unconfirmed lies ahead. The current jobId is skipped implicitly —
+		// the wrap stops at idx — so this stays correct even when the caller
+		// has just confirmed the current submission and the cache hasn't
+		// refetched yet (its confirmed_at is still null here).
+		let nextUnconfirmedId: string | null = null
+		for (let i = idx + 1; i < all.length; i++) {
+			if (all[i].confirmed_at === null) {
+				nextUnconfirmedId = all[i].id
+				break
+			}
+		}
+		if (nextUnconfirmedId === null) {
+			for (let i = 0; i < idx; i++) {
+				if (all[i].confirmed_at === null) {
+					nextUnconfirmedId = all[i].id
+					break
+				}
+			}
+		}
+
 		return {
 			prevId: idx > 0 ? all[idx - 1].id : null,
 			nextId: idx < all.length - 1 ? all[idx + 1].id : null,
+			nextUnconfirmedId,
 			totalCount,
 			confirmedCount,
 		}

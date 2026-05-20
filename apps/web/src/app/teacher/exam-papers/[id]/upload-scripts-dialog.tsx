@@ -148,9 +148,6 @@ export function UploadScriptsDialog({
 						</DialogHeader>
 						<div className="flex flex-col items-center gap-4 py-8">
 							<Loader2 className="h-10 w-10 animate-spin text-primary" />
-							<p className="text-sm text-muted-foreground">
-								Usually takes under a minute…
-							</p>
 						</div>
 						<DialogFooter>
 							<Button

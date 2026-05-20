@@ -35,6 +35,7 @@ import {
 	compareNullable,
 	pctFor,
 } from "@/lib/marking/listing/sort"
+import { retriggerOcr } from "@/lib/marking/stages/mutations"
 import { toggleBookmark } from "@/lib/marking/submissions/mutations"
 import type { SubmissionHistoryItem } from "@/lib/marking/types"
 import { queryKeys } from "@/lib/query-keys"
@@ -53,6 +54,7 @@ import {
 	ChevronRight,
 	Link2,
 	Pencil,
+	RefreshCw,
 	Share2,
 	Trash2,
 } from "lucide-react"
@@ -156,6 +158,21 @@ export function SubmissionTable({
 				queryKey: queryKeys.studentJob(vars.jobId),
 			})
 		},
+	})
+	const retryMutation = useMutation({
+		mutationFn: async (jobId: string) => {
+			const r = await retriggerOcr({ jobId })
+			if (r?.serverError) throw new Error(r.serverError)
+			return r?.data
+		},
+		onSuccess: () => {
+			toast.success("Retry started — the new attempt will appear shortly")
+			queryClient.invalidateQueries({
+				queryKey: queryKeys.submissions(examPaperId),
+			})
+		},
+		onError: (err) =>
+			toast.error(err instanceof Error ? err.message : "Failed to retry"),
 	})
 	const [sort, setSort] = useQueryState("sort", parseAsStringLiteral(SORT_KEYS))
 	const [dir, setDir] = useQueryState("dir", parseAsStringLiteral(SORT_DIRS))
@@ -536,15 +553,32 @@ export function SubmissionTable({
 											</TableCell>
 											<TableCell>
 												<div className="flex items-center justify-end gap-2">
-													<Button
-														type="button"
-														size="sm"
-														variant="ghost"
-														onClick={() => onView(sub.id)}
-														className="h-7 px-2 text-xs"
-													>
-														View
-													</Button>
+													{phase === "error" ? (
+														<Button
+															type="button"
+															size="sm"
+															variant="ghost"
+															onClick={() => retryMutation.mutate(sub.id)}
+															disabled={
+																retryMutation.isPending &&
+																retryMutation.variables === sub.id
+															}
+															className="h-7 gap-1 px-2 text-xs"
+														>
+															<RefreshCw className="h-3.5 w-3.5" />
+															Retry
+														</Button>
+													) : (
+														<Button
+															type="button"
+															size="sm"
+															variant="ghost"
+															onClick={() => onView(sub.id)}
+															className="h-7 px-2 text-xs"
+														>
+															View
+														</Button>
+													)}
 													<ShareDialog
 														resourceType="student_submission"
 														resourceId={sub.id}

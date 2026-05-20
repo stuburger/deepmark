@@ -88,6 +88,7 @@ export function SubmissionToolbar({
 	const { data: adjacent } = useAdjacentSubmissions(examPaperId, jobId)
 	const prevId = adjacent?.prevId ?? null
 	const nextId = adjacent?.nextId ?? null
+	const nextUnconfirmedId = adjacent?.nextUnconfirmedId ?? null
 	const isConfirmed = data.confirmed_at !== null
 
 	// Prefix-only key for the batch-progress cache: matches every cached
@@ -157,6 +158,11 @@ export function SubmissionToolbar({
 		},
 		onSuccess: (_data, confirmed) => {
 			toast.success(confirmed ? "Marking confirmed" : "Marking unconfirmed")
+			// Prefer the next *unconfirmed* sibling (wrapping if needed) over a
+			// blind linear advance, so a teacher who's been skipping around
+			// always lands on the next thing that still needs their attention.
+			// If every other sibling is already confirmed, stay put.
+			if (confirmed && nextUnconfirmedId) onNavigateToJob(nextUnconfirmedId)
 		},
 		onSettled: () => {
 			queryClient.invalidateQueries({

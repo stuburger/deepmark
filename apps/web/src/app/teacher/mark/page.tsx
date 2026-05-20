@@ -43,7 +43,6 @@ export default async function MarkPage() {
 							<h2 className="text-lg font-semibold">No papers marked yet</h2>
 							<p className="mt-1 max-w-sm text-sm text-muted-foreground">
 								Select an exam paper and upload a student&apos;s answer sheet.
-								Results appear in under a minute.
 							</p>
 						</div>
 						<Link

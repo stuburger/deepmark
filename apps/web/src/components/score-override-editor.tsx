@@ -67,6 +67,7 @@ export function ScoreOverrideEditor({
 	const effectiveScore = override?.score_override ?? aiScore
 	const isOverridden = override !== null
 	const triggerIsScoreBadge = !renderDisplay && effectiveScore !== null
+	const scoreVariant = scoreBadgeVariant(effectiveScore, maxScore)
 
 	const [open, setOpen] = useState(false)
 	const [score, setScore] = useState(effectiveScore ?? 0)
@@ -135,7 +136,7 @@ export function ScoreOverrideEditor({
 				render={
 					triggerIsScoreBadge ? (
 						<Badge
-							variant="score-full"
+							variant={scoreVariant}
 							// biome-ignore lint/a11y/useSemanticElements: PopoverTrigger `nativeButton={false}` avoids nested `<button>` in MCQ/grid rows.
 							role="button"
 							tabIndex={0}
@@ -216,6 +217,16 @@ export function ScoreOverrideEditor({
 			</PopoverContent>
 		</Popover>
 	)
+}
+
+function scoreBadgeVariant(
+	score: number | null,
+	maxScore: number,
+): "score-full" | "score-part" | "score-low" {
+	if (score === null || maxScore <= 0) return "score-full"
+	if (score === 0) return "score-low"
+	if (score * 2 > maxScore) return "score-full"
+	return "score-part"
 }
 
 function DefaultBadge({

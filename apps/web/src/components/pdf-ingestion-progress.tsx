@@ -101,9 +101,9 @@ export function PdfIngestionProgressView({
 					})}
 			</div>
 			<p className="text-xs text-muted-foreground">
-				Processing your {docLabel} PDF. Usually takes 30–90 seconds
+				Processing your {docLabel} PDF
 				{documentType === "mark_scheme"
-					? " (longer if adversarial checks run)."
+					? " — adversarial checks may add time."
 					: "."}
 			</p>
 		</div>

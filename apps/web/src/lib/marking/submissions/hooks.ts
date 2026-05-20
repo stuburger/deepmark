@@ -7,6 +7,7 @@ import { getAdjacentSubmissions } from "./queries"
 export type BatchAdjacency = {
 	prevId: string | null
 	nextId: string | null
+	nextUnconfirmedId: string | null
 	totalCount: number
 	confirmedCount: number
 }
@@ -27,6 +28,7 @@ export function useAdjacentSubmissions(examPaperId: string, jobId: string) {
 				r?.data ?? {
 					prevId: null,
 					nextId: null,
+					nextUnconfirmedId: null,
 					totalCount: 0,
 					confirmedCount: 0,
 				}

@@ -37,8 +37,6 @@ type Prefill = {
 	text: string
 	questionNumber: string | null
 	questionId?: string | null
-	tokenStart?: string | null
-	tokenEnd?: string | null
 }
 
 export type ToolDispatchResult =
@@ -190,8 +188,6 @@ export function TalkToDeepMarkChat({
 								text: chip.text,
 								questionNumber: chip.questionNumber,
 								questionId: chip.questionId ?? null,
-								tokenStart: chip.tokenStart ?? null,
-								tokenEnd: chip.tokenEnd ?? null,
 							},
 						},
 					}

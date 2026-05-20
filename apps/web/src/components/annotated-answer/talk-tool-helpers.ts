@@ -2,11 +2,10 @@
  * Helpers used by the Talk to DeepMark tool dispatcher to apply, update,
  * and remove annotation marks on the live PM editor.
  *
- * Two addressing paths supported for adds:
- *   - **phrase** (primary): exact verbatim quote within the question's
- *     `student_answer`. Single match required; multi-match fails the call.
- *   - **token range** (selection fallback): tokenStart / tokenEnd resolved
- *     via the per-question alignment.
+ * Annotations are addressed by **phrase** — exact verbatim quote within
+ * the question's `student_answer`. Single match required; multi-match
+ * fails the call so the model can retry with a longer, disambiguating
+ * quote.
  *
  * Updates and removes address by `annotationId`. All ops dispatch a single
  * PM transaction so they go through Yjs as one update. The sidebar's
@@ -15,7 +14,6 @@
  * activation.
  */
 
-import type { TokenAlignment } from "@mcp-gcse/shared"
 import type { Editor } from "@tiptap/core"
 import type { Mark, Node as PmNode } from "@tiptap/pm/model"
 
@@ -232,56 +230,6 @@ export function applyAnnotationByPhrase(
 	)
 	if (pmFrom === null || pmTo === null) {
 		return { ok: false, reason: "Failed to map phrase to document position." }
-	}
-	return applyAnnotationAtRange(editor, pmFrom, pmTo, input)
-}
-
-/**
- * Apply an annotation by token-id range (selection-driven path). Both
- * endpoints must be in the per-question alignment.
- */
-export function applyAnnotationByTokenRange(
-	editor: Editor,
-	input: AddAnnotationInput & { tokenStart: string; tokenEnd: string },
-	alignmentByQuestion: ReadonlyMap<string, TokenAlignment>,
-): ApplyAnnotationResult {
-	const block = findQuestionBlock(editor.state.doc, input.questionId)
-	if (!block) {
-		return {
-			ok: false,
-			reason: `Question ${input.questionId} not found.`,
-		}
-	}
-	const alignment = alignmentByQuestion.get(input.questionId)
-	if (!alignment) {
-		return {
-			ok: false,
-			reason: `Alignment not loaded for question ${input.questionId}.`,
-		}
-	}
-	const startRange = alignment.tokenMap[input.tokenStart]
-	const endRange = alignment.tokenMap[input.tokenEnd]
-	if (!startRange) {
-		return {
-			ok: false,
-			reason: `Token ${input.tokenStart} not found in alignment.`,
-		}
-	}
-	if (!endRange) {
-		return {
-			ok: false,
-			reason: `Token ${input.tokenEnd} not found in alignment.`,
-		}
-	}
-	const charFrom = Math.min(startRange.start, endRange.start)
-	const charTo = Math.max(startRange.end, endRange.end)
-	const pmFrom = charToPmPosInBlock(block.node, block.blockStart, charFrom)
-	const pmTo = charToPmPosInBlock(block.node, block.blockStart, charTo)
-	if (pmFrom === null || pmTo === null) {
-		return {
-			ok: false,
-			reason: "Failed to map token range to document position.",
-		}
 	}
 	return applyAnnotationAtRange(editor, pmFrom, pmTo, input)
 }

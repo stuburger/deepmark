@@ -19,7 +19,7 @@ describe("buildTalkTools", () => {
 		])
 	})
 
-	it("accepts addAnnotation with phrase (primary path)", () => {
+	it("accepts addAnnotation with a phrase", () => {
 		const tools = buildTalkTools("sub-1")
 		const schema = tools?.addAnnotation?.inputSchema as
 			| { safeParse: (input: unknown) => { success: boolean } }
@@ -35,58 +35,7 @@ describe("buildTalkTools", () => {
 		).toBe(true)
 	})
 
-	it("accepts addAnnotation with tokenStart + tokenEnd (selection path)", () => {
-		const tools = buildTalkTools("sub-1")
-		const schema = tools?.addAnnotation?.inputSchema as
-			| { safeParse: (input: unknown) => { success: boolean } }
-			| undefined
-
-		expect(
-			schema?.safeParse({
-				questionId: "q-1",
-				tokenStart: "tok-1",
-				tokenEnd: "tok-3",
-				signal: "tick",
-				reason: "Good use of evidence.",
-			}).success,
-		).toBe(true)
-	})
-
-	it("rejects addAnnotation with both phrase and tokens (must be exactly one path)", () => {
-		const tools = buildTalkTools("sub-1")
-		const schema = tools?.addAnnotation?.inputSchema as
-			| { safeParse: (input: unknown) => { success: boolean } }
-			| undefined
-
-		expect(
-			schema?.safeParse({
-				questionId: "q-1",
-				phrase: "climate change",
-				tokenStart: "tok-1",
-				tokenEnd: "tok-3",
-				signal: "tick",
-				reason: "x",
-			}).success,
-		).toBe(false)
-	})
-
-	it("rejects addAnnotation with partial token range (start without end)", () => {
-		const tools = buildTalkTools("sub-1")
-		const schema = tools?.addAnnotation?.inputSchema as
-			| { safeParse: (input: unknown) => { success: boolean } }
-			| undefined
-
-		expect(
-			schema?.safeParse({
-				questionId: "q-1",
-				tokenStart: "tok-1",
-				signal: "tick",
-				reason: "x",
-			}).success,
-		).toBe(false)
-	})
-
-	it("rejects addAnnotation with no address at all", () => {
+	it("rejects addAnnotation without a phrase", () => {
 		const tools = buildTalkTools("sub-1")
 		const schema = tools?.addAnnotation?.inputSchema as
 			| { safeParse: (input: unknown) => { success: boolean } }

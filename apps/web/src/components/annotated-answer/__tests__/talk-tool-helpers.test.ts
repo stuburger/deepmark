@@ -1,13 +1,11 @@
 // @vitest-environment happy-dom
 
-import type { TokenAlignment } from "@mcp-gcse/shared"
 import type { Editor } from "@tiptap/core"
 import type { Schema } from "@tiptap/pm/model"
 import { beforeAll, describe, expect, it } from "vitest"
 import { pmPosToCharInBlock } from "../pm-pos-mapping"
 import {
 	applyAnnotationByPhrase,
-	applyAnnotationByTokenRange,
 	charToPmPosInBlock,
 	findAnnotationRange,
 	findQuestionBlock,
@@ -312,83 +310,6 @@ describe("applyAnnotationByPhrase", () => {
 			})
 			expect(result.ok).toBe(false)
 			if (!result.ok) expect(result.reason).toContain("more than once")
-		} finally {
-			editor.destroy()
-		}
-	})
-})
-
-describe("applyAnnotationByTokenRange", () => {
-	it("applies a mark across a multi-token range via alignment lookup", async () => {
-		const editor = await buildEditor({
-			type: "doc",
-			content: [
-				{
-					type: "questionAnswer",
-					attrs: { questionId: "q1" },
-					content: [{ type: "text", text: "hello world today" }],
-				},
-			],
-		})
-		const alignments = new Map<string, TokenAlignment>([
-			[
-				"q1",
-				{
-					tokenMap: {
-						t1: { start: 0, end: 5 },
-						t2: { start: 6, end: 11 },
-						t3: { start: 12, end: 17 },
-					},
-					confidence: 1,
-				},
-			],
-		])
-		try {
-			const result = applyAnnotationByTokenRange(
-				editor,
-				{
-					questionId: "q1",
-					tokenStart: "t1",
-					tokenEnd: "t2",
-					signal: "box",
-					reason: "key phrase",
-				},
-				alignments,
-			)
-			expect(result.ok).toBe(true)
-			if (result.ok) {
-				const range = findAnnotationRange(editor.state.doc, result.annotationId)
-				expect(range?.mark.type.name).toBe("box")
-			}
-		} finally {
-			editor.destroy()
-		}
-	})
-
-	it("fails when alignment isn't loaded for the question", async () => {
-		const editor = await buildEditor({
-			type: "doc",
-			content: [
-				{
-					type: "questionAnswer",
-					attrs: { questionId: "q1" },
-					content: [{ type: "text", text: "hello" }],
-				},
-			],
-		})
-		try {
-			const result = applyAnnotationByTokenRange(
-				editor,
-				{
-					questionId: "q1",
-					tokenStart: "t1",
-					tokenEnd: "t1",
-					signal: "tick",
-					reason: "x",
-				},
-				new Map(),
-			)
-			expect(result.ok).toBe(false)
 		} finally {
 			editor.destroy()
 		}

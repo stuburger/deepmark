@@ -58,27 +58,6 @@ describe("formatUserMessageWithSelection", () => {
 		expect(out).toContain('questionId="q-uuid-1"')
 	})
 
-	it("includes a tokens attribute when both endpoints are supplied", () => {
-		const out = formatUserMessageWithSelection("Annotate this.", {
-			text: "Paris is the capital",
-			questionNumber: "1",
-			questionId: "q-uuid-1",
-			tokenStart: "t_4f2",
-			tokenEnd: "t_4f9",
-		})
-		expect(out).toContain('tokens="t_4f2..t_4f9"')
-	})
-
-	it("omits the tokens attribute when either endpoint is missing", () => {
-		const out = formatUserMessageWithSelection("Why?", {
-			text: "Paris",
-			questionNumber: "1",
-			tokenStart: "t_4f2",
-			// tokenEnd missing
-		})
-		expect(out).not.toContain("tokens=")
-	})
-
 	it("emits a bare <selection> tag when no machine handles are set", () => {
 		const out = formatUserMessageWithSelection("Why?", {
 			text: "Paris",
@@ -86,6 +65,5 @@ describe("formatUserMessageWithSelection", () => {
 		expect(out).toMatch(/^<selection>/)
 		expect(out).not.toContain('question="')
 		expect(out).not.toContain("questionId=")
-		expect(out).not.toContain("tokens=")
 	})
 })

@@ -24,10 +24,7 @@ Marking rules to respect (editor mode):
 When the context doesn't contain what's needed, say "I don't have that in front of me" and stop. Do not guess subject details from training data except for general assessment-objective definitions.
 
 Tools (editor mode only — never exposed in general mode):
-- **addAnnotation**: place a new mark on the student's answer. Address the location with EITHER:
-  - \`phrase\` (preferred): an **exact, verbatim** quote from the student's answer in the preamble. The client does a literal string search; if your phrase doesn't appear exactly, the call fails — you'll get back \`{ ok: false, reason }\` with the actual answer text and you can retry with a longer or differently-anchored quote. Never paraphrase. Never normalise punctuation, casing, or whitespace — copy the text exactly as it appears in the Student answer block of the preamble.
-  - \`tokenStart\` + \`tokenEnd\`: token-id range. Use ONLY when the teacher's <selection> tag carries \`tokens="..."\` (the chip was created from an editor highlight). Don't try to invent token ids.
-  Use one of the 6 existing signals — \`tick\` (correct / mark point met), \`cross\` (explicitly wrong), \`underline\` (highlight a phrase), \`double_underline\` (stronger emphasis), \`box\` (term / key word), \`circle\` (item to flag). Tag \`ao_category\` only when the mark scheme explicitly credits an AO; never invent codes.
+- **addAnnotation**: place a new mark on the student's answer. Pass the location in \`phrase\` — an **exact, verbatim** quote from the student's answer in the preamble. The client does a literal string search; if your phrase doesn't appear exactly, the call fails — you'll get back \`{ ok: false, reason }\` and you can retry with a longer or differently-anchored quote. Never paraphrase. Never normalise punctuation, casing, or whitespace — copy the text exactly as it appears in the Student answer block of the preamble. Use one of the 6 existing signals — \`tick\` (correct / mark point met), \`cross\` (explicitly wrong), \`underline\` (highlight a phrase), \`double_underline\` (stronger emphasis), \`box\` (term / key word), \`circle\` (item to flag). Tag \`ao_category\` only when the mark scheme explicitly credits an AO; never invent codes.
 - **updateAnnotation**: change an existing mark's payload (signal, comment, AO tags, label). Reference by \`annotationId\` from the preamble or a prior \`addAnnotation\` result.
 - **removeAnnotation**: delete an existing mark. Reference by \`annotationId\`.
 - **(score override)** — not yet wired. If the teacher disputes the mark or asks for a re-mark, say so in prose and tell them the override can be applied manually via the score field for now. Do NOT attempt a tool call for overrides; the tool isn't registered in this surface.
@@ -45,20 +42,12 @@ export type TalkSelection = {
 	questionNumber?: string | null
 	/** Question id, set when the selection sits inside a `questionAnswer` block. */
 	questionId?: string | null
-	/** OCR token id at the start of the selection (inclusive). */
-	tokenStart?: string | null
-	/** OCR token id at the end of the selection (inclusive). */
-	tokenEnd?: string | null
 }
 
 /**
  * Wraps user input with a <selection> tag the model can identify. The wrapped
  * text only goes to the model — the teacher's UI continues to show the
  * original input verbatim, with the selection rendered as a chip alongside.
- *
- * Includes machine-referenceable handles (`question`, `tokens`) so the model
- * can call `addAnnotation` against the exact token range the teacher
- * highlighted, not just the displayed text.
  */
 export function formatUserMessageWithSelection(
 	userText: string,
@@ -69,9 +58,6 @@ export function formatUserMessageWithSelection(
 	if (selection.questionNumber)
 		attrs.push(`question="Q${selection.questionNumber}"`)
 	if (selection.questionId) attrs.push(`questionId="${selection.questionId}"`)
-	if (selection.tokenStart && selection.tokenEnd) {
-		attrs.push(`tokens="${selection.tokenStart}..${selection.tokenEnd}"`)
-	}
 	const openTag =
 		attrs.length > 0 ? `<selection ${attrs.join(" ")}>` : "<selection>"
 	const block = `${openTag}\n${selection.text.trim()}\n</selection>`

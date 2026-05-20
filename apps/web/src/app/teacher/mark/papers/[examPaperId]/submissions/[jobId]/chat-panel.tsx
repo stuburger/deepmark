@@ -3,7 +3,6 @@
 import { useEditorHandle } from "@/components/annotated-answer/editor-handle-context"
 import {
 	applyAnnotationByPhrase,
-	applyAnnotationByTokenRange,
 	removeAnnotationById,
 	updateAnnotationById,
 } from "@/components/annotated-answer/talk-tool-helpers"
@@ -53,8 +52,6 @@ export function ChatPanel({
 		text: string
 		questionNumber: string | null
 		questionId?: string | null
-		tokenStart?: string | null
-		tokenEnd?: string | null
 	} | null
 	onPrefillConsumed?: () => void
 }) {
@@ -63,30 +60,8 @@ export function ChatPanel({
 	const onAddAnnotation = useCallback(
 		async (input: AddAnnotationInput): Promise<ToolDispatchResult> => {
 			const editor = getEditor()
-			if (!editor) {
-				return { ok: false, reason: "Editor not mounted." }
-			}
-			// Phrase path — preferred, doesn't need alignment data.
-			if (input.phrase) {
-				return applyAnnotationByPhrase(editor, {
-					...input,
-					phrase: input.phrase,
-				})
-			}
-			// Token path — requires alignment data, which is loaded inside
-			// grading-results-panel.tsx and isn't yet plumbed up to ChatPanel.
-			// Reject with a clear reason so the model retries with `phrase`.
-			if (input.tokenStart && input.tokenEnd) {
-				return {
-					ok: false,
-					reason:
-						"Token-range annotation isn't available in this surface yet. Use the `phrase` parameter — quote the text verbatim from the Student answer block.",
-				}
-			}
-			return {
-				ok: false,
-				reason: "Provide either `phrase` or both `tokenStart`+`tokenEnd`.",
-			}
+			if (!editor) return { ok: false, reason: "Editor not mounted." }
+			return applyAnnotationByPhrase(editor, input)
 		},
 		[getEditor],
 	)
@@ -125,11 +100,6 @@ export function ChatPanel({
 		},
 		[],
 	)
-
-	// Mark `applyAnnotationByTokenRange` referenced so dead-code analysis
-	// keeps it imported — it's wired in a follow-up that lifts the
-	// alignment data up to ChatPanel.
-	void applyAnnotationByTokenRange
 
 	return (
 		<TooltipProvider>

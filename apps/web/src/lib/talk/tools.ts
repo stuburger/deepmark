@@ -62,54 +62,18 @@ const annotationFields = {
 	),
 } as const
 
-const addAnnotationInput = z
-	.object({
-		questionId: z
-			.string()
-			.describe("ID of the question this annotation lives on."),
-		/**
-		 * Primary addressing path. Exact, verbatim text from the student's
-		 * answer (as it appears in the preamble's Student answer block).
-		 * The client does an exact string search inside the question's
-		 * answer and dispatches the mark at that range. If 0 or >1 matches,
-		 * the tool result is `{ ok: false, reason }` and the model can
-		 * retry with a longer, disambiguating quote.
-		 */
-		phrase: z
-			.string()
-			.min(1)
-			.optional()
-			.describe(
-				"Exact, verbatim text to annotate — quote directly from the student's answer in the preamble. Must appear exactly once in the question's answer; if ambiguous, include surrounding context.",
-			),
-		/** Selection-driven fallback when the chip already carries token IDs. */
-		tokenStart: z
-			.string()
-			.optional()
-			.describe(
-				"OCR token id where the mark starts (inclusive). Use ONLY when the teacher's <selection> tag provides token ids; otherwise prefer `phrase`.",
-			),
-		tokenEnd: z
-			.string()
-			.optional()
-			.describe("OCR token id where the mark ends (inclusive)."),
-		...annotationFields,
-	})
-	.refine(
-		(input) => {
-			const hasPhrase = input.phrase !== undefined
-			const hasStart = input.tokenStart !== undefined
-			const hasEnd = input.tokenEnd !== undefined
-			if (hasPhrase && (hasStart || hasEnd)) return false
-			if (hasStart !== hasEnd) return false
-			if (!hasPhrase && !hasStart) return false
-			return true
-		},
-		{
-			message:
-				"Provide EITHER `phrase` OR both `tokenStart`+`tokenEnd` (and not both).",
-		},
-	)
+const addAnnotationInput = z.object({
+	questionId: z
+		.string()
+		.describe("ID of the question this annotation lives on."),
+	phrase: z
+		.string()
+		.min(1)
+		.describe(
+			"Exact, verbatim text to annotate — quote directly from the student's answer in the preamble. Must appear exactly once in the question's answer; if ambiguous, include surrounding context.",
+		),
+	...annotationFields,
+})
 
 const updateAnnotationInput = z.object({
 	annotationId: z.string().describe("UUID of the annotation to update."),
@@ -125,6 +89,8 @@ const removeAnnotationInput = z.object({
 	annotationId: z.string().describe("UUID of the annotation to remove."),
 })
 
+// `proposeTeacherOverride` is currently disabled (see buildTalkTools). The
+// schema lives here so it's ready to re-register alongside the confirm-card UI.
 const proposeTeacherOverrideInput = z.object({
 	questionId: z.string(),
 	suggestedScore: z
@@ -159,7 +125,7 @@ export function buildTalkTools(submissionId: string | undefined) {
 	return {
 		addAnnotation: tool({
 			description:
-				"Add a new annotation mark to the student's answer. Use the 6 existing signal types (tick, cross, underline, double_underline, box, circle). Tag with AO when the mark scheme explicitly credits an AO.",
+				"Add a new annotation mark to the student's answer. Pass the exact verbatim text to mark in `phrase` — the client finds it in the student's answer. Use one of the 6 signal types (tick, cross, underline, double_underline, box, circle). Tag with AO only when the mark scheme explicitly credits an AO.",
 			inputSchema: addAnnotationInput,
 		}),
 		updateAnnotation: tool({

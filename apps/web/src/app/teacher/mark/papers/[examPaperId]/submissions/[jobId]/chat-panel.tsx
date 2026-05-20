@@ -6,6 +6,7 @@ import {
 	removeAnnotationById,
 	updateAnnotationById,
 } from "@/components/annotated-answer/talk-tool-helpers"
+import type { OverrideContextEntry } from "@/components/talk/override-confirm-card"
 import { TalkToDeepMarkChat } from "@/components/talk/talk-to-deepmark-chat"
 import type { ToolDispatchResult } from "@/components/talk/talk-to-deepmark-chat"
 import { Button } from "@/components/ui/button"
@@ -15,13 +16,16 @@ import {
 	TooltipProvider,
 	TooltipTrigger,
 } from "@/components/ui/tooltip"
+import { upsertTeacherOverride } from "@/lib/marking/overrides/mutations"
+import type { GradingResult } from "@/lib/marking/types"
 import type {
 	AddAnnotationInput,
+	ProposeTeacherOverrideInput,
 	RemoveAnnotationInput,
 	UpdateAnnotationInput,
 } from "@/lib/talk/tools"
 import { FileText, Sparkles } from "lucide-react"
-import { useCallback } from "react"
+import { useCallback, useMemo } from "react"
 
 /**
  * Editor-side chat panel — thin shell around TalkToDeepMarkChat. Owns the
@@ -33,20 +37,28 @@ import { useCallback } from "react"
  * forwards it to /api/talk via per-call body. The route renders it as a
  * <selection> tag the model can reference.
  *
- * Tool dispatch: when DeepMark calls addAnnotation / updateAnnotation /
- * removeAnnotation / linkToScan, the callback resolves the editor from
- * the handle context and runs the corresponding PM transaction. The
- * sidebar's `onMarkApplied` is intentionally NOT fired here — DeepMark-
- * applied marks stay silent so batches don't flicker active-card state.
+ * Tool dispatch:
+ * - addAnnotation / updateAnnotation / removeAnnotation: resolved via the
+ *   editor handle, applied as PM transactions, Yjs syncs the result.
+ *   Sidebar's `onMarkApplied` is intentionally NOT fired so multi-mark
+ *   batches don't flicker the active-card state.
+ * - linkToScan: fires a CustomEvent SubmissionView listens to.
+ * - proposeTeacherOverride: rendered as a confirm card inline in the
+ *   chat. Accept fires `upsertTeacherOverride` (server action — writes
+ *   to the Y.Doc; the projection mirrors it to the TeacherOverride
+ *   table). Dismiss declines. Until the teacher clicks, the tool call
+ *   stays pending and the model can't continue.
  */
 export function ChatPanel({
 	submissionId,
+	gradingResults,
 	onSwitchToScan,
 	prefill,
 	onPrefillConsumed,
 }: {
 	submissionId: string
 	studentName: string | null
+	gradingResults: GradingResult[]
 	onSwitchToScan: () => void
 	prefill?: {
 		text: string
@@ -92,14 +104,53 @@ export function ChatPanel({
 			tokenStart?: string
 			tokenEnd?: string
 		}) => {
-			// Emit a CustomEvent the scan panel listens to. UI navigation only;
-			// no data is modified. Listener wired in submission-view.tsx.
 			window.dispatchEvent(
 				new CustomEvent("deepmark:link-to-scan", { detail: input }),
 			)
 		},
 		[],
 	)
+
+	const onProposeOverride = useCallback(
+		async (
+			input: ProposeTeacherOverrideInput,
+		): Promise<{ ok: true } | { ok: false; reason: string }> => {
+			const result = await upsertTeacherOverride({
+				submissionId,
+				questionId: input.questionId,
+				input: {
+					score_override: input.suggestedScore,
+					reason: input.reason,
+				},
+			})
+			if (result?.serverError) {
+				return { ok: false, reason: result.serverError }
+			}
+			if (result?.validationErrors) {
+				return { ok: false, reason: "Validation failed on the server." }
+			}
+			if (!result?.data) {
+				return { ok: false, reason: "No response from the override action." }
+			}
+			return { ok: true }
+		},
+		[submissionId],
+	)
+
+	// Per-question context for the confirm card — drives the
+	// "current/max → suggested/max" delta. Cheap; rebuild on each render
+	// if grading_results changes.
+	const overrideContextByQuestion = useMemo(() => {
+		const map = new Map<string, OverrideContextEntry>()
+		for (const r of gradingResults) {
+			map.set(r.question_id, {
+				questionNumber: r.question_number,
+				currentScore: r.awarded_score,
+				maxScore: r.max_score,
+			})
+		}
+		return map
+	}, [gradingResults])
 
 	return (
 		<TooltipProvider>
@@ -143,6 +194,8 @@ export function ChatPanel({
 						onUpdateAnnotation={onUpdateAnnotation}
 						onRemoveAnnotation={onRemoveAnnotation}
 						onLinkToScan={onLinkToScan}
+						onProposeOverride={onProposeOverride}
+						overrideContextByQuestion={overrideContextByQuestion}
 					/>
 				</div>
 			</div>

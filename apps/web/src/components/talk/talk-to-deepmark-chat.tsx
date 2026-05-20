@@ -2,6 +2,7 @@
 
 import type {
 	AddAnnotationInput,
+	ProposeTeacherOverrideInput,
 	RemoveAnnotationInput,
 	UpdateAnnotationInput,
 } from "@/lib/talk/tools"
@@ -15,6 +16,10 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import { toast } from "sonner"
+import {
+	OverrideConfirmCard,
+	type OverrideContextEntry,
+} from "./override-confirm-card"
 
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
@@ -84,6 +89,20 @@ type TalkToDeepMarkChatProps = {
 		tokenStart?: string
 		tokenEnd?: string
 	}) => void
+	/**
+	 * Fires when the teacher accepts a proposed override card. Resolves to
+	 * `{ ok, reason? }` — `ok: true` becomes the tool's `accepted: true`
+	 * result. The card handles the loading/error UI; this callback is just
+	 * the mutation.
+	 */
+	onProposeOverride?: (
+		input: ProposeTeacherOverrideInput,
+	) => Promise<{ ok: true } | { ok: false; reason: string }>
+	/**
+	 * Per-question context used by the override card to render
+	 * "current/max → suggested/max" deltas. Keyed by questionId.
+	 */
+	overrideContextByQuestion?: ReadonlyMap<string, OverrideContextEntry>
 }
 
 export function TalkToDeepMarkChat({
@@ -96,6 +115,8 @@ export function TalkToDeepMarkChat({
 	onUpdateAnnotation,
 	onRemoveAnnotation,
 	onLinkToScan,
+	onProposeOverride,
+	overrideContextByQuestion,
 }: TalkToDeepMarkChatProps) {
 	const [input, setInput] = useState("")
 	const [chip, setChip] = useState<Prefill | null>(null)
@@ -130,6 +151,15 @@ export function TalkToDeepMarkChat({
 				toast.error(err.message || "Failed to reach DeepMark.")
 			},
 			onToolCall: async ({ toolCall }) => {
+				// proposeTeacherOverride is human-in-the-loop — the confirm
+				// card renders inline and writes the tool output on accept /
+				// dismiss. We do nothing here; the card resolves it.
+				if (
+					(toolCall as { toolName?: string }).toolName ===
+					"proposeTeacherOverride"
+				) {
+					return
+				}
 				const result = await dispatchToolCall(toolCall, {
 					addAnnotation: addAnnRef.current,
 					updateAnnotation: updateAnnRef.current,
@@ -238,7 +268,13 @@ export function TalkToDeepMarkChat({
 					<div ref={scrollRef} className="flex-1 overflow-y-auto pb-6">
 						<div className="flex flex-col gap-5">
 							{messages.map((m) => (
-								<MessageBubble key={m.id} message={m} />
+								<MessageBubble
+									key={m.id}
+									message={m}
+									onProposeOverride={onProposeOverride}
+									overrideContextByQuestion={overrideContextByQuestion}
+									addToolOutput={addToolOutput}
+								/>
 							))}
 							{status === "submitted" && (
 								<div className="flex items-center gap-2 text-[12px] text-muted-foreground">
@@ -419,8 +455,14 @@ function ChipBadge({
 
 function MessageBubble({
 	message,
+	onProposeOverride,
+	overrideContextByQuestion,
+	addToolOutput,
 }: {
 	message: ReturnType<typeof useChat>["messages"][number]
+	onProposeOverride?: TalkToDeepMarkChatProps["onProposeOverride"]
+	overrideContextByQuestion?: TalkToDeepMarkChatProps["overrideContextByQuestion"]
+	addToolOutput: ReturnType<typeof useChat>["addToolOutput"]
 }) {
 	const isUser = message.role === "user"
 	const text = message.parts
@@ -456,11 +498,112 @@ function MessageBubble({
 				)}
 			>
 				{text ? isUser ? text : <AssistantMarkdown text={text} /> : null}
-				{toolParts.map((p) => (
-					<ToolCallPill key={p.toolCallId} part={p} />
-				))}
+				{toolParts.map((p) => {
+					if (p.type === "tool-proposeTeacherOverride") {
+						return (
+							<OverrideToolPart
+								key={p.toolCallId}
+								part={p}
+								onProposeOverride={onProposeOverride}
+								overrideContextByQuestion={overrideContextByQuestion}
+								addToolOutput={addToolOutput}
+							/>
+						)
+					}
+					return <ToolCallPill key={p.toolCallId} part={p} />
+				})}
 			</div>
 		</div>
+	)
+}
+
+/**
+ * Renders a `proposeTeacherOverride` tool-call part as a confirm card.
+ * Pending → Accept/Dismiss buttons; once the teacher decides, the part
+ * transitions to output-available and the card collapses.
+ */
+function OverrideToolPart({
+	part,
+	onProposeOverride,
+	overrideContextByQuestion,
+	addToolOutput,
+}: {
+	part: ToolPartShape
+	onProposeOverride?: TalkToDeepMarkChatProps["onProposeOverride"]
+	overrideContextByQuestion?: TalkToDeepMarkChatProps["overrideContextByQuestion"]
+	addToolOutput: ReturnType<typeof useChat>["addToolOutput"]
+}) {
+	const [errorReason, setErrorReason] = useState<string | null>(null)
+	const input = part.input as
+		| {
+				questionId: string
+				suggestedScore: number
+				reason: string
+		  }
+		| undefined
+	if (!input) return null
+
+	// Derive the visible state from the AI-SDK part state.
+	let state:
+		| { kind: "pending" }
+		| { kind: "accepted" }
+		| { kind: "dismissed" }
+		| { kind: "error"; reason: string }
+	if (errorReason) {
+		state = { kind: "error", reason: errorReason }
+	} else if (part.state === "output-available") {
+		const accepted = (part.output as { accepted?: boolean } | undefined)
+			?.accepted
+		state = accepted ? { kind: "accepted" } : { kind: "dismissed" }
+	} else {
+		state = { kind: "pending" }
+	}
+
+	async function handleAccept() {
+		setErrorReason(null)
+		if (!onProposeOverride || !input) {
+			addToolOutput({
+				tool: "proposeTeacherOverride" as never,
+				toolCallId: part.toolCallId,
+				output: {
+					accepted: false,
+					reason: "Override mutation not wired in this surface.",
+				} as never,
+			})
+			return
+		}
+		const result = await onProposeOverride(input)
+		if (result.ok) {
+			addToolOutput({
+				tool: "proposeTeacherOverride" as never,
+				toolCallId: part.toolCallId,
+				output: { accepted: true } as never,
+			})
+		} else {
+			setErrorReason(result.reason)
+		}
+	}
+
+	function handleDismiss() {
+		setErrorReason(null)
+		addToolOutput({
+			tool: "proposeTeacherOverride" as never,
+			toolCallId: part.toolCallId,
+			output: {
+				accepted: false,
+				reason: "Teacher dismissed the suggestion.",
+			} as never,
+		})
+	}
+
+	return (
+		<OverrideConfirmCard
+			input={input}
+			state={state}
+			context={overrideContextByQuestion?.get(input.questionId)}
+			onAccept={handleAccept}
+			onDismiss={handleDismiss}
+		/>
 	)
 }
 

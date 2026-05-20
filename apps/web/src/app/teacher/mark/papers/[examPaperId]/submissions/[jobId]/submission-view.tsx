@@ -390,6 +390,7 @@ export function SubmissionView({
 									<ChatPanel
 										submissionId={docSubmissionId}
 										studentName={data.student_name}
+										gradingResults={data.grading_results}
 										onSwitchToScan={switchToScan}
 										prefill={chatPrefill}
 										onPrefillConsumed={consumeChatPrefill}

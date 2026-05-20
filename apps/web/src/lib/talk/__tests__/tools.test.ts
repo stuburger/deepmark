@@ -9,12 +9,11 @@ describe("buildTalkTools", () => {
 	it("returns the registered tools when submissionId is present", () => {
 		const tools = buildTalkTools("sub-1")
 		expect(tools).toBeDefined()
-		// proposeTeacherOverride is intentionally NOT registered in this
-		// commit — confirm-card UX lands in a follow-up.
 		expect(Object.keys(tools ?? {})).toEqual([
 			"addAnnotation",
 			"updateAnnotation",
 			"removeAnnotation",
+			"proposeTeacherOverride",
 			"linkToScan",
 		])
 	})
@@ -76,9 +75,36 @@ describe("buildTalkTools", () => {
 		).toBe(false)
 	})
 
-	// proposeTeacherOverride schema test deferred — re-add when the
-	// confirm-card UX lands and the tool is re-registered in
-	// buildTalkTools.
+	it("validates proposeTeacherOverride input", () => {
+		const tools = buildTalkTools("sub-1")
+		const schema = tools?.proposeTeacherOverride?.inputSchema as
+			| { safeParse: (input: unknown) => { success: boolean } }
+			| undefined
+
+		expect(
+			schema?.safeParse({
+				questionId: "q-1",
+				suggestedScore: 8,
+				reason: "Sustained analysis throughout.",
+			}).success,
+		).toBe(true)
+
+		expect(
+			schema?.safeParse({
+				questionId: "q-1",
+				suggestedScore: -1,
+				reason: "x",
+			}).success,
+		).toBe(false)
+
+		expect(
+			schema?.safeParse({
+				questionId: "q-1",
+				suggestedScore: 8,
+				reason: "",
+			}).success,
+		).toBe(false)
+	})
 })
 
 describe("signalToMarkName", () => {

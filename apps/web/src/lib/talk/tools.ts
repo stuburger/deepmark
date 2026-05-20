@@ -89,8 +89,6 @@ const removeAnnotationInput = z.object({
 	annotationId: z.string().describe("UUID of the annotation to remove."),
 })
 
-// `proposeTeacherOverride` is currently disabled (see buildTalkTools). The
-// schema lives here so it's ready to re-register alongside the confirm-card UI.
 const proposeTeacherOverrideInput = z.object({
 	questionId: z.string(),
 	suggestedScore: z
@@ -138,11 +136,11 @@ export function buildTalkTools(submissionId: string | undefined) {
 				"Remove an existing annotation from the student's answer. Reference by annotationId.",
 			inputSchema: removeAnnotationInput,
 		}),
-		// proposeTeacherOverride is intentionally not registered in this
-		// commit — the confirm-card UX lands in a follow-up. Reintroduce
-		// alongside the card component to keep model behaviour and UI
-		// surface in lockstep.
-		// proposeTeacherOverride: tool({ ... inputSchema: proposeTeacherOverrideInput }),
+		proposeTeacherOverride: tool({
+			description:
+				"Propose a score override for a question. Does NOT apply directly — surfaces a confirm card in the conversation that the teacher must accept. Only call this when the teacher explicitly disputes a mark or asks for a re-mark. Never propose unsolicited overrides.",
+			inputSchema: proposeTeacherOverrideInput,
+		}),
 		linkToScan: tool({
 			description:
 				"Scroll the scan view to a question (and optionally to a specific token range). UI navigation only; no data is modified.",

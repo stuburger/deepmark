@@ -19,6 +19,9 @@ Why client-executed tools, not server-side: the editor is a Yjs-backed ProseMirr
 1. **Teacher-override surfaces as a confirm card in the chat, not direct apply.** DeepMark calls `proposeTeacherOverride`; an inline card renders in the conversation with the proposed score change and reasoning; the teacher clicks **Accept** to fire the existing override mutation. Decline is also a button. The model is told via the deferred tool result whether the change went through.
 2. **No new mark types.** DeepMark picks from the existing 6 `MARK_SIGNAL_NAMES` (`tick`, `cross`, `underline`, `double_underline`, `box`, `circle`) and the existing `ao_category` / `ao_quality` / `ao_display` vocabulary on `AnnotationPayload`. The schema doesn't grow.
 3. **Annotation writes apply directly** (no confirm card per annotation — they're cheap, reversible via the existing eraser, and asking the teacher to confirm every tick destroys flow). Teacher override is the exception because it changes the headline mark.
+4. **Phrase-match is the primary addressing mechanism for annotations.** Model emits `phrase: string` — the exact text it wants to annotate — and we do an **exact** (not fuzzy) string search inside the question's `student_answer`. Token-range (`tokenStart`/`tokenEnd`) remains an OPTIONAL alternative for selection-driven flows where the chip already carries token IDs from `<selection tokens="...">`. Either path is accepted by the tool; both paths converge on the same client helper. **Per CLAUDE.md: exact match is not fuzzy match — phrase-match here is on safe ground.**
+5. **Comment sidebar stays silent on DeepMark-applied marks.** The existing `onMarkApplied` activation (which the teacher's own toolbar / shortcut clicks trigger) is NOT fired by the tool dispatcher. Lets DeepMark batch multiple annotations in one turn without UI flicker.
+6. **Single-undo grouping for batched tool calls.** When the model emits N annotation tool calls in one turn, the client dispatches them as one PM history entry (via `tr.setMeta("addToHistory", false)` on intermediate transactions, history-on for the final one). Teacher hits Ctrl+Z once → all N marks undone.
 
 ## Goal
 
@@ -40,15 +43,17 @@ Plus the per-turn selection signal must carry token IDs (not just text + questio
 
 ## Tool surface (Zod schemas)
 
-All inputs token-based. Token IDs are strings from `student_paper_page_tokens.id`. The preamble already exposes existing-annotation token ranges in the format `tokens=<startId>..<endId>`; new annotations follow the same shape.
+Annotation address is either a verbatim phrase (primary) or a token range (selection-driven fallback). The Zod schema requires ONE of the two. The student answer is verbatim in the preamble so the model can quote it precisely; the `<selection>` tag carries `tokens="..."` when a chip is attached so the model can opt for the token path.
 
 ### `addAnnotation`
 
 ```ts
 z.object({
   questionId: z.string(),
-  tokenStart: z.string(),
-  tokenEnd: z.string(),
+  // ONE of these is required:
+  phrase: z.string().min(1).optional(),  // exact text to match within the question's student_answer
+  tokenStart: z.string().optional(),     // OR token range
+  tokenEnd: z.string().optional(),
   signal: z.enum(["tick", "cross", "underline", "double_underline", "box", "circle"]),
   reason: z.string().min(1), // examiner-style short note — REQUIRED on AnnotationPayload
   comment: z.string().optional(),

@@ -28,6 +28,7 @@ import "./annotation-marks.css"
 import { AnnotationShortcuts } from "./annotation-shortcuts"
 import { AnnotationToolbar } from "./annotation-toolbar"
 import { CommentSidebar } from "./comment-sidebar"
+import { useRegisterEditorHandle } from "./editor-handle-context"
 import {
 	HoverHighlightPlugin,
 	setAnnotationHighlight,
@@ -221,6 +222,11 @@ export function AnnotatedAnswerSheet({
 		// changes are pushed via `editor.commands.updateUser(...)` below.
 		[ydoc, !!provider?.awareness, !!cursorUser],
 	)
+
+	// Expose the editor handle to sibling subtrees (the Talk to DeepMark
+	// chat panel) via the EditorHandleProvider. No-op when the provider
+	// isn't mounted (e.g. dashboard, /teacher/talk).
+	useRegisterEditorHandle(editor)
 
 	// Push user identity changes (name, color, image) directly into the
 	// awareness state. We bypass `editor.commands.updateUser(...)` because

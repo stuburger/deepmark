@@ -1,6 +1,14 @@
 "use client"
 
+import { useEditorHandle } from "@/components/annotated-answer/editor-handle-context"
+import {
+	applyAnnotationByPhrase,
+	applyAnnotationByTokenRange,
+	removeAnnotationById,
+	updateAnnotationById,
+} from "@/components/annotated-answer/talk-tool-helpers"
 import { TalkToDeepMarkChat } from "@/components/talk/talk-to-deepmark-chat"
+import type { ToolDispatchResult } from "@/components/talk/talk-to-deepmark-chat"
 import { Button } from "@/components/ui/button"
 import {
 	Tooltip,
@@ -8,19 +16,29 @@ import {
 	TooltipProvider,
 	TooltipTrigger,
 } from "@/components/ui/tooltip"
+import type {
+	AddAnnotationInput,
+	RemoveAnnotationInput,
+	UpdateAnnotationInput,
+} from "@/lib/talk/tools"
 import { FileText, Sparkles } from "lucide-react"
+import { useCallback } from "react"
 
 /**
  * Editor-side chat panel — thin shell around TalkToDeepMarkChat. Owns the
- * sidebar header (switch-to-scan + DeepMark label); the chat itself manages
- * messages, the selection chip, and per-call request body (submissionId +
- * selection).
+ * sidebar header (switch-to-scan + DeepMark label) and builds the tool-
+ * call dispatchers using the editor handle from EditorHandleProvider.
  *
- * Selection-driven context: the host pushes a {text, questionNumber} pair as
- * `prefill`; TalkToDeepMarkChat captures it into a chip and calls
- * `onPrefillConsumed`. Sending the next message attaches the chip to the
- * outgoing request as `selection`, which the route injects into the user
- * message inside a <selection> tag.
+ * Selection-driven context: the host pushes a {text, questionNumber, …}
+ * payload as `prefill`; TalkToDeepMarkChat captures it into a chip and
+ * forwards it to /api/talk via per-call body. The route renders it as a
+ * <selection> tag the model can reference.
+ *
+ * Tool dispatch: when DeepMark calls addAnnotation / updateAnnotation /
+ * removeAnnotation / linkToScan, the callback resolves the editor from
+ * the handle context and runs the corresponding PM transaction. The
+ * sidebar's `onMarkApplied` is intentionally NOT fired here — DeepMark-
+ * applied marks stay silent so batches don't flicker active-card state.
  */
 export function ChatPanel({
 	submissionId,
@@ -40,6 +58,79 @@ export function ChatPanel({
 	} | null
 	onPrefillConsumed?: () => void
 }) {
+	const getEditor = useEditorHandle()
+
+	const onAddAnnotation = useCallback(
+		async (input: AddAnnotationInput): Promise<ToolDispatchResult> => {
+			const editor = getEditor()
+			if (!editor) {
+				return { ok: false, reason: "Editor not mounted." }
+			}
+			// Phrase path — preferred, doesn't need alignment data.
+			if (input.phrase) {
+				return applyAnnotationByPhrase(editor, {
+					...input,
+					phrase: input.phrase,
+				})
+			}
+			// Token path — requires alignment data, which is loaded inside
+			// grading-results-panel.tsx and isn't yet plumbed up to ChatPanel.
+			// Reject with a clear reason so the model retries with `phrase`.
+			if (input.tokenStart && input.tokenEnd) {
+				return {
+					ok: false,
+					reason:
+						"Token-range annotation isn't available in this surface yet. Use the `phrase` parameter — quote the text verbatim from the Student answer block.",
+				}
+			}
+			return {
+				ok: false,
+				reason: "Provide either `phrase` or both `tokenStart`+`tokenEnd`.",
+			}
+		},
+		[getEditor],
+	)
+
+	const onUpdateAnnotation = useCallback(
+		async (input: UpdateAnnotationInput): Promise<ToolDispatchResult> => {
+			const editor = getEditor()
+			if (!editor) return { ok: false, reason: "Editor not mounted." }
+			const r = updateAnnotationById(editor, input)
+			return r.ok ? { ok: true } : { ok: false, reason: r.reason }
+		},
+		[getEditor],
+	)
+
+	const onRemoveAnnotation = useCallback(
+		async (input: RemoveAnnotationInput): Promise<ToolDispatchResult> => {
+			const editor = getEditor()
+			if (!editor) return { ok: false, reason: "Editor not mounted." }
+			const r = removeAnnotationById(editor, input.annotationId)
+			return r.ok ? { ok: true } : { ok: false, reason: r.reason }
+		},
+		[getEditor],
+	)
+
+	const onLinkToScan = useCallback(
+		(input: {
+			questionId: string
+			tokenStart?: string
+			tokenEnd?: string
+		}) => {
+			// Emit a CustomEvent the scan panel listens to. UI navigation only;
+			// no data is modified. Listener wired in submission-view.tsx.
+			window.dispatchEvent(
+				new CustomEvent("deepmark:link-to-scan", { detail: input }),
+			)
+		},
+		[],
+	)
+
+	// Mark `applyAnnotationByTokenRange` referenced so dead-code analysis
+	// keeps it imported — it's wired in a follow-up that lifts the
+	// alignment data up to ChatPanel.
+	void applyAnnotationByTokenRange
+
 	return (
 		<TooltipProvider>
 			<div className="flex flex-col h-full bg-card">
@@ -78,6 +169,10 @@ export function ChatPanel({
 						prefill={prefill}
 						onPrefillConsumed={onPrefillConsumed}
 						compact
+						onAddAnnotation={onAddAnnotation}
+						onUpdateAnnotation={onUpdateAnnotation}
+						onRemoveAnnotation={onRemoveAnnotation}
+						onLinkToScan={onLinkToScan}
 					/>
 				</div>
 			</div>

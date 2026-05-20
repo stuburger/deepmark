@@ -60,27 +60,56 @@ const annotationFields = {
 	ao_quality: AO_QUALITY.optional().describe(
 		"Quality of the AO skill demonstration. Use 'strong' / 'partial' / 'incorrect' / 'valid' per the existing toolbar vocabulary.",
 	),
-	label: z
-		.string()
-		.max(20)
-		.optional()
-		.describe('Optional short marginal label, e.g. "3/4" for a sub-mark.'),
 } as const
 
-const addAnnotationInput = z.object({
-	questionId: z
-		.string()
-		.describe("ID of the question this annotation lives on."),
-	tokenStart: z
-		.string()
-		.describe(
-			"OCR token id where the mark starts (inclusive). Use the token ids exposed in the submission preamble.",
-		),
-	tokenEnd: z
-		.string()
-		.describe("OCR token id where the mark ends (inclusive)."),
-	...annotationFields,
-})
+const addAnnotationInput = z
+	.object({
+		questionId: z
+			.string()
+			.describe("ID of the question this annotation lives on."),
+		/**
+		 * Primary addressing path. Exact, verbatim text from the student's
+		 * answer (as it appears in the preamble's Student answer block).
+		 * The client does an exact string search inside the question's
+		 * answer and dispatches the mark at that range. If 0 or >1 matches,
+		 * the tool result is `{ ok: false, reason }` and the model can
+		 * retry with a longer, disambiguating quote.
+		 */
+		phrase: z
+			.string()
+			.min(1)
+			.optional()
+			.describe(
+				"Exact, verbatim text to annotate — quote directly from the student's answer in the preamble. Must appear exactly once in the question's answer; if ambiguous, include surrounding context.",
+			),
+		/** Selection-driven fallback when the chip already carries token IDs. */
+		tokenStart: z
+			.string()
+			.optional()
+			.describe(
+				"OCR token id where the mark starts (inclusive). Use ONLY when the teacher's <selection> tag provides token ids; otherwise prefer `phrase`.",
+			),
+		tokenEnd: z
+			.string()
+			.optional()
+			.describe("OCR token id where the mark ends (inclusive)."),
+		...annotationFields,
+	})
+	.refine(
+		(input) => {
+			const hasPhrase = input.phrase !== undefined
+			const hasStart = input.tokenStart !== undefined
+			const hasEnd = input.tokenEnd !== undefined
+			if (hasPhrase && (hasStart || hasEnd)) return false
+			if (hasStart !== hasEnd) return false
+			if (!hasPhrase && !hasStart) return false
+			return true
+		},
+		{
+			message:
+				"Provide EITHER `phrase` OR both `tokenStart`+`tokenEnd` (and not both).",
+		},
+	)
 
 const updateAnnotationInput = z.object({
 	annotationId: z.string().describe("UUID of the annotation to update."),
@@ -90,7 +119,6 @@ const updateAnnotationInput = z.object({
 	ao_category: z.string().optional(),
 	ao_display: z.string().optional(),
 	ao_quality: AO_QUALITY.optional(),
-	label: z.string().max(20).optional(),
 })
 
 const removeAnnotationInput = z.object({
@@ -144,11 +172,11 @@ export function buildTalkTools(submissionId: string | undefined) {
 				"Remove an existing annotation from the student's answer. Reference by annotationId.",
 			inputSchema: removeAnnotationInput,
 		}),
-		proposeTeacherOverride: tool({
-			description:
-				"Propose a score override for a question. This does NOT apply directly — it surfaces a confirm card in the conversation that the teacher must accept. Only call this when the teacher explicitly disputes a mark or signals the score is wrong. Never propose unsolicited overrides.",
-			inputSchema: proposeTeacherOverrideInput,
-		}),
+		// proposeTeacherOverride is intentionally not registered in this
+		// commit — the confirm-card UX lands in a follow-up. Reintroduce
+		// alongside the card component to keep model behaviour and UI
+		// surface in lockstep.
+		// proposeTeacherOverride: tool({ ... inputSchema: proposeTeacherOverrideInput }),
 		linkToScan: tool({
 			description:
 				"Scroll the scan view to a question (and optionally to a specific token range). UI navigation only; no data is modified.",

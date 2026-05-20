@@ -1,7 +1,15 @@
 "use client"
 
+import type {
+	AddAnnotationInput,
+	RemoveAnnotationInput,
+	UpdateAnnotationInput,
+} from "@/lib/talk/tools"
 import { useChat } from "@ai-sdk/react"
-import { DefaultChatTransport } from "ai"
+import {
+	DefaultChatTransport,
+	lastAssistantMessageIsCompleteWithToolCalls,
+} from "ai"
 import { ArrowUp, AtSign, Loader2, Sparkles, Square, X } from "lucide-react"
 import { useEffect, useMemo, useRef, useState } from "react"
 import ReactMarkdown from "react-markdown"
@@ -33,6 +41,10 @@ type Prefill = {
 	tokenEnd?: string | null
 }
 
+export type ToolDispatchResult =
+	| { ok: true; annotationId?: string }
+	| { ok: false; reason: string }
+
 type TalkToDeepMarkChatProps = {
 	className?: string
 	/**
@@ -56,6 +68,24 @@ type TalkToDeepMarkChatProps = {
 	 * its own framing.
 	 */
 	compact?: boolean
+	/**
+	 * Tool-call dispatchers. Parent (ChatPanel) builds these using the
+	 * editor handle from `EditorHandleProvider`; missing callbacks → the
+	 * tool result is `{ ok: false, reason: "Not available." }` so the
+	 * model can self-correct.
+	 */
+	onAddAnnotation?: (input: AddAnnotationInput) => Promise<ToolDispatchResult>
+	onUpdateAnnotation?: (
+		input: UpdateAnnotationInput,
+	) => Promise<ToolDispatchResult>
+	onRemoveAnnotation?: (
+		input: RemoveAnnotationInput,
+	) => Promise<ToolDispatchResult>
+	onLinkToScan?: (input: {
+		questionId: string
+		tokenStart?: string
+		tokenEnd?: string
+	}) => void
 }
 
 export function TalkToDeepMarkChat({
@@ -64,6 +94,10 @@ export function TalkToDeepMarkChat({
 	prefill,
 	onPrefillConsumed,
 	compact = false,
+	onAddAnnotation,
+	onUpdateAnnotation,
+	onRemoveAnnotation,
+	onLinkToScan,
 }: TalkToDeepMarkChatProps) {
 	const [input, setInput] = useState("")
 	const [chip, setChip] = useState<Prefill | null>(null)
@@ -79,12 +113,43 @@ export function TalkToDeepMarkChat({
 		[submissionId],
 	)
 
-	const { messages, sendMessage, status, stop, error } = useChat({
-		transport,
-		onError: (err) => {
-			toast.error(err.message || "Failed to reach DeepMark.")
+	// Refs so the onToolCall closure always sees the latest callbacks +
+	// addToolOutput. addToolOutput is destructured from useChat below; its
+	// binding is hoisted so the closure resolves it at call-time.
+	const addAnnRef = useRef(onAddAnnotation)
+	addAnnRef.current = onAddAnnotation
+	const updateAnnRef = useRef(onUpdateAnnotation)
+	updateAnnRef.current = onUpdateAnnotation
+	const removeAnnRef = useRef(onRemoveAnnotation)
+	removeAnnRef.current = onRemoveAnnotation
+	const linkScanRef = useRef(onLinkToScan)
+	linkScanRef.current = onLinkToScan
+
+	const { messages, sendMessage, status, stop, error, addToolOutput } = useChat(
+		{
+			transport,
+			onError: (err) => {
+				toast.error(err.message || "Failed to reach DeepMark.")
+			},
+			onToolCall: async ({ toolCall }) => {
+				const result = await dispatchToolCall(toolCall, {
+					addAnnotation: addAnnRef.current,
+					updateAnnotation: updateAnnRef.current,
+					removeAnnotation: removeAnnRef.current,
+					linkToScan: linkScanRef.current,
+				})
+				addToolOutput({
+					tool: toolCall.toolName as never,
+					toolCallId: toolCall.toolCallId,
+					output: result as never,
+				})
+			},
+			// When all tool calls in the latest assistant turn have results,
+			// auto-send to give the model a chance to react ("done", "I tried
+			// X but it failed, let me try Y").
+			sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
 		},
-	})
+	)
 
 	const isStreaming = status === "submitted" || status === "streaming"
 	const hasMessages = messages.length > 0
@@ -261,6 +326,64 @@ export function TalkToDeepMarkChat({
 	)
 }
 
+type ToolCallShape = {
+	toolName: string
+	toolCallId: string
+	input: Record<string, unknown>
+}
+
+type ToolCallbacks = {
+	addAnnotation?: TalkToDeepMarkChatProps["onAddAnnotation"]
+	updateAnnotation?: TalkToDeepMarkChatProps["onUpdateAnnotation"]
+	removeAnnotation?: TalkToDeepMarkChatProps["onRemoveAnnotation"]
+	linkToScan?: TalkToDeepMarkChatProps["onLinkToScan"]
+}
+
+/**
+ * Dispatch a single tool call to the parent-supplied callback. Unknown
+ * tools or absent callbacks resolve to `{ ok: false, reason }` so the
+ * model can self-correct on the next turn.
+ */
+async function dispatchToolCall(
+	toolCall: unknown,
+	cbs: ToolCallbacks,
+): Promise<ToolDispatchResult> {
+	const tc = toolCall as ToolCallShape
+	switch (tc.toolName) {
+		case "addAnnotation": {
+			if (!cbs.addAnnotation) return notAvailable()
+			return cbs.addAnnotation(tc.input as AddAnnotationInput)
+		}
+		case "updateAnnotation": {
+			if (!cbs.updateAnnotation) return notAvailable()
+			return cbs.updateAnnotation(tc.input as UpdateAnnotationInput)
+		}
+		case "removeAnnotation": {
+			if (!cbs.removeAnnotation) return notAvailable()
+			return cbs.removeAnnotation(tc.input as RemoveAnnotationInput)
+		}
+		case "linkToScan": {
+			cbs.linkToScan?.(
+				tc.input as {
+					questionId: string
+					tokenStart?: string
+					tokenEnd?: string
+				},
+			)
+			return { ok: true }
+		}
+		default:
+			return { ok: false, reason: `Unknown tool: ${tc.toolName}` }
+	}
+}
+
+function notAvailable(): ToolDispatchResult {
+	return {
+		ok: false,
+		reason: "Tool callback not wired in this surface. Try again later.",
+	}
+}
+
 function ChipBadge({
 	chip,
 	onRemove,
@@ -309,7 +432,20 @@ function MessageBubble({
 		.map((p) => p.text)
 		.join("")
 
-	if (!text) return null
+	// Tool-call parts (assistant only). Each renders as a compact inline
+	// status pill — DeepMark adding a tick, succeeded, failed, etc. The
+	// AI SDK's typed union splits per registered tool name; we narrow by
+	// reading the runtime `type` field as a string and casting to a
+	// minimal shape — the field set we care about (`toolCallId`, `state`,
+	// `input`, `output`, `errorText`) is consistent across every tool-*
+	// part in the SDK's union.
+	const toolParts = !isUser
+		? (message.parts.filter(
+				(p) => typeof p.type === "string" && p.type.startsWith("tool-"),
+			) as unknown as ToolPartShape[])
+		: []
+
+	if (!text && toolParts.length === 0) return null
 
 	return (
 		<div
@@ -323,10 +459,91 @@ function MessageBubble({
 						: "text-foreground",
 				)}
 			>
-				{isUser ? text : <AssistantMarkdown text={text} />}
+				{text ? isUser ? text : <AssistantMarkdown text={text} /> : null}
+				{toolParts.map((p) => (
+					<ToolCallPill key={p.toolCallId} part={p} />
+				))}
 			</div>
 		</div>
 	)
+}
+
+type ToolPartShape = {
+	type: string
+	toolCallId: string
+	state:
+		| "input-streaming"
+		| "input-available"
+		| "output-available"
+		| "output-error"
+		| "approval-requested"
+		| "approval-responded"
+		| "output-denied"
+	input?: Record<string, unknown>
+	output?: { ok?: boolean; reason?: string; annotationId?: string }
+	errorText?: string
+}
+
+const TOOL_LABELS: Record<string, string> = {
+	"tool-addAnnotation": "annotation",
+	"tool-updateAnnotation": "annotation update",
+	"tool-removeAnnotation": "annotation removal",
+	"tool-linkToScan": "scan navigation",
+	"tool-proposeTeacherOverride": "score override",
+}
+
+function ToolCallPill({ part }: { part: ToolPartShape }) {
+	const label = TOOL_LABELS[part.type] ?? part.type.replace(/^tool-/, "")
+	const phrase =
+		typeof part.input?.phrase === "string"
+			? `"${truncate(part.input.phrase as string, 40)}"`
+			: null
+
+	let status: "pending" | "ok" | "error" = "pending"
+	let detail: string | null = null
+	if (part.state === "output-available") {
+		const out = part.output
+		if (out && out.ok === false) {
+			status = "error"
+			detail = out.reason ?? null
+		} else {
+			status = "ok"
+		}
+	} else if (part.state === "output-error") {
+		status = "error"
+		detail = part.errorText ?? null
+	}
+
+	return (
+		<div
+			className={cn(
+				"mt-2 inline-flex items-center gap-1.5 rounded-sm border px-2 py-1 font-mono text-[11px]",
+				status === "ok" && "border-success/40 bg-success-50 text-success-700",
+				status === "error" && "border-error/40 bg-error-50 text-error-700",
+				status === "pending" &&
+					"border-border-quiet bg-muted text-muted-foreground",
+			)}
+		>
+			<span>
+				{status === "pending" && "…"}
+				{status === "ok" && "✓"}
+				{status === "error" && "×"}
+			</span>
+			<span>
+				{status === "pending" && `Applying ${label}`}
+				{status === "ok" && `Applied ${label}`}
+				{status === "error" && `Failed ${label}`}
+				{phrase ? ` — ${phrase}` : ""}
+			</span>
+			{detail && status === "error" ? (
+				<span className="text-muted-foreground"> · {truncate(detail, 80)}</span>
+			) : null}
+		</div>
+	)
+}
+
+function truncate(s: string, max: number): string {
+	return s.length > max ? `${s.slice(0, max)}…` : s
 }
 
 /**

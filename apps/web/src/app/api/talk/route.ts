@@ -7,6 +7,7 @@ import {
 	TALK_SYSTEM_PROMPT,
 	formatUserMessageWithSelection,
 } from "@/lib/talk/system-prompt"
+import { buildTalkTools } from "@/lib/talk/tools"
 import { createAnthropic } from "@ai-sdk/anthropic"
 import {
 	type ModelMessage,
@@ -99,6 +100,12 @@ export const POST = routeHandler.authenticated(async (ctx, req) => {
 		model: anthropic("claude-sonnet-4-6"),
 		system,
 		messages: modelMessages,
+		// Tools only register in editor mode (submissionId present). General-
+		// assistant mode (dashboard, /teacher/talk) sees no tools so the model
+		// answers in prose.
+		// No `execute` fns — tool calls pass through the stream and the client
+		// resolves each via `onToolCall` / `addToolResult`.
+		tools: buildTalkTools(submissionId),
 	})
 
 	return result.toUIMessageStreamResponse()

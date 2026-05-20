@@ -6,23 +6,38 @@ describe("buildTalkTools", () => {
 		expect(buildTalkTools(undefined)).toBeUndefined()
 	})
 
-	it("returns the full tool set when submissionId is present", () => {
+	it("returns the registered tools when submissionId is present", () => {
 		const tools = buildTalkTools("sub-1")
 		expect(tools).toBeDefined()
+		// proposeTeacherOverride is intentionally NOT registered in this
+		// commit — confirm-card UX lands in a follow-up.
 		expect(Object.keys(tools ?? {})).toEqual([
 			"addAnnotation",
 			"updateAnnotation",
 			"removeAnnotation",
-			"proposeTeacherOverride",
 			"linkToScan",
 		])
 	})
 
-	it("validates addAnnotation input against the existing signal enum", () => {
+	it("accepts addAnnotation with phrase (primary path)", () => {
 		const tools = buildTalkTools("sub-1")
-		const addAnnotation = tools?.addAnnotation
-		// inputSchema is a Zod schema — exercise it directly.
-		const schema = addAnnotation?.inputSchema as
+		const schema = tools?.addAnnotation?.inputSchema as
+			| { safeParse: (input: unknown) => { success: boolean } }
+			| undefined
+
+		expect(
+			schema?.safeParse({
+				questionId: "q-1",
+				phrase: "because of climate change",
+				signal: "tick",
+				reason: "Good use of evidence.",
+			}).success,
+		).toBe(true)
+	})
+
+	it("accepts addAnnotation with tokenStart + tokenEnd (selection path)", () => {
+		const tools = buildTalkTools("sub-1")
+		const schema = tools?.addAnnotation?.inputSchema as
 			| { safeParse: (input: unknown) => { success: boolean } }
 			| undefined
 
@@ -35,15 +50,70 @@ describe("buildTalkTools", () => {
 				reason: "Good use of evidence.",
 			}).success,
 		).toBe(true)
+	})
+
+	it("rejects addAnnotation with both phrase and tokens (must be exactly one path)", () => {
+		const tools = buildTalkTools("sub-1")
+		const schema = tools?.addAnnotation?.inputSchema as
+			| { safeParse: (input: unknown) => { success: boolean } }
+			| undefined
+
+		expect(
+			schema?.safeParse({
+				questionId: "q-1",
+				phrase: "climate change",
+				tokenStart: "tok-1",
+				tokenEnd: "tok-3",
+				signal: "tick",
+				reason: "x",
+			}).success,
+		).toBe(false)
+	})
+
+	it("rejects addAnnotation with partial token range (start without end)", () => {
+		const tools = buildTalkTools("sub-1")
+		const schema = tools?.addAnnotation?.inputSchema as
+			| { safeParse: (input: unknown) => { success: boolean } }
+			| undefined
+
+		expect(
+			schema?.safeParse({
+				questionId: "q-1",
+				tokenStart: "tok-1",
+				signal: "tick",
+				reason: "x",
+			}).success,
+		).toBe(false)
+	})
+
+	it("rejects addAnnotation with no address at all", () => {
+		const tools = buildTalkTools("sub-1")
+		const schema = tools?.addAnnotation?.inputSchema as
+			| { safeParse: (input: unknown) => { success: boolean } }
+			| undefined
+
+		expect(
+			schema?.safeParse({
+				questionId: "q-1",
+				signal: "tick",
+				reason: "x",
+			}).success,
+		).toBe(false)
+	})
+
+	it("rejects addAnnotation with invalid signal or missing reason", () => {
+		const tools = buildTalkTools("sub-1")
+		const schema = tools?.addAnnotation?.inputSchema as
+			| { safeParse: (input: unknown) => { success: boolean } }
+			| undefined
 
 		// Invalid signal → reject.
 		expect(
 			schema?.safeParse({
 				questionId: "q-1",
-				tokenStart: "tok-1",
-				tokenEnd: "tok-3",
+				phrase: "x",
 				signal: "highlight",
-				reason: "",
+				reason: "y",
 			}).success,
 		).toBe(false)
 
@@ -51,45 +121,15 @@ describe("buildTalkTools", () => {
 		expect(
 			schema?.safeParse({
 				questionId: "q-1",
-				tokenStart: "tok-1",
-				tokenEnd: "tok-3",
+				phrase: "x",
 				signal: "tick",
 			}).success,
 		).toBe(false)
 	})
 
-	it("validates proposeTeacherOverride input", () => {
-		const tools = buildTalkTools("sub-1")
-		const schema = tools?.proposeTeacherOverride?.inputSchema as
-			| { safeParse: (input: unknown) => { success: boolean } }
-			| undefined
-
-		expect(
-			schema?.safeParse({
-				questionId: "q-1",
-				suggestedScore: 8,
-				reason: "Sustained analysis throughout.",
-			}).success,
-		).toBe(true)
-
-		// Negative scores rejected.
-		expect(
-			schema?.safeParse({
-				questionId: "q-1",
-				suggestedScore: -1,
-				reason: "x",
-			}).success,
-		).toBe(false)
-
-		// Empty reason rejected.
-		expect(
-			schema?.safeParse({
-				questionId: "q-1",
-				suggestedScore: 8,
-				reason: "",
-			}).success,
-		).toBe(false)
-	})
+	// proposeTeacherOverride schema test deferred — re-add when the
+	// confirm-card UX lands and the tool is re-registered in
+	// buildTalkTools.
 })
 
 describe("signalToMarkName", () => {
